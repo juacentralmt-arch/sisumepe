@@ -69,7 +69,8 @@ const isHash = p => typeof p === 'string' && /^\$2[aby]\$/.test(p);
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
   console.error(e);
-  res.status(e.status || 500).json({ error: e.message || 'Erro interno' });
+  const code = e.status || 500;
+  res.status(code).json({ error: code === 500 ? 'Erro interno. Tente de novo.' : (e.message || 'Erro') });
 });
 
 // SSE clients
@@ -394,6 +395,7 @@ app.patch('/api/tickets/:id/start', auth(['tecnico']), ah(async (req, res) => {
   const blockStart = infinityBlocked(t, starter);
   if (blockStart) return res.status(403).json({ error: blockStart });
   if (starter && starter.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Ticket já saiu da fila.' });
   const upd = await store.tickets.patch(t.id, {
     status: 'em_atendimento',
     tecnico: starter.name + ' (' + starter.user + ')',
@@ -429,6 +431,7 @@ app.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 4)
   const blockFin = infinityBlocked(t, finisher);
   if (blockFin) return res.status(403).json({ error: blockFin });
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
   const pos = await mapFiles(req.files);
   const upd = await store.tickets.patch(t.id, {
     status: 'finalizado',
@@ -617,5 +620,12 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
 app.get('/tv', (req, res) => res.sendFile(path.join(ROOT, 'public', 'tv.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
+
+// Erros de upload viram 400 JSON (nunca HTML)
+app.use((err, req, res, next) => {
+  if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'))
+    return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 5 por vez).' });
+  next(err);
+});
 
 app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));
