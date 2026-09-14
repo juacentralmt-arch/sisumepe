@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SISUMEPE Juazeiro</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SISUMEPE">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#0b1220; }
+  body{font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:#0f172a}
+  .font-display{font-family:'Sora',sans-serif}
+  body::before{content:'';position:fixed;inset:0;z-index:-1;
+    background:
+      radial-gradient(900px 400px at 85% -5%, rgba(99,102,241,.10), transparent 60%),
+      radial-gradient(700px 380px at -10% 20%, rgba(14,165,233,.08), transparent 60%),
+      radial-gradient(800px 500px at 50% 110%, rgba(124,58,237,.07), transparent 60%);}
+  /* nav */
+  .snav{color:#94a3b8}
+  .snav:hover{color:#fff;background:rgba(255,255,255,.06)}
+  .snav svg{opacity:.75}
+  .mnav{color:#475569;background:#fff;border:1px solid #e2e8f0;white-space:nowrap}
+  .mnav:hover{background:#f8fafc}
+  .tab-active{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 8px 20px -6px rgba(99,102,241,.55)}
+  .tab-active svg{opacity:1}
+  /* cards */
+  .card{background:#fff;border:1px solid #e6ebf2;border-radius:1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card-hover{transition:box-shadow .15s ease}
+  .card-hover:hover{box-shadow:0 10px 24px -12px rgba(15,23,42,.16)}
+  .prio-glow{border-color:#fecaca!important;box-shadow:0 0 0 3px rgba(220,38,38,.08),0 1px 2px rgba(15,23,42,.05)!important}
+  .inp{border:1px solid #e2e8f0;border-radius:.75rem;padding:.65rem .8rem;font-size:.875rem;width:100%;background:#fff;outline:none;transition:box-shadow .15s,border-color .15s}
+  .inp:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+  .lbl{font-size:.68rem;font-weight:700;letter-spacing:.06em;color:#64748b}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;font-weight:700;border-radius:.75rem;transition:filter .15s,transform .1s}
+  .btn:active{transform:scale(.98)}
+  .btn-primary{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;box-shadow:0 8px 18px -8px rgba(99,102,241,.7)}
+  .btn-primary:hover{filter:brightness(1.07)}
+  .btn-dark{background:#0f172a;color:#fff}.btn-dark:hover{background:#1e293b}
+  .btn-green{background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 8px 18px -8px rgba(16,185,129,.6)}
+  .btn-green:hover{filter:brightness(1.06)}
+  .btn-ghost{background:#fff;border:1px solid #e2e8f0;color:#334155}.btn-ghost:hover{background:#f8fafc}
+  .avatar{background:linear-gradient(135deg,#4f46e5,#0ea5e9);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:9999px;flex:none}
+  .fade{animation:fade .15s ease-out}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .timeline::before{content:'';position:absolute;left:13px;top:10px;bottom:10px;width:2px;background:linear-gradient(#c7d2fe,#e2e8f0)}
+  .toggle-on{background:linear-gradient(135deg,#dc2626,#ef4444)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 6px 14px -6px rgba(220,38,38,.6)}
+  #chatPanel{transition:opacity .15s ease}
+  .chat-hidden{opacity:0;pointer-events:none}
+  #chatMsgs::-webkit-scrollbar{width:6px}
+  #chatMsgs::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:6px}
+  .blob{position:absolute;border-radius:9999px;filter:blur(90px);opacity:.5;pointer-events:none}
+  .step-num{width:1.6rem;height:1.6rem;border-radius:.6rem;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#4f46e5,#7c3aed);flex:none}
+  /* Otimização mobile (foco na recepção) */
+  @media (max-width:640px){
+    .inp{font-size:16px;padding:.85rem .9rem}
+    .btn{min-height:48px}
+    main{padding-bottom:5.5rem}
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============ SIDEBAR (desktop) ============ -->
+<aside class="hidden lg:flex fixed left-0 top-0 h-screen w-[270px] flex-col z-40 text-white" style="background:linear-gradient(180deg,#0b1220 0%,#111a30 60%,#0d1426 100%)">
+  <div class="px-6 pt-7 pb-6 flex items-center gap-3">
+    <div class="w-11 h-11 rounded-2xl flex items-center justify-center font-display font-extrabold text-lg shadow-lg" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">SJ</div>
+    <div>
+      <p class="font-display font-bold leading-tight">SISUMEPE</p>
+      <p class="text-[11px] text-slate-400 -mt-0.5">Juazeiro • Atendimento</p>
+    </div>
+  </div>
+  <nav id="sidebarNav" class="px-4 space-y-1.5 flex-1">
+    <p class="px-3 pt-2 pb-1 text-[10px] font-bold tracking-[.15em] text-slate-500">MENU</p>
+    <button data-tab="fila" onclick="go('fila')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor"/></svg>
+      Fila em tempo real</button>
+    <button data-tab="checkin" onclick="go('checkin')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+      Check-in / Novo ticket</button>
+    <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>
+      Painel Técnico</button>
+    <button data-tab="visao" onclick="go('visao')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      Visão 360° <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">RESTRITO</span></button>
+    <button data-tab="dash" onclick="go('dash')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      Dashboard</button>
+    <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Usuários <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
+  </nav>
+  <div class="p-4">
+    <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(139,92,246,.15));border:1px solid rgba(255,255,255,.08)">
+      <p class="text-[11px] text-slate-300">⚖️ Prioridade legal sempre no topo da fila</p>
+    </div>
+    <p class="text-center text-[10px] text-slate-500 mt-3">v3.0 • SISUMEPE</p>
+  </div>
+</aside>
+
+<div class="lg:pl-[270px] min-h-screen flex flex-col">
+
+  <!-- ============ TOPBAR ============ -->
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-white/75 border-b border-slate-200/70">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+      <div class="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center font-display font-extrabold text-white text-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">SJ</div>
+      <div class="lg:hidden font-display font-bold text-sm">SISUMEPE</div>
+      <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 ml-1">
+        <span id="liveDot" class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+        <span id="liveTxt" class="font-semibold">tempo real</span>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <button id="userChip" onclick="openAccount()" title="Minha conta / trocar senha" class="text-xs font-bold bg-slate-900 text-white pl-1.5 pr-3 py-1.5 rounded-full hidden sm:inline-flex items-center gap-1.5 hover:bg-slate-700 transition">—</button>
+        <button onclick="logout()" class="btn text-xs px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">Sair</button>
+      </div>
+    </div>
+    <!-- mobile nav -->
+    <div id="mobileNav" class="lg:hidden px-4 pb-3 flex gap-2 overflow-x-auto">
+      <button data-tab="fila" onclick="go('fila')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Fila</button>
+      <button data-tab="checkin" onclick="go('checkin')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">➕ Check-in</button>
+      <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
+      <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
+      <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
+      <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 w-full flex-1">
+
+    <!-- STATS -->
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div class="card card-hover p-4 sm:p-5 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center flex-none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <div><p id="stAguard" class="font-display text-2xl font-extrabold leading-none">0</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">AGUARDANDO</p></div>
+      </div>
+      <div class="card card-hover p-4 sm:p-5 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center flex-none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg></div>
+        <div><p id="stAtend" class="font-display text-2xl font-extrabold leading-none">0</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">EM ATENDIMENTO</p></div>
+      </div>
+      <div class="card card-hover p-4 sm:p-5 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+        <div><p id="stFin" class="font-display text-2xl font-extrabold leading-none">0</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">FINALIZADOS</p></div>
+      </div>
+      <div class="card card-hover p-4 sm:p-5 flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center flex-none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><p id="stPes" class="font-display text-2xl font-extrabold leading-none">0</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">ATENDIDOS</p></div>
+      </div>
+    </div>
+
+    <!-- FILA -->
+    <section id="tab-fila" class="fade">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h2 class="font-display font-bold text-xl">Fila de atendimento</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Prioridade legal no topo • ordenada por chegada • atualiza a cada 5 segundos</p>
+        </div>
+        <div class="flex gap-2">
+          <a href="/tv" target="_blank" class="btn btn-ghost text-xs px-3.5 py-2">📺 Painel TV</a>
+          <button onclick="loadAll()" class="btn btn-ghost text-xs px-3.5 py-2">↻ Atualizar</button>
+        </div>
+      </div>
+      <div id="callBanner" class="hidden mb-4 rounded-2xl p-4 sm:p-5 text-white fade" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 12px 28px -8px rgba(99,102,241,.6)">
+        <div class="flex items-center gap-3">
+          <span class="h-3.5 w-3.5 rounded-full bg-white flex-none"></span>
+          <div class="min-w-0"><p class="text-[11px] font-extrabold tracking-widest opacity-80">📢 CHAMANDO AGORA</p>
+          <p id="callTxt" class="font-display font-extrabold text-lg leading-tight truncate"></p></div>
+        </div>
+      </div>
+      <div class="card p-3.5 mb-4 flex flex-wrap gap-2 items-center">
+        <select id="fModelo" onchange="setFilter()" class="inp !w-auto !py-2 text-xs font-bold">
+          <option value="">📡 Todos os modelos</option>
+          <option value="Spacecom">📡 Spacecom</option>
+          <option value="Infinity">📡 Infinity</option>
+        </select>
+        <select id="fMotivo" onchange="setFilter()" class="inp !w-auto !py-2 text-xs font-bold">
+          <option value="">🏷️ Todos os motivos</option>
+          <option>Botão do Pânico</option>
+          <option>Instalação de Tornozeleira</option>
+          <option>Retirada de Tornozeleira</option>
+          <option>Manutenção</option>
+          <option>Outros</option>
+        </select>
+        <input id="fBusca" oninput="setFilter()" placeholder="🔎 Buscar na fila..." class="inp !w-auto flex-1 min-w-[140px] !py-2 text-xs">
+      </div>
+      <div id="filaList" class="grid md:grid-cols-2 gap-3.5"></div>
+    </section>
+
+    <!-- CHECKIN -->
+    <section id="tab-checkin" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Check-in da recepção</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Busque o atendido, cadastre se preciso e abra o ticket</p>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-4 items-start">
+        <div class="card p-5 sm:p-6">
+          <div class="flex items-center gap-2.5 mb-1"><span class="step-num">1</span><h3 class="font-display font-bold">Localizar atendido</h3></div>
+          <p class="text-xs text-slate-500 mb-3 ml-9">Busca rápida por CPF, RG ou nome</p>
+          <div class="flex gap-2">
+            <input id="q" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." class="inp flex-1">
+            <button onclick="buscarPessoa()" class="btn btn-primary text-sm px-5">Buscar</button>
+          </div>
+          <div id="searchRes" class="mt-3 space-y-2"></div>
+          <div class="flex items-center gap-3 my-5"><span class="flex-1 h-px bg-slate-200"></span><span class="text-[11px] font-bold text-slate-400">NOVO CADASTRO</span><span class="flex-1 h-px bg-slate-200"></span></div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <input id="cNome" placeholder="Nome completo *" class="inp col-span-2">
+            <input id="cCpf" placeholder="CPF" class="inp">
+            <input id="cRg" placeholder="RG" class="inp">
+            <input id="cMae" placeholder="Nome da mãe *" class="inp col-span-2">
+            <label class="col-span-2 lbl flex items-center gap-2">DATA DE NASCIMENTO <input id="cNasc" type="date" class="inp !w-auto"></label>
+          </div>
+          <label class="lbl mt-3 block">MODELO DA TORNOZELEIRA *</label>
+          <div class="grid grid-cols-2 gap-2.5 mt-1">
+            <button type="button" data-cmodelo="Spacecom" onclick="pickCadModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+            <button type="button" data-cmodelo="Infinity" onclick="pickCadModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+          </div>
+          <button onclick="cadastrarPessoa()" class="btn btn-dark w-full py-3 text-sm mt-4">Cadastrar atendido</button>
+        </div>
+
+        <div class="card p-5 sm:p-6 lg:sticky lg:top-24">
+          <div class="flex items-center gap-2.5 mb-1"><span class="step-num">2</span><h3 class="font-display font-bold">Abrir ticket</h3></div>
+          <p class="text-xs text-slate-500 mb-3 ml-9">Selecione o atendido e o motivo</p>
+          <div id="selPerson" class="rounded-xl p-3.5 text-sm mb-4 border border-dashed border-slate-300 bg-slate-50 text-slate-500">Nenhum atendido selecionado. Busque ao lado e clique em <b>Selecionar</b>.</div>
+          <label class="lbl">MOTIVO *</label>
+          <select id="tMotivo" class="inp mt-1 mb-3">
+            <option>Botão do Pânico</option>
+            <option>Instalação de Tornozeleira</option>
+            <option>Retirada de Tornozeleira</option>
+            <option>Manutenção</option>
+            <option>Outros</option>
+          </select>
+          <label class="lbl">DESCRIÇÃO</label>
+          <textarea id="tDesc" rows="3" placeholder="Descreva o problema, avaria, decisão judicial..." class="inp mt-1 mb-3"></textarea>
+          <label class="lbl">MODELO DA TORNOZELEIRA * <span class="font-normal normal-case">(vem do cadastro — toque para corrigir)</span></label>
+          <div class="grid grid-cols-2 gap-2.5 mt-1 mb-3">
+            <button type="button" data-modelo="Spacecom" onclick="pickModelo('Spacecom')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 transition min-h-[84px] active:scale-95">
+              <span class="mcheck absolute top-2 right-2 w-5 h-5 rounded-full text-white text-[11px] items-center justify-center" style="display:none;background:#0891b2">✓</span>
+              <span class="text-2xl">📡</span><br>Spacecom
+            </button>
+            <button type="button" data-modelo="Infinity" onclick="pickModelo('Infinity')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 transition min-h-[84px] active:scale-95">
+              <span class="mcheck absolute top-2 right-2 w-5 h-5 rounded-full text-white text-[11px] items-center justify-center" style="display:none;background:#c026d3">✓</span>
+              <span class="text-2xl">📡</span><br>Infinity
+            </button>
+          </div>
+          <div class="flex items-center justify-between rounded-xl p-3.5 mb-3 border border-rose-200" style="background:linear-gradient(135deg,#fef2f2,#fff)">
+            <div><p class="text-sm font-bold text-rose-700">⚖️ Prioridade legal</p><p class="text-[11px] text-rose-600">Idoso, gestante, PCD, medida urgente → topo da fila</p></div>
+            <button id="prioBtn" onclick="togglePrio()" class="px-5 py-2 rounded-full text-xs font-extrabold bg-white border border-slate-200 text-slate-500">NÃO</button>
+          </div>
+          <label class="lbl">ANEXOS / FOTOS (ATÉ 5)</label>
+          <input id="tFiles" type="file" multiple accept="image/*,.pdf" class="w-full text-xs mt-1 mb-3 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+          <input id="tResp" placeholder="Responsável recepção (opcional)" class="inp mb-4">
+          <button onclick="abrirTicket()" class="btn btn-green w-full py-3.5 text-sm hidden lg:inline-flex">🎫 Abrir ticket e entrar na fila</button>
+        </div>
+      </div>
+      <!-- barra de ação fixa no celular -->
+      <div class="lg:hidden sticky bottom-3 mt-4">
+        <button onclick="abrirTicket()" class="btn btn-green w-full py-4 text-base shadow-2xl">🎫 Abrir ticket e entrar na fila</button>
+      </div>
+    </section>
+
+    <!-- TECNICO -->
+    <section id="tab-tecnico" class="hidden fade">
+      <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 class="font-display font-bold text-xl">Painel técnico</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Execute os atendimentos e registre o relatório obrigatório</p>
+        </div>
+        <button onclick="callNext()" class="btn btn-primary text-xs px-4 py-2.5">📢 Chamar próximo da fila</button>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-4 items-start">
+        <div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+          <h3 class="text-xs font-extrabold tracking-wider text-amber-700 mb-3">⏳ AGUARDANDO</h3>
+          <div id="tecAguard" class="space-y-2.5"></div>
+        </div>
+        <div class="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
+          <h3 class="text-xs font-extrabold tracking-wider text-blue-700 mb-3">🔧 EM ATENDIMENTO</h3>
+          <div id="tecAtend" class="space-y-2.5"></div>
+        </div>
+      </div>
+      <h3 class="text-xs font-extrabold tracking-wider text-emerald-700 mt-6 mb-3">✅ FINALIZADOS RECENTES</h3>
+      <div id="tecFin" class="grid md:grid-cols-2 gap-3"></div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="tab-dash" class="hidden fade">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h2 class="font-display font-bold text-xl">Dashboard gerencial</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Desempenho do atendimento em tempo real</p>
+        </div>
+        <button onclick="exportCSV()" class="btn btn-ghost text-xs px-3.5 py-2">⬇ Exportar CSV</button>
+      </div>
+      <div id="dashCards" class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4"></div>
+      <div class="grid lg:grid-cols-2 gap-4 items-start">
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por motivo</h3><div class="h-56"><canvas id="chMotivo"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por modelo</h3><div class="h-56"><canvas id="chModelo"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Últimos 7 dias</h3><div class="h-56"><canvas id="chDias"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por técnico</h3><div id="dashTec" class="space-y-2"></div></div>
+      </div>
+      <div class="card p-5 mt-4"><h3 class="font-display font-bold text-sm mb-3">🕘 Atividade recente (auditoria)</h3><div id="dashFeed" class="space-y-2"></div></div>
+    </section>
+
+    <!-- USUÁRIOS (ADMIN) -->
+    <section id="tab-usuarios" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Gestão de usuários</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Criar, remover e redefinir senhas (acesso do administrador)</p>
+      </div>
+      <div class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">Novo usuário</h3>
+          <label class="lbl">USUÁRIO (login)</label>
+          <input id="uUser" placeholder="ex: maria" class="inp mt-1 mb-2.5">
+          <label class="lbl">NOME</label>
+          <input id="uName" placeholder="Nome de exibição" class="inp mt-1 mb-2.5">
+          <label class="lbl">PERFIL</label>
+          <select id="uRole" class="inp mt-1 mb-2.5">
+            <option value="recepcao">Recepção</option>
+            <option value="tecnico">Técnico</option>
+            <option value="admin">Admin</option>
+          </select>
+          <label class="lbl">SENHA</label>
+          <input id="uPass" placeholder="mín. 4 caracteres" class="inp mt-1 mb-3">
+          <button onclick="createUser()" class="btn btn-primary w-full py-3 text-sm">Criar usuário</button>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">Usuários cadastrados</h3>
+          <div id="usersList" class="space-y-2"></div>
+        </div>
+      </div>
+      <div class="card p-5 mt-4">
+        <h3 class="font-display font-bold text-sm mb-1">Backup e restauração</h3>
+        <p class="text-xs text-slate-500 mb-3">Baixe a cópia de segurança ou restaure um backup anterior (a restauração guarda cópia automática do estado atual no servidor).</p>
+        <div class="flex flex-wrap gap-2 items-center">
+          <button onclick="downloadBackup()" class="btn btn-dark text-xs px-4 py-2.5">⬇ Baixar backup</button>
+          <label class="btn btn-ghost text-xs px-4 py-2.5 cursor-pointer">↩ Restaurar backup<input id="restoreFile" type="file" accept=".json,application/json" class="hidden" onchange="restoreBackup()"></label>
+        </div>
+        <p id="bkMsg" class="hidden text-xs font-semibold mt-2"></p>
+      </div>
+    </section>
+
+    <!-- VISAO 360 -->
+    <section id="tab-visao" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Visão 360° do atendido</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Ficha cadastral + histórico completo em linha do tempo</p>
+      </div>
+      <div id="visaoLock" class="hidden card p-8 text-center" style="background:linear-gradient(135deg,#fffbeb,#fff)">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl">🔒</div>
+        <p class="font-display font-bold mt-3">Acesso restrito</p>
+        <p class="text-sm text-slate-500 mt-1">A Visão 360° é exclusiva do <b>Setor Técnico e do Administrador</b>. O usuário da <b>Recepção não tem acesso</b>. Saia e entre com um usuário autorizado.</p>
+      </div>
+      <div id="visaoBody">
+        <div class="card p-4 mb-4 flex gap-2">
+          <input id="vQ" oninput="visaoTyping()" onkeydown="if(event.key==='Enter')buscarVisao()" placeholder="Digite nome, CPF ou RG — busca automática..." class="inp flex-1" autocomplete="off">
+          <button onclick="buscarVisao()" class="btn btn-dark text-sm px-5">Buscar</button>
+        </div>
+        <div id="visaoRes" class="grid sm:grid-cols-2 md:grid-cols-3 gap-2.5 mb-4"></div>
+        <div id="visaoDetail" class="grid lg:grid-cols-3 gap-4 items-start"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-6xl mx-auto px-6 pb-6 w-full">
+    <p class="text-center text-[11px] text-slate-400">SISUMEPE Juazeiro • Gestão de Atendimento e Manutenção</p>
+  </footer>
+</div>
+
+<!-- LOGIN -->
+<div id="loginOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden" style="background:#0b1220">
+  <div class="blob w-[500px] h-[500px] bg-indigo-600 -top-40 -left-40"></div>
+  <div class="blob w-[420px] h-[420px] bg-violet-700 bottom-0 right-0"></div>
+  <div class="blob w-[300px] h-[300px] bg-sky-500 top-1/3 left-1/2"></div>
+  <div class="relative bg-white/95 backdrop-blur rounded-3xl max-w-sm w-full p-8 shadow-2xl fade">
+    <div class="w-14 h-14 rounded-2xl flex items-center justify-center font-display font-extrabold text-white text-xl mx-auto shadow-lg" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">SJ</div>
+    <h2 class="font-display font-extrabold text-center text-lg mt-4">SISUMEPE Juazeiro</h2>
+    <p class="text-xs text-slate-500 text-center mb-5">Digite seu usuário e senha para acessar</p>
+    <label class="lbl">USUÁRIO</label>
+    <input id="loginUser" placeholder="Ex: recepcao, joanderson..." class="inp mb-2.5" autocomplete="username">
+    <label class="lbl">SENHA</label>
+    <input id="loginPass" type="password" onkeydown="if(event.key==='Enter')doLogin()" placeholder="••••••••" class="inp mb-2.5" autocomplete="current-password">
+    <p id="loginErr" class="hidden text-xs text-rose-600 font-semibold mb-2"></p>
+    <button onclick="doLogin()" class="btn btn-primary w-full py-3 text-sm">Entrar no sistema →</button>
+  </div>
+</div>
+
+<!-- CHAT INTERNO -->
+<button id="chatFab" onclick="toggleChat()" class="fixed bottom-5 right-5 z-40 text-white w-14 h-14 rounded-2xl shadow-xl text-2xl flex items-center justify-center hover:scale-105 transition" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 12px 28px -8px rgba(99,102,241,.6)">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <span id="chatBadge" class="hidden absolute -top-1.5 -right-1.5 bg-rose-600 text-[11px] font-extrabold min-w-[1.25rem] h-5 px-1 rounded-full items-center justify-center">0</span>
+</button>
+<div id="chatPanel" class="chat-hidden fixed bottom-24 right-5 z-40 w-80 max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+  <div class="px-4 py-3.5 flex items-center gap-2.5 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
+    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+    <span class="font-display font-bold text-sm">Chat da equipe</span>
+    <button onclick="toggleChat()" class="ml-auto text-slate-300 hover:text-white text-xl leading-none">×</button>
+  </div>
+  <div id="chatTabs" class="flex gap-1.5 px-2.5 py-2 border-b border-slate-100 bg-white overflow-x-auto"></div>
+  <div id="chatMsgs" class="h-72 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
+  <div id="chatPending" class="hidden px-2.5 pt-2 flex flex-wrap gap-1.5 bg-white"></div>
+  <div class="p-2.5 border-t border-slate-100 flex gap-2 bg-white items-center">
+    <input id="chatFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" class="hidden" onchange="chatFilesChanged()">
+    <button onclick="document.getElementById('chatFiles').click()" title="Anexar foto ou arquivo" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none">📎</button>
+    <input id="chatInput" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-2">
+    <button onclick="sendChat()" class="btn btn-primary px-4 text-sm flex-none">➤</button>
+  </div>
+</div>
+
+<!-- MODAL EDITAR USUÁRIO (ADMIN) -->
+<div id="modalUser" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl fade">
+    <h3 class="font-display font-bold text-lg">Editar usuário</h3>
+    <p id="ueWho" class="text-xs text-slate-500 mb-3"></p>
+    <label class="lbl">NOME DE EXIBIÇÃO</label>
+    <input id="ueName" class="inp mt-1 mb-2.5">
+    <label class="lbl">PERFIL</label>
+    <select id="ueRole" class="inp mt-1 mb-2.5">
+      <option value="recepcao">Recepção</option>
+      <option value="tecnico">Técnico</option>
+      <option value="admin">Admin</option>
+    </select>
+    <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input id="ueActive" type="checkbox" class="w-5 h-5 accent-emerald-600"> Usuário ativo (pode entrar)</label>
+    <p id="ueErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeUserEdit()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="saveUserEdit()" class="btn btn-primary flex-1 py-3 text-sm">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MINHA CONTA -->
+<div id="modalAccount" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl fade">
+    <h3 class="font-display font-bold text-lg">Minha conta</h3>
+    <p id="accWho" class="text-xs text-slate-500 mb-3"></p>
+    <label class="lbl">SENHA ATUAL</label>
+    <input id="accCur" type="password" class="inp mt-1 mb-2.5">
+    <label class="lbl">NOVA SENHA</label>
+    <input id="accNew" type="password" placeholder="mín. 4 caracteres" class="inp mt-1 mb-2.5">
+    <p id="accErr" class="hidden text-xs text-rose-600 font-semibold"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeAccount()" class="btn btn-ghost flex-1 py-3 text-sm">Fechar</button>
+      <button onclick="saveAccount()" class="btn btn-primary flex-1 py-3 text-sm">Trocar senha</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CORRIGIR TICKET -->
+<div id="modalTicket" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
+    <h3 class="font-display font-bold text-lg">Corrigir ticket <span id="teCode" class="text-xs font-bold text-indigo-600"></span></h3>
+    <p class="text-xs text-slate-500 mt-1 mb-3">Somente tickets aguardando. A correção entra na auditoria.</p>
+    <label class="lbl">MOTIVO</label>
+    <select id="teMotivo" class="inp mt-1 mb-2.5">
+      <option>Botão do Pânico</option>
+      <option>Instalação de Tornozeleira</option>
+      <option>Retirada de Tornozeleira</option>
+      <option>Manutenção</option>
+      <option>Outros</option>
+    </select>
+    <label class="lbl">MODELO DA TORNOZELEIRA</label>
+    <div class="grid grid-cols-2 gap-2.5 mt-1 mb-2.5">
+      <button type="button" data-tmodelo="Spacecom" onclick="pickTicketModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+      <button type="button" data-tmodelo="Infinity" onclick="pickTicketModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+    </div>
+    <label class="lbl">DESCRIÇÃO</label>
+    <textarea id="teDesc" rows="2" class="inp mt-1 mb-2.5"></textarea>
+    <label class="flex items-center gap-2.5 py-1 text-sm font-semibold cursor-pointer"><input id="tePrio" type="checkbox" class="w-5 h-5 accent-rose-600"> ⚖️ Prioridade legal</label>
+    <p id="teErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeTicketEdit()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="saveTicketEdit()" class="btn btn-primary flex-1 py-3 text-sm">Salvar correção</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR CADASTRO -->
+<div id="modalEdit" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">✏️</div>
+      <div><h3 class="font-display font-bold text-lg leading-tight">Editar dados cadastrais</h3><p id="eWho" class="text-xs text-slate-500"></p></div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3 mb-3">Toda alteração fica registrada na <b>auditoria</b> com seu nome, data e valores anterior/novo.</p>
+    <label class="lbl">NOME COMPLETO *</label>
+    <input id="eNome" class="inp mt-1 mb-2.5">
+    <div class="grid grid-cols-2 gap-2.5">
+      <div><label class="lbl">CPF</label><input id="eCpf" class="inp mt-1 mb-2.5"></div>
+      <div><label class="lbl">RG</label><input id="eRg" class="inp mt-1 mb-2.5"></div>
+    </div>
+    <label class="lbl">NOME DA MÃE *</label>
+    <input id="eMae" class="inp mt-1 mb-2.5">
+    <label class="lbl">DATA DE NASCIMENTO</label>
+    <input id="eNasc" type="date" class="inp mt-1 mb-2.5">
+    <label class="lbl">MODELO DA TORNOZELEIRA *</label>
+    <div class="grid grid-cols-2 gap-2.5 mt-1 mb-2.5">
+      <button type="button" data-emodelo="Spacecom" onclick="pickEditModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+      <button type="button" data-emodelo="Infinity" onclick="pickEditModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+    </div>
+    <p id="eErr" class="hidden text-xs text-rose-600 font-semibold"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeEditModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="saveEdit()" class="btn btn-primary flex-1 py-3 text-sm">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INICIAR ATENDIMENTO -->
+<div id="modalStart" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">▶</div>
+      <div><h3 class="font-display font-bold text-lg leading-tight">Iniciar atendimento</h3><span id="sCode" class="text-xs font-bold text-indigo-600"></span></div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3 mb-3">Confirma o início do atendimento?</p>
+    <div class="rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-sm">O ticket será <b>vinculado a <span id="sTecName" class="text-blue-800"></span></b> — e somente esse técnico poderá finalizar.</div>
+    <p id="sErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeStart()" class="btn btn-ghost flex-1 py-3 text-sm">Não</button>
+      <button onclick="confirmStart()" class="btn btn-primary flex-1 py-3 text-sm">Sim, iniciar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FINALIZAR -->
+<div id="modalFin" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl fade">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">✔</div>
+      <div><h3 class="font-display font-bold text-lg leading-tight">Finalizar atendimento</h3><span id="mCode" class="text-xs font-bold text-indigo-600"></span></div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3 mb-3">É obrigatório informar o <b>relatório da ação realizada</b> (procedimento, peça trocada, teste, orientação).</p>
+    <input id="mTec" readonly title="Técnico vinculado ao atendimento" placeholder="Técnico vinculado" class="inp mb-2.5 !bg-slate-100 font-bold">
+    <textarea id="mRel" rows="4" placeholder="Ex: Realizada troca da pulseira, teste de sinal OK, bateria 100%, orientado sobre carregamento diário..." class="inp"></textarea>
+    <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+      <p class="lbl mb-2">CHECKLIST TÉCNICO * (todos obrigatórios)</p>
+      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="sinal"> Teste de sinal / GPS OK</label>
+      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="bateria"> Bateria carregada e testada</label>
+      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="pulseira"> Pulseira e lacre íntegros</label>
+      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="orientacao"> Atendido orientado sobre cuidados</label>
+    </div>
+    <label class="lbl mt-3 block">FOTOS DO SERVIÇO (antes/depois, até 4)</label>
+    <input id="mFotos" type="file" multiple accept="image/*" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+    <p id="mErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
+    <div class="flex gap-2.5 mt-5">
+      <button onclick="closeModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="confirmFinish()" class="btn btn-green flex-1 py-3 text-sm">Confirmar e finalizar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-24 right-5 bg-slate-900 text-white text-sm font-medium pl-4 pr-5 py-3 rounded-2xl shadow-2xl z-50 border border-white/10"></div>
+
+<script>
+let session = JSON.parse(localStorage.getItem('te_session') || 'null');
+let role = session ? session.role : null;
+let lastVisaoPerson = null;
+let tickets = [], selPersonId = null, selPersonName = '', prio = false, modeloSel = '', cadModelo = '', editModelo = '', finishId = null;
+function paintModelBoxes(attr, val){
+  document.querySelectorAll('[' + attr + ']').forEach(b => {
+    const on = b.getAttribute(attr) === val;
+    const space = b.getAttribute(attr) === 'Spacecom';
+    b.className = 'relative rounded-2xl border-2 p-3 text-sm font-bold transition min-h-[64px] active:scale-95 ' + (on
+      ? (space ? 'border-cyan-600 bg-cyan-50 text-cyan-900' : 'border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900')
+      : 'border-slate-200 bg-white text-slate-500');
+  });
+}
+function pickCadModelo(m){ cadModelo = (cadModelo === m) ? '' : m; paintModelBoxes('data-cmodelo', cadModelo); }
+function pickEditModelo(m){ editModelo = (editModelo === m) ? '' : m; paintModelBoxes('data-emodelo', editModelo); }
+let fModelo = '', fMotivo = '', fBusca = '', lastCallKey = '', seenMaxTicket = 0, seenInit = false;
+function setFilter(){
+  fModelo = document.getElementById('fModelo').value;
+  fMotivo = document.getElementById('fMotivo').value;
+  fBusca = document.getElementById('fBusca').value;
+  renderFila();
+}
+function sortQueueJS(list){
+  return [...list].sort((a, b) => {
+    if(!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+}
+async function callTicket(id){
+  try{ await api('/api/tickets/' + id + '/call', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calledBy: session ? session.user : '' }) }); loadAll(); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+function callNext(){
+  const next = sortQueueJS(tickets.filter(t => t.status === 'aguardando' && podeAssumir(t)))[0];
+  if(!next) return toast('Nenhum ticket disponível para você (Infinity é do Júlio)');
+  callTicket(next.id);
+}
+
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000); }
+// --- Login / sessão ---
+async function doLogin(){
+  const user = document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginErr');
+  try{
+    const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
+    session = s; role = s.role;
+    localStorage.setItem('te_session', JSON.stringify(s));
+    document.getElementById('loginPass').value = '';
+    err.classList.add('hidden');
+    enterApp();
+    toast('Bem-vindo(a), ' + s.name + '!');
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+function logout(){
+  session = null; role = null;
+  localStorage.removeItem('te_session');
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('chatPanel').classList.add('chat-hidden');
+}
+function paintUser(){
+  const chip = document.getElementById('userChip');
+  const dot = session && session.role === 'recepcao' ? '🧾' : session && session.role === 'admin' ? '👑' : '🔧';
+  chip.innerHTML = session ? `<span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">${dot}</span> ${esc(session.name)} <span class="font-normal text-slate-400">(${esc(session.user)})</span>` : '—';
+  // Permissões por perfil
+  const r = session ? session.role : null;
+  document.querySelectorAll('[data-tab]').forEach(b => {
+    const t = b.dataset.tab;
+    let show = true;
+    if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
+    else if(r === 'tecnico') show = t !== 'usuarios';
+    else if(r === 'admin') show = t !== 'tecnico';
+    b.classList.toggle('hidden', !show);
+  });
+  applyNavOrder();
+}
+// Ordem do menu por perfil (admin: Dashboard no topo)
+const NAV_ORDER = {
+  admin: ['dash', 'fila', 'checkin', 'visao', 'usuarios'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'visao', 'dash'],
+  recepcao: ['fila', 'checkin', 'tecnico', 'visao', 'dash', 'usuarios']
+};
+function applyNavOrder(){
+  const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
+  document.querySelectorAll('#sidebarNav,#mobileNav').forEach(nav => {
+    [...nav.querySelectorAll('.tabbtn')]
+      .sort((a, b) => order.indexOf(a.dataset.tab) - order.indexOf(b.dataset.tab))
+      .forEach(b => nav.appendChild(b));
+  });
+}
+function enterApp(){
+  document.getElementById('loginOverlay').classList.add('hidden');
+  paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat();
+  try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){}
+}
+function canSee(t){
+  if(!session) return false;
+  if(session.role==='admin') return t!=='tecnico';
+  if(session.role==='recepcao') return ['fila','checkin'].includes(t);
+  return t!=='usuarios';
+}
+function go(tab){
+  if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
+  ['fila','checkin','tecnico','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
+  if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
+  if(tab==='dash') loadDash();
+  if(tab==='usuarios') loadUsersAdmin();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
+function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initials(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
+
+async function api(p, opt){ const r=await fetch(p,opt); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Erro'); return j; }
+
+async function loadAll(){
+  try{
+    tickets = await api('/api/tickets');
+    if(!seenInit){ seenMaxTicket = tickets.length ? Math.max(...tickets.map(t => t.id)) : 0; seenInit = true; }
+    else if(tickets.length){
+      const news = tickets.filter(t => t.id > seenMaxTicket && t.status === 'aguardando' && (!session || t.createdBy !== session.user));
+      seenMaxTicket = Math.max(seenMaxTicket, ...tickets.map(t => t.id));
+      if(news.length){ chime(); toast('🎫 Novo ticket na fila: ' + news[0].code); }
+    }
+    const s = await api('/api/stats');
+    document.getElementById('stAguard').textContent=s.aguardando;
+    document.getElementById('stAtend').textContent=s.em_atendimento;
+    document.getElementById('stFin').textContent=s.finalizados;
+    document.getElementById('stPes').textContent=s.totalPessoas;
+    renderFila(); renderTec();
+  }catch(e){}
+}
+
+function modeloBadge(m){
+  if(!m) return '';
+  const isSpace = /space/i.test(m);
+  return `<span class="text-[10px] font-extrabold tracking-wide px-2.5 py-1 rounded-full ${isSpace?'bg-cyan-100 text-cyan-800':'bg-fuchsia-100 text-fuchsia-800'}">📡 ${esc(m)}</span>`;
+}
+// FILA
+const ALERT_MIN = 30;
+const alertedWait = new Set();
+function waitMin(iso){ return Math.floor((Date.now() - new Date(iso)) / 60000); }
+const CHECK_LABELS = { sinal: 'Sinal/GPS', bateria: 'Bateria', pulseira: 'Pulseira/lacre', orientacao: 'Orientado' };
+function checklistBadge(cl){
+  if(!cl) return '';
+  const keys = Object.keys(CHECK_LABELS).filter(k => cl[k]);
+  if(!keys.length) return '';
+  return `<p class="mt-1.5 flex flex-wrap gap-1">${keys.map(k => `<span class="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">✔ ${CHECK_LABELS[k]}</span>`).join('')}</p>`;
+}
+function fotosPosHtml(list){
+  if(!list || !list.length) return '';
+  return `<div class="mt-1.5 flex gap-1.5 flex-wrap">${list.map(a => `<a href="${esc(a.url)}" target="_blank"><img src="${esc(a.url)}" loading="lazy" class="w-14 h-14 rounded-lg object-cover border border-slate-200"></a>`).join('')}</div>`;
+}
+function statusPill(st){
+  if(st==='aguardando') return '<span class="text-[10px] font-extrabold tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">AGUARDANDO</span>';
+  if(st==='em_atendimento') return '<span class="text-[10px] font-extrabold tracking-wide bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">EM ATENDIMENTO</span>';
+  return '<span class="text-[10px] font-extrabold tracking-wide bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">FINALIZADO</span>';
+}
+function waitBadge(t){
+  if(t.status === 'aguardando' && waitMin(t.createdAt) > ALERT_MIN)
+    return '<span class="text-[10px] font-extrabold tracking-wide bg-orange-100 text-orange-800 px-2.5 py-1 rounded-full">ESPERA ALTA</span>';
+  return '';
+}
+function cardFila(t,i){
+  const prioB = t.prioridadeLegal ? '<span class="text-[10px] font-extrabold tracking-wide text-white px-2.5 py-1 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">⚖️ PRIORIDADE LEGAL</span>' : '';
+  return `<div class="card card-hover p-4 sm:p-5 ${t.prioridadeLegal&&t.status!=='finalizado'?'prio-glow':''}">
+    <div class="flex items-center gap-2 flex-wrap mb-3">
+      <span class="font-display font-extrabold text-lg text-slate-800 w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-sm">${i+1}</span>
+      <span class="text-xs font-extrabold text-indigo-600 tracking-wide">${esc(t.code)}</span>${prioB}${statusPill(t.status)}${modeloBadge(t.modeloTornozeleira)}${waitBadge(t)}
+      <span class="ml-auto text-[11px] font-semibold text-slate-400">⏱ ${tempo(t.createdAt)}</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="avatar w-10 h-10 text-sm">${initials(t.person?.nome)}</span>
+      <div class="min-w-0"><p class="font-bold text-sm truncate">${esc(t.person?.nome||'-')}</p>
+      <p class="text-xs text-slate-500 truncate">${esc(t.person?.cpf||t.person?.rg||'sem doc.')} • ${esc(t.motivo)}</p></div>
+    </div>
+    ${t.descricao?`<p class="text-xs mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 leading-relaxed">${esc(t.descricao)}</p>`:''}
+    ${filaActions(t)}
+  </div>`;
+}
+function filaActions(t){
+  if(!session || !['recepcao', 'admin'].includes(session.role)) return '';
+  if(t.status !== 'aguardando') return '';
+  return `<div class="flex gap-2 mt-3">
+    <button onclick="openTicketEdit(${t.id})" class="btn btn-ghost flex-1 py-2 text-xs">✏️ Corrigir</button>
+    <button onclick="cancelTicket(${t.id},'${esc(t.code)}')" class="btn flex-1 py-2 text-xs bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">🚫 Cancelar</button>
+  </div>`;
+}
+function renderFila(){
+  const all = tickets.filter(t=>t.status==='aguardando'||t.status==='em_atendimento');
+  const called = all.filter(t=>t.called).sort((a,b)=>new Date(b.calledAt||0)-new Date(a.calledAt||0))[0];
+  const banner = document.getElementById('callBanner');
+  const key = called ? called.id + '|' + called.calledAt : '';
+  if(called){
+    banner.classList.remove('hidden');
+    document.getElementById('callTxt').textContent = called.code + ' • ' + ((called.person && called.person.nome) || '') + (called.modeloTornozeleira ? ' • ' + called.modeloTornozeleira : '');
+    if(key !== lastCallKey){ if(lastCallKey !== '') chime(); lastCallKey = key; }
+  } else { banner.classList.add('hidden'); lastCallKey = ''; }
+  all.filter(t => t.status === 'aguardando').forEach(t => {
+    if(waitMin(t.createdAt) > ALERT_MIN && !alertedWait.has(t.id)){
+      alertedWait.add(t.id); chime();
+      toast('⏳ ' + t.code + ' aguardando há mais de ' + ALERT_MIN + ' min');
+    }
+  });
+  const q = (fBusca || '').toLowerCase();
+  const ativos = all.filter(t =>
+    (!fModelo || t.modeloTornozeleira === fModelo) &&
+    (!fMotivo || t.motivo === fMotivo) &&
+    (!q || (((t.person && t.person.nome) || '').toLowerCase().includes(q) || String(t.code || '').toLowerCase().includes(q)))
+  );
+  document.getElementById('filaList').innerHTML = ativos.length? ativos.map(cardFila).join('') : '<div class="col-span-2 bg-white border rounded-xl p-8 text-center text-sm text-slate-500">Fila vazia. Nenhum atendimento pendente. 🎉</div>';
+}
+
+// CHECKIN
+async function buscarPessoa(){
+  const q=document.getElementById('q').value.trim();
+  const box=document.getElementById('searchRes');
+  box.innerHTML='<p class="text-xs text-slate-500">Buscando...</p>';
+  try{
+    const list=await api('/api/persons?q='+encodeURIComponent(q));
+    box.innerHTML = list.length? list.map(p=>`<div class="border border-slate-200 rounded-xl p-3 flex items-center gap-3 text-sm bg-white">
+      <span class="avatar w-9 h-9 text-xs">${initials(p.nome)}</span>
+      <div class="flex-1 min-w-0"><b class="truncate block">${esc(p.nome)}</b><span class="text-xs text-slate-500">CPF: ${esc(p.cpf||'-')} • RG: ${esc(p.rg||'-')}</span> ${modeloBadge(p.modeloTornozeleira)}</div>
+      <button onclick="selectPerson(${p.id},'${esc(p.nome).replace(/'/g,"\\'")}','${esc(p.modeloTornozeleira||'')}')" class="btn btn-primary text-xs px-3.5 py-2">Selecionar</button>
+    </div>`).join('') : '<p class="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-3 text-center">Nenhum resultado. Cadastre abaixo. ⬇️</p>';
+  }catch(e){ box.innerHTML='<p class="text-xs text-rose-600">Erro na busca</p>'; }
+}
+function selectPerson(id,nome,modelo){ selPersonId=id; selPersonName=nome; document.getElementById('selPerson').className='rounded-xl p-3.5 text-sm mb-4 border border-emerald-300 bg-emerald-50 text-emerald-900'; document.getElementById('selPerson').innerHTML=`✅ <b>${esc(nome)}</b> selecionado (ID ${id}). Pronto para abrir o ticket.`; toast('Atendido selecionado: '+nome); if(modelo==='Spacecom'||modelo==='Infinity'){ modeloSel=modelo; paintModelo(); } }
+async function cadastrarPessoa(){
+  const body={ nome:document.getElementById('cNome').value, cpf:document.getElementById('cCpf').value, rg:document.getElementById('cRg').value, nomeMae:document.getElementById('cMae').value, dataNascimento:document.getElementById('cNasc').value, modeloTornozeleira:cadModelo };
+  if(!cadModelo) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
+  try{ const p=await api('/api/persons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); selectPerson(p.id,p.nome,p.modeloTornozeleira); toast('Cadastrado com sucesso!'); ['cNome','cCpf','cRg','cMae'].forEach(i=>document.getElementById(i).value=''); document.getElementById('cNasc').value=''; cadModelo=''; paintModelBoxes('data-cmodelo',''); loadAll(); }
+  catch(e){ toast('⚠️ '+e.message); }
+}
+function togglePrio(){ prio=!prio; const b=document.getElementById('prioBtn'); b.textContent=prio?'SIM ✓':'NÃO'; b.className='px-5 py-2 rounded-full text-xs font-extrabold transition '+(prio?'toggle-on':'bg-white border border-slate-200 text-slate-500'); }
+function pickModelo(m){ modeloSel = (modeloSel === m) ? '' : m; paintModelo(); }
+function paintModelo(){
+  document.querySelectorAll('[data-modelo]').forEach(b => {
+    const on = b.dataset.modelo === modeloSel;
+    const space = b.dataset.modelo === 'Spacecom';
+    b.className = 'relative rounded-2xl border-2 p-4 text-sm font-bold transition min-h-[84px] active:scale-95 ' + (on
+      ? (space ? 'border-cyan-600 bg-cyan-50 text-cyan-900 shadow-lg shadow-cyan-100' : 'border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900 shadow-lg shadow-fuchsia-100')
+      : 'border-slate-200 bg-white text-slate-500');
+    const chk = b.querySelector('.mcheck');
+    if (chk) chk.style.display = on ? 'flex' : 'none';
+  });
+}
+async function abrirTicket(){
+  if(!selPersonId) return toast('⚠️ Selecione o atendido primeiro');
+  if(!modeloSel) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
+  const fd=new FormData();
+  fd.append('personId',selPersonId); fd.append('motivo',document.getElementById('tMotivo').value);
+  fd.append('descricao',document.getElementById('tDesc').value); fd.append('prioridadeLegal',prio);
+  fd.append('modeloTornozeleira',modeloSel);
+  fd.append('tecnicoRecepcao',document.getElementById('tResp').value);
+  fd.append('createdBy', session ? session.user : '');
+  [...document.getElementById('tFiles').files].forEach(f=>fd.append('anexos',f));
+  try{ const t=await fetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
+    toast('🎫 Ticket '+t.code+' criado!'); document.getElementById('tDesc').value=''; document.getElementById('tFiles').value='';
+    modeloSel=''; paintModelo(); prio=false;
+    const pb=document.getElementById('prioBtn'); pb.textContent='NÃO'; pb.className='px-5 py-2 rounded-full text-xs font-extrabold transition bg-white border border-slate-200 text-slate-500';
+    loadAll(); go('fila');
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+// --- CORRIGIR / CANCELAR / REABRIR TICKET ---
+let editTicketId = null, ticketModelo = '';
+function pickTicketModelo(m){ ticketModelo = (ticketModelo === m) ? '' : m; paintModelBoxes('data-tmodelo', ticketModelo); }
+function openTicketEdit(id){
+  const t = tickets.find(x => x.id === id);
+  if(!t) return;
+  editTicketId = id; ticketModelo = t.modeloTornozeleira || '';
+  document.getElementById('teCode').textContent = t.code;
+  document.getElementById('teMotivo').value = t.motivo;
+  document.getElementById('teDesc').value = t.descricao || '';
+  document.getElementById('tePrio').checked = !!t.prioridadeLegal;
+  paintModelBoxes('data-tmodelo', ticketModelo);
+  document.getElementById('teErr').classList.add('hidden');
+  document.getElementById('modalTicket').classList.remove('hidden');
+}
+function closeTicketEdit(){ document.getElementById('modalTicket').classList.add('hidden'); editTicketId = null; }
+async function saveTicketEdit(){
+  const err = document.getElementById('teErr');
+  try{
+    await api('/api/tickets/' + editTicketId + '/edit', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: session.user, motivo: document.getElementById('teMotivo').value, modeloTornozeleira: ticketModelo, descricao: document.getElementById('teDesc').value, prioridadeLegal: document.getElementById('tePrio').checked }) });
+    closeTicketEdit(); toast('Ticket corrigido!'); loadAll();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function cancelTicket(id, code){
+  if(!confirm('Cancelar o ticket ' + code + '? Ele sai da fila (registrado em auditoria).')) return;
+  try{ await api('/api/tickets/' + id + '/cancel', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: session.user }) }); toast('Ticket cancelado'); loadAll(); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+function reopenBtn(t){
+  const owner = ticketOwner(t);
+  if(session && session.role === 'tecnico' && owner && owner.toLowerCase() === String(session.user).toLowerCase())
+    return `<button onclick="reopenTicket(${t.id},'${esc(t.code)}')" class="btn btn-ghost mt-2 w-full py-2 text-xs">↩ Reabrir atendimento</button>`;
+  return '';
+}
+async function reopenTicket(id, code){
+  if(!confirm('Reabrir o ticket ' + code + '? Ele volta para atendimento com o mesmo técnico.')) return;
+  try{ await api('/api/tickets/' + id + '/reopen', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: session.user }) }); toast('Ticket reaberto!'); loadAll(); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+
+// --- BACKUP ---
+function downloadBackup(){
+  window.open('/api/backup?requester=' + encodeURIComponent(session.user), '_blank');
+}
+async function restoreBackup(){
+  const inp = document.getElementById('restoreFile');
+  if(!inp.files.length) return;
+  if(!confirm('Restaurar este backup? Os dados atuais serão substituídos (cópia de segurança guardada no servidor).')){ inp.value = ''; return; }
+  const fd = new FormData();
+  fd.append('requester', session.user); fd.append('backup', inp.files[0]);
+  const msg = document.getElementById('bkMsg');
+  try{
+    const r = await fetch('/api/restore', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || 'Erro ao restaurar');
+    msg.textContent = 'Backup restaurado: ' + j.persons + ' pessoas, ' + j.tickets + ' tickets, ' + j.users + ' usuários.';
+    msg.className = 'text-xs font-semibold mt-2 text-emerald-700'; msg.classList.remove('hidden');
+    loadAll();
+  }catch(e){ msg.textContent = '⚠️ ' + e.message; msg.className = 'text-xs font-semibold mt-2 text-rose-600'; msg.classList.remove('hidden'); }
+  inp.value = '';
+}
+
+// TECNICO
+function atendBtn(t){
+  const owner = ticketOwner(t);
+  if(t.modeloTornozeleira === 'Infinity' && session && session.user !== 'julio' && session.role !== 'admin') return lockInfinity();
+  const mine = session && owner && owner.toLowerCase() === String(session.user).toLowerCase();
+  if (mine || !owner) return `<button onclick="openModal(${t.id},'${esc(t.code)}')" class="btn btn-green mt-2 w-full py-2.5 text-xs">✔ Finalizar com relatório</button>`;
+  return `<p class="mt-2 text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Vinculado a ${esc(t.tecnico || owner)}</p>`;
+}
+function renderTec(){
+  const ag=tickets.filter(t=>t.status==='aguardando'), at=tickets.filter(t=>t.status==='em_atendimento'), fi=tickets.filter(t=>t.status==='finalizado').slice(0,6);
+  const mini=(t,btn)=>`<div class="card card-hover p-4 text-sm ${t.prioridadeLegal?'prio-glow':''}">
+    <div class="flex gap-2 items-center flex-wrap"><b class="text-indigo-600 text-xs tracking-wide">${esc(t.code)}</b>${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE</span>':''}${modeloBadge(t.modeloTornozeleira)}<span class="ml-auto text-[11px] font-semibold text-slate-400">${tempo(t.createdAt)}</span></div>
+    <div class="flex items-center gap-2.5 mt-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(t.person?.nome)}</span>
+    <div><p class="font-bold leading-tight">${esc(t.person?.nome||'')}</p><p class="text-xs text-slate-500">${esc(t.motivo)}</p></div></div>${btn||''}</div>`;
+  document.getElementById('tecAguard').innerHTML=ag.length?ag.map(t=>mini(t,startBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nada aguardando.</p>';
+  document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
+  document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
+}
+// Regra Infinity: só o Júlio (ou admin) assume
+function podeAssumir(t){
+  if(!t || t.modeloTornozeleira !== 'Infinity') return true;
+  if(!session) return false;
+  return session.user === 'julio' || session.role === 'admin';
+}
+function lockInfinity(){
+  return `<p class="mt-2 text-[11px] font-bold text-fuchsia-800 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Infinity • exclusivo Júlio Cesar</p>`;
+}
+function startBtn(t){
+  if(!podeAssumir(t)) return lockInfinity();
+  return `<button onclick="startTicket(${t.id})" class="btn btn-primary mt-3 w-full py-2.5 text-xs">▶ Iniciar atendimento</button>`;
+}
+let startId = null;
+function ticketOwner(t){
+  if(!t) return '';
+  if(t.tecnicoUser) return String(t.tecnicoUser);
+  const m = String(t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/);
+  return m ? m[1] : '';
+}
+function startTicket(id){
+  if(!session) return toast('⚠️ Entre com seu usuário técnico');
+  if(session.role!=='tecnico') return toast('🔒 Só o Setor Técnico pode iniciar atendimentos');
+  const t = tickets.find(x => x.id === id);
+  startId = id;
+  if(!podeAssumir(t)){ toast('🔒 Ticket Infinity: somente Júlio Cesar pode assumir'); startId = null; return; }
+  document.getElementById('sCode').textContent = t ? t.code + ' • ' + ((t.person && t.person.nome) || '') : '';
+  document.getElementById('sTecName').textContent = session.name + ' (' + session.user + ')';
+  document.getElementById('sErr').classList.add('hidden');
+  document.getElementById('modalStart').classList.remove('hidden');
+}
+function closeStart(){ document.getElementById('modalStart').classList.add('hidden'); startId = null; }
+async function confirmStart(){
+  const err = document.getElementById('sErr');
+  const tec = session.name + ' (' + session.user + ')';
+  try{
+    await api('/api/tickets/' + startId + '/start', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tecnico: tec, tecnicoUser: session.user, startedBy: session.user }) });
+    closeStart(); toast('▶ Atendimento vinculado a ' + session.name); loadAll();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+function openModal(id,code){
+  const t = tickets.find(x => x.id === id);
+  const owner = ticketOwner(t);
+  if (owner && session && owner.toLowerCase() !== String(session.user).toLowerCase()){ toast('🔒 Ticket vinculado a ' + ((t && t.tecnico) || owner)); return; }
+  finishId=id;
+  document.querySelectorAll('.ckItem').forEach(c => c.checked = false);
+  const mf = document.getElementById('mFotos'); if(mf) mf.value = ''; document.getElementById('mCode').textContent=code; document.getElementById('mTec').value=((t&&t.tecnico)||(session?session.name+' ('+session.user+')':'')); document.getElementById('mRel').value=''; document.getElementById('mErr').classList.add('hidden'); document.getElementById('modalFin').classList.remove('hidden'); }
+function closeModal(){ document.getElementById('modalFin').classList.add('hidden'); finishId=null; }
+async function confirmFinish(){
+  const rel=document.getElementById('mRel').value, tec=document.getElementById('mTec').value, err=document.getElementById('mErr');
+  if(!tec.trim()){ err.textContent='Informe o nome do técnico.'; err.classList.remove('hidden'); return; }
+  if(!rel.trim()||rel.trim().length<10){ err.textContent='Relatório obrigatório: descreva a ação realizada (mín. 10 caracteres).'; err.classList.remove('hidden'); return; }
+  const cl={}; document.querySelectorAll('.ckItem').forEach(c=>cl[c.dataset.k]=c.checked);
+  if(!['sinal','bateria','pulseira','orientacao'].every(k=>cl[k])){ err.textContent='Checklist incompleto: marque os 4 itens obrigatórios.'; err.classList.remove('hidden'); return; }
+  try{
+    const fd=new FormData();
+    fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
+    fd.append('checklist',JSON.stringify(cl));
+    [...document.getElementById('mFotos').files].slice(0,4).forEach(f=>fd.append('fotos',f));
+    const r=await fetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||'Erro ao finalizar');
+    closeModal(); toast('Atendimento finalizado!'); loadAll();
+  }
+  catch(e){ err.textContent=e.message; err.classList.remove('hidden'); }
+}
+
+// VISAO 360 — Setor Técnico + Admin (recepção bloqueada)
+function renderVisaoGate(){
+  const lock = role !== 'tecnico' && role !== 'admin';
+  document.getElementById('visaoLock').classList.toggle('hidden',!lock);
+  document.getElementById('visaoBody').classList.toggle('hidden',lock);
+}
+// Busca instantânea enquanto digita (com debounce)
+let visaoTimer = null;
+function visaoTyping(){
+  clearTimeout(visaoTimer);
+  visaoTimer = setTimeout(buscarVisao, 350);
+}
+async function buscarVisao(){
+  const q=document.getElementById('vQ').value.trim();
+  try{
+    const list=await api('/api/persons?q='+encodeURIComponent(q));
+    document.getElementById('visaoRes').innerHTML=list.map(p=>`<button onclick="openVisao(${p.id})" class="card card-hover p-3.5 text-left flex items-center gap-3"><span class="avatar w-10 h-10 text-sm">${initials(p.nome)}</span><span class="min-w-0"><b class="text-sm block truncate">${esc(p.nome)}</b><span class="text-xs text-slate-500">${esc(p.cpf||p.rg||'')}</span> ${modeloBadge(p.modeloTornozeleira)}</span></button>`).join('')||'<p class="text-sm text-slate-500">Nada encontrado.</p>';
+  }catch(e){ toast(e.message); }
+}
+async function openVisao(id){
+  try{
+    const {person,tickets:hist,audit=[]}=await api('/api/persons/'+id);
+    lastVisaoPerson = person;
+    const total=hist.length, fin=hist.filter(t=>t.status==='finalizado').length;
+    document.getElementById('visaoDetail').innerHTML=`
+      <div class="card p-6 text-center">
+        <span class="avatar w-16 h-16 text-xl mx-auto">${initials(person.nome)}</span>
+        <h3 class="font-display font-bold mt-3 leading-tight">${esc(person.nome)}</h3>
+        <p class="mt-1.5">${modeloBadge(person.modeloTornozeleira) || '<span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">MODELO NÃO INFORMADO</span>'}</p>
+        <div class="text-xs text-slate-600 mt-3 space-y-1.5 text-left bg-slate-50 border border-slate-100 rounded-xl p-3.5"><p>CPF: <b>${esc(person.cpf||'-')}</b></p><p>RG: <b>${esc(person.rg||'-')}</b></p><p>Mãe: <b>${esc(person.nomeMae||'-')}</b></p><p>Nasc.: <b>${esc(person.dataNascimento||'-')}</b></p><p>Desde: ${new Date(person.createdAt).toLocaleDateString('pt-BR')}</p></div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-center"><div class="rounded-xl p-2.5 bg-indigo-50 border border-indigo-100"><p class="font-display font-extrabold text-lg text-indigo-700">${total}</p><p class="text-[10px] font-bold text-indigo-500">CHAMADOS</p></div><div class="rounded-xl p-2.5 bg-emerald-50 border border-emerald-100"><p class="font-display font-extrabold text-lg text-emerald-700">${fin}</p><p class="text-[10px] font-bold text-emerald-600">FINALIZADOS</p></div></div>
+        <button onclick="openEditModal()" class="btn btn-primary w-full mt-3 py-2.5 text-xs">✏️ Editar dados cadastrais</button>
+      </div>
+      <div class="lg:col-span-2 card p-5 sm:p-6">
+        <h3 class="font-display font-bold mb-4">🕘 Linha do tempo — histórico completo</h3>
+        <div class="relative timeline pl-10 space-y-4">${hist.map(t=>`
+          <div class="relative"><span class="absolute -left-10 top-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow ${t.status==='finalizado'?'text-white':''}" style="${t.status==='finalizado'?'background:linear-gradient(135deg,#059669,#10b981)':'background:#fbbf24;color:#78350f'}">${t.status==='finalizado'?'✓':'•'}</span>
+          <div class="border rounded-2xl p-3.5 text-sm bg-white ${t.prioridadeLegal?'border-rose-300':'border-slate-200'}">
+            <div class="flex gap-2 flex-wrap items-center"><b class="text-indigo-600 text-xs">${esc(t.code)}</b><span class="text-xs font-bold">${esc(t.motivo)}</span>${modeloBadge(t.modeloTornozeleira)}${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE LEGAL</span>':''}<span class="ml-auto text-[11px] text-slate-400">${new Date(t.createdAt).toLocaleString('pt-BR')}</span></div>
+            ${t.descricao?`<p class="text-xs mt-1.5 text-slate-600">${esc(t.descricao)}</p>`:''}
+            ${t.relatorio?`<p class="text-xs mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 leading-relaxed"><b>Relatório (${esc(t.tecnico||'técnico')}):</b> ${esc(t.relatorio)}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}`:''}
+            ${t.anexos?.length?`<p class="text-[11px] mt-1.5">📎 ${t.anexos.map(a=>`<a class="text-indigo-600 underline font-semibold" target="_blank" href="${a.url}">${esc(a.name)}</a>`).join(' • ')}</p>`:''}
+          </div></div>`).join('')||'<p class="text-sm text-slate-500">Sem chamados.</p>'}</div>
+      </div>
+      <div class="card p-5 sm:p-6 lg:col-span-3">
+        <h3 class="font-display font-bold mb-1">🕵️ Histórico de alterações (auditoria)</h3>
+        <p class="text-xs text-slate-500 mb-4">Quem alterou os dados cadastrais e o que foi mudado — do mais recente ao mais antigo.</p>
+        <div class="space-y-2.5">${audit.map(a=>`
+          <div class="border border-slate-200 rounded-2xl p-3.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="avatar w-7 h-7 text-[10px]">${initials(a.byName)}</span>
+              <p class="text-sm"><b>${esc(a.byName)}</b> <span class="text-slate-500">alterou os dados cadastrais</span></p>
+              <span class="ml-auto text-[11px] font-semibold text-slate-400">${new Date(a.at).toLocaleString('pt-BR')}</span>
+            </div>
+            <ul class="mt-2 space-y-1.5">${a.changes.map(c=>`<li class="text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">🏷️ <b>${esc(c.label)}:</b> <span class="line-through text-slate-400">${esc(c.from||'—')}</span> → <b class="text-emerald-700">${esc(c.to||'—')}</b></li>`).join('')}</ul>
+          </div>`).join('')||'<p class="text-sm text-slate-500">Nenhuma alteração registrada. Os dados originais estão intactos.</p>'}</div>
+      </div>`;
+  }catch(e){ toast(e.message); }
+}
+
+// --- EDIÇÃO CADASTRAL (Visão 360°) ---
+function openEditModal(){
+  if (!lastVisaoPerson) return;
+  const p = lastVisaoPerson;
+  document.getElementById('eNome').value = p.nome || '';
+  document.getElementById('eCpf').value = p.cpf || '';
+  document.getElementById('eRg').value = p.rg || '';
+  document.getElementById('eMae').value = p.nomeMae || '';
+  document.getElementById('eNasc').value = p.dataNascimento || '';
+  editModelo = (p.modeloTornozeleira === 'Spacecom' || p.modeloTornozeleira === 'Infinity') ? p.modeloTornozeleira : '';
+  paintModelBoxes('data-emodelo', editModelo);
+  document.getElementById('eWho').textContent = 'Atendido: ' + (p.nome || '') + ' (ID ' + p.id + ')';
+  document.getElementById('eErr').classList.add('hidden');
+  document.getElementById('modalEdit').classList.remove('hidden');
+}
+function closeEditModal(){ document.getElementById('modalEdit').classList.add('hidden'); }
+async function saveEdit(){
+  const err = document.getElementById('eErr');
+  const body = {
+    nome: document.getElementById('eNome').value,
+    cpf: document.getElementById('eCpf').value,
+    rg: document.getElementById('eRg').value,
+    nomeMae: document.getElementById('eMae').value,
+    dataNascimento: document.getElementById('eNasc').value,
+    modeloTornozeleira: editModelo,
+    editedBy: session ? session.user : ''
+  };
+  if(!editModelo){ err.textContent = '⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity).'; err.classList.remove('hidden'); return; }
+  try{
+    const r = await api('/api/persons/' + lastVisaoPerson.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    closeEditModal();
+    toast('✅ Cadastro atualizado (' + r.changes.length + ' campo(s)). Auditoria registrada.');
+    openVisao(lastVisaoPerson.id);
+    if (document.getElementById('vQ').value.trim()) buscarVisao();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+
+// --- DASHBOARD GERENCIAL ---
+let chM = null, chMo = null, chD = null;
+function ensureChart(){
+  return new Promise((res, rej) => {
+    if(typeof Chart !== 'undefined') return res();
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+function dashCard(label, val, color){
+  return `<div class="card card-hover p-4 sm:p-5"><p class="font-display text-2xl font-extrabold leading-none ${color}">${val}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1.5">${label}</p></div>`;
+}
+async function loadDash(){
+  try{
+    const d = await api('/api/dashboard');
+    document.getElementById('dashCards').innerHTML =
+      dashCard('TICKETS HOJE', d.hoje, 'text-slate-800') +
+      dashCard('AGUARDANDO', d.aguardando, 'text-amber-600') +
+      dashCard('EM ATENDIMENTO', d.emAtendimento, 'text-blue-600') +
+      dashCard('FINALIZADOS (TOTAL)', d.finalizados, 'text-emerald-600') +
+      dashCard('ESPERA MÉDIA', d.esperaMediaMin + ' min', 'text-indigo-600') +
+      dashCard('ATEND. MÉDIO', d.atendimentoMedioMin + ' min', 'text-violet-600') +
+      dashCard('PRIORIDADE NA FILA', d.prioridade, 'text-rose-600') +
+      dashCard('ESPERA +30MIN', (d.esperaAlta == null ? 0 : d.esperaAlta), 'text-orange-600') +
+      dashCard('ATENDIDOS', document.getElementById('stPes').textContent, 'text-slate-800');
+    try{ await ensureChart(); }catch(e){}
+    if(typeof Chart !== 'undefined'){
+      if(chM) chM.destroy(); if(chMo) chMo.destroy(); if(chD) chD.destroy();
+      const grid = { color: '#eef2f7' };
+      chM = new Chart(document.getElementById('chMotivo'), { type: 'bar',
+        data: { labels: Object.keys(d.byMotivo), datasets: [{ data: Object.values(d.byMotivo), backgroundColor: '#6366f1', borderRadius: 8 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
+      chMo = new Chart(document.getElementById('chModelo'), { type: 'doughnut',
+        data: { labels: Object.keys(d.byModelo), datasets: [{ data: Object.values(d.byModelo), backgroundColor: ['#06b6d4', '#d946ef', '#94a3b8'] }] },
+        options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false } });
+      const days = Object.keys(d.byDay);
+      chD = new Chart(document.getElementById('chDias'), { type: 'line',
+        data: { labels: days.map(x => x.slice(8, 10) + '/' + x.slice(5, 7)), datasets: [{ data: Object.values(d.byDay), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.15)', fill: true, tension: .4, pointRadius: 3 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
+    }
+    document.getElementById('dashTec').innerHTML = d.byTec.length ? d.byTec.map(x => `<div class="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3 py-2 text-xs"><span class="avatar w-8 h-8 text-[11px]">${initials(x.tecnico)}</span><b class="flex-1 truncate">${esc(x.tecnico)}</b><span class="text-slate-500">${x.iniciados} inic. • <b class="text-emerald-700">${x.finalizados} fin.</b></span></div>`).join('') : '<p class="text-xs text-slate-400">Sem dados.</p>';
+    const feed = await api('/api/audit?limit=12');
+    document.getElementById('dashFeed').innerHTML = feed.length ? feed.map(auditItem).join('') : '<p class="text-xs text-slate-400">Sem atividade registrada.</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+function auditItem(a){
+  const icon = a.kind === 'ticket' ? ({ criado: '🎫', iniciado: '▶', finalizado: '✔', editado: '📝', cancelado: '🚫', reaberto: '🔄' }[a.action] || '•') : '✏️';
+  const what = a.kind === 'ticket'
+    ? `<b>${esc(a.ref || '')}</b> ${esc(a.action || '')} — ${esc(a.personName || '')}${a.summary ? ' • ' + esc(a.summary) : ''}`
+    : `<b>${esc(a.personName || '')}</b> alterou cadastro (${(a.changes || []).map(c => esc(c.label)).join(', ')})`;
+  return `<div class="flex gap-2.5 items-start border border-slate-200 rounded-xl p-2.5 text-xs"><span class="text-base flex-none">${icon}</span><div class="min-w-0 flex-1">${what}<p class="text-slate-400 mt-0.5">${esc(a.byName || '?')} • ${new Date(a.at).toLocaleString('pt-BR')}</p></div></div>`;
+}
+function exportCSV(){
+  api('/api/tickets').then(list => {
+    const rows = [['Codigo', 'Atendido', 'CPF', 'RG', 'Motivo', 'Modelo', 'Prioridade', 'Status', 'Tecnico', 'CriadoEm', 'IniciadoEm', 'FinalizadoEm']];
+    list.forEach(t => rows.push([t.code, ((t.person || {}).nome || ''), ((t.person || {}).cpf || ''), ((t.person || {}).rg || ''), t.motivo, (t.modeloTornozeleira || ''), (t.prioridadeLegal ? 'SIM' : 'NAO'), t.status, (t.tecnico || ''), (t.createdAt || ''), (t.startedAt || ''), (t.finishedAt || '')]));
+    const csv = rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\n');
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'tickets.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }).catch(e => toast('⚠️ ' + e.message));
+}
+
+// --- MINHA CONTA + ADMIN USUÁRIOS ---
+function openAccount(){
+  if(!session) return;
+  document.getElementById('accWho').textContent = session.name + ' (' + session.user + ') • perfil ' + session.role;
+  document.getElementById('accCur').value = '';
+  document.getElementById('accNew').value = '';
+  document.getElementById('accErr').classList.add('hidden');
+  document.getElementById('modalAccount').classList.remove('hidden');
+}
+function closeAccount(){ document.getElementById('modalAccount').classList.add('hidden'); }
+async function saveAccount(){
+  const err = document.getElementById('accErr');
+  try{
+    await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
+    closeAccount(); toast('Senha atualizada!');
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function loadUsersAdmin(){
+  try{
+    const list = await api('/api/users');
+    const badge = r => r === 'admin' ? '<span class="text-[10px] font-extrabold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">ADMIN</span>' : r === 'tecnico' ? '<span class="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">TÉCNICO</span>' : '<span class="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">RECEPÇÃO</span>';
+    document.getElementById('usersList').innerHTML = list.map(u => `<div class="border ${u.active === false ? 'border-slate-200 bg-slate-50 opacity-70' : 'border-slate-200'} rounded-xl p-3 flex items-center gap-3 text-sm"><span class="avatar w-9 h-9 text-xs">${initials(u.name)}</span><div class="flex-1 min-w-0"><b class="block truncate">${esc(u.name)}</b><span class="text-xs text-slate-500">@${esc(u.user)}</span></div><div class="flex flex-col gap-1 items-end">${badge(u.role)}${u.active === false ? '<span class="text-[10px] font-extrabold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">INATIVO</span>' : ''}</div><div class="flex flex-col gap-1"><button onclick="openUserEdit('${esc(u.user)}')" class="btn btn-ghost text-xs px-2.5 py-1.5">Editar</button><button onclick="resetUserPass('${esc(u.user)}')" title="Redefinir senha" class="btn btn-ghost text-xs px-2.5 py-1.5">Senha</button>${u.user !== session.user ? `<button onclick="toggleUserActive('${esc(u.user)}', ${u.active === false ? 'true' : 'false'})" class="btn text-xs px-2.5 py-1.5 ${u.active === false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${u.active === false ? 'Ativar' : 'Desativar'}</button><button onclick="deleteUser('${esc(u.user)}')" title="Remover" class="btn text-xs px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200">Remover</button>` : ''}</div></div>`).join('');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function createUser(){
+  const body = { requester: session.user, user: document.getElementById('uUser').value, name: document.getElementById('uName').value, role: document.getElementById('uRole').value, pass: document.getElementById('uPass').value };
+  try{
+    await api('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    toast('Usuário criado!');
+    ['uUser', 'uName', 'uPass'].forEach(i => document.getElementById(i).value = '');
+    loadUsersAdmin();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function deleteUser(u){
+  if(!confirm('Remover o usuário @' + u + '?')) return;
+  try{ await api('/api/users/' + encodeURIComponent(u), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester: session.user }) }); toast('Usuário removido'); loadUsersAdmin(); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+async function resetUserPass(u){
+  const p = prompt('Nova senha para @' + u + ' (mín. 4 caracteres):', '');
+  if(!p) return;
+  try{ await api('/api/users/' + encodeURIComponent(u) + '/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester: session.user, pass: p }) }); toast('Senha redefinida!'); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+let editUserId = null;
+function openUserEdit(u){
+  api('/api/users').then(list => {
+    const x = list.find(i => i.user === u);
+    if(!x) return toast('Usuário não encontrado');
+    editUserId = u;
+    document.getElementById('ueWho').textContent = '@' + x.user;
+    document.getElementById('ueName').value = x.name || '';
+    document.getElementById('ueRole').value = x.role || 'recepcao';
+    document.getElementById('ueActive').checked = x.active !== false;
+    document.getElementById('ueErr').classList.add('hidden');
+    document.getElementById('modalUser').classList.remove('hidden');
+  }).catch(e => toast('⚠️ ' + e.message));
+}
+function closeUserEdit(){ document.getElementById('modalUser').classList.add('hidden'); editUserId = null; }
+async function saveUserEdit(){
+  const err = document.getElementById('ueErr');
+  try{
+    await api('/api/users/' + encodeURIComponent(editUserId), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester: session.user, name: document.getElementById('ueName').value, role: document.getElementById('ueRole').value, active: document.getElementById('ueActive').checked }) });
+    closeUserEdit(); toast('Usuário atualizado!'); loadUsersAdmin();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function toggleUserActive(u, on){
+  try{ await api('/api/users/' + encodeURIComponent(u), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester: session.user, active: on }) }); toast(on ? 'Usuário ativado!' : 'Usuário desativado!'); loadUsersAdmin(); }
+  catch(e){ toast('⚠️ ' + e.message); }
+}
+
+// --- CHAT DA EQUIPE ---
+let chatOpen = false, lastChatId = Number(localStorage.getItem('te_lastchat') || 0);
+function toggleChat(){
+  chatOpen = !chatOpen;
+  document.getElementById('chatPanel').classList.toggle('chat-hidden', !chatOpen);
+  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); }
+}
+let chatMaxId = 0, chatCache = [];
+function fmtSize(b){ b=Number(b||0); if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
+function chatAnexo(a, mine){
+  const isImg = (a.mimetype||'').startsWith('image/');
+  if (isImg) return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}"><img src="${esc(a.url)}" loading="lazy" class="mt-1.5 rounded-xl max-h-36 max-w-full border border-white/20"></a>`;
+  return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}" class="mt-1.5 flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold break-all ${mine?'bg-white/20 text-white':'bg-slate-100 text-slate-700'}"><span class="text-sm flex-none">📄</span><span class="min-w-0 truncate">${esc(a.name)}</span><span class="flex-none opacity-70">${fmtSize(a.size)}</span></a>`;
+}
+let activeConvo = 'todos', allUsers = [];
+async function loadUsers(){ try{ allUsers = await api('/api/users'); renderTabs(); updateChatPlaceholder(); }catch(e){} }
+function convoUnread(to){
+  if(!session) return 0;
+  return chatCache.filter(m => {
+    if(m.user === session.user || m.id <= lastChatId) return false;
+    const t = String(m.to || 'todos').toLowerCase();
+    if(to === 'todos') return t === 'todos';
+    return m.user === to && t === session.user;
+  }).length;
+}
+function renderTabs(){
+  if(!session) return;
+  const box = document.getElementById('chatTabs');
+  if(!box) return;
+  const others = allUsers.filter(u => u.user !== session.user);
+  const tab = (val, label) => {
+    const on = activeConvo === val, un = convoUnread(val);
+    return `<button onclick="setConvo('${val}')" class="relative flex-none text-[11px] font-extrabold px-3 py-1.5 rounded-full transition ${on ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}" ${on ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>${label}${un ? '<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 border-2 border-white"></span>' : ''}</button>`;
+  };
+  box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : 'TEC ') + esc(u.name))).join('');
+}
+function setConvo(to){
+  activeConvo = to; renderTabs(); updateChatPlaceholder(); loadChat();
+  if(chatOpen){ lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); renderTabs(); }
+}
+function updateChatPlaceholder(){
+  const inp = document.getElementById('chatInput');
+  if(!inp) return;
+  if(activeConvo === 'todos') inp.placeholder = 'Mensagem para todos...';
+  else { const u = allUsers.find(x => x.user === activeConvo); inp.placeholder = 'Mensagem para ' + (u ? u.name : activeConvo) + '...'; }
+}
+let audioCtx = null;
+function chime(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    [880, 660].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      const t0 = audioCtx.currentTime + i * 0.18;
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.4, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      o.start(t0); o.stop(t0 + 0.18);
+    });
+  }catch(e){}
+}
+function notifyIncoming(m){
+  renderTabs();
+  if(!session) return;
+  const to = String(m.to || 'todos').toLowerCase();
+  const viewing = chatOpen && !document.hidden && (activeConvo === 'todos'
+    ? to === 'todos'
+    : ((m.user === activeConvo && to === session.user) || (m.user === session.user && to === activeConvo)));
+  if(viewing) return;
+  chime();
+  try{
+    if('Notification' in window && Notification.permission === 'granted'){
+      const isDM = to !== 'todos';
+      const nn = new Notification((isDM ? '[privado] ' : '') + m.name, {
+        body: m.text || ((m.anexos && m.anexos.length) ? 'enviou um anexo' : 'Nova mensagem'),
+        tag: 'te-chat-' + m.id
+      });
+      nn.onclick = () => {
+        try{
+          window.focus();
+          if(!chatOpen) toggleChat();
+          setConvo(isDM ? (m.user === session.user ? m.to : m.user) : 'todos');
+        }catch(e){}
+      };
+    }
+  }catch(e){}
+}
+async function loadChat(){
+  if (!session) return;
+  try{
+    const msgs = await api('/api/chat?user=' + encodeURIComponent(session.user));
+    const prevMax = chatMaxId;
+    chatCache = msgs;
+    chatMaxId = msgs.length ? msgs[msgs.length-1].id : 0;
+    const me = session.user;
+    const visible = msgs.filter(m => {
+      const to = String(m.to || 'todos').toLowerCase();
+      if (activeConvo === 'todos') return to === 'todos';
+      return (m.user === me && to === activeConvo) || (m.user === activeConvo && to === me);
+    });
+    const box = document.getElementById('chatMsgs');
+    box.innerHTML = visible.length ? visible.map(m => {
+      const mine = session && m.user === session.user;
+      return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} fade">
+        <div class="max-w-[85%] px-3.5 py-2 text-[13px] leading-relaxed ${mine ? 'text-white rounded-2xl rounded-br-md' : 'bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm'}" ${mine ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>
+          <p class="text-[10px] font-bold ${mine ? 'text-indigo-200' : 'text-slate-400'}">${esc(m.name)} • ${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
+          ${m.text?`<p>${esc(m.text)}</p>`:''}
+          ${(m.anexos||[]).map(a=>chatAnexo(a,mine)).join('')}
+        </div></div>`;
+    }).join('') : '<p class="text-xs text-slate-400 text-center pt-6">Nenhuma mensagem.<br>Diga oi! 👋</p>';
+    box.scrollTop = box.scrollHeight;
+    const fresh = msgs.filter(m => m.id > prevMax && m.user !== me);
+    if (fresh.length && prevMax > 0) notifyIncoming(fresh[fresh.length - 1]);
+    else renderTabs();
+    if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
+  }catch(e){}
+}
+function paintBadge(){
+  const n = chatCache.filter(m => m.id > lastChatId && (!session || m.user !== session.user)).length;
+  const b = document.getElementById('chatBadge');
+  b.textContent = n > 9 ? '9+' : n;
+  b.classList.toggle('hidden', n === 0);
+  b.classList.toggle('flex', n > 0);
+}
+let pendingFiles = [];
+function chatFilesChanged(){
+  const inp = document.getElementById('chatFiles');
+  pendingFiles = [...pendingFiles, ...inp.files].slice(0, 5);
+  inp.value = '';
+  renderPending();
+}
+function removePending(i){ pendingFiles.splice(i, 1); renderPending(); }
+function renderPending(){
+  const box = document.getElementById('chatPending');
+  box.classList.toggle('hidden', !pendingFiles.length);
+  box.innerHTML = pendingFiles.map((f, i) => {
+    const isImg = (f.type || '').startsWith('image/');
+    return `<span class="flex items-center gap-1.5 text-[11px] font-semibold bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full pl-1.5 pr-2 py-1 max-w-full">
+      ${isImg ? `<img src="${URL.createObjectURL(f)}" class="w-6 h-6 rounded-full object-cover flex-none">` : '📄'}
+      <span class="truncate max-w-[120px]">${esc(f.name)}</span>
+      <button onclick="removePending(${i})" class="text-indigo-400 hover:text-rose-600 font-bold">✕</button>
+    </span>`;
+  }).join('');
+}
+async function sendChat(){
+  const inp = document.getElementById('chatInput');
+  const text = inp.value.trim();
+  if ((!text && !pendingFiles.length) || !session) return;
+  const fd = new FormData();
+  fd.append('user', session.user);
+  fd.append('text', text);
+  fd.append('to', activeConvo);
+  pendingFiles.forEach(f => fd.append('arquivos', f));
+  inp.value = '';
+  try{
+    const r = await fetch('/api/chat', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Erro ao enviar');
+    pendingFiles = []; renderPending();
+    lastChatId = chatMaxId;
+    await loadChat();
+    lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+
+if (session) { enterApp(); } else { document.getElementById('loginOverlay').classList.remove('hidden'); }
+setInterval(()=>{ if(session){ loadAll(); loadChat(); } }, 5000);
+// SSE realtime
+try{ const es=new EventSource('/api/events'); es.onmessage=()=>{ if(session){ loadAll(); loadChat(); } }; es.onerror=()=>{document.getElementById('liveDot').className='inline-block h-2.5 w-2.5 rounded-full bg-amber-500';}; es.onopen=()=>{document.getElementById('liveDot').className='inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';}; }catch{}
+// PWA
+if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
+</script>
+</body>
+</html>

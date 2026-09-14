@@ -1,0 +1,559 @@
+require('dotenv').config();
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const store = require('./store');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const ROOT = __dirname;
+
+const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
+  console.error(e);
+  res.status(e.status || 500).json({ error: e.message || 'Erro interno' });
+});
+
+// SSE clients
+let sseClients = [];
+function broadcast() {
+  const payload = JSON.stringify({ type: 'update', at: Date.now() });
+  sseClients.forEach(res => { try { res.write(`data: ${payload}\n\n`); } catch {} });
+}
+
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(path.join(ROOT, 'public')));
+app.use('/uploads', express.static(path.join(ROOT, 'uploads')));
+
+// Uploads em memória -> disco local (file) ou Supabase Storage (supabase)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 5 } });
+async function mapFiles(files) {
+  const out = [];
+  for (const f of (files || [])) out.push(await store.saveFileUpload(f));
+  return out;
+}
+
+function sortQueue(list) {
+  return [...list].sort((a, b) => {
+    if (!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+}
+function enrich(t, persons) {
+  const p = (persons || []).find(x => String(x.id) === String(t.personId));
+  return { ...t, person: p || null };
+}
+async function enrichAll(list) {
+  const persons = await store.persons.all();
+  return list.map(t => enrich(t, persons));
+}
+function ticketOwnerOf(t) {
+  if (t.tecnicoUser) return String(t.tecnicoUser);
+  const m = String(t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/);
+  return m ? m[1] : '';
+}
+// Regra Infinity: só o Júlio (ou admin) assume tickets de tornozeleira Infinity
+function infinityBlocked(ticket, actor) {
+  if (!ticket || ticket.modeloTornozeleira !== 'Infinity') return null;
+  const u = actor && actor.user ? actor.user : '';
+  const role = actor && actor.role ? actor.role : '';
+  if (u === 'julio' || role === 'admin') return null;
+  return 'Ticket de tornozeleira Infinity: somente o técnico Júlio Cesar pode assumir.';
+}
+const PERSON_LABELS = { nome: 'Nome', cpf: 'CPF', rg: 'RG', nomeMae: 'Nome da mãe', dataNascimento: 'Data de nascimento', modeloTornozeleira: 'Modelo da tornozeleira' };
+const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Outros'];
+
+// --- API ---
+app.get('/api/health', (req, res) => res.json({ ok: true, store: store.mode }));
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+  sseClients.push(res);
+  req.on('close', () => { sseClients = sseClients.filter(c => c !== res); });
+});
+
+// Login / usuários
+app.post('/api/login', ah(async (req, res) => {
+  const { user, pass } = req.body || {};
+  const u = await store.users.byName(user);
+  if (!u || u.pass !== String(pass || '')) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  if (u.active === false) return res.status(403).json({ error: 'Usuário desativado. Fale com o administrador.' });
+  res.json({ user: u.user, role: u.role, name: u.name });
+}));
+
+app.get('/api/users', ah(async (req, res) => {
+  const list = await store.users.all();
+  res.json(list.map(u => ({ user: u.user, name: u.name, role: u.role, active: u.active !== false })));
+}));
+
+app.patch('/api/users/me/password', ah(async (req, res) => {
+  const { user, current, next } = req.body || {};
+  const u = await store.users.byName(user);
+  if (!u || u.pass !== String(current || '')) return res.status(401).json({ error: 'Senha atual incorreta' });
+  if (!next || String(next).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
+  await store.users.patch(u.user, { pass: String(next) });
+  res.json({ ok: true });
+}));
+
+app.post('/api/users', ah(async (req, res) => {
+  const admin = await store.users.byName(req.body && req.body.requester);
+  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  const { user, name, role, pass } = req.body || {};
+  const id = String(user || '').toLowerCase().trim().replace(/\s+/g, '');
+  if (!id || !name || !pass) return res.status(400).json({ error: 'Usuário, nome e senha são obrigatórios' });
+  if (!['recepcao', 'tecnico', 'admin'].includes(role)) return res.status(400).json({ error: 'Perfil inválido' });
+  if (await store.users.byName(id)) return res.status(409).json({ error: 'Usuário já existe' });
+  await store.users.insert({ user: id, name: String(name).trim(), role, pass: String(pass), active: true });
+  broadcast();
+  res.status(201).json({ user: id, name: String(name).trim(), role });
+}));
+
+app.delete('/api/users/:user', ah(async (req, res) => {
+  const admin = await store.users.byName(req.body && req.body.requester);
+  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  const target = String(req.params.user).toLowerCase().trim();
+  if (target === admin.user) return res.status(400).json({ error: 'Você não pode remover seu próprio usuário' });
+  const u = await store.users.byName(target);
+  if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
+  const all = await store.users.all();
+  if (u.role === 'admin' && all.filter(x => x.role === 'admin' && x.active !== false && x.user !== u.user).length < 1)
+    return res.status(400).json({ error: 'Não é possível remover o último administrador' });
+  await store.users.remove(target);
+  broadcast();
+  res.json({ ok: true });
+}));
+
+app.patch('/api/users/:user/password', ah(async (req, res) => {
+  const admin = await store.users.byName(req.body && req.body.requester);
+  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  const u = await store.users.byName(req.params.user);
+  if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
+  const { pass } = req.body || {};
+  if (!pass || String(pass).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
+  await store.users.patch(u.user, { pass: String(pass) });
+  res.json({ ok: true });
+}));
+
+app.patch('/api/users/:user', ah(async (req, res) => {
+  const admin = await store.users.byName(req.body && req.body.requester);
+  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  const u = await store.users.byName(req.params.user);
+  if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
+  const { name, role, active } = req.body || {};
+  const all = await store.users.all();
+  const stayingAdmin = (role || u.role) === 'admin' && active !== false;
+  if (u.role === 'admin' && !stayingAdmin && all.filter(x => x.role === 'admin' && x.active !== false && x.user !== u.user).length < 1)
+    return res.status(400).json({ error: 'Deve existir ao menos um administrador ativo' });
+  if (u.user === admin.user && active === false)
+    return res.status(400).json({ error: 'Você não pode desativar seu próprio usuário' });
+  const fields = {};
+  if (name && String(name).trim()) fields.name = String(name).trim();
+  if (['recepcao', 'tecnico', 'admin'].includes(role)) fields.role = role;
+  if (active !== undefined) fields.active = active !== false;
+  const upd = await store.users.patch(u.user, fields);
+  broadcast();
+  res.json({ user: upd.user, name: upd.name, role: upd.role, active: upd.active !== false });
+}));
+
+// Chat
+app.get('/api/chat', ah(async (req, res) => {
+  const me = String(req.query.user || '').toLowerCase().trim();
+  const list = await store.chat.list();
+  res.json(list.filter(m => {
+    const to = String(m.to || 'todos').toLowerCase();
+    if (to === 'todos') return true;
+    return !!me && (m.user === me || to === me);
+  }).slice(-100));
+}));
+
+app.post('/api/chat', upload.array('arquivos', 5), ah(async (req, res) => {
+  const { user, text } = req.body || {};
+  const u = await store.users.byName(user);
+  if (!u) return res.status(401).json({ error: 'Usuário não autenticado' });
+  const files = await mapFiles(req.files);
+  const cleanText = String(text || '').trim().slice(0, 1000);
+  if (!cleanText && !files.length) return res.status(400).json({ error: 'Escreva uma mensagem ou anexe um arquivo' });
+  let to = String((req.body && req.body.to) || 'todos').toLowerCase().trim();
+  if (to !== 'todos' && !(await store.users.byName(to))) return res.status(400).json({ error: 'Destinatário inválido' });
+  const msg = await store.chat.insert({
+    user: u.user, name: u.name, role: u.role, to,
+    text: cleanText, anexos: files, at: new Date().toISOString()
+  });
+  broadcast();
+  res.status(201).json(msg);
+}));
+
+// Persons
+app.get('/api/persons', ah(async (req, res) => {
+  res.json(await store.persons.search(req.query.q || ''));
+}));
+
+app.get('/api/persons/:id', ah(async (req, res) => {
+  const p = await store.persons.byId(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Não encontrado' });
+  const all = await store.tickets.all();
+  const persons = await store.persons.all();
+  const tickets = all.filter(t => String(t.personId) === String(p.id)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const audit = await store.audit.byPerson(p.id);
+  res.json({ person: p, tickets: tickets.map(t => enrich(t, persons)), audit });
+}));
+
+app.post('/api/persons', ah(async (req, res) => {
+  const { nome, cpf, rg, nomeMae, dataNascimento, modeloTornozeleira } = req.body || {};
+  if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+  if (!cpf && !rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
+  if (!nomeMae) return res.status(400).json({ error: 'Nome da mãe é obrigatório' });
+  if (!['Spacecom', 'Infinity'].includes(modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  const cpfN = (cpf || '').replace(/\D/g, '');
+  const all = await store.persons.all();
+  const dup = all.find(p => (cpfN && p.cpfN === cpfN) || (rg && p.rg === rg));
+  if (dup) return res.status(409).json({ error: 'CPF/RG já cadastrado', person: dup });
+  const person = await store.persons.insert({
+    nome: nome.trim(), cpf: (cpf || '').trim(), cpfN,
+    rg: (rg || '').trim(), nomeMae: (nomeMae || '').trim(),
+    dataNascimento: dataNascimento || '', modeloTornozeleira,
+    createdAt: new Date().toISOString()
+  });
+  broadcast();
+  res.status(201).json(person);
+}));
+
+app.patch('/api/persons/:id', ah(async (req, res) => {
+  const p = await store.persons.byId(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Atendido não encontrado' });
+  const editor = await store.users.byName(req.body && req.body.editedBy);
+  if (!editor) return res.status(401).json({ error: 'Usuário não autenticado' });
+  const fields = ['nome', 'cpf', 'rg', 'nomeMae', 'dataNascimento', 'modeloTornozeleira'];
+  const next = {};
+  fields.forEach(f => { next[f] = f === 'dataNascimento' ? String((req.body && req.body[f]) || '') : String((req.body && req.body[f]) || '').trim(); });
+  if (!next.nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+  if (!next.cpf && !next.rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
+  if (!['Spacecom', 'Infinity'].includes(next.modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  const cpfN = next.cpf.replace(/\D/g, '');
+  const all = await store.persons.all();
+  const dup = all.find(x => String(x.id) !== String(p.id) && ((cpfN && x.cpfN === cpfN) || (next.rg && x.rg === next.rg)));
+  if (dup) return res.status(409).json({ error: 'CPF/RG já usado por: ' + dup.nome });
+  const changes = [];
+  fields.forEach(f => {
+    const from = p[f] || '', to = next[f] || '';
+    if (from !== to) changes.push({ field: f, label: PERSON_LABELS[f], from, to });
+  });
+  if (!changes.length) return res.status(400).json({ error: 'Nenhuma alteração detectada' });
+  const upd = await store.persons.patch(p.id, { ...next, cpfN });
+  await store.audit.insert({
+    kind: 'cadastro', personId: p.id, personName: upd.nome,
+    byUser: editor.user, byName: editor.name, byRole: editor.role, changes
+  });
+  broadcast();
+  res.json({ person: upd, changes });
+}));
+
+// Tickets
+app.get('/api/tickets', ah(async (req, res) => {
+  const status = req.query.status;
+  let list = await enrichAll(await store.tickets.all());
+  if (status && status !== 'todos') list = list.filter(t => t.status === status);
+  const active = list.filter(t => t.status !== 'finalizado');
+  const done = list.filter(t => t.status === 'finalizado').sort((a, b) => new Date(b.finishedAt || b.createdAt) - new Date(a.finishedAt || a.createdAt));
+  res.json([...sortQueue(active), ...done]);
+}));
+
+app.get('/api/stats', ah(async (req, res) => {
+  const all = await store.tickets.all();
+  const persons = await store.persons.all();
+  res.json({
+    aguardando: all.filter(t => t.status === 'aguardando').length,
+    em_atendimento: all.filter(t => t.status === 'em_atendimento').length,
+    finalizados: all.filter(t => t.status === 'finalizado').length,
+    totalPessoas: persons.length
+  });
+}));
+
+app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
+  const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira, createdBy } = req.body || {};
+  const person = await store.persons.byId(personId);
+  if (!person) return res.status(400).json({ error: 'Atendido inválido. Selecione ou cadastre a pessoa.' });
+  if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
+  if (!modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  const files = await mapFiles(req.files);
+  const creator = await store.users.byName(createdBy);
+  const ticket = await store.tickets.insert({
+    personId: person.id,
+    motivo, descricao: descricao || '',
+    prioridadeLegal: String(prioridadeLegal) === 'true' || prioridadeLegal === true || prioridadeLegal === '1',
+    modeloTornozeleira,
+    status: 'aguardando',
+    anexos: files,
+    tecnicoRecepcao: tecnicoRecepcao || '',
+    tecnico: '', tecnicoUser: '', relatorio: '',
+    createdBy: creator ? creator.user : String(createdBy || '').toLowerCase().trim(),
+    createdByName: creator ? creator.name : '',
+    called: false, calledAt: null, calledBy: '',
+    createdAt: new Date().toISOString(), startedAt: null, finishedAt: null
+  });
+  if (modeloTornozeleira && person.modeloTornozeleira !== modeloTornozeleira) {
+    const fromMod = person.modeloTornozeleira || '';
+    await store.persons.patch(person.id, { modeloTornozeleira });
+    await store.audit.insert({
+      kind: 'cadastro', personId: person.id, personName: person.nome,
+      byUser: ticket.createdBy, byName: ticket.createdByName,
+      byRole: creator ? creator.role : '',
+      changes: [{ field: 'modeloTornozeleira', label: 'Modelo da tornozeleira', from: fromMod, to: modeloTornozeleira }]
+    });
+  }
+  await store.audit.insert({
+    action: 'criado', personId: person.id, personName: person.nome,
+    ticketId: ticket.id, ref: ticket.code,
+    byUser: ticket.createdBy, byName: ticket.createdByName,
+    byRole: creator ? creator.role : '',
+    summary: motivo + (ticket.prioridadeLegal ? ' (prioridade legal)' : '')
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.status(201).json(enrich(ticket, persons));
+}));
+
+app.patch('/api/tickets/:id/start', ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  const starter = await store.users.byName(req.body && req.body.startedBy);
+  const blockStart = infinityBlocked(t, starter);
+  if (blockStart) return res.status(403).json({ error: blockStart });
+  if (starter && starter.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const upd = await store.tickets.patch(t.id, {
+    status: 'em_atendimento',
+    tecnico: (req.body && req.body.tecnico) || t.tecnico || '',
+    tecnicoUser: (req.body && req.body.tecnicoUser) || t.tecnicoUser || '',
+    startedAt: new Date().toISOString()
+  });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'iniciado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: upd.tecnicoUser, byName: upd.tecnico, byRole: 'tecnico',
+    summary: 'Atendimento iniciado'
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+app.patch('/api/tickets/:id/finish', upload.array('fotos', 4), ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  const { relatorio, tecnico, requestedBy } = req.body || {};
+  if (!relatorio || !relatorio.trim() || relatorio.trim().length < 10)
+    return res.status(400).json({ error: 'Relatório da ação realizada é obrigatório (mín. 10 caracteres).' });
+  let cl = req.body.checklist;
+  if (typeof cl === 'string') { try { cl = JSON.parse(cl); } catch { cl = null; } }
+  if (!cl || !['sinal', 'bateria', 'pulseira', 'orientacao'].every(k => cl[k] === true))
+    return res.status(400).json({ error: 'Checklist técnico incompleto: marque os 4 itens obrigatórios.' });
+  const owner = (t.tecnicoUser || (((t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/) || [])[1] || '')).toLowerCase().trim();
+  const by = String(requestedBy || '').toLowerCase().trim();
+  if (owner && by !== owner)
+    return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode finalizar este atendimento.' });
+  const finisher = await store.users.byName(requestedBy);
+  const blockFin = infinityBlocked(t, finisher);
+  if (blockFin) return res.status(403).json({ error: blockFin });
+  if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const pos = await mapFiles(req.files);
+  const upd = await store.tickets.patch(t.id, {
+    status: 'finalizado',
+    relatorio: relatorio.trim(),
+    tecnico: tecnico || t.tecnico,
+    checklist: { sinal: true, bateria: true, pulseira: true, orientacao: true },
+    fotosPos: (t.fotosPos || []).concat(pos).slice(-8),
+    finishedAt: new Date().toISOString()
+  });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'finalizado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: by, byName: upd.tecnico, byRole: 'tecnico',
+    summary: 'Atendimento finalizado'
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+app.patch('/api/tickets/:id/call', ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Ticket já saiu da fila' });
+  const caller = await store.users.byName(req.body && req.body.calledBy);
+  const blockCall = infinityBlocked(t, caller);
+  if (blockCall) return res.status(403).json({ error: blockCall });
+  if (caller && caller.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const upd = await store.tickets.patch(t.id, { called: true, calledAt: new Date().toISOString(), calledBy: caller ? caller.user : '' });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+app.patch('/api/tickets/:id/edit', ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível corrigir tickets aguardando na fila' });
+  const editor = await store.users.byName(req.body && req.body.editor);
+  if (!editor || !['recepcao', 'admin'].includes(editor.role)) return res.status(403).json({ error: 'Correção restrita à Recepção.' });
+  const { motivo, modeloTornozeleira, descricao, prioridadeLegal } = req.body || {};
+  const changes = [];
+  const patch = {};
+  if (motivo && MOTIVOS_OK.includes(motivo) && motivo !== t.motivo) { changes.push({ field: 'motivo', label: 'Motivo', from: t.motivo, to: motivo }); patch.motivo = motivo; }
+  if (modeloTornozeleira && ['Spacecom', 'Infinity'].includes(modeloTornozeleira) && modeloTornozeleira !== t.modeloTornozeleira) {
+    changes.push({ field: 'modeloTornozeleira', label: 'Modelo', from: t.modeloTornozeleira || '', to: modeloTornozeleira });
+    patch.modeloTornozeleira = modeloTornozeleira;
+    const person = await store.persons.byId(t.personId);
+    if (person && person.modeloTornozeleira !== modeloTornozeleira) {
+      const fromMod = person.modeloTornozeleira || '';
+      await store.persons.patch(person.id, { modeloTornozeleira });
+      changes.push({ field: 'cadastro', label: 'Modelo no cadastro', from: fromMod, to: modeloTornozeleira });
+    }
+  }
+  const nd = String(descricao == null ? t.descricao : descricao);
+  if (nd !== (t.descricao || '')) { changes.push({ field: 'descricao', label: 'Descrição', from: t.descricao || '', to: nd }); patch.descricao = nd; }
+  const np = String(prioridadeLegal) === 'true' || prioridadeLegal === true;
+  if (np !== !!t.prioridadeLegal) { changes.push({ field: 'prioridadeLegal', label: 'Prioridade legal', from: t.prioridadeLegal ? 'SIM' : 'NÃO', to: np ? 'SIM' : 'NÃO' }); patch.prioridadeLegal = np; }
+  if (!changes.length) return res.status(400).json({ error: 'Nenhuma alteração detectada' });
+  const upd = await store.tickets.patch(t.id, patch);
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'editado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: editor.user, byName: editor.name, byRole: editor.role,
+    summary: changes.map(c => c.label).join(', ')
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+app.patch('/api/tickets/:id/cancel', ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível cancelar tickets aguardando na fila' });
+  const editor = await store.users.byName(req.body && req.body.by);
+  if (!editor || !['recepcao', 'admin'].includes(editor.role)) return res.status(403).json({ error: 'Cancelamento restrito à Recepção.' });
+  const upd = await store.tickets.patch(t.id, { status: 'cancelado', cancelledAt: new Date().toISOString(), cancelledBy: editor.user });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'cancelado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: editor.user, byName: editor.name, byRole: editor.role,
+    summary: t.motivo
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+app.patch('/api/tickets/:id/reopen', ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'finalizado') return res.status(400).json({ error: 'Só é possível reabrir tickets finalizados' });
+  const by = String((req.body && req.body.by) || '').toLowerCase().trim();
+  const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
+  if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado pode reabrir este atendimento.' });
+  const upd = await store.tickets.patch(t.id, { status: 'em_atendimento', finishedAt: null, reopenedAt: new Date().toISOString() });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'reaberto', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: by, byName: t.tecnico, byRole: 'tecnico',
+    summary: 'Atendimento reaberto'
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+// Auditoria / dashboard / backup
+app.get('/api/audit', ah(async (req, res) => {
+  res.json(await store.audit.recent(req.query.limit));
+}));
+
+app.get('/api/dashboard', ah(async (req, res) => {
+  const all = (await store.tickets.all()).filter(x => x.status !== 'cancelado');
+  const t = all;
+  const today = new Date().toISOString().slice(0, 10);
+  const byMotivo = {}, byModelo = {}, byTec = {}, byDay = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+    byDay[d] = 0;
+  }
+  let waitSum = 0, waitN = 0, svcSum = 0, svcN = 0, todayN = 0, todayFin = 0;
+  t.forEach(x => {
+    byMotivo[x.motivo || 'Outros'] = (byMotivo[x.motivo || 'Outros'] || 0) + 1;
+    byModelo[x.modeloTornozeleira || 'Não informado'] = (byModelo[x.modeloTornozeleira || 'Não informado'] || 0) + 1;
+    const day = String(x.createdAt || '').slice(0, 10);
+    if (day in byDay) byDay[day]++;
+    if (day === today) { todayN++; if (x.status === 'finalizado') todayFin++; }
+    const key = x.tecnico || '—';
+    byTec[key] = byTec[key] || { tecnico: key, iniciados: 0, finalizados: 0 };
+    if (x.startedAt) {
+      byTec[key].iniciados++;
+      waitSum += new Date(x.startedAt) - new Date(x.createdAt); waitN++;
+    }
+    if (x.finishedAt) {
+      byTec[key].finalizados++;
+      if (x.startedAt) { svcSum += new Date(x.finishedAt) - new Date(x.startedAt); svcN++; }
+    }
+  });
+  const mins = ms => Math.round(ms / 60000);
+  res.json({
+    total: t.length,
+    aguardando: t.filter(x => x.status === 'aguardando').length,
+    emAtendimento: t.filter(x => x.status === 'em_atendimento').length,
+    finalizados: t.filter(x => x.status === 'finalizado').length,
+    hoje: todayN, hojeFinalizados: todayFin,
+    esperaMediaMin: waitN ? mins(waitSum / waitN) : 0,
+    atendimentoMedioMin: svcN ? mins(svcSum / svcN) : 0,
+    esperaAlta: t.filter(x => x.status === 'aguardando' && (Date.now() - new Date(x.createdAt)) > 30 * 60000).length,
+    cancelados: (await store.tickets.all()).filter(x => x.status === 'cancelado').length,
+    prioridade: t.filter(x => x.prioridadeLegal && x.status !== 'finalizado').length,
+    byMotivo, byModelo,
+    byTec: Object.values(byTec).sort((a, b) => b.finalizados - a.finalizados),
+    byDay
+  });
+}));
+
+app.get('/api/backup', ah(async (req, res) => {
+  const r = await store.users.byName(req.query.requester);
+  if (!r || r.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  const fname = 'sisumepe-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  res.setHeader('Content-Disposition', 'attachment; filename="' + fname + '"');
+  res.setHeader('Content-Type', 'application/json');
+  res.json(await store.backup());
+}));
+
+app.post('/api/restore', upload.single('backup'), ah(async (req, res) => {
+  const r = await store.users.byName(req.body && req.body.requester);
+  if (!r || r.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+  if (!req.file) return res.status(400).json({ error: 'Envie o arquivo de backup (.json)' });
+  let data;
+  try {
+    data = JSON.parse(req.file.buffer.toString('utf8'));
+  } catch {
+    return res.status(400).json({ error: 'Arquivo inválido' });
+  }
+  if (store.mode === 'file') {
+    try {
+      fs.writeFileSync(path.join(ROOT, 'db.json') + '.bak-' + Date.now(), JSON.stringify(await store.backup()));
+    } catch {}
+  }
+  try {
+    const out = await store.restore(data);
+    broadcast();
+    res.json({ ok: true, ...out });
+  } catch (e) {
+    res.status(e.status || 400).json({ error: e.message || 'Arquivo inválido ou sem administrador ativo' });
+  }
+}));
+
+app.get('/tv', (req, res) => res.sendFile(path.join(ROOT, 'public', 'tv.html')));
+
+app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
+
+app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));

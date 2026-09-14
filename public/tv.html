@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SISUMEPE Juazeiro • Painel de Chamada</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Sora',sans-serif;background:#0b1220;color:#fff}
+  .glow{text-shadow:0 0 40px rgba(99,102,241,.6)}
+  .fade{animation:fade .3s ease-out}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+<header class="flex items-center justify-between px-6 sm:px-10 py-4 border-b border-white/10">
+  <div class="flex items-center gap-3">
+    <div class="w-11 h-11 rounded-2xl flex items-center justify-center font-extrabold text-lg" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">SJ</div>
+    <div><p class="font-bold leading-tight">SISUMEPE Juazeiro</p><p class="text-xs text-slate-400">Painel de chamada • atualiza sozinho</p></div>
+  </div>
+  <p id="clock" class="font-extrabold text-2xl sm:text-3xl tabular-nums">--:--</p>
+</header>
+
+<main class="flex-1 flex flex-col items-center justify-center px-6 py-6 text-center w-full max-w-5xl mx-auto">
+  <div id="callBox" class="hidden w-full rounded-3xl p-8 sm:p-12 fade" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 20px 60px -12px rgba(99,102,241,.6)">
+    <p class="text-sm sm:text-base font-bold tracking-[.3em] opacity-80">CHAMANDO AGORA</p>
+    <p id="callCode" class="font-extrabold glow leading-none my-3" style="font-size:clamp(3rem,12vw,7rem)"></p>
+    <p id="callName" class="font-bold" style="font-size:clamp(1.3rem,4vw,2.2rem)"></p>
+    <p id="callInfo" class="text-sm sm:text-base opacity-80 mt-1"></p>
+  </div>
+  <div id="idleBox" class="w-full rounded-3xl p-8 sm:p-12 border border-white/10 bg-white/5">
+    <p class="text-4xl mb-3">⏳</p>
+    <p class="font-bold text-xl sm:text-2xl">Aguardando chamada...</p>
+    <p class="text-sm text-slate-400 mt-1">Os próximos da fila aparecem abaixo</p>
+  </div>
+
+  <div class="w-full mt-6 text-left">
+    <p class="text-xs font-bold tracking-[.25em] text-slate-400 mb-2">PRÓXIMOS NA FILA</p>
+    <div id="nextList" class="grid sm:grid-cols-3 gap-2.5"></div>
+  </div>
+</main>
+
+<footer class="px-6 py-3 text-center text-[11px] text-slate-500">SISUMEPE Juazeiro • Fila em tempo real</footer>
+
+<button id="soundBtn" onclick="enableSound()" class="fixed bottom-5 right-5 bg-white/10 hover:bg-white/20 border border-white/20 text-sm font-bold px-4 py-3 rounded-2xl">🔔 Ativar som e voz</button>
+
+<script>
+let lastCallKey = '', audioCtx = null, soundOn = false;
+function enableSound(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    soundOn = true;
+    document.getElementById('soundBtn').textContent = '🔔 Som e voz ativados';
+    setTimeout(() => speak('Painel de chamada ativado.'), 500);
+    setTimeout(() => document.getElementById('soundBtn').classList.add('hidden'), 1500);
+  }catch(e){}
+}
+function pickVoice(){
+  try{
+    const vs = speechSynthesis.getVoices();
+    return vs.find(v => v.lang && v.lang.toLowerCase().startsWith('pt-br'))
+        || vs.find(v => v.lang && v.lang.toLowerCase().startsWith('pt'))
+        || null;
+  }catch(e){ return null; }
+}
+function speak(text){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice();
+    if(v) u.voice = v;
+    u.lang = (v && v.lang) || 'pt-BR';
+    u.rate = 0.95; u.volume = 1;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function announceCall(t){
+  const nome = (t.person && t.person.nome) || '';
+  const msg = 'Atenção! ' + nome + ', ticket ' + t.code + '. Dirija-se ao atendimento.';
+  speak(msg);
+  setTimeout(() => speak(msg), 7000);
+}
+function chime(){
+  if(!soundOn) return;
+  try{
+    [880, 660, 880].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      const t0 = audioCtx.currentTime + i * 0.22;
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      o.start(t0); o.stop(t0 + 0.22);
+    });
+  }catch(e){}
+}
+function sortQ(list){
+  return [...list].sort((a, b) => {
+    if(!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+}
+async function tick(){
+  try{
+    const all = await (await fetch('/api/tickets')).json();
+    const q = sortQ(all.filter(t => t.status === 'aguardando'));
+    const called = all.filter(t => t.status === 'aguardando' && t.called)
+      .sort((a, b) => new Date(b.calledAt || 0) - new Date(a.calledAt || 0))[0];
+    const key = called ? called.id + '|' + called.calledAt : '';
+    const hasCall = !!called;
+    document.getElementById('callBox').classList.toggle('hidden', !hasCall);
+    document.getElementById('idleBox').classList.toggle('hidden', hasCall);
+    if(hasCall){
+      document.getElementById('callCode').textContent = called.code;
+      document.getElementById('callName').textContent = (called.person && called.person.nome) || '';
+      document.getElementById('callInfo').textContent = (called.modeloTornozeleira ? called.modeloTornozeleira + ' • ' : '') + (called.motivo || '');
+      if(key !== lastCallKey){ if(lastCallKey !== ''){ chime(); announceCall(called); } lastCallKey = key; }
+    } else lastCallKey = '';
+    document.getElementById('nextList').innerHTML = q.filter(t => !called || t.id !== called.id).slice(0, 6).map((t, i) =>
+      `<div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3">
+        <span class="font-extrabold text-slate-400 text-lg w-8">${i + 1}</span>
+        <div class="min-w-0"><p class="font-bold truncate">${(t.person && t.person.nome) || '-'}</p>
+        <p class="text-xs text-slate-400">${t.code}${t.prioridadeLegal ? ' • PRIORIDADE' : ''}</p></div>
+      </div>`).join('') || '<p class="text-sm text-slate-500">Fila vazia 🎉</p>';
+  }catch(e){}
+}
+setInterval(() => {
+  const d = new Date();
+  document.getElementById('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}, 1000);
+tick(); setInterval(tick, 5000);
+</script>
+</body>
+</html>

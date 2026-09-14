@@ -1,0 +1,16 @@
+{
+  "name": "sistema-tornozeleiras",
+  "version": "1.0.0",
+  "description": "Gestão de atendimento e manutenção de tornozeleiras eletrônicas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "@supabase/supabase-js": "^2.44.0"
+  }
+}
