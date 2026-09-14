@@ -467,6 +467,10 @@
     <h3 class="font-display font-bold text-lg">📄 Digitalizar documento</h3>
     <p class="text-xs text-slate-500 mt-1">Fotografe o documento impresso e aplique o filtro para melhor leitura.</p>
     <canvas id="scanCanvas" class="w-full rounded-xl border border-slate-200 bg-slate-100 mt-3"></canvas>
+    <div class="flex items-center gap-2 mt-2">
+      <button type="button" id="straightBtn" onclick="toggleStraighten()" class="btn btn-ghost flex-1 py-2.5 text-xs">📐 Endireitar: ON</button>
+      <span id="scanStatus" class="flex-1 text-[11px] text-slate-500 text-center"></span>
+    </div>
     <div class="grid grid-cols-3 gap-2 mt-3">
       <button type="button" data-sf="orig" onclick="setScanFilter('orig')" class="rounded-xl border-2 border-slate-200 py-2.5 text-xs font-bold">Original</button>
       <button type="button" data-sf="pb" onclick="setScanFilter('pb')" class="rounded-xl border-2 border-slate-200 py-2.5 text-xs font-bold">Doc. P&amp;B</button>
@@ -861,6 +865,133 @@ async function abrirTicket(){
 
 // --- DIGITALIZAR DOCUMENTOS ---
 let scanImg = null, scanAngle = 0, scanFilter = 'orig', scanModeCam = false;
+let scanStraighten = true, scanQuad = null, scanWarped = null;
+let cvReady = false, cvLoading = false;
+function ensureCV(){
+  return new Promise((res, rej) => {
+    try{
+      if(cvReady) return res();
+      if(typeof cv !== 'undefined' && cv.Mat){ cvReady = true; return res(); }
+    }catch(e){}
+    if(cvLoading){
+      const iv = setInterval(() => { if(cvReady){ clearInterval(iv); res(); } }, 250);
+      setTimeout(() => { clearInterval(iv); rej(new Error('timeout')); }, 20000);
+      return;
+    }
+    cvLoading = true;
+    const s = document.createElement('script');
+    s.src = 'https://docs.opencv.org/4.8.0/opencv.js';
+    s.onload = () => {
+      const iv = setInterval(() => {
+        try{ if(typeof cv !== 'undefined' && cv.Mat){ clearInterval(iv); cvReady = true; cvLoading = false; res(); } }catch(e){}
+      }, 250);
+      setTimeout(() => { clearInterval(iv); if(!cvReady){ cvLoading = false; rej(new Error('timeout')); } }, 20000);
+    };
+    s.onerror = () => { cvLoading = false; rej(new Error('offline')); };
+    document.head.appendChild(s);
+  });
+}
+function setScanStatus(t){ const el = document.getElementById('scanStatus'); if(el) el.textContent = t || ''; }
+function orderQuad(pts){
+  const s = pts.map(p => p.x + p.y), d = pts.map(p => p.x - p.y);
+  const tl = pts[s.indexOf(Math.min(...s))], br = pts[s.indexOf(Math.max(...s))];
+  const tr = pts[d.indexOf(Math.max(...d))], bl = pts[d.indexOf(Math.min(...d))];
+  return [tl, tr, br, bl];
+}
+function detectQuad(img){
+  const maxD = 800;
+  const sc = Math.min(1, maxD / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, w, h);
+  const src = cv.imread(c);
+  const gray = new cv.Mat(), blur = new cv.Mat(), edges = new cv.Mat(), hier = new cv.Mat(), conts = new cv.MatVector();
+  let best = null, bestArea = 0;
+  try{
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+    cv.Canny(blur, edges, 50, 150);
+    cv.findContours(edges, conts, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    const minArea = w * h * 0.05;
+    for(let i = 0; i < conts.size(); i++){
+      const cnt = conts.get(i);
+      const approx = new cv.Mat();
+      try{
+        cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true);
+        if(approx.rows === 4 && approx.cols === 1){
+          const area = cv.contourArea(approx);
+          if(area > minArea && area > bestArea){ bestArea = area; if(best) best.delete(); best = approx.clone(); }
+        }
+      }finally{ approx.delete(); }
+      cnt.delete();
+    }
+  }finally{
+    src.delete(); gray.delete(); blur.delete(); edges.delete(); hier.delete(); conts.delete();
+  }
+  let quad = null;
+  if(best){
+    try{
+      quad = [];
+      for(let i = 0; i < 4; i++) quad.push({ x: best.data32S[i * 2] / sc, y: best.data32S[i * 2 + 1] / sc });
+      quad = orderQuad(quad);
+    }finally{ best.delete(); }
+  }
+  return quad;
+}
+function warpQuad(img, quad){
+  const [tl, tr, br, bl] = quad;
+  const W = Math.max(1, Math.round(Math.max(Math.hypot(tr.x - tl.x, tr.y - tl.y), Math.hypot(br.x - bl.x, br.y - bl.y))));
+  const H = Math.max(1, Math.round(Math.max(Math.hypot(bl.x - tl.x, bl.y - tl.y), Math.hypot(br.x - tr.x, br.y - tr.y))));
+  const fc = document.createElement('canvas');
+  fc.width = img.naturalWidth; fc.height = img.naturalHeight;
+  fc.getContext('2d').drawImage(img, 0, 0);
+  const out = document.createElement('canvas');
+  const src = cv.imread(fc);
+  const sTri = cv.matFromArray(4, 1, cv.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+  const dTri = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, W, 0, W, H, 0, H]);
+  const M = cv.getPerspectiveTransform(sTri, dTri);
+  const dst = new cv.Mat();
+  try{
+    cv.warpPerspective(src, dst, new cv.Size(W, H), M, cv.INTER_LINEAR, cv.BORDER_REPLICATE);
+    cv.imshow(out, dst);
+  }finally{
+    src.delete(); sTri.delete(); dTri.delete(); M.delete(); dst.delete();
+  }
+  return out;
+}
+function runStraighten(){
+  scanQuad = null; scanWarped = null;
+  paintStraightBtn();
+  if(!scanStraighten || !scanImg){ setScanStatus(''); drawScan(); return; }
+  setScanStatus('Detectando bordas...');
+  drawScan();
+  ensureCV().then(() => {
+    try{
+      const q = detectQuad(scanImg);
+      if(q && q.length === 4){
+        scanQuad = q;
+        scanWarped = warpQuad(scanImg, q);
+        setScanStatus('Bordas detectadas e endireitadas ✓');
+      } else setScanStatus('Bordas não encontradas — usando foto inteira.');
+    }catch(e){ setScanStatus('Usando foto inteira.'); }
+    drawScan();
+  }).catch(() => { setScanStatus('Sem internet p/ detector — usando foto inteira.'); drawScan(); });
+}
+function toggleStraighten(){ scanStraighten = !scanStraighten; runStraighten(); }
+function paintStraightBtn(){
+  const b = document.getElementById('straightBtn');
+  if(b) b.textContent = '📐 Endireitar: ' + (scanStraighten ? 'ON' : 'OFF');
+}
+function scanSource(){
+  if(scanStraighten && scanWarped) return scanWarped;
+  if(!scanImg._full){
+    const c = document.createElement('canvas');
+    c.width = scanImg.naturalWidth; c.height = scanImg.naturalHeight;
+    c.getContext('2d').drawImage(scanImg, 0, 0);
+    scanImg._full = c;
+  }
+  return scanImg._full;
+}
 function openScan(camera){
   scanModeCam = !!camera;
   (camera ? document.getElementById('scanCam') : document.getElementById('scanPick')).click();
@@ -871,7 +1002,8 @@ function scanFileChanged(inp){
   img.onload = () => {
     scanImg = img; scanAngle = 0;
     scanFilter = scanModeCam ? 'orig' : 'pb';
-    drawScan();
+    scanStraighten = !scanModeCam;
+    runStraighten();
     document.getElementById('modalScan').classList.remove('hidden');
     URL.revokeObjectURL(img.src);
   };
@@ -892,9 +1024,10 @@ function retakeScan(){
 }
 function drawScan(){
   if(!scanImg) return;
+  const srcEl = scanSource();
   const cv = document.getElementById('scanCanvas');
   const maxDim = 2000;
-  let w = scanImg.naturalWidth, h = scanImg.naturalHeight;
+  let w = srcEl.width, h = srcEl.height;
   const sc = Math.min(1, maxDim / Math.max(w, h));
   w = Math.round(w * sc); h = Math.round(h * sc);
   const rot = scanAngle % 180 !== 0;
@@ -902,7 +1035,7 @@ function drawScan(){
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.save(); ctx.translate(cv.width / 2, cv.height / 2); ctx.rotate(scanAngle * Math.PI / 180);
-  ctx.drawImage(scanImg, -w / 2, -h / 2, w, h); ctx.restore();
+  ctx.drawImage(srcEl, -w / 2, -h / 2, w, h); ctx.restore();
   if(scanFilter !== 'orig'){
     const id = ctx.getImageData(0, 0, cv.width, cv.height), d = id.data;
     const k = scanFilter === 'pb' ? 1.7 : 2.1, b = scanFilter === 'pb' ? 10 : 0;
