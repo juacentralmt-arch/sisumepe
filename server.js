@@ -44,25 +44,23 @@ function loginRateLimit(req, res, next) {
   next();
 }
 
-// Sessões por token (12h). O servidor NUNCA confia no usuário vindo do app.
-const sessions = new Map();
-function issueToken(u) {
+// Sessões por token (12h, persistentes no banco). O servidor NUNCA confia no usuário vindo do app.
+async function issueToken(u) {
   const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + 12 * 3600e3 });
+  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + 12 * 3600e3 });
   return token;
 }
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, s] of sessions) if (s.exp < now) sessions.delete(k);
-}, 3600e3).unref();
+setInterval(() => { store.sessions.cleanup().catch(() => {}); }, 3600e3).unref();
 function auth(roles) {
   return (req, res, next) => {
     const t = req.headers['x-session'] || req.query.token;
-    const s = t && sessions.get(t);
-    if (!s || s.exp < Date.now()) { if (t) sessions.delete(t); return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }); }
-    req.auth = s;
-    if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
-    next();
+    if (!t) return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' });
+    store.sessions.get(t).then(s => {
+      if (!s || s.exp < Date.now()) { store.sessions.del(t).catch(() => {}); return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }); }
+      req.auth = s;
+      if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
+      next();
+    }).catch(() => res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }));
   };
 }
 const isHash = p => typeof p === 'string' && /^\$2[aby]\$/.test(p);
@@ -148,12 +146,12 @@ app.post('/api/login', loginRateLimit, ah(async (req, res) => {
   }
   if (!ok) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   if (u.active === false) return res.status(403).json({ error: 'Usuário desativado. Fale com o administrador.' });
-  res.json({ user: u.user, role: u.role, name: u.name, token: issueToken(u) });
+  res.json({ user: u.user, role: u.role, name: u.name, token: await issueToken(u) });
 }));
 
 app.post('/api/logout', auth(), ah(async (req, res) => {
   const t = req.headers['x-session'] || req.query.token;
-  if (t) sessions.delete(t);
+  await store.sessions.del(t);
   res.json({ ok: true });
 }));
 

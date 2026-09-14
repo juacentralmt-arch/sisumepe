@@ -85,6 +85,15 @@ create index if not exists idx_tickets_person on tickets (personid);
 create index if not exists idx_audit_person on audit (personid);
 create index if not exists idx_chat_users on chat ("user", "to");
 
+-- Sessões de login (12h, sobrevivem a restart do servidor)
+create table if not exists sessions (
+  token text primary key,
+  "user" text,
+  role text,
+  name text,
+  exp timestamptz
+);
+
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público
 -- =====================================================================
