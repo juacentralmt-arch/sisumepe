@@ -290,7 +290,7 @@
           <h2 class="font-display font-bold text-xl">Painel técnico</h2>
           <p class="text-xs text-slate-500 mt-0.5">Execute os atendimentos e registre o relatório obrigatório</p>
         </div>
-        <button onclick="callNext()" class="btn btn-primary text-xs px-4 py-2.5">📢 Chamar próximo da fila</button>
+        <button id="callNextBtn" onclick="callNext()" class="btn btn-primary text-xs px-4 py-2.5">📢 Chamar próximo da fila</button>
       </div>
       <div class="grid lg:grid-cols-2 gap-4 items-start">
         <div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
@@ -631,14 +631,33 @@ function sortQueueJS(list){
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 }
-async function callTicket(id){
-  try{ await api('/api/tickets/' + id + '/call', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calledBy: session ? session.user : '' }) }); loadAll(); }
-  catch(e){ toast('⚠️ ' + e.message); }
+let callCooldownUntil = 0;
+function paintCallNext(){
+  const b = document.getElementById('callNextBtn');
+  if(!b) return;
+  const left = Math.ceil((callCooldownUntil - Date.now()) / 1000);
+  if(left > 0){
+    b.disabled = true;
+    b.classList.add('opacity-50');
+    b.innerHTML = '⏳ Aguarde ' + left + 's...';
+    setTimeout(paintCallNext, 500);
+  } else {
+    b.disabled = false;
+    b.classList.remove('opacity-50');
+    b.innerHTML = '📢 Chamar próximo da fila';
+  }
 }
-function callNext(){
+async function callNext(){
+  if(Date.now() < callCooldownUntil) return;
   const next = sortQueueJS(tickets.filter(t => t.status === 'aguardando' && podeAssumir(t)))[0];
   if(!next) return toast('Nenhum ticket disponível para você (Infinity é do Júlio)');
-  callTicket(next.id);
+  callCooldownUntil = Date.now() + 3000;
+  paintCallNext();
+  try{
+    await api('/api/tickets/' + next.id + '/call', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    toast('📢 Chamando ' + next.code + ' • ' + ((next.person && next.person.nome) || ''));
+    loadAll();
+  }catch(e){ toast('⚠️ ' + e.message); }
 }
 
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000); }
