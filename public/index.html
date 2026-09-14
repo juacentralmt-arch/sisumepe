@@ -657,11 +657,18 @@ async function doLogin(){
     toast('Bem-vindo(a), ' + s.name + '!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
-function logout(){
+function logout(silent){
+  try{
+    const s = JSON.parse(localStorage.getItem('te_session') || 'null');
+    if(s && s.token) fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {});
+  }catch(e){}
   session = null; role = null;
   localStorage.removeItem('te_session');
+  try{ if(es) es.close(); }catch(e){}
+  es = null;
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('chatPanel').classList.add('chat-hidden');
+  if(!silent) toast('Sessão encerrada');
 }
 function paintUser(){
   const chip = document.getElementById('userChip');
@@ -695,7 +702,7 @@ function applyNavOrder(){
 }
 function enterApp(){
   document.getElementById('loginOverlay').classList.add('hidden');
-  paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat();
+  paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
   try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){}
 }
 function canSee(t){
@@ -718,7 +725,23 @@ function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 
-async function api(p, opt){ const r=await fetch(p,opt); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Erro'); return j; }
+function authHeaders(h){
+  h = h || {};
+  try{
+    const s = JSON.parse(localStorage.getItem('te_session') || 'null');
+    if(s && s.token) h['X-Session'] = s.token;
+  }catch(e){}
+  return h;
+}
+async function api(p, opt){
+  opt = opt || {};
+  opt.headers = authHeaders(opt.headers);
+  const r = await fetch(p, opt);
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 401){ logout(true); throw new Error(j.error || 'Sessão expirada. Entre novamente.'); }
+  if(!r.ok) throw new Error(j.error || 'Erro');
+  return j;
+}
 
 async function loadAll(){
   try{
@@ -1644,7 +1667,18 @@ async function sendChat(){
 if (session) { enterApp(); } else { document.getElementById('loginOverlay').classList.remove('hidden'); }
 setInterval(()=>{ if(session){ loadAll(); loadChat(); } }, 5000);
 // SSE realtime
-try{ const es=new EventSource('/api/events'); es.onmessage=()=>{ if(session){ loadAll(); loadChat(); } }; es.onerror=()=>{document.getElementById('liveDot').className='inline-block h-2.5 w-2.5 rounded-full bg-amber-500';}; es.onopen=()=>{document.getElementById('liveDot').className='inline-block h-2.5 w-2.5 rounded-full bg-emerald-500';}; }catch{}
+let es = null;
+function connectSSE(){
+  try{ if(es) es.close(); }catch(e){}
+  es = null;
+  if(!session || !session.token) return;
+  try{
+    es = new EventSource('/api/events?token=' + encodeURIComponent(session.token));
+    es.onmessage = () => { if(session){ loadAll(); loadChat(); } };
+    es.onerror = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-amber-500'; };
+    es.onopen = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500'; };
+  }catch(e){}
+}
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
 </script>

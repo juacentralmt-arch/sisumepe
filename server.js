@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
-const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
@@ -9,6 +10,62 @@ const store = require('./store');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
+
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+// Cabeçalhos de segurança
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=()');
+  next();
+});
+// HTTPS em produção (Render)
+if (process.env.FORCE_HTTPS === '1') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https')
+      return res.redirect('https://' + req.headers.host + req.url);
+    next();
+  });
+}
+
+// Anti força-bruta no login: 10 tentativas / 5 min por IP
+const loginHits = new Map();
+function loginRateLimit(req, res, next) {
+  const ip = req.ip || '?';
+  const now = Date.now();
+  const h = loginHits.get(ip) || { n: 0, reset: now + 5 * 60e3 };
+  if (now > h.reset) { h.n = 0; h.reset = now + 5 * 60e3; }
+  h.n++;
+  loginHits.set(ip, h);
+  if (h.n > 10) return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
+  next();
+}
+
+// Sessões por token (12h). O servidor NUNCA confia no usuário vindo do app.
+const sessions = new Map();
+function issueToken(u) {
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + 12 * 3600e3 });
+  return token;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, s] of sessions) if (s.exp < now) sessions.delete(k);
+}, 3600e3).unref();
+function auth(roles) {
+  return (req, res, next) => {
+    const t = req.headers['x-session'] || req.query.token;
+    const s = t && sessions.get(t);
+    if (!s || s.exp < Date.now()) { if (t) sessions.delete(t); return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }); }
+    req.auth = s;
+    if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
+    next();
+  };
+}
+const isHash = p => typeof p === 'string' && /^\$2[aby]\$/.test(p);
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
   console.error(e);
@@ -22,7 +79,6 @@ function broadcast() {
   sseClients.forEach(res => { try { res.write(`data: ${payload}\n\n`); } catch {} });
 }
 
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(ROOT, 'public')));
 app.use('/uploads', express.static(path.join(ROOT, 'uploads')));
@@ -68,7 +124,7 @@ const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retira
 // --- API ---
 app.get('/api/health', (req, res) => res.json({ ok: true, store: store.mode }));
 
-app.get('/api/events', (req, res) => {
+app.get('/api/events', auth(), (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -79,44 +135,59 @@ app.get('/api/events', (req, res) => {
 });
 
 // Login / usuários
-app.post('/api/login', ah(async (req, res) => {
+app.post('/api/login', loginRateLimit, ah(async (req, res) => {
   const { user, pass } = req.body || {};
   const u = await store.users.byName(user);
-  if (!u || u.pass !== String(pass || '')) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  if (!u) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  let ok = false;
+  if (isHash(u.pass)) ok = await bcrypt.compare(String(pass || ''), u.pass);
+  else if (u.pass === String(pass || '')) {
+    ok = true;
+    await store.users.patch(u.user, { pass: await bcrypt.hash(String(pass || ''), 10) }); // migra p/ hash
+  }
+  if (!ok) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   if (u.active === false) return res.status(403).json({ error: 'Usuário desativado. Fale com o administrador.' });
-  res.json({ user: u.user, role: u.role, name: u.name });
+  res.json({ user: u.user, role: u.role, name: u.name, token: issueToken(u) });
 }));
 
-app.get('/api/users', ah(async (req, res) => {
+app.post('/api/logout', auth(), ah(async (req, res) => {
+  const t = req.headers['x-session'] || req.query.token;
+  if (t) sessions.delete(t);
+  res.json({ ok: true });
+}));
+
+app.get('/api/users', auth(), ah(async (req, res) => {
   const list = await store.users.all();
   res.json(list.map(u => ({ user: u.user, name: u.name, role: u.role, active: u.active !== false })));
 }));
 
-app.patch('/api/users/me/password', ah(async (req, res) => {
-  const { user, current, next } = req.body || {};
-  const u = await store.users.byName(user);
-  if (!u || u.pass !== String(current || '')) return res.status(401).json({ error: 'Senha atual incorreta' });
+app.patch('/api/users/me/password', auth(), ah(async (req, res) => {
+  const { current, next } = req.body || {};
+  const u = await store.users.byName(req.auth.user);
+  if (!u) return res.status(401).json({ error: 'Sessão inválida' });
+  let ok = false;
+  if (isHash(u.pass)) ok = await bcrypt.compare(String(current || ''), u.pass);
+  else ok = u.pass === String(current || '');
+  if (!ok) return res.status(401).json({ error: 'Senha atual incorreta' });
   if (!next || String(next).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
-  await store.users.patch(u.user, { pass: String(next) });
+  await store.users.patch(u.user, { pass: await bcrypt.hash(String(next), 10) });
   res.json({ ok: true });
 }));
 
-app.post('/api/users', ah(async (req, res) => {
-  const admin = await store.users.byName(req.body && req.body.requester);
-  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.post('/api/users', auth(['admin']), ah(async (req, res) => {
+  const admin = req.auth;
   const { user, name, role, pass } = req.body || {};
   const id = String(user || '').toLowerCase().trim().replace(/\s+/g, '');
   if (!id || !name || !pass) return res.status(400).json({ error: 'Usuário, nome e senha são obrigatórios' });
   if (!['recepcao', 'tecnico', 'admin'].includes(role)) return res.status(400).json({ error: 'Perfil inválido' });
   if (await store.users.byName(id)) return res.status(409).json({ error: 'Usuário já existe' });
-  await store.users.insert({ user: id, name: String(name).trim(), role, pass: String(pass), active: true });
+  await store.users.insert({ user: id, name: String(name).trim(), role, pass: await bcrypt.hash(String(pass), 10), active: true });
   broadcast();
   res.status(201).json({ user: id, name: String(name).trim(), role });
 }));
 
-app.delete('/api/users/:user', ah(async (req, res) => {
-  const admin = await store.users.byName(req.body && req.body.requester);
-  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.delete('/api/users/:user', auth(['admin']), ah(async (req, res) => {
+  const admin = req.auth;
   const target = String(req.params.user).toLowerCase().trim();
   if (target === admin.user) return res.status(400).json({ error: 'Você não pode remover seu próprio usuário' });
   const u = await store.users.byName(target);
@@ -129,20 +200,17 @@ app.delete('/api/users/:user', ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.patch('/api/users/:user/password', ah(async (req, res) => {
-  const admin = await store.users.byName(req.body && req.body.requester);
-  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.patch('/api/users/:user/password', auth(['admin']), ah(async (req, res) => {
   const u = await store.users.byName(req.params.user);
   if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
   const { pass } = req.body || {};
   if (!pass || String(pass).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
-  await store.users.patch(u.user, { pass: String(pass) });
+  await store.users.patch(u.user, { pass: await bcrypt.hash(String(pass), 10) });
   res.json({ ok: true });
 }));
 
-app.patch('/api/users/:user', ah(async (req, res) => {
-  const admin = await store.users.byName(req.body && req.body.requester);
-  if (!admin || admin.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.patch('/api/users/:user', auth(['admin']), ah(async (req, res) => {
+  const admin = req.auth;
   const u = await store.users.byName(req.params.user);
   if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
   const { name, role, active } = req.body || {};
@@ -162,8 +230,8 @@ app.patch('/api/users/:user', ah(async (req, res) => {
 }));
 
 // Chat
-app.get('/api/chat', ah(async (req, res) => {
-  const me = String(req.query.user || '').toLowerCase().trim();
+app.get('/api/chat', auth(), ah(async (req, res) => {
+  const me = req.auth.user;
   const list = await store.chat.list();
   res.json(list.filter(m => {
     const to = String(m.to || 'todos').toLowerCase();
@@ -172,10 +240,10 @@ app.get('/api/chat', ah(async (req, res) => {
   }).slice(-100));
 }));
 
-app.post('/api/chat', upload.array('arquivos', 5), ah(async (req, res) => {
-  const { user, text } = req.body || {};
-  const u = await store.users.byName(user);
-  if (!u) return res.status(401).json({ error: 'Usuário não autenticado' });
+app.post('/api/chat', auth(), upload.array('arquivos', 5), ah(async (req, res) => {
+  const { text } = req.body || {};
+  const u = await store.users.byName(req.auth.user);
+  if (!u) return res.status(401).json({ error: 'Sessão inválida' });
   const files = await mapFiles(req.files);
   const cleanText = String(text || '').trim().slice(0, 1000);
   if (!cleanText && !files.length) return res.status(400).json({ error: 'Escreva uma mensagem ou anexe um arquivo' });
@@ -190,11 +258,11 @@ app.post('/api/chat', upload.array('arquivos', 5), ah(async (req, res) => {
 }));
 
 // Persons
-app.get('/api/persons', ah(async (req, res) => {
+app.get('/api/persons', auth(), ah(async (req, res) => {
   res.json(await store.persons.search(req.query.q || ''));
 }));
 
-app.get('/api/persons/:id', ah(async (req, res) => {
+app.get('/api/persons/:id', auth(['tecnico', 'admin']), ah(async (req, res) => {
   const p = await store.persons.byId(req.params.id);
   if (!p) return res.status(404).json({ error: 'Não encontrado' });
   const all = await store.tickets.all();
@@ -204,7 +272,7 @@ app.get('/api/persons/:id', ah(async (req, res) => {
   res.json({ person: p, tickets: tickets.map(t => enrich(t, persons)), audit });
 }));
 
-app.post('/api/persons', ah(async (req, res) => {
+app.post('/api/persons', auth(), ah(async (req, res) => {
   const { nome, cpf, rg, nomeMae, dataNascimento, modeloTornozeleira } = req.body || {};
   if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!cpf && !rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
@@ -224,11 +292,11 @@ app.post('/api/persons', ah(async (req, res) => {
   res.status(201).json(person);
 }));
 
-app.patch('/api/persons/:id', ah(async (req, res) => {
+app.patch('/api/persons/:id', auth(), ah(async (req, res) => {
   const p = await store.persons.byId(req.params.id);
   if (!p) return res.status(404).json({ error: 'Atendido não encontrado' });
-  const editor = await store.users.byName(req.body && req.body.editedBy);
-  if (!editor) return res.status(401).json({ error: 'Usuário não autenticado' });
+  const editor = await store.users.byName(req.auth.user);
+  if (!editor) return res.status(401).json({ error: 'Sessão inválida' });
   const fields = ['nome', 'cpf', 'rg', 'nomeMae', 'dataNascimento', 'modeloTornozeleira'];
   const next = {};
   fields.forEach(f => { next[f] = f === 'dataNascimento' ? String((req.body && req.body[f]) || '') : String((req.body && req.body[f]) || '').trim(); });
@@ -255,7 +323,7 @@ app.patch('/api/persons/:id', ah(async (req, res) => {
 }));
 
 // Tickets
-app.get('/api/tickets', ah(async (req, res) => {
+app.get('/api/tickets', auth(), ah(async (req, res) => {
   const status = req.query.status;
   let list = await enrichAll(await store.tickets.all());
   if (status && status !== 'todos') list = list.filter(t => t.status === status);
@@ -264,7 +332,7 @@ app.get('/api/tickets', ah(async (req, res) => {
   res.json([...sortQueue(active), ...done]);
 }));
 
-app.get('/api/stats', ah(async (req, res) => {
+app.get('/api/stats', auth(), ah(async (req, res) => {
   const all = await store.tickets.all();
   const persons = await store.persons.all();
   res.json({
@@ -275,14 +343,14 @@ app.get('/api/stats', ah(async (req, res) => {
   });
 }));
 
-app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
-  const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira, createdBy } = req.body || {};
+app.post('/api/tickets', auth(), upload.array('anexos', 5), ah(async (req, res) => {
+  const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira } = req.body || {};
   const person = await store.persons.byId(personId);
   if (!person) return res.status(400).json({ error: 'Atendido inválido. Selecione ou cadastre a pessoa.' });
   if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
   if (!modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
   const files = await mapFiles(req.files);
-  const creator = await store.users.byName(createdBy);
+  const creator = await store.users.byName(req.auth.user);
   const ticket = await store.tickets.insert({
     personId: person.id,
     motivo, descricao: descricao || '',
@@ -292,8 +360,8 @@ app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
     anexos: files,
     tecnicoRecepcao: tecnicoRecepcao || '',
     tecnico: '', tecnicoUser: '', relatorio: '',
-    createdBy: creator ? creator.user : String(createdBy || '').toLowerCase().trim(),
-    createdByName: creator ? creator.name : '',
+    createdBy: creator ? creator.user : req.auth.user,
+    createdByName: creator ? creator.name : req.auth.name,
     called: false, calledAt: null, calledBy: '',
     createdAt: new Date().toISOString(), startedAt: null, finishedAt: null
   });
@@ -303,7 +371,7 @@ app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
     await store.audit.insert({
       kind: 'cadastro', personId: person.id, personName: person.nome,
       byUser: ticket.createdBy, byName: ticket.createdByName,
-      byRole: creator ? creator.role : '',
+    byRole: creator ? creator.role : req.auth.role,
       changes: [{ field: 'modeloTornozeleira', label: 'Modelo da tornozeleira', from: fromMod, to: modeloTornozeleira }]
     });
   }
@@ -311,7 +379,7 @@ app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
     action: 'criado', personId: person.id, personName: person.nome,
     ticketId: ticket.id, ref: ticket.code,
     byUser: ticket.createdBy, byName: ticket.createdByName,
-    byRole: creator ? creator.role : '',
+    byRole: creator ? creator.role : req.auth.role,
     summary: motivo + (ticket.prioridadeLegal ? ' (prioridade legal)' : '')
   });
   broadcast();
@@ -319,17 +387,17 @@ app.post('/api/tickets', upload.array('anexos', 5), ah(async (req, res) => {
   res.status(201).json(enrich(ticket, persons));
 }));
 
-app.patch('/api/tickets/:id/start', ah(async (req, res) => {
+app.patch('/api/tickets/:id/start', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  const starter = await store.users.byName(req.body && req.body.startedBy);
+  const starter = await store.users.byName(req.auth.user);
   const blockStart = infinityBlocked(t, starter);
   if (blockStart) return res.status(403).json({ error: blockStart });
   if (starter && starter.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
   const upd = await store.tickets.patch(t.id, {
     status: 'em_atendimento',
-    tecnico: (req.body && req.body.tecnico) || t.tecnico || '',
-    tecnicoUser: (req.body && req.body.tecnicoUser) || t.tecnicoUser || '',
+    tecnico: starter.name + ' (' + starter.user + ')',
+    tecnicoUser: starter.user,
     startedAt: new Date().toISOString()
   });
   const person = await store.persons.byId(t.personId);
@@ -343,10 +411,10 @@ app.patch('/api/tickets/:id/start', ah(async (req, res) => {
   res.json(enrich(upd, persons));
 }));
 
-app.patch('/api/tickets/:id/finish', upload.array('fotos', 4), ah(async (req, res) => {
+app.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 4), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  const { relatorio, tecnico, requestedBy } = req.body || {};
+  const { relatorio } = req.body || {};
   if (!relatorio || !relatorio.trim() || relatorio.trim().length < 10)
     return res.status(400).json({ error: 'Relatório da ação realizada é obrigatório (mín. 10 caracteres).' });
   let cl = req.body.checklist;
@@ -354,10 +422,10 @@ app.patch('/api/tickets/:id/finish', upload.array('fotos', 4), ah(async (req, re
   if (!cl || !['sinal', 'bateria', 'pulseira', 'orientacao'].every(k => cl[k] === true))
     return res.status(400).json({ error: 'Checklist técnico incompleto: marque os 4 itens obrigatórios.' });
   const owner = (t.tecnicoUser || (((t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/) || [])[1] || '')).toLowerCase().trim();
-  const by = String(requestedBy || '').toLowerCase().trim();
+  const by = req.auth.user;
   if (owner && by !== owner)
     return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode finalizar este atendimento.' });
-  const finisher = await store.users.byName(requestedBy);
+  const finisher = await store.users.byName(req.auth.user);
   const blockFin = infinityBlocked(t, finisher);
   if (blockFin) return res.status(403).json({ error: blockFin });
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
@@ -365,7 +433,7 @@ app.patch('/api/tickets/:id/finish', upload.array('fotos', 4), ah(async (req, re
   const upd = await store.tickets.patch(t.id, {
     status: 'finalizado',
     relatorio: relatorio.trim(),
-    tecnico: tecnico || t.tecnico,
+    tecnico: t.tecnico,
     checklist: { sinal: true, bateria: true, pulseira: true, orientacao: true },
     fotosPos: (t.fotosPos || []).concat(pos).slice(-8),
     finishedAt: new Date().toISOString()
@@ -381,11 +449,11 @@ app.patch('/api/tickets/:id/finish', upload.array('fotos', 4), ah(async (req, re
   res.json(enrich(upd, persons));
 }));
 
-app.patch('/api/tickets/:id/call', ah(async (req, res) => {
+app.patch('/api/tickets/:id/call', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   if (t.status !== 'aguardando') return res.status(400).json({ error: 'Ticket já saiu da fila' });
-  const caller = await store.users.byName(req.body && req.body.calledBy);
+  const caller = await store.users.byName(req.auth.user);
   const blockCall = infinityBlocked(t, caller);
   if (blockCall) return res.status(403).json({ error: blockCall });
   if (caller && caller.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
@@ -395,12 +463,11 @@ app.patch('/api/tickets/:id/call', ah(async (req, res) => {
   res.json(enrich(upd, persons));
 }));
 
-app.patch('/api/tickets/:id/edit', ah(async (req, res) => {
+app.patch('/api/tickets/:id/edit', auth(['recepcao', 'admin']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível corrigir tickets aguardando na fila' });
-  const editor = await store.users.byName(req.body && req.body.editor);
-  if (!editor || !['recepcao', 'admin'].includes(editor.role)) return res.status(403).json({ error: 'Correção restrita à Recepção.' });
+  const editor = await store.users.byName(req.auth.user);
   const { motivo, modeloTornozeleira, descricao, prioridadeLegal } = req.body || {};
   const changes = [];
   const patch = {};
@@ -432,12 +499,11 @@ app.patch('/api/tickets/:id/edit', ah(async (req, res) => {
   res.json(enrich(upd, persons));
 }));
 
-app.patch('/api/tickets/:id/cancel', ah(async (req, res) => {
+app.patch('/api/tickets/:id/cancel', auth(['recepcao', 'admin']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível cancelar tickets aguardando na fila' });
-  const editor = await store.users.byName(req.body && req.body.by);
-  if (!editor || !['recepcao', 'admin'].includes(editor.role)) return res.status(403).json({ error: 'Cancelamento restrito à Recepção.' });
+  const editor = await store.users.byName(req.auth.user);
   const upd = await store.tickets.patch(t.id, { status: 'cancelado', cancelledAt: new Date().toISOString(), cancelledBy: editor.user });
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
@@ -450,11 +516,11 @@ app.patch('/api/tickets/:id/cancel', ah(async (req, res) => {
   res.json(enrich(upd, persons));
 }));
 
-app.patch('/api/tickets/:id/reopen', ah(async (req, res) => {
+app.patch('/api/tickets/:id/reopen', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   if (t.status !== 'finalizado') return res.status(400).json({ error: 'Só é possível reabrir tickets finalizados' });
-  const by = String((req.body && req.body.by) || '').toLowerCase().trim();
+  const by = req.auth.user;
   const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado pode reabrir este atendimento.' });
   const upd = await store.tickets.patch(t.id, { status: 'em_atendimento', finishedAt: null, reopenedAt: new Date().toISOString() });
@@ -470,11 +536,11 @@ app.patch('/api/tickets/:id/reopen', ah(async (req, res) => {
 }));
 
 // Auditoria / dashboard / backup
-app.get('/api/audit', ah(async (req, res) => {
+app.get('/api/audit', auth(['tecnico', 'admin']), ah(async (req, res) => {
   res.json(await store.audit.recent(req.query.limit));
 }));
 
-app.get('/api/dashboard', ah(async (req, res) => {
+app.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
   const all = (await store.tickets.all()).filter(x => x.status !== 'cancelado');
   const t = all;
   const today = new Date().toISOString().slice(0, 10);
@@ -519,18 +585,14 @@ app.get('/api/dashboard', ah(async (req, res) => {
   });
 }));
 
-app.get('/api/backup', ah(async (req, res) => {
-  const r = await store.users.byName(req.query.requester);
-  if (!r || r.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.get('/api/backup', auth(['admin']), ah(async (req, res) => {
   const fname = 'sisumepe-backup-' + new Date().toISOString().slice(0, 10) + '.json';
   res.setHeader('Content-Disposition', 'attachment; filename="' + fname + '"');
   res.setHeader('Content-Type', 'application/json');
   res.json(await store.backup());
 }));
 
-app.post('/api/restore', upload.single('backup'), ah(async (req, res) => {
-  const r = await store.users.byName(req.body && req.body.requester);
-  if (!r || r.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito ao administrador' });
+app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo de backup (.json)' });
   let data;
   try {
