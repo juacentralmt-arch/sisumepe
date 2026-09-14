@@ -615,6 +615,22 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
   }
 }));
 
+// Painel TV público (sem login): só o mínimo necessário à chamada
+app.get('/api/tv', ah(async (req, res) => {
+  const all = await store.tickets.all();
+  const persons = await store.persons.all();
+  const queue = sortQueue(all.filter(t => t.status === 'aguardando')).map(t => {
+    const p = persons.find(x => String(x.id) === String(t.personId));
+    return {
+      id: t.id, code: t.code, nome: p ? p.nome : '-',
+      motivo: t.motivo || '', modelo: t.modeloTornozeleira || '',
+      prioridade: !!t.prioridadeLegal,
+      called: !!t.called, calledAt: t.calledAt || null, createdAt: t.createdAt
+    };
+  });
+  res.json({ queue, now: new Date().toISOString() });
+}));
+
 app.get('/tv', (req, res) => res.sendFile(path.join(ROOT, 'public', 'tv.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));

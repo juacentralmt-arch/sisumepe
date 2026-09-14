@@ -761,6 +761,11 @@ async function api(p, opt){
   if(!r.ok) throw new Error(j.error || 'Erro');
   return j;
 }
+function authFetch(url, opt){
+  opt = opt || {};
+  opt.headers = authHeaders(opt.headers);
+  return fetch(url, opt);
+}
 
 async function loadAll(){
   try{
@@ -905,7 +910,7 @@ async function abrirTicket(){
   fd.append('tecnicoRecepcao',document.getElementById('tResp').value);
   fd.append('createdBy', session ? session.user : '');
   [...document.getElementById('tFiles').files].forEach(f=>fd.append('anexos',f));
-  try{ const t=await fetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
+  try{ const t=await authFetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
     toast('🎫 Ticket '+t.code+' criado!'); document.getElementById('tDesc').value=''; document.getElementById('tFiles').value='';
     refreshScanPreview();
     modeloSel=''; paintModelo(); prio=false;
@@ -1177,7 +1182,9 @@ async function reopenTicket(id, code){
 
 // --- BACKUP ---
 function downloadBackup(){
-  window.open('/api/backup?requester=' + encodeURIComponent(session.user), '_blank');
+  let tok = '';
+  try{ const s = JSON.parse(localStorage.getItem('te_session') || 'null'); if(s && s.token) tok = s.token; }catch(e){}
+  window.open('/api/backup?token=' + encodeURIComponent(tok), '_blank');
 }
 async function restoreBackup(){
   const inp = document.getElementById('restoreFile');
@@ -1187,7 +1194,7 @@ async function restoreBackup(){
   fd.append('requester', session.user); fd.append('backup', inp.files[0]);
   const msg = document.getElementById('bkMsg');
   try{
-    const r = await fetch('/api/restore', { method: 'POST', body: fd });
+    const r = await authFetch('/api/restore', { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
     if(!r.ok) throw new Error(j.error || 'Erro ao restaurar');
     msg.textContent = 'Backup restaurado: ' + j.persons + ' pessoas, ' + j.tickets + ' tickets, ' + j.users + ' usuários.';
@@ -1274,7 +1281,7 @@ async function confirmFinish(){
     fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
     fd.append('checklist',JSON.stringify(cl));
     [...document.getElementById('mFotos').files].slice(0,4).forEach(f=>fd.append('fotos',f));
-    const r=await fetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
+    const r=await authFetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||'Erro ao finalizar');
     closeModal(); toast('Atendimento finalizado!'); loadAll();
@@ -1673,7 +1680,7 @@ async function sendChat(){
   pendingFiles.forEach(f => fd.append('arquivos', f));
   inp.value = '';
   try{
-    const r = await fetch('/api/chat', { method: 'POST', body: fd });
+    const r = await authFetch('/api/chat', { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'Erro ao enviar');
     pendingFiles = []; renderPending();

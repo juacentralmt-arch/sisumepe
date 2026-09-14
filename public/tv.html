@@ -78,7 +78,7 @@ function speak(text){
   }catch(e){}
 }
 function announceCall(t){
-  const nome = (t.person && t.person.nome) || '';
+  const nome = t.nome || '';
   const msg = 'Atenção! ' + nome + ', ticket ' + t.code + '. Dirija-se ao atendimento.';
   speak(msg);
   setTimeout(() => speak(msg), 7000);
@@ -100,15 +100,16 @@ function chime(){
 }
 function sortQ(list){
   return [...list].sort((a, b) => {
-    if(!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
+    if(!!a.prioridade !== !!b.prioridade) return a.prioridade ? -1 : 1;
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 }
 async function tick(){
   try{
-    const all = await (await fetch('/api/tickets')).json();
-    const q = sortQ(all.filter(t => t.status === 'aguardando'));
-    const called = all.filter(t => t.status === 'aguardando' && t.called)
+    const data = await (await fetch('/api/tv')).json();
+    const all = Array.isArray(data.queue) ? data.queue : [];
+    const q = sortQ(all);
+    const called = all.filter(t => t.called)
       .sort((a, b) => new Date(b.calledAt || 0) - new Date(a.calledAt || 0))[0];
     const key = called ? called.id + '|' + called.calledAt : '';
     const hasCall = !!called;
@@ -116,15 +117,15 @@ async function tick(){
     document.getElementById('idleBox').classList.toggle('hidden', hasCall);
     if(hasCall){
       document.getElementById('callCode').textContent = called.code;
-      document.getElementById('callName').textContent = (called.person && called.person.nome) || '';
-      document.getElementById('callInfo').textContent = (called.modeloTornozeleira ? called.modeloTornozeleira + ' • ' : '') + (called.motivo || '');
+      document.getElementById('callName').textContent = called.nome || '';
+      document.getElementById('callInfo').textContent = (called.modelo ? called.modelo + ' • ' : '') + (called.motivo || '');
       if(key !== lastCallKey){ if(lastCallKey !== ''){ chime(); announceCall(called); } lastCallKey = key; }
     } else lastCallKey = '';
     document.getElementById('nextList').innerHTML = q.filter(t => !called || t.id !== called.id).slice(0, 6).map((t, i) =>
       `<div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3">
         <span class="font-extrabold text-slate-400 text-lg w-8">${i + 1}</span>
-        <div class="min-w-0"><p class="font-bold truncate">${(t.person && t.person.nome) || '-'}</p>
-        <p class="text-xs text-slate-400">${t.code}${t.prioridadeLegal ? ' • PRIORIDADE' : ''}</p></div>
+        <div class="min-w-0"><p class="font-bold truncate">${t.nome || '-'}</p>
+        <p class="text-xs text-slate-400">${t.code}${t.prioridade ? ' • PRIORIDADE' : ''}</p></div>
       </div>`).join('') || '<p class="text-sm text-slate-500">Fila vazia 🎉</p>';
   }catch(e){}
 }
