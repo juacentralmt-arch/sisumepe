@@ -27,7 +27,7 @@ let mem = null;
 function loadFile() {
   try {
     if (!fs.existsSync(DB_FILE)) {
-      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
+      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
       fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2));
       return mem;
     }
@@ -38,9 +38,10 @@ function loadFile() {
     if (!mem.seqAudit) mem.seqAudit = mem.audit.length + 1;
     if (!Array.isArray(mem.users) || !mem.users.length) mem.users = seedUsers();
     mem.users.forEach(u => { if (u.active === undefined) u.active = true; });
+    if (!mem.sessions || typeof mem.sessions !== 'object') mem.sessions = {};
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
     return mem;
   }
 }
@@ -90,6 +91,16 @@ const appP = r => toApp(r, P);
 const appT = r => toApp(r, T);
 const appA = r => toApp(r, A);
 const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.to, text: r.text, anexos: r.anexos || [], at: r.at });
+
+// Fallback em memória (se a tabela sessions ainda não existir no Supabase)
+const memSessions = new Map();
+let warnedSessions = false;
+function warnSessions(e) {
+  if (!warnedSessions) {
+    warnedSessions = true;
+    console.warn('sessions: usando memória volátil — rode o SQL da tabela sessions no Supabase.', e && e.message);
+  }
+}
 
 // ------------------------------ API ----------------------------------
 const eqi = (a, b) => String(a) === String(b);
@@ -268,6 +279,51 @@ const store = {
     }
   },
 
+  // Sessões persistentes (sobrevivem a restart do servidor)
+  sessions: {
+    async insert(token, row) {
+      if (MODE === 'file') { mem.sessions[token] = row; saveFile(); return; }
+      try {
+        const r = await supa.from('sessions').upsert({ token, user: row.user, role: row.role, name: row.name, exp: new Date(row.exp).toISOString() }, { onConflict: 'token' });
+        if (r.error) throw r.error;
+      } catch (e) { warnSessions(e); memSessions.set(token, row); }
+    },
+    async get(token) {
+      if (!token) return null;
+      if (MODE === 'file') return mem.sessions[token] || null;
+      try {
+        const r = await supa.from('sessions').select('*').eq('token', token).limit(1);
+        if (r.error) throw r.error;
+        if (!r.data.length) return memSessions.get(token) || null;
+        const s = r.data[0];
+        return { user: s.user, role: s.role, name: s.name, exp: new Date(s.exp).getTime() };
+      } catch (e) { warnSessions(e); return memSessions.get(token) || null; }
+    },
+    async del(token) {
+      if (!token) return;
+      if (MODE === 'file') { delete mem.sessions[token]; saveFile(); return; }
+      try {
+        const r = await supa.from('sessions').delete().eq('token', token);
+        if (r.error) throw r.error;
+      } catch (e) { warnSessions(e); }
+      memSessions.delete(token);
+    },
+    async cleanup() {
+      const now = Date.now();
+      if (MODE === 'file') {
+        let ch = false;
+        for (const k of Object.keys(mem.sessions)) if (mem.sessions[k].exp < now) { delete mem.sessions[k]; ch = true; }
+        if (ch) saveFile();
+        return;
+      }
+      try {
+        const r = await supa.from('sessions').delete().lt('exp', new Date(now).toISOString());
+        if (r.error) throw r.error;
+      } catch (e) { warnSessions(e); }
+      for (const [k, s] of memSessions) if (s.exp < now) memSessions.delete(k);
+    }
+  },
+
   async backup() {
     const [persons, tickets, chat, audit, users] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
@@ -288,11 +344,12 @@ const store = {
       throw Object.assign(new Error('Arquivo inválido ou sem administrador ativo'), { status: 400 });
     dump.users.forEach(u => { if (u.active === undefined) u.active = true; });
     if (MODE === 'file') {
+      const keepSessions = (mem && mem.sessions) || {};
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat.slice(-200) : [],
         audit: Array.isArray(dump.audit) ? dump.audit.slice(-500) : [],
-        users: dump.users,
+        users: dump.users, sessions: keepSessions,
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
         seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1
       };
