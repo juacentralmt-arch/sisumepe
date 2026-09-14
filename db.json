@@ -1,0 +1,453 @@
+{
+    "persons":  [
+                    {
+                        "id":  1,
+                        "nome":  "Joanderson Vitor da Silva Santos",
+                        "cpf":  "08307317509",
+                        "cpfN":  "08307317509",
+                        "rg":  "",
+                        "nomeMae":  "Joselha",
+                        "dataNascimento":  "2001-05-20",
+                        "createdAt":  "2026-09-14T16:03:33.054Z"
+                    },
+                    {
+                        "id":  3,
+                        "nome":  "Usuário Teste",
+                        "cpf":  "01454848818",
+                        "cpfN":  "01454848818",
+                        "rg":  "",
+                        "nomeMae":  "Mãe teste",
+                        "dataNascimento":  "2000-01-01",
+                        "createdAt":  "2026-09-14T16:09:47.838Z"
+                    },
+                    {
+                        "id":  5,
+                        "nome":  "Daniel Gonçalves rodrigues",
+                        "cpf":  "09088990",
+                        "cpfN":  "09088990",
+                        "rg":  "",
+                        "nomeMae":  "Amandq",
+                        "dataNascimento":  "",
+                        "createdAt":  "2026-09-14T16:19:55.430Z"
+                    },
+                    {
+                        "id":  7,
+                        "nome":  "pedro",
+                        "cpf":  "05101321",
+                        "cpfN":  "05101321",
+                        "rg":  "02501",
+                        "nomeMae":  "maria",
+                        "dataNascimento":  "",
+                        "createdAt":  "2026-09-14T16:35:24.072Z"
+                    },
+                    {
+                        "id":  10,
+                        "nome":  "pedro",
+                        "cpf":  "15235500564",
+                        "cpfN":  "15235500564",
+                        "rg":  "",
+                        "nomeMae":  "maria",
+                        "dataNascimento":  "2026-09-14",
+                        "createdAt":  "2026-09-14T17:04:47.203Z"
+                    }
+                ],
+    "tickets":  [
+                    {
+                        "id":  1,
+                        "code":  "TK-0001",
+                        "personId":  1,
+                        "motivo":  "Outros",
+                        "descricao":  "Migração",
+                        "prioridadeLegal":  true,
+                        "status":  "finalizado",
+                        "anexos":  [
+                                       {
+                                           "url":  "/uploads/1789401814904-323209527-WhatsApp_Image_2026-09-14_at_11.33.44__2_.jpeg",
+                                           "name":  "WhatsApp Image 2026-09-14 at 11.33.44 (2).jpeg",
+                                           "size":  69943,
+                                           "mimetype":  "image/jpeg"
+                                       }
+                                   ],
+                        "tecnicoRecepcao":  "",
+                        "tecnico":  "Joanderson",
+                        "relatorio":  "Foi feito a migração",
+                        "createdAt":  "2026-09-14T16:03:36.981Z",
+                        "startedAt":  "2026-09-14T16:03:58.024Z",
+                        "finishedAt":  "2026-09-14T16:04:13.340Z"
+                    },
+                    {
+                        "id":  2,
+                        "code":  "TK-0002",
+                        "personId":  3,
+                        "motivo":  "Instalação de tornozeleira",
+                        "descricao":  "é réu solto. Veio para colocar tornozeleira",
+                        "prioridadeLegal":  true,
+                        "status":  "finalizado",
+                        "anexos":  [
+
+                                   ],
+                        "tecnicoRecepcao":  "",
+                        "tecnico":  "adailton",
+                        "relatorio":  "feito feito",
+                        "createdAt":  "2026-09-14T16:09:50.077Z",
+                        "startedAt":  "2026-09-14T16:10:28.736Z",
+                        "finishedAt":  "2026-09-14T16:11:59.983Z"
+                    },
+                    {
+                        "id":  3,
+                        "code":  "TK-0003",
+                        "personId":  3,
+                        "motivo":  "Manutenção / Troca de pulseira",
+                        "descricao":  "Teste",
+                        "prioridadeLegal":  false,
+                        "status":  "finalizado",
+                        "anexos":  [
+
+                                   ],
+                        "tecnicoRecepcao":  "",
+                        "tecnico":  "Joanderson (joanderson)",
+                        "relatorio":  "realizado conferido",
+                        "createdAt":  "2026-09-14T16:14:49.140Z",
+                        "startedAt":  "2026-09-14T16:33:07.066Z",
+                        "finishedAt":  "2026-09-14T16:34:26.207Z"
+                    },
+                    {
+                        "id":  5,
+                        "code":  "TK-0005",
+                        "personId":  5,
+                        "motivo":  "Instalação de tornozeleira",
+                        "descricao":  "Custodia",
+                        "prioridadeLegal":  false,
+                        "status":  "aguardando",
+                        "anexos":  [
+
+                                   ],
+                        "tecnicoRecepcao":  "",
+                        "tecnico":  "",
+                        "relatorio":  "",
+                        "createdAt":  "2026-09-14T16:20:26.588Z",
+                        "startedAt":  null,
+                        "finishedAt":  null,
+                        "called":  true,
+                        "calledAt":  "2026-09-14T21:11:23.758Z",
+                        "calledBy":  "joanderson"
+                    },
+                    {
+                        "id":  8,
+                        "code":  "TK-0008",
+                        "personId":  1,
+                        "motivo":  "Manutenção / Troca de pulseira",
+                        "descricao":  "Teste",
+                        "modeloTornozeleira":  "Spacecom",
+                        "prioridadeLegal":  false,
+                        "status":  "em_atendimento",
+                        "anexos":  [
+
+                                   ],
+                        "tecnicoRecepcao":  "",
+                        "tecnico":  "Joanderson (joanderson)",
+                        "relatorio":  "",
+                        "createdAt":  "2026-09-14T16:39:11.470Z",
+                        "startedAt":  "2026-09-14T16:39:19.287Z",
+                        "finishedAt":  null,
+                        "tecnicoUser":  "joanderson"
+                    }
+                ],
+    "chat":  [
+                 {
+                     "id":  1,
+                     "user":  "recepcao",
+                     "name":  "Recepção",
+                     "role":  "recepcao",
+                     "text":  "Ei",
+                     "at":  "2026-09-14T15:52:06.277Z"
+                 },
+                 {
+                     "id":  2,
+                     "user":  "tecnico",
+                     "name":  "Setor Técnico",
+                     "role":  "tecnico",
+                     "text":  "Salve",
+                     "at":  "2026-09-14T15:52:26.574Z"
+                 },
+                 {
+                     "id":  3,
+                     "user":  "tecnico",
+                     "name":  "Setor Técnico",
+                     "role":  "tecnico",
+                     "text":  "Chamar tal pessoa",
+                     "at":  "2026-09-14T15:52:32.907Z"
+                 },
+                 {
+                     "id":  4,
+                     "user":  "tecnico",
+                     "name":  "Setor Técnico",
+                     "role":  "tecnico",
+                     "text":  "teste json ap�s update",
+                     "at":  "2026-09-14T15:54:13.172Z"
+                 },
+                 {
+                     "id":  8,
+                     "user":  "recepcao",
+                     "name":  "Recepção",
+                     "role":  "recepcao",
+                     "text":  "Teste",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:10:40.118Z"
+                 },
+                 {
+                     "id":  9,
+                     "user":  "adailton",
+                     "name":  "Adailton",
+                     "role":  "tecnico",
+                     "text":  "ok",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:10:47.490Z"
+                 },
+                 {
+                     "id":  10,
+                     "user":  "recepcao",
+                     "name":  "Recepção",
+                     "role":  "recepcao",
+                     "text":  "Eai",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:10:51.032Z"
+                 },
+                 {
+                     "id":  11,
+                     "user":  "recepcao",
+                     "name":  "Recepção",
+                     "role":  "recepcao",
+                     "text":  "Eai adialton",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:20:44.658Z"
+                 },
+                 {
+                     "id":  12,
+                     "user":  "recepcao",
+                     "name":  "Recepção",
+                     "role":  "recepcao",
+                     "text":  "Fala comigo",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:21:13.482Z"
+                 },
+                 {
+                     "id":  13,
+                     "user":  "adailton",
+                     "name":  "Adailton",
+                     "role":  "tecnico",
+                     "text":  "oi",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:35:43.278Z"
+                 },
+                 {
+                     "id":  16,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "Oi",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:42:51.762Z"
+                 },
+                 {
+                     "id":  17,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "Oi",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:43:04.625Z"
+                 },
+                 {
+                     "id":  18,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "oi",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:43:10.946Z"
+                 },
+                 {
+                     "id":  19,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "oi",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:43:17.133Z"
+                 },
+                 {
+                     "id":  20,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "okk",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:43:23.055Z"
+                 },
+                 {
+                     "id":  21,
+                     "user":  "adailton",
+                     "name":  "Adailton",
+                     "role":  "tecnico",
+                     "to":  "todos",
+                     "text":  "ok",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:43:36.402Z"
+                 },
+                 {
+                     "id":  22,
+                     "user":  "adailton",
+                     "name":  "Adailton",
+                     "role":  "tecnico",
+                     "to":  "todos",
+                     "text":  "cuida",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:44:04.666Z"
+                 },
+                 {
+                     "id":  23,
+                     "user":  "adailton",
+                     "name":  "Adailton",
+                     "role":  "tecnico",
+                     "to":  "joanderson",
+                     "text":  "ok",
+                     "anexos":  [
+
+                                ],
+                     "at":  "2026-09-14T16:44:15.390Z"
+                 },
+                 {
+                     "id":  24,
+                     "user":  "joanderson",
+                     "name":  "Joanderson",
+                     "role":  "tecnico",
+                     "to":  "adailton",
+                     "text":  "",
+                     "anexos":  [
+                                    {
+                                        "url":  "/uploads/1789404271044-778598323-WhatsApp_Image_2026-09-14_at_11.33.43.jpeg",
+                                        "name":  "WhatsApp Image 2026-09-14 at 11.33.43.jpeg",
+                                        "size":  53905,
+                                        "mimetype":  "image/jpeg"
+                                    }
+                                ],
+                     "at":  "2026-09-14T16:44:31.060Z"
+                 }
+             ],
+    "audit":  [
+                  {
+                      "id":  3,
+                      "personId":  1,
+                      "personName":  "Joanderson Vitor da Silva Santos",
+                      "byUser":  "joanderson",
+                      "byName":  "Joanderson",
+                      "byRole":  "tecnico",
+                      "changes":  [
+                                      {
+                                          "field":  "nome",
+                                          "label":  "Nome",
+                                          "from":  "Joanderson Vitor da Silva Santo",
+                                          "to":  "Joanderson Vitor da Silva Santos"
+                                      }
+                                  ],
+                      "at":  "2026-09-14T16:13:29.817Z"
+                  },
+                  {
+                      "id":  2,
+                      "personId":  1,
+                      "personName":  "Joanderson Vitor da Silva Santo",
+                      "byUser":  "joanderson",
+                      "byName":  "Joanderson",
+                      "byRole":  "tecnico",
+                      "changes":  [
+                                      {
+                                          "field":  "nome",
+                                          "label":  "Nome",
+                                          "from":  "Joanderson Vitor da Silva Santos",
+                                          "to":  "Joanderson Vitor da Silva Santo"
+                                      }
+                                  ],
+                      "at":  "2026-09-14T16:13:13.961Z"
+                  }
+              ],
+    "users":  [
+                  {
+                      "user":  "joanderson",
+                      "name":  "Joanderson",
+                      "role":  "tecnico",
+                      "pass":  "joanderson123",
+                      "active":  true
+                  },
+                  {
+                      "user":  "adailton",
+                      "name":  "Adailton",
+                      "role":  "tecnico",
+                      "pass":  "adailton123",
+                      "active":  true
+                  },
+                  {
+                      "user":  "admin",
+                      "name":  "Administrador",
+                      "role":  "admin",
+                      "pass":  "admin123",
+                      "active":  true
+                  },
+                  {
+                      "user":  "daniel",
+                      "name":  "Daniel",
+                      "role":  "recepcao",
+                      "pass":  "daniel123",
+                      "active":  true
+                  },
+                  {
+                      "user":  "andre",
+                      "name":  "André",
+                      "role":  "recepcao",
+                      "pass":  "andre123",
+                      "active":  true
+                  },
+                  {
+                      "user":  "julio",
+                      "name":  "Júlio Cesar",
+                      "role":  "tecnico",
+                      "pass":  "julio123",
+                      "active":  true
+                  }
+              ],
+    "seqPerson":  18,
+    "seqTicket":  21,
+    "seqChat":  26,
+    "seqAudit":  35
+}
