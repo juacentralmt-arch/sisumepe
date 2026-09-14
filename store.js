@@ -322,8 +322,21 @@ const store = {
   },
 
   // Arquivos: disco local (file) ou Supabase Storage (supabase)
+  // Só tipos seguros (nada de .svg/.html que executam código no navegador)
   async saveFileUpload(file) {
-    const safe = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + String(file.originalname || 'arquivo').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const orig = String(file.originalname || 'arquivo');
+    const ext = (orig.split('.').pop() || '').toLowerCase();
+    const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv'];
+    const okMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain', 'text/csv'];
+    if (!okExt.includes(ext) || !okMime.includes(file.mimetype)) {
+      const e = new Error('Tipo de arquivo não permitido: ' + orig);
+      e.status = 400;
+      throw e;
+    }
+    const safe = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + orig.replace(/[^a-zA-Z0-9._-]/g, '_');
     if (MODE === 'file') {
       fs.writeFileSync(path.join(UPLOAD_DIR, safe), file.buffer);
       return { url: '/uploads/' + safe, name: file.originalname, size: file.size, mimetype: file.mimetype };

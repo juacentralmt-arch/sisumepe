@@ -1,5 +1,6 @@
 node_modules/
 .env
+db.json
 *.bak-*
 cloudflare-url.log
 tornozeleira-system/
