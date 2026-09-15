@@ -583,13 +583,6 @@
     <p class="text-xs text-slate-500 mt-3 mb-3">É obrigatório informar o <b>relatório da ação realizada</b> (procedimento, peça trocada, teste, orientação).</p>
     <input id="mTec" readonly title="Técnico vinculado ao atendimento" placeholder="Técnico vinculado" class="inp mb-2.5 !bg-slate-100 font-bold">
     <textarea id="mRel" rows="4" placeholder="Ex: Realizada troca da pulseira, teste de sinal OK, bateria 100%, orientado sobre carregamento diário..." class="inp"></textarea>
-    <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-      <p class="lbl mb-2">CHECKLIST TÉCNICO * (todos obrigatórios)</p>
-      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="sinal"> Teste de sinal / GPS OK</label>
-      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="bateria"> Bateria carregada e testada</label>
-      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="pulseira"> Pulseira e lacre íntegros</label>
-      <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input type="checkbox" class="ckItem w-5 h-5 accent-emerald-600" data-k="orientacao"> Atendido orientado sobre cuidados</label>
-    </div>
     <label class="lbl mt-3 block">FOTOS DO SERVIÇO (antes/depois, até 4)</label>
     <input id="mFotos" type="file" multiple accept="image/*" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
     <p id="mErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
@@ -1267,19 +1260,15 @@ function openModal(id,code){
   const owner = ticketOwner(t);
   if (owner && session && owner.toLowerCase() !== String(session.user).toLowerCase()){ toast('🔒 Ticket vinculado a ' + ((t && t.tecnico) || owner)); return; }
   finishId=id;
-  document.querySelectorAll('.ckItem').forEach(c => c.checked = false);
   const mf = document.getElementById('mFotos'); if(mf) mf.value = ''; document.getElementById('mCode').textContent=code; document.getElementById('mTec').value=((t&&t.tecnico)||(session?session.name+' ('+session.user+')':'')); document.getElementById('mRel').value=''; document.getElementById('mErr').classList.add('hidden'); document.getElementById('modalFin').classList.remove('hidden'); }
 function closeModal(){ document.getElementById('modalFin').classList.add('hidden'); finishId=null; }
 async function confirmFinish(){
   const rel=document.getElementById('mRel').value, tec=document.getElementById('mTec').value, err=document.getElementById('mErr');
   if(!tec.trim()){ err.textContent='Informe o nome do técnico.'; err.classList.remove('hidden'); return; }
   if(!rel.trim()||rel.trim().length<10){ err.textContent='Relatório obrigatório: descreva a ação realizada (mín. 10 caracteres).'; err.classList.remove('hidden'); return; }
-  const cl={}; document.querySelectorAll('.ckItem').forEach(c=>cl[c.dataset.k]=c.checked);
-  if(!['sinal','bateria','pulseira','orientacao'].every(k=>cl[k])){ err.textContent='Checklist incompleto: marque os 4 itens obrigatórios.'; err.classList.remove('hidden'); return; }
   try{
     const fd=new FormData();
     fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
-    fd.append('checklist',JSON.stringify(cl));
     [...document.getElementById('mFotos').files].slice(0,4).forEach(f=>fd.append('fotos',f));
     const r=await authFetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
     const j=await r.json().catch(()=>({}));

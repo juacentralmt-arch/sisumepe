@@ -419,8 +419,7 @@ app.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 4)
     return res.status(400).json({ error: 'Relatório da ação realizada é obrigatório (mín. 10 caracteres).' });
   let cl = req.body.checklist;
   if (typeof cl === 'string') { try { cl = JSON.parse(cl); } catch { cl = null; } }
-  if (!cl || !['sinal', 'bateria', 'pulseira', 'orientacao'].every(k => cl[k] === true))
-    return res.status(400).json({ error: 'Checklist técnico incompleto: marque os 4 itens obrigatórios.' });
+  if (cl && (typeof cl !== 'object' || Array.isArray(cl))) cl = null;
   const owner = (t.tecnicoUser || (((t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/) || [])[1] || '')).toLowerCase().trim();
   const by = req.auth.user;
   if (owner && by !== owner)
@@ -435,7 +434,7 @@ app.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 4)
     status: 'finalizado',
     relatorio: relatorio.trim(),
     tecnico: t.tecnico,
-    checklist: { sinal: true, bateria: true, pulseira: true, orientacao: true },
+    ...(cl ? { checklist: { sinal: !!cl.sinal, bateria: !!cl.bateria, pulseira: !!cl.pulseira, orientacao: !!cl.orientacao } } : {}),
     fotosPos: (t.fotosPos || []).concat(pos).slice(-8),
     finishedAt: new Date().toISOString()
   });
