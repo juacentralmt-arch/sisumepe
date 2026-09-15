@@ -760,6 +760,13 @@ function authFetch(url, opt){
   return fetch(url, opt);
 }
 
+// Alerta direcionado: só quem pode assumir o ticket é avisado
+function deveAlertar(t){
+  if(!session || !t || t.status !== 'aguardando') return false;
+  if(session.role === 'recepcao') return false;
+  if(t.modeloTornozeleira === 'Infinity') return session.user === 'julio' || session.role === 'admin';
+  return session.role === 'tecnico' || session.role === 'admin';
+}
 async function loadAll(){
   try{
     tickets = await api('/api/tickets');
@@ -767,7 +774,12 @@ async function loadAll(){
     else if(tickets.length){
       const news = tickets.filter(t => t.id > seenMaxTicket && t.status === 'aguardando' && (!session || t.createdBy !== session.user));
       seenMaxTicket = Math.max(seenMaxTicket, ...tickets.map(t => t.id));
-      if(news.length){ chime(); toast('🎫 Novo ticket na fila: ' + news[0].code); }
+      const mine = news.filter(deveAlertar);
+      if(mine.length){
+        chime();
+        const t0 = mine[0];
+        toast(t0.modeloTornozeleira === 'Infinity' ? '🔔 Novo ticket Infinity para você: ' + t0.code : '🎫 Novo ticket na fila: ' + t0.code);
+      }
     }
     const s = await api('/api/stats');
     document.getElementById('stAguard').textContent=s.aguardando;
