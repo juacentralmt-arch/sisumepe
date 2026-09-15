@@ -59,10 +59,19 @@ function enableSound(){
 }
 function pickVoice(){
   try{
-    const vs = speechSynthesis.getVoices();
-    return vs.find(v => v.lang && v.lang.toLowerCase().startsWith('pt-br'))
-        || vs.find(v => v.lang && v.lang.toLowerCase().startsWith('pt'))
-        || null;
+    const all = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+    if(!all.length) return null;
+    const br = all.filter(v => v.lang.toLowerCase().startsWith('pt-br'));
+    const pool = br.length ? br : all;
+    const FEM = ['maria', 'francisca', 'thalia', 'thalita', 'luciana', 'heloisa', 'heloísa', 'camila', 'beatriz', 'alice', 'carla', 'fernanda', 'patricia', 'patrícia', 'female', 'feminina', 'mulher', 'google português do brasil'];
+    const MASC = ['antonio', 'antônio', 'daniel', 'david', 'alex', 'male', 'masculino', 'masculina', 'homem'];
+    const score = v => {
+      const n = (v.name || '').toLowerCase();
+      if(FEM.some(k => n.includes(k))) return 2;
+      if(MASC.some(k => n.includes(k))) return 0;
+      return 1;
+    };
+    return [...pool].sort((a, b) => score(b) - score(a))[0] || null;
   }catch(e){ return null; }
 }
 function speak(text){
@@ -73,7 +82,7 @@ function speak(text){
     const v = pickVoice();
     if(v) u.voice = v;
     u.lang = (v && v.lang) || 'pt-BR';
-    u.rate = 0.95; u.volume = 1;
+    u.rate = 0.95; u.volume = 1; u.pitch = 1.1;
     speechSynthesis.speak(u);
   }catch(e){}
 }
