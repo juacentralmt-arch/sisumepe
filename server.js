@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -119,6 +120,81 @@ function infinityBlocked(ticket, actor) {
 }
 const PERSON_LABELS = { nome: 'Nome', cpf: 'CPF', rg: 'RG', nomeMae: 'Nome da mãe', dataNascimento: 'Data de nascimento', modeloTornozeleira: 'Modelo da tornozeleira' };
 const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Outros'];
+
+// Google Agenda helpers
+function getGoogleConfig(){
+  const cid = process.env.GOOGLE_CLIENT_ID;
+  const csec = process.env.GOOGLE_CLIENT_SECRET;
+  let redir = process.env.GOOGLE_REDIRECT_URI;
+  if(!redir){
+    const base = process.env.RENDER_EXTERNAL_URL || (process.env.RENDER_EXTERNAL_HOSTNAME ? 'https://' + process.env.RENDER_EXTERNAL_HOSTNAME : null);
+    if(base) redir = base.replace(/\/$/,'') + '/api/auth/google/callback';
+    else redir = 'http://localhost:' + PORT + '/api/auth/google/callback';
+  }
+  if(!cid || !csec) return null;
+  return { cid, csec, redir };
+}
+function makeOAuthClient(){
+  const cfg = getGoogleConfig();
+  if(!cfg) return null;
+  return new google.auth.OAuth2(cfg.cid, cfg.csec, cfg.redir);
+}
+async function getAuthedClientForUser(user){
+  const tokens = await store.googleTokens.get(user);
+  if(!tokens) return null;
+  const cfg = getGoogleConfig();
+  if(!cfg) return null;
+  const o = new google.auth.OAuth2(cfg.cid, cfg.csec, cfg.redir);
+  o.setCredentials({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expiry_date: tokens.expiry_date ? Number(tokens.expiry_date) : null,
+    scope: tokens.scope,
+    token_type: tokens.token_type
+  });
+  o.on('tokens', async (t)=>{
+    try{
+      const upd = {
+        access_token: t.access_token || tokens.access_token,
+        refresh_token: t.refresh_token || tokens.refresh_token,
+        expiry_date: t.expiry_date || tokens.expiry_date,
+        scope: t.scope || tokens.scope,
+        token_type: t.token_type || tokens.token_type
+      };
+      await store.googleTokens.set(user, upd);
+    }catch(e){}
+  });
+  return o;
+}
+async function syncAgendaToGoogle(user, ev, opts){
+  // opts: { isDelete, isUpdate }
+  const client = await getAuthedClientForUser(user);
+  if(!client) return null;
+  const cal = google.calendar({ version: 'v3', auth: client });
+  try{
+    if(opts && opts.isDelete){
+      if(!ev.googleEventId) return null;
+      await cal.events.delete({ calendarId: 'primary', eventId: ev.googleEventId });
+      return null;
+    }
+    const body = {
+      summary: ev.title || 'Atendimento SISUMEPE',
+      description: (ev.description||'') + (ev.personId ? '\nAtendido ID: '+ev.personId : '') + (ev.ticketId ? '\nTicket: '+ev.ticketId : ''),
+      start: { dateTime: new Date(ev.start).toISOString() },
+      end: { dateTime: new Date(ev.end).toISOString() }
+    };
+    if(opts && opts.isUpdate && ev.googleEventId){
+      const r = await cal.events.update({ calendarId: 'primary', eventId: ev.googleEventId, requestBody: body });
+      return r.data.id;
+    } else {
+      const r = await cal.events.insert({ calendarId: 'primary', requestBody: body });
+      return r.data.id;
+    }
+  }catch(e){
+    console.warn('Google sync failed', e.message);
+    return null;
+  }
+}
 
 // --- API ---
 app.get('/api/health', (req, res) => res.json({ ok: true, store: store.mode }));
@@ -720,6 +796,99 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
   } catch (e) {
     res.status(e.status || 400).json({ error: e.message || 'Arquivo inválido ou sem administrador ativo' });
   }
+}));
+
+// ============ GOOGLE AGENDA ============
+const pendingGoogleStates = new Map();
+app.get('/api/auth/google', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const cfg = getGoogleConfig();
+  if(!cfg) return res.status(500).json({ error: 'Google Agenda não configurado. Defina GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI no servidor.' });
+  const o = makeOAuthClient();
+  const state = crypto.randomBytes(16).toString('hex');
+  pendingGoogleStates.set(state, { user: req.auth.user, exp: Date.now()+10*60e3 });
+  setTimeout(()=> pendingGoogleStates.delete(state), 10*60e3);
+  const url = o.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ['https://www.googleapis.com/auth/calendar'], state });
+  res.json({ url });
+}));
+app.get('/api/auth/google/callback', ah(async (req,res)=>{
+  const { code, state } = req.query;
+  if(!code || !state) return res.status(400).send('Código ou estado ausente');
+  const rec = pendingGoogleStates.get(String(state));
+  if(!rec || rec.exp < Date.now()) return res.status(400).send('Estado expirado. Tente novamente no sistema.');
+  pendingGoogleStates.delete(String(state));
+  const cfg = getGoogleConfig();
+  if(!cfg) return res.status(500).send('Google não configurado');
+  const o = makeOAuthClient();
+  try{
+    const { tokens } = await o.getToken(String(code));
+    await store.googleTokens.set(rec.user, tokens);
+    // redireciona para o app com sucesso
+    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>✅ Google Agenda vinculada!</h2><p>Conta <b>${rec.user}</b> conectada com sucesso.</p><p>Você pode fechar esta janela e voltar ao SISUMEPE.</p><script>setTimeout(()=>window.close(),1200); setTimeout(()=>location.href='/',1500);</script></body></html>`);
+  }catch(e){
+    console.error(e);
+    res.status(500).send('Falha ao vincular Google: ' + (e.message||'erro'));
+  }
+}));
+app.get('/api/auth/google/status', auth(), ah(async (req,res)=>{
+  const cfg = getGoogleConfig();
+  const tokens = await store.googleTokens.get(req.auth.user);
+  res.json({ configured: !!cfg, connected: !!tokens, hasRefresh: !!(tokens && tokens.refresh_token) });
+}));
+app.post('/api/auth/google/disconnect', auth(), ah(async (req,res)=>{
+  await store.googleTokens.del(req.auth.user);
+  res.json({ ok: true });
+}));
+
+// Agenda do técnico
+app.get('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const list = await store.agenda.allByUser(req.auth.user);
+  // admin vê a própria agenda; se quiser ver todas, use ?all=1
+  if(req.auth.role==='admin' && req.query.all==='1'){
+    const all = await store.agenda.all();
+    return res.json(all);
+  }
+  res.json(list);
+}));
+app.post('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const { title, description, start, end, personId, ticketId } = req.body||{};
+  if(!title || !String(title).trim()) return res.status(400).json({ error: 'Título é obrigatório' });
+  if(!start || !end) return res.status(400).json({ error: 'Início e fim são obrigatórios' });
+  const s = new Date(start), e = new Date(end);
+  if(isNaN(s) || isNaN(e) || e <= s) return res.status(400).json({ error: 'Datas inválidas' });
+  const ev = await store.agenda.insert({ user: req.auth.user, title: String(title).trim(), description: String(description||'').trim(), start: s.toISOString(), end: e.toISOString(), personId: personId||null, ticketId: ticketId||null, googleEventId: '' });
+  // tenta sync Google em background
+  syncAgendaToGoogle(req.auth.user, ev, {}).then(async (gid)=>{
+    if(gid) await store.agenda.patch(ev.id, { googleEventId: gid }).catch(()=>{});
+  }).catch(()=>{});
+  broadcast();
+  res.status(201).json(ev);
+}));
+app.patch('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const ev = await store.agenda.byId(req.params.id);
+  if(!ev) return res.status(404).json({ error: 'Evento não encontrado' });
+  if(ev.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  const { title, description, start, end, personId, ticketId } = req.body||{};
+  const patch={};
+  if(title!=null) patch.title=String(title).trim();
+  if(description!=null) patch.description=String(description).trim();
+  if(start) patch.start=new Date(start).toISOString();
+  if(end) patch.end=new Date(end).toISOString();
+  if(personId!==undefined) patch.personId=personId||null;
+  if(ticketId!==undefined) patch.ticketId=ticketId||null;
+  if(patch.start && patch.end && new Date(patch.end) <= new Date(patch.start)) return res.status(400).json({ error: 'Fim deve ser após início' });
+  const upd = await store.agenda.patch(ev.id, patch);
+  syncAgendaToGoogle(req.auth.user, upd, { isUpdate: true }).catch(()=>{});
+  broadcast();
+  res.json(upd);
+}));
+app.delete('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const ev = await store.agenda.byId(req.params.id);
+  if(!ev) return res.status(404).json({ error: 'Evento não encontrado' });
+  if(ev.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  await store.agenda.remove(ev.id);
+  syncAgendaToGoogle(req.auth.user, ev, { isDelete: true }).catch(()=>{});
+  broadcast();
+  res.json({ ok: true });
 }));
 
 // Painel TV público (sem login): só o mínimo necessário à chamada

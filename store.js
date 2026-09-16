@@ -27,7 +27,7 @@ let mem = null;
 function loadFile() {
   try {
     if (!fs.existsSync(DB_FILE)) {
-      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
+      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1 };
       fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2));
       return mem;
     }
@@ -39,9 +39,12 @@ function loadFile() {
     if (!Array.isArray(mem.users) || !mem.users.length) mem.users = seedUsers();
     mem.users.forEach(u => { if (u.active === undefined) u.active = true; });
     if (!mem.sessions || typeof mem.sessions !== 'object') mem.sessions = {};
+    if (!Array.isArray(mem.agenda)) mem.agenda = [];
+    if (!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
+    if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1 };
     return mem;
   }
 }
@@ -78,6 +81,10 @@ const A = {
   ticketId: 'ticketid', ref: 'ref', byUser: 'byuser', byName: 'byname', byRole: 'byrole',
   changes: 'changes', summary: 'summary', at: 'at'
 };
+const AG = {
+  id: 'id', user: 'user', title: 'title', description: 'description', start: 'start', end: 'end',
+  personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', createdAt: 'createdat', updatedAt: 'updatedat'
+};
 function toApp(row, map) {
   if (!row) return null;
   const o = {};
@@ -93,6 +100,7 @@ const appP = r => toApp(r, P);
 const appT = r => toApp(r, T);
 const appA = r => toApp(r, A);
 const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.to, text: r.text, anexos: r.anexos || [], at: r.at });
+const appAG = r => toApp(r, AG);
 
 // Fallback em memória (se a tabela sessions ainda não existir no Supabase)
 const memSessions = new Map();
@@ -281,6 +289,63 @@ const store = {
     }
   },
 
+  agenda: {
+    async allByUser(user){
+      if(MODE==='file') return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start));
+      return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG);
+    },
+    async all(){
+      if(MODE==='file') return mem.agenda;
+      return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG);
+    },
+    async byId(id){
+      if(MODE==='file') return mem.agenda.find(x=>eqi(x.id,id))||null;
+      const r=must(await supa.from('agenda').select('*').eq('id', Number(id)).limit(1),'agenda.byId');
+      return r.length?appAG(r[0]):null;
+    },
+    async insert(ev){
+      if(MODE==='file'){
+        const row={ id: mem.seqAgenda++, ...ev, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        mem.agenda.push(row); saveFile(); return row;
+      }
+      const r=must(await supa.from('agenda').insert(toRow(ev, AG)).select().single(),'agenda.insert');
+      return appAG(r);
+    },
+    async patch(id, fields){
+      if(MODE==='file'){
+        const e=mem.agenda.find(x=>eqi(x.id,id)); if(!e) return null;
+        Object.assign(e, fields, { updatedAt: new Date().toISOString() }); saveFile(); return e;
+      }
+      const r=must(await supa.from('agenda').update(toRow({...fields, updatedAt: new Date().toISOString()}, AG)).eq('id', Number(id)).select(),'agenda.patch');
+      return r.length?appAG(r[0]):null;
+    },
+    async remove(id){
+      if(MODE==='file'){ mem.agenda=mem.agenda.filter(x=>!eqi(x.id,id)); saveFile(); return; }
+      must(await supa.from('agenda').delete().eq('id', Number(id)),'agenda.remove');
+    }
+  },
+
+  googleTokens: {
+    async get(user){
+      const id=String(user||'').toLowerCase().trim();
+      if(MODE==='file') return mem.googleTokens[id]||null;
+      const r=must(await supa.from('google_tokens').select('*').eq('user', id).limit(1),'googleTokens.get');
+      return r.length?r[0]:null;
+    },
+    async set(user, tokens){
+      const id=String(user||'').toLowerCase().trim();
+      const row={ user:id, access_token: tokens.access_token||tokens.accessToken||'', refresh_token: tokens.refresh_token||tokens.refreshToken||'', expiry_date: tokens.expiry_date||tokens.expiryDate||null, scope: tokens.scope||'', token_type: tokens.token_type||tokens.tokenType||'Bearer' };
+      if(MODE==='file'){ mem.googleTokens[id]=row; saveFile(); return row; }
+      const r=must(await supa.from('google_tokens').upsert(row, {onConflict:'user'}).select(),'googleTokens.set');
+      return r.length?r[0]:row;
+    },
+    async del(user){
+      const id=String(user||'').toLowerCase().trim();
+      if(MODE==='file'){ delete mem.googleTokens[id]; saveFile(); return; }
+      must(await supa.from('google_tokens').delete().eq('user', id),'googleTokens.del');
+    }
+  },
+
   // Sessões persistentes (sobrevivem a restart do servidor)
   sessions: {
     async insert(token, row) {
@@ -327,15 +392,15 @@ const store = {
   },
 
   async backup() {
-    const [persons, tickets, chat, audit, users] = await Promise.all([
+    const [persons, tickets, chat, audit, users, agenda] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
-      store.audit.recent(500), store.users.all()
+      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[])
     ]);
     const mx = a => a.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
     return {
-      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users,
+      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500),
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
-      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1
+      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1
     };
   },
 
@@ -347,13 +412,18 @@ const store = {
     dump.users.forEach(u => { if (u.active === undefined) u.active = true; });
     if (MODE === 'file') {
       const keepSessions = (mem && mem.sessions) || {};
+      const keepAgenda = (mem && mem.agenda) || [];
+      const keepTokens = (mem && mem.googleTokens) || {};
+      const keepSeqAgenda = (mem && mem.seqAgenda) || 1;
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat.slice(-200) : [],
         audit: Array.isArray(dump.audit) ? dump.audit.slice(-500) : [],
         users: dump.users, sessions: keepSessions,
+        agenda: Array.isArray(dump.agenda) ? dump.agenda.slice(-500) : keepAgenda,
+        googleTokens: keepTokens,
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
-        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1
+        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda
       };
       saveFile();
       return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length };
@@ -363,6 +433,15 @@ const store = {
       for (let i = 0; i < all.length; i += 200) {
         must(await supa.from(t).delete().in('id', all.slice(i, i + 200).map(x => x.id)), 'restore.del');
       }
+    }
+    // agenda (opcional)
+    if (Array.isArray(dump.agenda) && dump.agenda.length) {
+      try{
+        const allA = must(await supa.from('agenda').select('id').limit(10000), 'restore.agenda.list');
+        for (let i = 0; i < allA.length; i += 200) {
+          must(await supa.from('agenda').delete().in('id', allA.slice(i, i + 200).map(x => x.id)), 'restore.agenda.del');
+        }
+      }catch(e){}
     }
     const cur = await supa.from('users').select('user');
     if (!cur.error && cur.data.length) must(await supa.from('users').delete().neq('user', '__impossivel__'), 'restore.usersdel');
@@ -376,7 +455,10 @@ const store = {
     await chunk('chat', (dump.chat || []).slice(-200).map(m => ({ id: m.id, user: m.user, name: m.name, role: m.role, to: m.to, text: m.text, anexos: m.anexos || [] })), { id: 'id', user: 'user', name: 'name', role: 'role', to: 'to', text: 'text', anexos: 'anexos' });
     await chunk('audit', (dump.audit || []).slice(-500), A);
     await chunk('users', dump.users, { user: 'user', name: 'name', role: 'role', pass: 'pass', active: 'active' });
-    must(await supa.rpc('reset_sequences'), 'restore.seq');
+    if (Array.isArray(dump.agenda) && dump.agenda.length) {
+      try{ await chunk('agenda', dump.agenda.slice(-500), AG); }catch(e){}
+    }
+    try{ must(await supa.rpc('reset_sequences'), 'restore.seq'); }catch(e){}
     return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length };
   },
 

@@ -99,6 +99,9 @@
     <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>
       Painel Técnico</button>
+    <button data-tab="agenda" onclick="go('agenda')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Agenda <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
     <button data-tab="visao" onclick="go('visao')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
       Visão 360° <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">RESTRITO</span></button>
@@ -138,6 +141,7 @@
       <button data-tab="fila" onclick="go('fila')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Fila</button>
       <button data-tab="checkin" onclick="go('checkin')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">➕ Check-in</button>
       <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
+      <button data-tab="agenda" onclick="go('agenda')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📅 Agenda</button>
       <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
@@ -311,6 +315,31 @@
       </div>
       <h3 class="text-xs font-extrabold tracking-wider text-emerald-700 mt-6 mb-3">✅ FINALIZADOS RECENTES</h3>
       <div id="tecFin" class="grid md:grid-cols-2 gap-3"></div>
+    </section>
+
+    <!-- AGENDA TÉCNICO -->
+    <section id="tab-agenda" class="hidden fade">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h2 class="font-display font-bold text-xl">Agenda do técnico</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Seus agendamentos vinculados ao Google Agenda</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="googleConnectBtn" onclick="googleConnect()" class="btn btn-ghost text-xs px-3.5 py-2">🔗 Conectar Google</button>
+          <button id="googleDisconnectBtn" onclick="googleDisconnect()" class="hidden btn btn-ghost text-xs px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200">🔓 Desconectar</button>
+          <button onclick="openAgendaModal()" class="btn btn-primary text-xs px-4 py-2.5">➕ Novo agendamento</button>
+        </div>
+      </div>
+      <div id="googleStatus" class="hidden mb-4 rounded-xl p-3 text-xs font-semibold border"></div>
+      <div class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="lg:col-span-2 card p-4">
+          <div id="agendaCalendar" class="min-h-[420px]"></div>
+        </div>
+        <div class="card p-4">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Próximos agendamentos</h3>
+          <div id="agendaList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        </div>
+      </div>
     </section>
 
     <!-- DASHBOARD -->
@@ -598,6 +627,35 @@
   </div>
 </div>
 
+<!-- MODAL AGENDA -->
+<div id="modalAgenda" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl fade max-h-[92vh] overflow-y-auto">
+    <h3 class="font-display font-bold text-lg"><span id="agendaModalTitle">Novo agendamento</span> <span id="agendaModalId" class="text-xs font-bold text-indigo-600"></span></h3>
+    <p class="text-xs text-slate-500 mt-1 mb-3">Sincroniza automaticamente com seu Google Agenda quando conectado.</p>
+    <label class="lbl">TÍTULO *</label>
+    <input id="agTitle" placeholder="Ex: Instalação - João da Silva" class="inp mt-1 mb-2.5">
+    <label class="lbl">DESCRIÇÃO</label>
+    <textarea id="agDesc" rows="2" placeholder="Detalhes, endereço, observações..." class="inp mt-1 mb-2.5"></textarea>
+    <div class="grid grid-cols-2 gap-2.5">
+      <div><label class="lbl">INÍCIO *</label><input id="agStart" type="datetime-local" class="inp mt-1 mb-2.5"></div>
+      <div><label class="lbl">FIM *</label><input id="agEnd" type="datetime-local" class="inp mt-1 mb-2.5"></div>
+    </div>
+    <label class="lbl">ATENDIDO (opcional)</label>
+    <div class="flex gap-2 mt-1 mb-2.5">
+      <input id="agPersonQ" placeholder="Buscar por nome/CPF..." class="inp flex-1" onkeydown="if(event.key==='Enter')searchAgPerson()">
+      <button type="button" onclick="searchAgPerson()" class="btn btn-ghost text-xs px-3">Buscar</button>
+    </div>
+    <div id="agPersonRes" class="space-y-1 mb-2.5 max-h-28 overflow-y-auto"></div>
+    <div id="agPersonSel" class="hidden rounded-xl p-2.5 bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 mb-2.5"></div>
+    <p id="agErr" class="hidden text-xs text-rose-600 font-semibold"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeAgendaModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button id="agDeleteBtn" onclick="deleteAgenda()" class="hidden btn bg-rose-50 text-rose-700 border border-rose-200 flex-1 py-3 text-sm">Excluir</button>
+      <button onclick="saveAgenda()" class="btn btn-primary flex-1 py-3 text-sm">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CORRIGIR TICKET -->
 <div id="modalTicket" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
@@ -821,9 +879,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'visao', 'usuarios'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'visao', 'dash'],
-  recepcao: ['fila', 'checkin', 'tecnico', 'visao', 'dash', 'usuarios']
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'visao', 'dash'],
+  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
   const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
@@ -847,11 +905,12 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
   if(tab==='dash') loadDash();
+  if(tab==='agenda') loadAgenda();
   if(tab==='usuarios') loadUsersAdmin();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2067,6 +2126,195 @@ function renderTec(){
   document.getElementById('tecAguard').innerHTML=ag.length?ag.map(t=>mini(t,startBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nada aguardando.</p>';
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
+}
+// --- AGENDA TÉCNICO + GOOGLE CALENDAR ---
+let agendaEvents = [], agendaCalendar = null, editingAgendaId = null, agPersonSel = null;
+function ensureFullCalendar(){
+  return new Promise((res, rej)=>{
+    if(typeof FullCalendar !== 'undefined') return res();
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css';
+    document.head.appendChild(link);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+async function loadAgenda(){
+  try{
+    await updateGoogleStatus();
+    const list = await api('/api/agenda');
+    agendaEvents = list;
+    renderAgendaList();
+    await renderAgendaCalendar();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function renderAgendaCalendar(){
+  const el = document.getElementById('agendaCalendar');
+  if(!el) return;
+  try{ await ensureFullCalendar(); }catch(e){ el.innerHTML = '<p class="text-xs text-slate-500">Calendário não carregado (sem internet)</p>'; return; }
+  const events = agendaEvents.map(ev => ({
+    id: String(ev.id),
+    title: ev.title,
+    start: ev.start,
+    end: ev.end,
+    extendedProps: ev,
+    backgroundColor: ev.googleEventId ? '#6366f1' : '#0ea5e9',
+    borderColor: ev.googleEventId ? '#6366f1' : '#0ea5e9'
+  }));
+  if(agendaCalendar){ agendaCalendar.destroy(); agendaCalendar = null; }
+  // FullCalendar precisa estar visível para calcular tamanho
+  setTimeout(()=>{
+    agendaCalendar = new FullCalendar.Calendar(el, {
+      initialView: 'dayGridMonth',
+      locale: 'pt-br',
+      headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+      height: 520,
+      events,
+      eventClick: info => openAgendaModal(Number(info.event.id)),
+      dateClick: info => openAgendaModal(null, info.dateStr),
+      selectable: true,
+      select: info => openAgendaModal(null, info.startStr, info.endStr),
+      buttonText: { today: 'hoje', month: 'mês', week: 'semana', day: 'dia', list: 'lista' }
+    });
+    agendaCalendar.render();
+  }, 100);
+}
+function renderAgendaList(){
+  const box = document.getElementById('agendaList');
+  if(!box) return;
+  if(!agendaEvents.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum agendamento.<br>Crie o primeiro! 📅</p>'; return; }
+  const now = new Date();
+  const upcoming = [...agendaEvents].sort((a,b)=> new Date(a.start)-new Date(b.start)).slice(0,20);
+  box.innerHTML = upcoming.map(ev=>{
+    const s = new Date(ev.start), e = new Date(ev.end);
+    const isPast = e < now;
+    const gBadge = ev.googleEventId ? '<span class="text-[9px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Google</span>' : '<span class="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Local</span>';
+    return `<div class="border ${isPast?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPast?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})">
+      <div class="flex items-center gap-2"><b class="text-xs flex-1 truncate">${esc(ev.title)}</b>${gBadge}</div>
+      <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleString('pt-BR')} → ${e.toLocaleString('pt-BR')}</p>
+      ${ev.description?`<p class="text-xs mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1.5">${esc(ev.description)}</p>`:''}
+    </div>`;
+  }).join('');
+}
+function openAgendaModal(id, dateStr, endStr){
+  editingAgendaId = id || null;
+  agPersonSel = null;
+  document.getElementById('agPersonRes').innerHTML = '';
+  document.getElementById('agPersonSel').classList.add('hidden');
+  document.getElementById('agErr').classList.add('hidden');
+  const delBtn = document.getElementById('agDeleteBtn');
+  if(id){
+    const ev = agendaEvents.find(x=>x.id===id);
+    if(!ev) return;
+    document.getElementById('agendaModalTitle').textContent = 'Editar agendamento';
+    document.getElementById('agendaModalId').textContent = '#' + ev.id + (ev.googleEventId ? ' • Google' : '');
+    document.getElementById('agTitle').value = ev.title || '';
+    document.getElementById('agDesc').value = ev.description || '';
+    document.getElementById('agStart').value = toLocalDT(ev.start);
+    document.getElementById('agEnd').value = toLocalDT(ev.end);
+    if(ev.personId) { agPersonSel = { id: ev.personId }; document.getElementById('agPersonSel').textContent = 'Atendido ID ' + ev.personId + ' vinculado'; document.getElementById('agPersonSel').classList.remove('hidden'); }
+    delBtn.classList.remove('hidden');
+  } else {
+    document.getElementById('agendaModalTitle').textContent = 'Novo agendamento';
+    document.getElementById('agendaModalId').textContent = '';
+    document.getElementById('agTitle').value = '';
+    document.getElementById('agDesc').value = '';
+    let s = dateStr ? new Date(dateStr) : new Date();
+    if(dateStr && !endStr){ s.setHours(9,0,0,0); endStr = new Date(s.getTime()+60*60*1000).toISOString(); dateStr = s.toISOString(); }
+    document.getElementById('agStart').value = toLocalDT(dateStr || new Date().toISOString());
+    document.getElementById('agEnd').value = toLocalDT(endStr || new Date(new Date(dateStr|| new Date()).getTime()+60*60*1000).toISOString());
+    delBtn.classList.add('hidden');
+  }
+  document.getElementById('modalAgenda').classList.remove('hidden');
+}
+function toLocalDT(iso){
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function closeAgendaModal(){ document.getElementById('modalAgenda').classList.add('hidden'); editingAgendaId=null; agPersonSel=null; }
+async function saveAgenda(){
+  const err = document.getElementById('agErr');
+  err.classList.add('hidden');
+  const title = document.getElementById('agTitle').value.trim();
+  const description = document.getElementById('agDesc').value.trim();
+  const start = document.getElementById('agStart').value;
+  const end = document.getElementById('agEnd').value;
+  if(!title) { err.textContent='⚠️ Título é obrigatório'; err.classList.remove('hidden'); return; }
+  if(!start || !end) { err.textContent='⚠️ Início e fim são obrigatórios'; err.classList.remove('hidden'); return; }
+  const body = { title, description, start: new Date(start).toISOString(), end: new Date(end).toISOString(), personId: agPersonSel ? agPersonSel.id : null };
+  try{
+    if(editingAgendaId){
+      await api('/api/agenda/'+editingAgendaId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Agendamento atualizado');
+    } else {
+      await api('/api/agenda', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('📅 Agendamento criado');
+    }
+    closeAgendaModal(); loadAgenda();
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function deleteAgenda(){
+  if(!editingAgendaId) return;
+  if(!confirm('Excluir este agendamento? Se estiver no Google, também será removido.')) return;
+  try{ await api('/api/agenda/'+editingAgendaId, { method:'DELETE' }); toast('🗑️ Agendamento excluído'); closeAgendaModal(); loadAgenda(); }catch(e){ toast('⚠️ '+e.message); }
+}
+async function searchAgPerson(){
+  const q = document.getElementById('agPersonQ').value.trim();
+  if(!q) return;
+  const box = document.getElementById('agPersonRes');
+  box.innerHTML = '<p class="text-xs text-slate-400">Buscando...</p>';
+  try{
+    const list = await api('/api/persons?q='+encodeURIComponent(q));
+    box.innerHTML = list.length ? list.slice(0,5).map(p=>`<button onclick="selectAgPerson(${p.id},'${esc(p.nome).replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-slate-50"><b>${esc(p.nome)}</b><br><span class="text-slate-500">${esc(p.cpf||p.rg||'')}</span></button>`).join('') : '<p class="text-xs text-slate-400">Nenhum encontrado</p>';
+  }catch(e){ box.innerHTML = '<p class="text-xs text-rose-500">Erro</p>'; }
+}
+function selectAgPerson(id, nome){
+  agPersonSel = { id, nome };
+  document.getElementById('agPersonSel').textContent = '✅ ' + nome + ' (ID '+id+')';
+  document.getElementById('agPersonSel').classList.remove('hidden');
+  document.getElementById('agPersonRes').innerHTML = '';
+  document.getElementById('agPersonQ').value = '';
+}
+async function updateGoogleStatus(){
+  try{
+    const s = await api('/api/auth/google/status');
+    const box = document.getElementById('googleStatus');
+    const btnC = document.getElementById('googleConnectBtn');
+    const btnD = document.getElementById('googleDisconnectBtn');
+    if(!s.configured){
+      box.className = 'mb-4 rounded-xl p-3 text-xs font-semibold border bg-amber-50 border-amber-200 text-amber-800';
+      box.textContent = '⚠️ Google Agenda não configurado no servidor (defina GOOGLE_CLIENT_ID/SECRET). Agenda funciona localmente.';
+      box.classList.remove('hidden');
+      btnC.classList.add('hidden'); btnD.classList.add('hidden');
+      return;
+    }
+    if(s.connected){
+      box.className = 'mb-4 rounded-xl p-3 text-xs font-semibold border bg-emerald-50 border-emerald-200 text-emerald-800';
+      box.textContent = '✅ Conectado ao Google Agenda — novos agendamentos vão para seu calendário Google';
+      box.classList.remove('hidden');
+      btnC.classList.add('hidden'); btnD.classList.remove('hidden');
+    } else {
+      box.className = 'mb-4 rounded-xl p-3 text-xs font-semibold border bg-slate-50 border-slate-200 text-slate-600';
+      box.textContent = '🔗 Conecte sua conta Google para sincronizar a agenda automaticamente';
+      box.classList.remove('hidden');
+      btnC.classList.remove('hidden'); btnD.classList.add('hidden');
+    }
+  }catch(e){}
+}
+async function googleConnect(){
+  try{
+    const r = await api('/api/auth/google');
+    if(r.url) window.open(r.url, '_blank', 'width=500,height=600');
+    else toast('⚠️ ' + (r.error||'Erro'));
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function googleDisconnect(){
+  if(!confirm('Desconectar Google Agenda? Agendamentos locais permanecem.')) return;
+  try{ await api('/api/auth/google/disconnect', { method:'POST' }); toast('🔓 Desconectado'); updateGoogleStatus(); }catch(e){ toast('⚠️ '+e.message); }
 }
 // Regra Infinity: só o Júlio (ou admin) assume
 function podeAssumir(t){

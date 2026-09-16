@@ -105,6 +105,34 @@ create table if not exists sessions (
   exp timestamptz
 );
 
+-- Agenda do técnico (com Google Calendar opcional)
+create table if not exists agenda (
+  id serial primary key,
+  "user" text not null,
+  title text not null,
+  description text default '',
+  start timestamptz not null,
+  "end" timestamptz not null,
+  personid int default null,
+  ticketid int default null,
+  googleeventid text default '',
+  createdat timestamptz default now(),
+  updatedat timestamptz default now()
+);
+create index if not exists idx_agenda_user on agenda ("user");
+create index if not exists idx_agenda_start on agenda (start);
+-- Migração idempotente para bases já existentes
+alter table agenda add column if not exists googleeventid text default '';
+
+create table if not exists google_tokens (
+  "user" text primary key,
+  access_token text,
+  refresh_token text,
+  expiry_date bigint,
+  scope text,
+  token_type text
+);
+
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público
 -- =====================================================================
@@ -131,4 +159,5 @@ begin
   perform setval(pg_get_serial_sequence('tickets', 'id'), coalesce((select max(id) from tickets), 0) + 1, false);
   perform setval(pg_get_serial_sequence('chat', 'id'), coalesce((select max(id) from chat), 0) + 1, false);
   perform setval(pg_get_serial_sequence('audit', 'id'), coalesce((select max(id) from audit), 0) + 1, false);
+  perform setval(pg_get_serial_sequence('agenda', 'id'), coalesce((select max(id) from agenda), 0) + 1, false);
 end $$;
