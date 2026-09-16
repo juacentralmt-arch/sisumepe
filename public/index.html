@@ -541,8 +541,24 @@
       <div><h3 class="font-display font-bold text-lg leading-tight">Ler CPF/RG do documento</h3><p class="text-xs text-slate-500">Foto do documento → OCR local → busca automática</p></div>
     </div>
     <div id="docPreviewWrap" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2 hidden">
-      <img id="docPreviewImg" class="w-full max-h-52 object-contain rounded-lg bg-white">
-      <canvas id="docCanvas" class="hidden"></canvas>
+      <div id="docWrap" class="relative w-full" style="touch-action:none">
+        <img id="docPreviewImg" class="w-full max-h-52 object-contain rounded-lg bg-white block">
+        <canvas id="docCanvas" class="hidden"></canvas>
+        <div id="docCropOverlay" class="hidden absolute inset-0 rounded-lg overflow-hidden">
+          <div id="docCropBox" class="absolute border-2 border-indigo-600 bg-indigo-500/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" style="cursor:move; touch-action:none">
+            <div class="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-doc-handle="nw" style="cursor:nw-resize"></div>
+            <div class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-doc-handle="ne" style="cursor:ne-resize"></div>
+            <div class="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-doc-handle="sw" style="cursor:sw-resize"></div>
+            <div class="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-doc-handle="se" style="cursor:se-resize"></div>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-2">
+        <button type="button" id="docCropToggleBtn" onclick="toggleDocCrop()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✂️ Recortar: OFF</button>
+        <button type="button" onclick="resetDocCrop()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">↺ Reset</button>
+        <button type="button" onclick="autoCropDoc()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">🤖 Auto</button>
+      </div>
+      <p id="docCropHint" class="hidden text-[11px] text-indigo-600 font-semibold text-center mt-1">Arraste para recortar só o documento — fica até 50% mais rápido e preciso</p>
     </div>
     <div id="docProgress" class="hidden mt-3 rounded-xl bg-indigo-50 border border-indigo-200 p-3">
       <div class="flex items-center gap-2 text-xs font-bold text-indigo-700"><span class="w-4 h-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin"></span><span id="docProgressTxt">Carregando OCR...</span></div>
@@ -1352,9 +1368,133 @@ function getCropNormPos(e){
   // inicializa após DOM pronto
   setTimeout(() => { const w = document.getElementById('scanWrap'); if(w) w.style.touchAction = 'none'; }, 500);
 })();
+(function initDocCrop(){
+  const wrap = document.getElementById('docWrap');
+  if(!wrap) return;
+  const getPos = (e) => {
+    const r = wrap.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+    return { x: Math.max(0, Math.min(1, (cx - r.left)/r.width)), y: Math.max(0, Math.min(1, (cy - r.top)/r.height)) };
+  };
+  const updateBox = () => {
+    const box = document.getElementById('docCropBox');
+    if(!box || !docCropRect) return;
+    box.style.left = (docCropRect.x*100)+'%'; box.style.top = (docCropRect.y*100)+'%';
+    box.style.width = (docCropRect.w*100)+'%'; box.style.height = (docCropRect.h*100)+'%';
+  };
+  window.__updateDocCropBox = updateBox;
+  wrap.addEventListener('pointerdown', (e)=>{
+    if(!docCropEnabled) return;
+    const pos = getPos(e);
+    const h = e.target && e.target.getAttribute && e.target.getAttribute('data-doc-handle');
+    if(h){ docCropDrag = h; docCropOrig = { ...docCropRect }; e.preventDefault(); try{ e.target.setPointerCapture(e.pointerId);}catch{} return; }
+    const inside = docCropRect && pos.x>=docCropRect.x && pos.x<=docCropRect.x+docCropRect.w && pos.y>=docCropRect.y && pos.y<=docCropRect.y+docCropRect.h;
+    if(inside){ docCropDrag='move'; docCropOrig={ ...docCropRect, dx: pos.x-docCropRect.x, dy: pos.y-docCropRect.y }; }
+    else { docCropDrag='create'; docCropOrig={ x: pos.x, y: pos.y }; docCropRect={ x: pos.x, y: pos.y, w:0.02, h:0.02 }; }
+    wrap.setPointerCapture && wrap.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', (e)=>{
+    if(!docCropEnabled || !docCropDrag) return;
+    const pos = getPos(e);
+    if(docCropDrag==='move'){
+      let nx=pos.x-docCropOrig.dx, ny=pos.y-docCropOrig.dy;
+      nx=Math.max(0, Math.min(1-docCropOrig.w, nx)); ny=Math.max(0, Math.min(1-docCropOrig.h, ny));
+      docCropRect.x=nx; docCropRect.y=ny;
+    } else if(docCropDrag==='create'){
+      let x=Math.min(docCropOrig.x,pos.x), y=Math.min(docCropOrig.y,pos.y);
+      let w=Math.abs(pos.x-docCropOrig.x), h=Math.abs(pos.y-docCropOrig.y);
+      w=Math.max(0.05,w); h=Math.max(0.05,h);
+      if(x+w>1) w=1-x; if(y+h>1) h=1-y;
+      docCropRect={x,y,w,h};
+    } else {
+      let {x,y,w,h}=docCropOrig;
+      if(docCropDrag==='nw'){ const nx=pos.x, ny=pos.y; w=(x+w)-nx; h=(y+h)-ny; x=nx; y=ny; }
+      else if(docCropDrag==='ne'){ const ny=pos.y; w=pos.x-x; h=(y+h)-ny; y=ny; }
+      else if(docCropDrag==='sw'){ const nx=pos.x; w=(x+w)-nx; h=pos.y-y; x=nx; }
+      else if(docCropDrag==='se'){ w=pos.x-x; h=pos.y-y; }
+      if(w<0.05){ w=0.05; if(docCropDrag.includes('w')) x=docCropOrig.x+docCropOrig.w-w; }
+      if(h<0.05){ h=0.05; if(docCropDrag.includes('n')) y=docCropOrig.y+docCropOrig.h-h; }
+      x=Math.max(0, Math.min(1-w,x)); y=Math.max(0, Math.min(1-h,y));
+      if(x+w>1) w=1-x; if(y+h>1) h=1-y;
+      docCropRect={x,y,w,h};
+    }
+    updateBox();
+  });
+  window.addEventListener('pointerup', ()=>{ docCropDrag=null; });
+  wrap.addEventListener('touchmove', (e)=>{ if(docCropEnabled && docCropDrag) e.preventDefault(); }, {passive:false});
+  setTimeout(()=>{ const w=document.getElementById('docWrap'); if(w) w.style.touchAction='none'; }, 500);
+})();
+function toggleDocCrop(){
+  docCropEnabled=!docCropEnabled;
+  const btn=document.getElementById('docCropToggleBtn'), ov=document.getElementById('docCropOverlay'), hint=document.getElementById('docCropHint');
+  if(btn) btn.textContent=docCropEnabled?'✂️ Recortar: ON':'✂️ Recortar: OFF';
+  if(ov) ov.classList.toggle('hidden', !docCropEnabled);
+  if(hint) hint.classList.toggle('hidden', !docCropEnabled);
+  if(docCropEnabled){
+    if(!docCropRect) docCropRect={x:0.08,y:0.08,w:0.84,h:0.84};
+    if(window.__updateDocCropBox) window.__updateDocCropBox();
+  }
+}
+function resetDocCrop(){
+  if(!docCropEnabled) toggleDocCrop();
+  docCropRect={x:0.08,y:0.08,w:0.84,h:0.84};
+  if(window.__updateDocCropBox) window.__updateDocCropBox();
+}
+function autoCropDoc(){
+  // tenta detectar bordas do documento via OpenCV para sugerir recorte
+  if(!docImg) return toast('⚠️ Carregue a imagem primeiro');
+  if(!docCropEnabled) toggleDocCrop();
+  // se OpenCV disponível, tenta detectar quad
+  if(typeof cv!=='undefined' && cv.Mat && cvReady){
+    try{
+      const c=document.createElement('canvas');
+      const maxD=600;
+      const sc=Math.min(1, maxD/Math.max(docImg.naturalWidth,docImg.naturalHeight));
+      const w=Math.round(docImg.naturalWidth*sc), h=Math.round(docImg.naturalHeight*sc);
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(docImg,0,0,w,h);
+      const src=cv.imread(c);
+      const gray=new cv.Mat(), blur=new cv.Mat(), edges=new cv.Mat(), hier=new cv.Mat(), conts=new cv.MatVector();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blur, new cv.Size(5,5),0);
+      cv.Canny(blur, edges, 50,150);
+      cv.findContours(edges, conts, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      let best=null,bestArea=0;
+      const minArea=w*h*0.08;
+      for(let i=0;i<conts.size();i++){
+        const cnt=conts.get(i);
+        const approx=new cv.Mat();
+        cv.approxPolyDP(cnt, approx, 0.02*cv.arcLength(cnt,true), true);
+        if(approx.rows===4){
+          const area=cv.contourArea(approx);
+          if(area>minArea && area>bestArea){ bestArea=area; if(best) best.delete(); best=approx.clone(); }
+        }
+        approx.delete(); cnt.delete();
+      }
+      src.delete(); gray.delete(); blur.delete(); edges.delete(); hier.delete(); conts.delete();
+      if(best){
+        const quad=[];
+        for(let i=0;i<4;i++) quad.push({x:best.data32S[i*2]/sc / docImg.naturalWidth, y:best.data32S[i*2+1]/sc / docImg.naturalHeight});
+        best.delete();
+        // calcula bounding box do quad
+        const xs=quad.map(p=>p.x), ys=quad.map(p=>p.y);
+        let x=Math.min(...xs), y=Math.min(...ys), w2=Math.max(...xs)-x, h2=Math.max(...ys)-y;
+        x=Math.max(0,Math.min(1-w2, x-0.02)); y=Math.max(0,Math.min(1-h2, y-0.02)); w2=Math.min(1-x, w2+0.04); h2=Math.min(1-y, h2+0.04);
+        docCropRect={x,y,w:w2,h:h2};
+        if(window.__updateDocCropBox) window.__updateDocCropBox();
+        toast('🤖 Recorte automático sugerido — ajuste se preciso');
+        return;
+      }
+    }catch(e){}
+  }
+  // fallback: recorte central 84%
+  docCropRect={x:0.08,y:0.08,w:0.84,h:0.84};
+  if(window.__updateDocCropBox) window.__updateDocCropBox();
+  toast('✂️ Recorte central — ajuste a área do documento');
+}
 // --- LER DOCUMENTO (OCR CPF/RG) - OTIMIZADO VELOZ ---
-let docImg = null, docTesseractReady = false, docTesseractLoading = false;
-let docWorker = null, docWorkerReady = false;
 async function getDocWorker(logger){
   if(docWorker && docWorkerReady) return docWorker;
   await ensureTesseract();
@@ -1395,6 +1535,10 @@ function closeDocReader(){
   document.getElementById('docResult').classList.add('hidden');
   document.getElementById('docErr').classList.add('hidden');
   const a = document.getElementById('docAutoStatus'); if(a){ a.classList.add('hidden'); a.textContent=''; }
+  docCropEnabled = false; docCropRect = null; docCropDrag = null;
+  const ov2 = document.getElementById('docCropOverlay'); if(ov2) ov2.classList.add('hidden');
+  const tb2 = document.getElementById('docCropToggleBtn'); if(tb2) tb2.textContent = '✂️ Recortar: OFF';
+  const hint2 = document.getElementById('docCropHint'); if(hint2) hint2.classList.add('hidden');
   document.getElementById('docProgressBar').style.width = '0%';
 }
 function retryDocReader(){
@@ -1407,6 +1551,10 @@ function docReaderChanged(inp){
   const img = new Image();
   img.onload = () => {
     docImg = img;
+    docCropEnabled = false; docCropRect = null; docCropDrag = null;
+    const tb2 = document.getElementById('docCropToggleBtn'); if(tb2) tb2.textContent = '✂️ Recortar: OFF';
+    const ov2 = document.getElementById('docCropOverlay'); if(ov2) ov2.classList.add('hidden');
+    const hint2 = document.getElementById('docCropHint'); if(hint2) hint2.classList.add('hidden');
     const pv = document.getElementById('docPreviewImg');
     const wrap = document.getElementById('docPreviewWrap');
     pv.src = img.src;
@@ -1450,6 +1598,19 @@ function preprocessForOCR(img){
   c.width = w; c.height = h;
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
+  // Se recorte ativo, recorta a área selecionada (muito mais rápido e preciso)
+  if(docCropEnabled && docCropRect){
+    const sx = Math.round(docCropRect.x * w), sy = Math.round(docCropRect.y * h);
+    const sw = Math.round(docCropRect.w * w), sh = Math.round(docCropRect.h * h);
+    if(sw > 30 && sh > 30 && sx+sw <= w && sy+sh <= h){
+      const tmp = document.createElement('canvas');
+      tmp.width = sw; tmp.height = sh;
+      tmp.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
+      c.width = sw; c.height = sh;
+      c.getContext('2d').drawImage(tmp, 0, 0);
+      w = sw; h = sh;
+    }
+  }
   // Tenta usar OpenCV para binarização adaptativa (muito melhor para CNH com brilho)
   try{
     if(typeof cv !== 'undefined' && cv.Mat && cvReady){
