@@ -545,10 +545,27 @@
       <div class="w-full h-2 bg-white rounded-full mt-2 overflow-hidden"><div id="docProgressBar" class="h-full bg-indigo-600 transition-all" style="width:0%"></div></div>
     </div>
     <div id="docResult" class="hidden mt-3">
-      <label class="lbl">TEXTO DETECTADO</label>
-      <pre id="docOcrText" class="mt-1 max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded-xl p-3 text-[11px] leading-relaxed whitespace-pre-wrap"></pre>
+      <label class="lbl">TEXTO DETECTADO (toque para editar e corrigir)</label>
+      <pre id="docOcrText" class="mt-1 max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded-xl p-3 text-[11px] leading-relaxed whitespace-pre-wrap" contenteditable="true" title="Toque para corrigir o texto e re-extrair"></pre>
+      <div class="flex gap-2 mt-1.5">
+        <button type="button" onclick="reparseDocText()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">↻ Re-extrair dados do texto corrigido</button>
+        <button type="button" onclick="copyOcrText()" class="btn btn-ghost px-3 py-1.5 text-[11px]">📋 Copiar</button>
+      </div>
       <div id="docDetected" class="mt-3 space-y-2"></div>
-      <p id="docNoMatch" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">Nenhum CPF/RG detectado. Tente aproximar, melhorar iluminação ou digitar manualmente.</p>
+      <p id="docNoMatch" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">Nenhum CPF/RG detectado. Tente aproximar o documento, preencher toda a tela, boa luz sem reflexo, ou edite os campos abaixo.</p>
+      <div id="docFields" class="mt-3 grid grid-cols-2 gap-2.5 hidden">
+        <div><label class="lbl">CPF</label><input id="docFieldCpf" placeholder="000.000.000-00" class="inp mt-1"></div>
+        <div><label class="lbl">RG / DOC</label><input id="docFieldRg" placeholder="RG" class="inp mt-1"></div>
+        <div class="col-span-2"><label class="lbl">NOME</label><input id="docFieldNome" placeholder="Nome completo" class="inp mt-1"></div>
+        <div class="col-span-2"><label class="lbl">NOME DA MÃE (FILIAÇÃO)</label><input id="docFieldMae" placeholder="Nome da mãe" class="inp mt-1"></div>
+        <div><label class="lbl">DATA NASC.</label><input id="docFieldNasc" placeholder="DD/MM/AAAA" class="inp mt-1"></div>
+        <div><label class="lbl">DOC / CNH</label><input id="docFieldDoc" placeholder="Nº CNH/RG" class="inp mt-1"></div>
+      </div>
+      <div id="docFieldsActions" class="hidden mt-2 grid grid-cols-2 gap-2">
+        <button type="button" onclick="searchWithDocFields()" class="btn btn-primary py-2.5 text-xs">🔍 Buscar atendido</button>
+        <button type="button" onclick="fillCadastroWithDoc()" class="btn btn-dark py-2.5 text-xs">📋 Preencher cadastro</button>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-2">💡 <b>CNH:</b> use boa luz, sem brilho, preencha a tela. Se o CPF vier com erro (O→0, I→1), corrija no campo acima e toque em <b>Buscar</b>.</p>
     </div>
     <p id="docErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
     <div class="flex gap-2.5 mt-4">
@@ -1372,34 +1389,63 @@ function docReaderChanged(inp){
     pv.src = img.src;
     wrap.classList.remove('hidden');
     document.getElementById('docResult').classList.add('hidden');
+    document.getElementById('docFields').classList.add('hidden');
+    document.getElementById('docFieldsActions').classList.add('hidden');
     document.getElementById('docProgress').classList.add('hidden');
     document.getElementById('docErr').classList.add('hidden');
     document.getElementById('docAnalyzeBtn').classList.remove('hidden');
     document.getElementById('docRetryBtn').classList.add('hidden');
     document.getElementById('modalDocReader').classList.remove('hidden');
-    // auto-analisa após 400ms para dar tempo de ver a foto
     setTimeout(() => analyzeDoc(), 400);
   };
   img.onerror = () => toast('⚠️ Falha ao ler imagem');
   img.src = URL.createObjectURL(file);
   inp.value = '';
 }
+function validarCPF(cpf){
+  cpf = String(cpf).replace(/\D/g,'');
+  if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let s=0; for(let i=0;i<9;i++) s+= parseInt(cpf[i])*(10-i);
+  let r = 11 - s%11; if(r>=10) r=0; if(r != parseInt(cpf[9])) return false;
+  s=0; for(let i=0;i<10;i++) s+= parseInt(cpf[i])*(11-i);
+  r = 11 - s%11; if(r>=10) r=0; return r===parseInt(cpf[10]);
+}
+function cleanOcrForCPF(t){
+  // Corrige confusões comuns do OCR: O→0, l/I→1, B→8, S→5, etc. apenas em sequências numéricas
+  return t.replace(/[OQ]/g,'0').replace(/[lI]/g,'1').replace(/S/g,'5');
+}
 function preprocessForOCR(img){
-  const maxW = 1400;
-  const sc = Math.min(1, maxW / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
   const c = document.getElementById('docCanvas');
+  // Upscale se muito pequeno (CNH fotografada de longe), limita a 1800 para não estourar memória
+  let w = img.naturalWidth, h = img.naturalHeight;
+  const maxSide = Math.max(w,h);
+  let scale = 1;
+  if(maxSide < 1200) scale = 1800 / maxSide;
+  else if(maxSide > 2200) scale = 2200 / maxSide;
+  w = Math.round(w*scale); h = Math.round(h*scale);
   c.width = w; c.height = h;
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
-  // grayscale + contraste para melhorar OCR
+  // Tenta usar OpenCV para binarização adaptativa (muito melhor para CNH com brilho)
+  try{
+    if(typeof cv !== 'undefined' && cv.Mat && cvReady){
+      const src = cv.imread(c);
+      const gray = new cv.Mat(), blur = new cv.Mat(), thr = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blur, new cv.Size(3,3), 0);
+      // adaptiveThreshold funciona melhor em documentos com sombra/brilho
+      cv.adaptiveThreshold(blur, thr, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 35, 12);
+      cv.imshow(c, thr);
+      src.delete(); gray.delete(); blur.delete(); thr.delete();
+      return c;
+    }
+  }catch(e){}
+  // Fallback: grayscale + contraste forte
   const id = ctx.getImageData(0, 0, w, h), d = id.data;
   for(let i=0;i<d.length;i+=4){
     let g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
-    // aumento de contraste
-    g = (g - 128) * 1.6 + 128;
+    g = (g - 128) * 1.9 + 128; // contraste mais alto para CNH
     g = g < 0 ? 0 : g > 255 ? 255 : g;
-    // binariza suave
     d[i]=d[i+1]=d[i+2]=g;
   }
   ctx.putImageData(id,0,0);
@@ -1413,12 +1459,16 @@ async function analyzeDoc(){
   const err = document.getElementById('docErr');
   const resBox = document.getElementById('docResult');
   prog.classList.remove('hidden'); resBox.classList.add('hidden'); err.classList.add('hidden');
+  document.getElementById('docFields').classList.add('hidden');
+  document.getElementById('docFieldsActions').classList.add('hidden');
   bar.style.width = '10%'; txt.textContent = 'Carregando OCR...';
   try{
     await ensureTesseract();
+    // garante OpenCV disponível para pré-processamento (opcional)
+    if(!cvReady && !cvLoading) ensureCV().catch(()=>{});
     bar.style.width = '30%'; txt.textContent = 'Preparando imagem...';
     const canvas = preprocessForOCR(docImg);
-    bar.style.width = '50%'; txt.textContent = 'Lendo documento (pode levar ~5-10s)...';
+    bar.style.width = '50%'; txt.textContent = 'Lendo documento (pode levar ~8-12s)...';
     const worker = await Tesseract.createWorker('por', 1, {
       logger: m => {
         if(m.status === 'recognizing text' && m.progress != null){
@@ -1428,7 +1478,21 @@ async function analyzeDoc(){
         }
       }
     });
-    const { data: { text } } = await worker.recognize(canvas);
+    await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+    let { data: { text } } = await worker.recognize(canvas);
+    // Se não achou CPF, tenta segunda passada com PSM 11 (esparso) + correção O→0
+    if(!/\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}/.test(text)){
+      const cleaned = cleanOcrForCPF(text);
+      if(/\d{11}/.test(cleaned.replace(/\D/g,''))){
+        text = cleaned;
+      } else {
+        try{
+          await worker.setParameters({ tessedit_pageseg_mode: '11' });
+          const r2 = await worker.recognize(canvas);
+          if(r2.data.text && r2.data.text.length > text.length) text = r2.data.text;
+        }catch{}
+      }
+    }
     await worker.terminate();
     bar.style.width = '100%'; txt.textContent = 'Concluído!';
     setTimeout(() => prog.classList.add('hidden'), 800);
@@ -1443,49 +1507,125 @@ async function analyzeDoc(){
     err.classList.remove('hidden');
   }
 }
-function renderDocDetected(raw){
-  const box = document.getElementById('docDetected');
-  const noMatch = document.getElementById('docNoMatch');
-  const t = (raw || '').replace(/\s+/g, ' ');
-  // CPF: 11 dígitos com ou sem pontuação
+function parseDocFields(raw){
+  const t = cleanOcrForCPF((raw||'').replace(/\s+/g,' '));
+  const textUpper = (raw||'').toUpperCase();
+  // CPF com validação
   const cpfRe = /\b\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}\b/g;
-  const rgRe = /\b\d{1,2}\.?\d{3}\.?\d{3}[- ]?\d{1,2}\b|\b\d{7,9}\b/g;
-  const cpfM = (t.match(cpfRe) || []).map(s => s.replace(/\D/g,'')).filter(s => s.length===11);
-  const uniqCpf = [...new Set(cpfM)].slice(0,2);
-  // RG: tenta pegar, evita duplicar CPF
-  let rgM = (t.match(rgRe) || []).map(s => s.replace(/\D/g,'')).filter(s => s.length>=7 && s.length<=9 && !uniqCpf.includes(s));
+  let cpfs = (t.match(cpfRe) || []).map(s=>s.replace(/\D/g,'')).filter(s=>s.length===11);
+  // valida e prioriza CPFs válidos
+  const valids = cpfs.filter(validarCPF);
+  const uniqCpf = (valids.length ? valids : cpfs).filter((v,i,a)=>a.indexOf(v)===i).slice(0,2);
+  // RG / DOC - na CNH é "DOC IDENTIDADE" ou "REGISTRO", formato variado
+  const rgRe = /\b\d{1,2}\.?\d{3}\.?\d{3}[- ]?\d{1,2}\b|\b\d{7,9}\b|\b\d{10,11}\b/g;
+  let rgM = (t.match(rgRe) || []).map(s=>s.replace(/\D/g,'')).filter(s=> s.length>=7 && s.length<=11 && !uniqCpf.includes(s) && !valids.includes(s));
+  // filtra CPFs já usados
   rgM = [...new Set(rgM)].slice(0,2);
-  // Nome: tenta linha após "NOME"
-  let nome = '';
-  const upper = (raw || '').toUpperCase();
-  const lines = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+  // DOC/CNH número (campo "REGISTRO" na CNH)
+  let docNum = '';
+  const regMatch = textUpper.match(/REGISTRO\s*[:\-]?\s*(\d{9,11})/);
+  if(regMatch) docNum = regMatch[1].replace(/\D/g,'');
+  // Linhas para nome/filiação
+  const lines = raw.split(/\n/).map(s=>s.trim()).filter(Boolean);
+  let nome = '', nomeMae = '', dataNasc = '';
   for(let i=0;i<lines.length;i++){
-    if(/NOME/.test(lines[i].toUpperCase()) && lines[i+1] && lines[i+1].length > 5){
-      const cand = lines[i+1].replace(/[^A-Za-zÀ-ÿ\s]/g,'').trim();
-      if(cand.split(/\s+/).length >= 2) { nome = cand; break; }
+    const up = lines[i].toUpperCase();
+    if(!nome && /NOME/.test(up) && lines[i+1]){
+      for(let k=i+1;k<Math.min(i+4, lines.length);k++){
+        const cand = lines[k].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim();
+        if(cand.split(/\s+/).length>=2 && cand.length>6 && cand.length<70 && !/FILIACAO|FILIACAO|NASC|CPF|RG|CNH|VALIDADE|HABILITACAO|ASSINATURA|EMISSOR/i.test(cand.toUpperCase())){
+          nome = cand.replace(/\s+/g,' ').trim(); break;
+        }
+      }
+    }
+    if(/FILIACAO|FILIA[ÇC]AO/.test(up)){
+      const cands = [];
+      for(let k=i+1;k<Math.min(i+5, lines.length);k++){
+        const cand = lines[k].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim();
+        if(cand.split(/\s+/).length>=2 && cand.length>6 && cand.length<70 && !/NASC|CPF|RG|CNH/i.test(cand.toUpperCase())) cands.push(cand.replace(/\s+/g,' ').trim());
+      }
+      if(cands.length>=2) nomeMae = cands[1];
+      else if(cands.length===1) nomeMae = cands[0];
+    }
+    if(!dataNasc && /DATA NASC|NASCIMENTO/.test(up)){
+      for(let k=i;k<Math.min(i+3, lines.length);k++){
+        const m = lines[k].match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/);
+        if(m){ dataNasc = m[1].replace(/[\-\.]/g,'/'); break; }
+      }
     }
   }
   if(!nome){
-    // fallback: maior linha com 2+ palavras e sem números
-    let best = '';
-    for(const l of lines){ const clean = l.replace(/[^A-Za-zÀ-ÿ\s]/g,'').trim(); if(clean.split(/\s+/).length>=2 && clean.length > best.length && !/\d/.test(clean)) best = clean; }
-    if(best.length > 8 && best.length < 60) nome = best;
+    let best=''; for(const l of lines){ const clean=l.replace(/[^A-Za-zÀ-ÿ\s]/g,'').trim(); if(clean.split(/\s+/).length>=2 && clean.length>best.length && !/\d/.test(clean) && clean.length<70) best=clean; }
+    if(best.length>8) nome=best.replace(/\s+/g,' ').trim();
   }
+  if(!dataNasc){
+    const m = raw.match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/);
+    if(m) dataNasc = m[1].replace(/[\-\.]/g,'/');
+  }
+  return { cpf: uniqCpf[0]||'', cpf2: uniqCpf[1]||'', rg: rgM[0]||'', rg2: rgM[1]||'', docNum, nome, nomeMae, dataNasc, rawCands: { cpfs: uniqCpf, rgs: rgM } };
+}
+function renderDocDetected(raw){
+  const box = document.getElementById('docDetected');
+  const noMatch = document.getElementById('docNoMatch');
+  const fields = document.getElementById('docFields');
+  const actions = document.getElementById('docFieldsActions');
+  const p = parseDocFields(raw);
+  // preenche campos editáveis
+  document.getElementById('docFieldCpf').value = p.cpf ? p.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4') : '';
+  document.getElementById('docFieldRg').value = p.rg || '';
+  document.getElementById('docFieldNome').value = p.nome || '';
+  document.getElementById('docFieldMae').value = p.nomeMae || '';
+  document.getElementById('docFieldNasc').value = p.dataNasc || '';
+  document.getElementById('docFieldDoc').value = p.docNum || p.rg || '';
+  fields.classList.remove('hidden'); actions.classList.remove('hidden');
   let html = '';
-  uniqCpf.forEach(cpf => {
-    const fmt = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
-    html += `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><span class="text-xs font-bold text-emerald-800">CPF: ${esc(fmt)}</span><button onclick="searchWithDoc('${esc(cpf)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar este CPF</button></div>`;
-  });
-  rgM.forEach(rg => {
-    html += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5"><span class="text-xs font-bold text-blue-800">RG: ${esc(rg)}</span><button onclick="searchWithDoc('${esc(rg)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar este RG</button></div>`;
-  });
-  if(nome){
-    html += `<div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl p-2.5"><span class="text-xs font-bold text-violet-800 truncate">Nome: ${esc(nome)}</span><button onclick="searchWithDoc('${esc(nome)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Buscar nome</button></div>`;
-  }
+  if(p.cpf) html += `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><span class="text-xs font-bold text-emerald-800">CPF: ${esc(p.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'))} ${validarCPF(p.cpf)?'✓':''}</span><button onclick="searchWithDoc('${esc(p.cpf)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar CPF</button></div>`;
+  if(p.rg) html += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5"><span class="text-xs font-bold text-blue-800">RG/DOC: ${esc(p.rg)}</span><button onclick="searchWithDoc('${esc(p.rg)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar RG</button></div>`;
+  if(p.docNum && p.docNum!==p.rg) html += `<div class="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-xl p-2.5"><span class="text-xs font-bold text-cyan-800">CNH: ${esc(p.docNum)}</span><button onclick="searchWithDoc('${esc(p.docNum)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar DOC</button></div>`;
+  if(p.nome) html += `<div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl p-2.5"><span class="text-xs font-bold text-violet-800 truncate">Nome: ${esc(p.nome)}</span><button onclick="searchWithDoc('${esc(p.nome)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Nome</button></div>`;
+  if(p.nomeMae) html += `<div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5"><span class="text-xs font-bold text-amber-800 truncate">Mãe: ${esc(p.nomeMae)}</span><button onclick="searchWithDoc('${esc(p.nomeMae)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Mãe</button></div>`;
   box.innerHTML = html;
-  const has = uniqCpf.length || rgM.length || nome;
-  noMatch.classList.toggle('hidden', !!has);
+  const has = !!(p.cpf || p.rg || p.nome || p.nomeMae);
+  noMatch.classList.toggle('hidden', has);
   if(!has) box.innerHTML = '';
+}
+function reparseDocText(){
+  const txt = document.getElementById('docOcrText').textContent || '';
+  renderDocDetected(txt);
+  toast('↻ Dados re-extraídos do texto corrigido');
+}
+function copyOcrText(){
+  const t = document.getElementById('docOcrText').textContent || '';
+  if(!t.trim()) return;
+  navigator.clipboard.writeText(t).then(()=>toast('📋 Texto copiado')).catch(()=>toast(t.slice(0,80)));
+}
+function searchWithDocFields(){
+  const cpf = document.getElementById('docFieldCpf').value.replace(/\D/g,'');
+  const rg = document.getElementById('docFieldRg').value.trim();
+  const nome = document.getElementById('docFieldNome').value.trim();
+  const q = (cpf && cpf.length===11) ? cpf : (rg || nome);
+  if(!q) return toast('⚠️ Preencha CPF, RG ou nome');
+  searchWithDoc(q);
+}
+function fillCadastroWithDoc(){
+  const cpf = document.getElementById('docFieldCpf').value.trim();
+  const rg = document.getElementById('docFieldRg').value.trim();
+  const nome = document.getElementById('docFieldNome').value.trim();
+  const mae = document.getElementById('docFieldMae').value.trim();
+  const nasc = document.getElementById('docFieldNasc').value.trim();
+  if(nome) document.getElementById('cNome').value = nome;
+  if(cpf) document.getElementById('cCpf').value = cpf;
+  if(rg) document.getElementById('cRg').value = rg;
+  if(mae) document.getElementById('cMae').value = mae;
+  if(nasc){
+    // converte DD/MM/AAAA -> YYYY-MM-DD
+    const m = nasc.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m) document.getElementById('cNasc').value = `${m[3]}-${m[2]}-${m[1]}`;
+    else document.getElementById('cNasc').value = nasc;
+  }
+  closeDocReader();
+  toast('📋 Cadastro preenchido — confira e toque em Cadastrar');
+  document.getElementById('cNome').scrollIntoView({behavior:'smooth',block:'center'});
 }
 function searchWithDoc(q){
   document.getElementById('q').value = q;
