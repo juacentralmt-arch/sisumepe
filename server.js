@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const { google } = require('googleapis');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -798,6 +799,116 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
   }
 }));
 
+// PDF Termos
+async function gerarTermoPDF(termo){
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const margin = 50;
+  let y = 800;
+  // Brasão placeholder + Governo
+  const gov1 = 'GOVERNO DO';
+  const gov1W = fontBold.widthOfTextAtSize(gov1, 10);
+  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontBold });
+  y -= 12;
+  const gov2 = 'ESTADO DO CEARÁ';
+  const gov2W = fontBold.widthOfTextAtSize(gov2, 10);
+  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 10, font: fontBold });
+  y -= 12;
+  const sec = 'Secretaria Administração Penitenciária';
+  const secW = font.widthOfTextAtSize(sec, 8);
+  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 8, font });
+  y -= 28;
+  let dataFmt = '___/___/______';
+  if(termo.dataEnvio){
+    try{ const d = new Date(termo.dataEnvio); if(!isNaN(d)) dataFmt = d.toLocaleDateString('pt-BR'); else dataFmt = String(termo.dataEnvio); }catch(e){ dataFmt = String(termo.dataEnvio); }
+  }
+  page.drawText(`Data de envio: ${dataFmt}`, { x: margin, y, size: 8, font });
+  y -= 28;
+  const title = 'LISTAGEM DE EQUIPAMENTOS';
+  const titleW = fontBold.widthOfTextAtSize(title, 12);
+  page.drawText(title, { x: (595.28 - titleW)/2, y, size: 12, font: fontBold });
+  page.drawLine({ start: { x: (595.28 - titleW)/2, y: y-2 }, end: { x: (595.28 + titleW)/2, y: y-2 }, thickness: 1, color: rgb(0,0,0) });
+  y -= 22;
+  const sub1 = 'SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE';
+  const sub1W = fontBold.widthOfTextAtSize(sub1, 8);
+  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 8, font: fontBold });
+  y -= 10;
+  const sub2 = 'Remetente: Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
+  const sub2W = font.widthOfTextAtSize(sub2, 7);
+  page.drawText(sub2, { x: (595.28 - sub2W)/2, y, size: 7, font });
+  y -= 9;
+  const sub3 = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA - SECÇÃO CARIRI';
+  const sub3W = fontBold.widthOfTextAtSize(sub3, 7);
+  page.drawText(sub3, { x: (595.28 - sub3W)/2, y, size: 7, font: fontBold, color: rgb(0,0,0) });
+  y -= 26;
+  const dest = termo.destinatario || '_________________________________';
+  page.drawText(`Destinatário: ${dest}`, { x: margin, y, size: 9, font: fontBold });
+  y -= 28;
+  const cols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
+  const colW = [110, 110, 110, 110];
+  const tableWidth = colW.reduce((a,b)=>a+b,0);
+  const startX = (595.28 - tableWidth)/2;
+  const rowH = 22, headerH = 20;
+  // Header background
+  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.99, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.5 });
+  let cx = startX;
+  cols.forEach((col,i)=>{
+    const tw = fontBold.widthOfTextAtSize(col, 8);
+    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 14, size: 8, font: fontBold });
+    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.5, color: rgb(0,0,0) });
+    cx += colW[i];
+  });
+  y -= headerH;
+  for(let r=0;r<5;r++){
+    const rowY = y - r*rowH - rowH;
+    page.drawRectangle({ x: startX, y: rowY, width: tableWidth, height: rowH, borderColor: rgb(0,0,0), borderWidth: 0.5, color: rgb(1,1,1) });
+    const row = termo.equipamentos && termo.equipamentos[r] ? termo.equipamentos[r] : {};
+    const vals = [row.tzpr04||'', row.fonte04||'', row.cinta||'', row.trava||''];
+    cx = startX;
+    vals.forEach((v,i)=>{
+      const txt = String(v).substring(0,20);
+      if(txt){
+        const tw = font.widthOfTextAtSize(txt, 8);
+        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 7, size: 8, font });
+      }
+      cx += colW[i];
+    });
+  }
+  // outer border
+  page.drawRectangle({ x: startX, y: y - 5*rowH, width: tableWidth, height: 5*rowH + headerH, borderColor: rgb(0,0,0), borderWidth: 0.8 });
+  y = y - 5*rowH - 45;
+  const sigLineW = 380;
+  const sigX = (595.28 - sigLineW)/2;
+  // Entrega
+  let sigY = y;
+  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 1, color: rgb(0,0,0) });
+  const sig1 = 'RESPONSÁVEL PELA ENTREGA';
+  const sig1W = fontBold.widthOfTextAtSize(sig1, 8);
+  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 12, size: 8, font: fontBold });
+  const sigSub = '(RG/CPF/MATRICULA)';
+  const sigSubW = font.widthOfTextAtSize(sigSub, 7);
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 22, size: 7, font });
+  if(termo.respEntrega){
+    const rw = font.widthOfTextAtSize(String(termo.respEntrega), 8);
+    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 8, size: 8, font });
+  }
+  y -= 60;
+  sigY = y;
+  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 1, color: rgb(0,0,0) });
+  const sig2 = 'RESPONSÁVEL PELA RECEBIMENTO';
+  const sig2W = fontBold.widthOfTextAtSize(sig2, 8);
+  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 12, size: 8, font: fontBold });
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 22, size: 7, font });
+  if(termo.respRecebimento){
+    const rw = font.widthOfTextAtSize(String(termo.respRecebimento), 8);
+    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 8, size: 8, font });
+  }
+  const pdfBytes = await pdfDoc.save();
+  return pdfBytes;
+}
+
 // ============ GOOGLE AGENDA ============
 const pendingGoogleStates = new Map();
 app.get('/api/auth/google', auth(['tecnico','admin']), ah(async (req,res)=>{
@@ -889,6 +1000,95 @@ app.delete('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
   syncAgendaToGoogle(req.auth.user, ev, { isDelete: true }).catch(()=>{});
   broadcast();
   res.json({ ok: true });
+}));
+
+// Termos - Listagem de Equipamentos
+app.get('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const list = await store.termos.allByUser(req.auth.user);
+  if(req.auth.role==='admin' && req.query.all==='1'){
+    const all = await store.termos.all();
+    return res.json(all);
+  }
+  res.json(list);
+}));
+app.post('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  if(!destinatario || !String(destinatario).trim()) return res.status(400).json({ error: 'Destinatário é obrigatório' });
+  let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
+  // normaliza 5 linhas
+  const norm = [];
+  for(let i=0;i<5;i++){
+    const r = eq[i]||{};
+    norm.push({ tzpr04: String(r.tzpr04||'').trim().slice(0,30), fonte04: String(r.fonte04||'').trim().slice(0,30), cinta: String(r.cinta||'').trim().slice(0,30), trava: String(r.trava||'').trim().slice(0,30) });
+  }
+  if(!norm.some(r=> r.tzpr04||r.fonte04||r.cinta||r.trava)) return res.status(400).json({ error: 'Preencha ao menos um equipamento (TZPR04/FONTE04/CINTA/TRAVA)' });
+  const termo = await store.termos.insert({
+    user: req.auth.user,
+    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+    destinatario: String(destinatario).trim().slice(0,120),
+    equipamentos: norm,
+    respEntrega: String(respEntrega||'').trim().slice(0,80),
+    respRecebimento: String(respRecebimento||'').trim().slice(0,80)
+  });
+  broadcast();
+  res.status(201).json(termo);
+}));
+app.get('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  res.json(t);
+}));
+app.patch('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  const patch={};
+  if(dataEnvio) patch.dataEnvio = new Date(dataEnvio).toISOString().slice(0,10);
+  if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
+  if(equipamentos!=null){
+    let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
+    const norm=[]; for(let i=0;i<5;i++){ const r=eq[i]||{}; norm.push({ tzpr04: String(r.tzpr04||'').trim().slice(0,30), fonte04: String(r.fonte04||'').trim().slice(0,30), cinta: String(r.cinta||'').trim().slice(0,30), trava: String(r.trava||'').trim().slice(0,30) }); }
+    patch.equipamentos = norm;
+  }
+  if(respEntrega!=null) patch.respEntrega = String(respEntrega).trim().slice(0,80);
+  if(respRecebimento!=null) patch.respRecebimento = String(respRecebimento).trim().slice(0,80);
+  const upd = await store.termos.patch(t.id, patch);
+  broadcast();
+  res.json(upd);
+}));
+app.delete('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  await store.termos.remove(t.id);
+  broadcast();
+  res.json({ ok: true });
+}));
+app.get('/api/termos/:id/pdf', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  const pdf = await gerarTermoPDF(t);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
+  res.send(Buffer.from(pdf));
+}));
+app.post('/api/termos/pdf-preview', auth(['tecnico','admin']), ah(async (req,res)=>{
+  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  const termo = {
+    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+    destinatario: String(destinatario||'').trim() || '_________________________',
+    equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,5).map(r=>({ tzpr04: String(r.tzpr04||''), fonte04: String(r.fonte04||''), cinta: String(r.cinta||''), trava: String(r.trava||'') })) : [],
+    respEntrega: String(respEntrega||'').trim(),
+    respRecebimento: String(respRecebimento||'').trim()
+  };
+  while(termo.equipamentos.length<5) termo.equipamentos.push({ tzpr04:'', fonte04:'', cinta:'', trava:'' });
+  const pdf = await gerarTermoPDF(termo);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+  res.send(Buffer.from(pdf));
 }));
 
 // Painel TV público (sem login): só o mínimo necessário à chamada

@@ -133,6 +133,20 @@ create table if not exists google_tokens (
   token_type text
 );
 
+create table if not exists termos (
+  id serial primary key,
+  "user" text not null,
+  dataenvio date,
+  destinatario text default '',
+  equipamentos jsonb default '[]'::jsonb,
+  respentrega text default '',
+  resprecebimento text default '',
+  createdat timestamptz default now(),
+  updatedat timestamptz default now()
+);
+create index if not exists idx_termos_user on termos ("user");
+create index if not exists idx_termos_data on termos (dataenvio);
+
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público
 -- =====================================================================
@@ -160,4 +174,5 @@ begin
   perform setval(pg_get_serial_sequence('chat', 'id'), coalesce((select max(id) from chat), 0) + 1, false);
   perform setval(pg_get_serial_sequence('audit', 'id'), coalesce((select max(id) from audit), 0) + 1, false);
   perform setval(pg_get_serial_sequence('agenda', 'id'), coalesce((select max(id) from agenda), 0) + 1, false);
+  perform setval(pg_get_serial_sequence('termos', 'id'), coalesce((select max(id) from termos), 0) + 1, false);
 end $$;
