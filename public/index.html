@@ -569,7 +569,8 @@
         <button type="button" onclick="searchWithDocFields()" class="btn btn-primary py-2.5 text-xs">🔍 Buscar atendido</button>
         <button type="button" onclick="fillCadastroWithDoc()" class="btn btn-dark py-2.5 text-xs">📋 Preencher cadastro</button>
       </div>
-      <p class="text-[11px] text-slate-500 mt-2">💡 <b>CNH:</b> use boa luz, sem brilho, preencha a tela. Se o CPF vier com erro (O→0, I→1), corrija no campo acima e toque em <b>Buscar</b>.</p>
+      <div id="docAutoStatus" class="hidden mt-3 rounded-xl p-3 text-xs font-semibold border"></div>
+      <p class="text-[11px] text-slate-500 mt-2">💡 <b>CNH:</b> use boa luz, sem brilho, preencha a tela. Se o CPF vier com erro (O→0, I→1), corrija no campo acima e toque em <b>Buscar</b>. O sistema verifica automaticamente o cadastro e já segue para o ticket.</p>
     </div>
     <p id="docErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
     <div class="flex gap-2.5 mt-4">
@@ -1376,6 +1377,7 @@ function closeDocReader(){
   document.getElementById('docProgress').classList.add('hidden');
   document.getElementById('docResult').classList.add('hidden');
   document.getElementById('docErr').classList.add('hidden');
+  const a = document.getElementById('docAutoStatus'); if(a){ a.classList.add('hidden'); a.textContent=''; }
   document.getElementById('docProgressBar').style.width = '0%';
 }
 function retryDocReader(){
@@ -1395,6 +1397,7 @@ function docReaderChanged(inp){
     document.getElementById('docResult').classList.add('hidden');
     document.getElementById('docFields').classList.add('hidden');
     document.getElementById('docFieldsActions').classList.add('hidden');
+    const a2 = document.getElementById('docAutoStatus'); if(a2){ a2.classList.add('hidden'); a2.textContent=''; }
     document.getElementById('docProgress').classList.add('hidden');
     document.getElementById('docErr').classList.add('hidden');
     document.getElementById('docAnalyzeBtn').classList.remove('hidden');
@@ -1592,6 +1595,10 @@ function renderDocDetected(raw){
   const has = !!(p.cpf || p.rg || p.nome || p.nomeMae);
   noMatch.classList.toggle('hidden', has);
   if(!has) box.innerHTML = '';
+  // verificação automática: busca cadastro e segue para ticket ou preenche cadastro
+  const auto = document.getElementById('docAutoStatus');
+  if(auto){ auto.classList.add('hidden'); auto.textContent=''; }
+  if(has) setTimeout(()=> autoProceedWithDoc(), 700);
 }
 function reparseDocText(){
   const txt = document.getElementById('docOcrText').textContent || '';
@@ -1636,6 +1643,65 @@ function searchWithDoc(q){
   closeDocReader();
   buscarPessoa();
   toast('🔍 Buscando por: ' + q);
+}
+async function autoProceedWithDoc(){
+  const status = document.getElementById('docAutoStatus');
+  if(!status) return;
+  status.classList.remove('hidden');
+  status.className = 'mt-3 rounded-xl p-3 text-xs font-semibold border bg-indigo-50 border-indigo-200 text-indigo-800';
+  status.textContent = '🔍 Verificando se já possui cadastro...';
+  // usa valores dos campos editáveis (usuário pode ter corrigido)
+  const cpfField = (document.getElementById('docFieldCpf').value || '').replace(/\D/g,'');
+  const rgField = (document.getElementById('docFieldRg').value || '').trim();
+  const nomeField = (document.getElementById('docFieldNome').value || '').trim();
+  const docNumField = (document.getElementById('docFieldDoc').value || '').trim();
+  // tenta CPF primeiro (mais preciso)
+  const trySearch = async (q) => {
+    if(!q) return null;
+    try{ const list = await api('/api/persons?q=' + encodeURIComponent(q)); return list && list.length ? list : null; }catch{ return null; }
+  };
+  let found = null, usedQ = '';
+  if(cpfField && cpfField.length===11){
+    const list = await trySearch(cpfField);
+    if(list){ found = list.find(x => (x.cpf||'').replace(/\D/g,'')===cpfField) || list[0]; usedQ = cpfField; }
+  }
+  if(!found && rgField){
+    const list = await trySearch(rgField);
+    if(list){ found = list.find(x => (x.rg||'').replace(/\D/g,'')===rgField.replace(/\D/g,'')) || list[0]; usedQ = rgField; }
+  }
+  if(!found && docNumField && docNumField!==rgField){
+    const list = await trySearch(docNumField);
+    if(list){ found = list[0]; usedQ = docNumField; }
+  }
+  if(!found && nomeField && nomeField.split(/\s+/).length>=2){
+    const list = await trySearch(nomeField);
+    if(list){
+      const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+      found = list.find(x => norm(x.nome)===norm(nomeField)) || list[0];
+      // só considera se nome muito próximo (evita falso positivo)
+      if(found && norm(found.nome).split(/\s+/)[0] !== norm(nomeField).split(/\s+/)[0]) found = null;
+      else usedQ = nomeField;
+    }
+  }
+  if(found){
+    status.className = 'mt-3 rounded-xl p-3 text-xs font-semibold border bg-emerald-50 border-emerald-200 text-emerald-800';
+    status.textContent = '✅ Cadastro encontrado: ' + found.nome + ' — seguindo para abertura de ticket...';
+    setTimeout(() => {
+      selectPerson(found.id, found.nome, found.modeloTornozeleira || '');
+      closeDocReader();
+      toast('✅ Atendido localizado: ' + found.nome + ' — selecione o motivo e abra o ticket');
+      setTimeout(()=>{ const el=document.getElementById('tMotivo'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }, 400);
+    }, 900);
+    return;
+  }
+  // não encontrado → preencher cadastro
+  status.className = 'mt-3 rounded-xl p-3 text-xs font-semibold border bg-amber-50 border-amber-200 text-amber-800';
+  status.textContent = '📋 Cadastro não encontrado — preenchendo formulário para novo cadastro...';
+  setTimeout(() => {
+    fillCadastroWithDoc();
+    const s2 = document.getElementById('docAutoStatus');
+    if(s2) s2.textContent = '📋 Formulário preenchido — escolha o modelo da tornozeleira e toque em Cadastrar atendido';
+  }, 900);
 }
 function removeScanFile(i){
   const cur = document.getElementById('tFiles');
