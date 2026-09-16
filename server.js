@@ -802,15 +802,11 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
 // PDF Termos
 async function gerarTermoPDF(termo){
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]);
+  const page = pdfDoc.addPage([595.32, 841.92]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontTimes = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  // A4 pixel-perfect: 210mm x 297mm = 595.28 x 841.89 pt @72dpi
-  // Margens: 70pt esq/dir, como no original escaneado
-  let y = 815;
-  // Brasao - tenta carregar, fallback para espaco
   let brasaoImage = null;
   try{
     if(typeof fetch !== 'undefined'){
@@ -821,27 +817,23 @@ async function gerarTermoPDF(termo){
       }
     }
   }catch(e){}
+  // Brasão centralizado no topo (original y ~ 780-800)
   if(brasaoImage){
-    const dims = brasaoImage.scale(0.19);
-    page.drawImage(brasaoImage, { x: (595.28 - dims.width)/2, y: y - 18, width: dims.width, height: dims.height });
-    y -= dims.height + 14;
-  } else {
-    y -= 48;
+    const dims = brasaoImage.scale(0.165);
+    // y do topo: 780, x centralizado
+    page.drawImage(brasaoImage, { x: (595.32 - dims.width)/2, y: 755, width: dims.width, height: dims.height });
   }
-  // Header Governo - exatamente como no modelo
+  // Textos com coordenadas exatas do PDF original (visitor_body)
+  // GOVERNO DO ESTADO DO CEARÁ - não capturado pelo visitor, estimado
   const gov1 = 'GOVERNO DO';
   const gov1W = fontTimesBold.widthOfTextAtSize(gov1, 10);
-  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontTimesBold, color: rgb(0,0,0) });
-  y -= 13;
+  page.drawText(gov1, { x: (595.32 - gov1W)/2, y: 770, size: 10, font: fontTimesBold, color: rgb(0,0,0) });
   const gov2 = 'ESTADO DO CEARÁ';
-  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13.5);
-  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 13.5, font: fontTimesBold, color: rgb(0,0,0) });
-  y -= 16;
-  const sec = 'Secretaria Administração Penitenciária';
-  const secW = fontTimesBold.widthOfTextAtSize(sec, 9);
-  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
-  y -= 32;
-  // Data de envio - esquerda, exatamente "Data de envio: _______/_______/________"
+  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 12);
+  page.drawText(gov2, { x: (595.32 - gov2W)/2, y: 755, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  // Secretaria Administração Penitenciária - x=228.89, y=731.62, font_size=9.0
+  page.drawText('Secretaria Administração Penitenciária', { x: 228.89, y: 731.62, size: 9, font: fontTimes, color: rgb(0,0,0) });
+  // Data de envio: x=90.26, y=689.98
   let dataFmt = '_______/_______/________';
   let hasData = false;
   if(termo.dataEnvio){
@@ -859,128 +851,115 @@ async function gerarTermoPDF(termo){
       }
     }catch(e){ dataFmt = String(termo.dataEnvio); hasData = true; }
   }
-  const dataLabel = 'Data de envio:';
-  page.drawText(dataLabel, { x: 72, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
-  const dataLabelW = fontTimes.widthOfTextAtSize(dataLabel + ' ', 9);
+  page.drawText('Data de envio', { x: 90.26, y: 689.98, size: 9, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText(':', { x: 145.94, y: 689.98, size: 9, font: fontTimes, color: rgb(0,0,0) });
   if(hasData){
-    page.drawText(dataFmt, { x: 72 + dataLabelW, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
-    const valW = fontTimes.widthOfTextAtSize(dataFmt, 9);
-    page.drawLine({ start: {x: 72 + dataLabelW, y: y-2}, end: {x: 72 + dataLabelW + valW + 4, y: y-2}, thickness: 0.6, color: rgb(0,0,0) });
+    page.drawText(dataFmt, { x: 150.86, y: 689.98, size: 9, font: fontTimes, color: rgb(0,0,0) });
   } else {
-    // traços originais
-    const trail = '_______/_______/________';
-    page.drawText(trail, { x: 72 + dataLabelW, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
+    page.drawText('_______/_______/________', { x: 150.86, y: 689.98, size: 9, font: fontTimes, color: rgb(0,0,0) });
   }
-  y -= 30;
-  // Título centralizado e sublinhado
+  // LISTAGEM DE EQUIPAMENTOS - x=224.09, y=641.98, font_size=12.0, underlined
   const title = 'LISTAGEM DE EQUIPAMENTOS';
-  const titleW = fontTimesBold.widthOfTextAtSize(title, 13);
-  const titleX = (595.28 - titleW)/2;
-  page.drawText(title, { x: titleX, y, size: 13, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawLine({ start: {x: titleX, y: y-2.5}, end: {x: titleX + titleW, y: y-2.5}, thickness: 1.1, color: rgb(0,0,0) });
-  y -= 24;
-  // Subtítulos centralizados
-  const sub1 = 'SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE';
-  const sub1W = fontTimesBold.widthOfTextAtSize(sub1, 9);
-  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
-  y -= 11;
-  const remBold = 'Remetente:';
-  const remAddr = ' Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
-  const remBoldW = fontTimesBold.widthOfTextAtSize(remBold, 8);
-  const remAddrW = fontTimes.widthOfTextAtSize(remAddr, 8);
-  const remTotalW = remBoldW + remAddrW;
-  const remX = (595.28 - remTotalW)/2;
-  page.drawText(remBold, { x: remX, y, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText(remAddr, { x: remX + remBoldW, y, size: 8, font: fontTimes, color: rgb(0,0,0) });
-  y -= 10;
-  const sub3a = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA -';
-  const sub3b = 'SECÇÃO CARIRI';
-  const sub3aW = fontTimesBold.widthOfTextAtSize(sub3a + ' ', 8);
-  const sub3bW = fontTimesBold.widthOfTextAtSize(sub3b, 8);
-  // SECÇÃO CARIRI em itálico no original - usa TimesBoldOblique se disponível, fallback Bold
+  const titleW = fontTimesBold.widthOfTextAtSize(title, 12);
+  // Usando TimesBold para título, mas original usa 12pt
+  page.drawText(title, { x: 224.09, y: 641.98, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawLine({ start: {x: 224.09, y: 639.98}, end: {x: 224.09 + titleW, y: 639.98}, thickness: 1.0, color: rgb(0,0,0) });
+  // SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/ - x=127.34, y=614.14, 12.0
+  page.drawText('SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/', { x: 127.34, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('SAP', { x: 416.02, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('–', { x: 442.66, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('CE', { x: 452.02, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  // Remetente: - x=120.26, y=600.34
+  page.drawText('Remetente:', { x: 120.26, y: 600.34, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte', { x: 185.09, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText('-', { x: 457.42, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText('CE', { x: 460.78, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
+  // CÉLULA DE MONITORAÇÃO ELETRÔNICA - x=131.54, y=586.54
+  page.drawText('CÉLULA DE MONITORAÇÃO ELETRÔNICA', { x: 131.54, y: 586.54, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('-', { x: 368.71, y: 586.54, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  // SECÇÃO CARIRI em itálico no original
   let fontItalic = fontTimesBold;
   try{ fontItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic); }catch(e){}
-  const sub3TotalW = sub3aW + sub3bW;
-  const sub3X = (595.28 - sub3TotalW)/2;
-  page.drawText(sub3a + ' ', { x: sub3X, y, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText(sub3b, { x: sub3X + sub3aW, y, size: 8, font: fontItalic, color: rgb(0,0,0) });
-  y -= 28;
-  // Destinatário - exatamente como no modelo: "Destinatário: _____________________________"
-  const destLabel = 'Destinatário:';
-  const destLabelW = fontTimesBold.widthOfTextAtSize(destLabel + ' ', 10);
-  const destX = 125;
-  page.drawText(destLabel, { x: destX, y, size: 10, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('SECÇÃO CARIRI', { x: 372.43, y: 586.54, size: 12, font: fontItalic, color: rgb(0,0,0) });
+  // Destinatário - x=170.09, y=558.91
+  page.drawText('Destinatário', { x: 170.09, y: 558.91, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
   const destVal = (termo.destinatario || '').trim();
   if(destVal){
-    page.drawText(destVal, { x: destX + destLabelW, y, size: 10, font: fontTimes, color: rgb(0,0,0) });
-    const destValW = fontTimes.widthOfTextAtSize(destVal, 10);
-    page.drawLine({ start: {x: destX + destLabelW, y: y-2}, end: {x: destX + destLabelW + destValW + 50, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+    page.drawText(': ' + destVal, { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    const full = ': ' + destVal;
+    const fullW = fontTimes.widthOfTextAtSize(full, 12);
+    page.drawLine({ start: {x: 235.25, y: 556.91}, end: {x: 235.25 + fullW + 20, y: 556.91}, thickness: 0.7, color: rgb(0,0,0) });
   } else {
-    page.drawLine({ start: {x: destX + destLabelW, y: y-2}, end: {x: destX + destLabelW + 260, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+    page.drawText(': _____________________________', { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
   }
-  y -= 36;
-  // Tabela - 4 colunas, header peach #FFE4CC, 5 linhas, bordas pretas 0.5-0.9
-  const cols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
-  const colW = [110, 110, 110, 110];
-  const tableWidth = colW.reduce((a,b)=>a+b,0);
-  const startX = (595.28 - tableWidth)/2;
-  const rowH = 19, headerH = 17;
-  // Header
-  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.996, 0.894, 0.8), borderColor: rgb(0,0,0), borderWidth: 0.7 });
-  let cx = startX;
-  cols.forEach((col,i)=>{
-    const tw = fontTimesBold.widthOfTextAtSize(col, 8);
-    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 11.5, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
-    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.6, color: rgb(0,0,0) });
-    cx += colW[i];
-  });
-  y -= headerH;
+  // Tabela - header em x=175.49,242.09,320.71,385.90 y=490.39
+  // Reconstruímos a tabela com posições exatas e 5 linhas de dados
+  const tableLeft = 110.42;
+  const tableRight = 484.90;
+  const tableWidth = tableRight - tableLeft;
+  const colBounds = [110.42, 220.76, 310.42, 370.42, 484.90];
+  // Header background peach
+  page.drawRectangle({ x: tableLeft, y: 478.39, width: tableWidth, height: 18, color: rgb(0.996, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.6 });
+  // Header text
+  page.drawText('TZPR04', { x: 175.49, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('FONTE', { x: 242.09, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('04', { x: 277.75, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('CINTA', { x: 320.71, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('TRAVA', { x: 385.90, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  // Grid: 1 header + 5 rows = 6 linhas horizontais, 5 colunas verticais
+  const rowTops = [496.39, 478.39, 458.39, 438.39, 418.39, 398.39];
+  const rowBottom = 378.39;
+  // Desenha bordas da tabela
+  // Vertical lines
+  for(let i=0;i<colBounds.length;i++){
+    const x = colBounds[i];
+    page.drawLine({ start: {x, y: 496.39}, end: {x, y: rowBottom}, thickness: 0.6, color: rgb(0,0,0) });
+  }
+  // Horizontal lines
+  for(let i=0;i<rowTops.length;i++){
+    const y = rowTops[i];
+    page.drawLine({ start: {x: tableLeft, y}, end: {x: tableRight, y}, thickness: 0.6, color: rgb(0,0,0) });
+  }
+  page.drawLine({ start: {x: tableLeft, y: rowBottom}, end: {x: tableRight, y: rowBottom}, thickness: 0.6, color: rgb(0,0,0) });
+  // Preenche dados nas 5 linhas
   for(let r=0;r<5;r++){
-    const rowY = y - r*rowH - rowH;
-    page.drawRectangle({ x: startX, y: rowY, width: tableWidth, height: rowH, borderColor: rgb(0,0,0), borderWidth: 0.5, color: rgb(1,1,1) });
     const row = termo.equipamentos && termo.equipamentos[r] ? termo.equipamentos[r] : {};
     const vals = [row.tzpr04||'', row.fonte04||'', row.cinta||'', row.trava||''];
-    cx = startX;
+    const rowCenterY = 468.39 - r*20;
+    // Cada coluna centralizada
+    const colCenters = [ (colBounds[0]+colBounds[1])/2, (colBounds[1]+colBounds[2])/2, (colBounds[2]+colBounds[3])/2, (colBounds[3]+colBounds[4])/2 ];
     vals.forEach((v,i)=>{
-      const txt = String(v).substring(0,20);
+      const txt = String(v).substring(0,18);
       if(txt){
-        const tw = fontTimes.widthOfTextAtSize(txt, 8);
-        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 6, size: 8, font: fontTimes, color: rgb(0,0,0) });
+        const tw = fontTimes.widthOfTextAtSize(txt, 9);
+        page.drawText(txt, { x: colCenters[i] - tw/2, y: rowCenterY, size: 9, font: fontTimes, color: rgb(0,0,0) });
       }
-      cx += colW[i];
     });
   }
-  page.drawRectangle({ x: startX, y: y - 5*rowH, width: tableWidth, height: 5*rowH + headerH, borderColor: rgb(0,0,0), borderWidth: 0.9 });
-  y = y - 5*rowH - 60;
-  // Rodapé - duas assinaturas com linhas longas
-  const sigLineW = 440;
-  const sigX = (595.28 - sigLineW)/2;
-  let sigY = y;
-  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
-  const sig1 = 'RESPONSÁVEL PELA ENTREGA';
-  const sig1W = fontTimesBold.widthOfTextAtSize(sig1, 9);
-  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 13, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
-  const sigSub = '(RG/CPF/MATRICULA)';
-  const sigSubW = fontTimes.widthOfTextAtSize(sigSub, 7);
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes, color: rgb(0,0,0) });
+  // Rodapé - linhas e textos em y=295,281,223,210
+  // Linha 1 em y ~ 310
+  page.drawLine({ start: {x: 60, y: 310}, end: {x: 535.32, y: 310}, thickness: 0.9, color: rgb(0,0,0) });
+  page.drawText('RESPONSÁVEL PELA ENTREGA', { x: 207.89, y: 295.37, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('(', { x: 236.81, y: 281.57, size: 12, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText('RG/CPF/MATRICULA', { x: 240.41, y: 281.57, size: 12, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText(')', { x: 354.79, y: 281.57, size: 12, font: fontTimes, color: rgb(0,0,0) });
   if(termo.respEntrega){
-    const rw = fontTimes.widthOfTextAtSize(String(termo.respEntrega), 8);
-    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 10, size: 8, font: fontTimes, color: rgb(0,0,0) });
+    const rw = fontTimes.widthOfTextAtSize(String(termo.respEntrega), 9);
+    page.drawText(String(termo.respEntrega), { x: (595.32 - rw)/2, y: 320, size: 9, font: fontTimes, color: rgb(0,0,0) });
   }
-  y -= 75;
-  sigY = y;
-  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
-  const sig2 = 'RESPONSÁVEL PELA RECEBIMENTO';
-  const sig2W = fontTimesBold.widthOfTextAtSize(sig2, 9);
-  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 13, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes, color: rgb(0,0,0) });
+  page.drawLine({ start: {x: 60, y: 238}, end: {x: 535.32, y: 238}, thickness: 0.9, color: rgb(0,0,0) });
+  page.drawText('RESPONSÁVEL PELA RECEBIMENTO', { x: 193.49, y: 223.94, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText('(', { x: 236.81, y: 210.14, size: 12, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText('RG/CPF/MATRICULA', { x: 240.41, y: 210.14, size: 12, font: fontTimes, color: rgb(0,0,0) });
+  page.drawText(')', { x: 354.79, y: 210.14, size: 12, font: fontTimes, color: rgb(0,0,0) });
   if(termo.respRecebimento){
-    const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 8);
-    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 10, size: 8, font: fontTimes, color: rgb(0,0,0) });
+    const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 9);
+    page.drawText(String(termo.respRecebimento), { x: (595.32 - rw)/2, y: 248, size: 9, font: fontTimes, color: rgb(0,0,0) });
   }
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
 }
+
 
 
 
