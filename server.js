@@ -555,13 +555,24 @@ app.patch('/api/tickets/:id/transfer', auth(['tecnico']), ah(async (req, res) =>
   if (!['tecnico', 'admin'].includes(target.role)) return res.status(400).json({ error: 'O destino deve ser um técnico.' });
   const block = infinityBlocked(t, target);
   if (block) return res.status(403).json({ error: block });
-  const upd = await store.tickets.patch(t.id, {
-    tecnico: target.name + ' (' + target.user + ')',
-    tecnicoUser: target.user,
-    transferredAt: new Date().toISOString(),
-    transferredBy: by,
-    transferredFrom: owner
-  });
+  let upd;
+  try {
+    upd = await store.tickets.patch(t.id, {
+      tecnico: target.name + ' (' + target.user + ')',
+      tecnicoUser: target.user,
+      transferredAt: new Date().toISOString(),
+      transferredBy: by,
+      transferredFrom: owner
+    });
+  } catch (e) {
+    // Fallback se as colunas novas ainda não existem no Supabase (sem migração)
+    if (e && e.message && /transferred/i.test(e.message)) {
+      upd = await store.tickets.patch(t.id, {
+        tecnico: target.name + ' (' + target.user + ')',
+        tecnicoUser: target.user
+      });
+    } else throw e;
+  }
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
     action: 'transferido', personId: t.personId, personName: person ? person.nome : '',
@@ -583,17 +594,32 @@ app.patch('/api/tickets/:id/return', auth(['tecnico']), ah(async (req, res) => {
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode devolver este atendimento.' });
   const actor = await store.users.byName(req.auth.user);
   if (actor && actor.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
-  const upd = await store.tickets.patch(t.id, {
-    status: 'aguardando',
-    tecnico: '',
-    tecnicoUser: '',
-    startedAt: null,
-    called: false,
-    calledAt: null,
-    calledBy: '',
-    returnedAt: new Date().toISOString(),
-    returnedBy: by
-  });
+  let upd;
+  try {
+    upd = await store.tickets.patch(t.id, {
+      status: 'aguardando',
+      tecnico: '',
+      tecnicoUser: '',
+      startedAt: null,
+      called: false,
+      calledAt: null,
+      calledBy: '',
+      returnedAt: new Date().toISOString(),
+      returnedBy: by
+    });
+  } catch (e) {
+    if (e && e.message && /returned/i.test(e.message)) {
+      upd = await store.tickets.patch(t.id, {
+        status: 'aguardando',
+        tecnico: '',
+        tecnicoUser: '',
+        startedAt: null,
+        called: false,
+        calledAt: null,
+        calledBy: ''
+      });
+    } else throw e;
+  }
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
     action: 'devolvido', personId: t.personId, personName: person ? person.nome : '',
