@@ -1,4 +1,4 @@
-const CACHE = 'te-v8';
+const CACHE = 'te-v9';
 const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -13,6 +13,22 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for(const c of list){ if(c.url.includes(self.location.origin) && 'focus' in c) return c.focus(); }
+      if(clients.openWindow) return clients.openWindow('/');
+    })
+  );
+});
+self.addEventListener('push', e => {
+  let data = {};
+  try{ data = e.data ? e.data.json() : {}; }catch{ data = { title: e.data ? e.data.text() : 'SISUMEPE' }; }
+  const title = data.title || 'SISUMEPE Juazeiro';
+  const opts = { body: data.body || 'Nova mensagem no chat da equipe', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: data.tag || 'sisumepe-chat', vibrate: [200,100,200], data: data.url || '/' };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const u = new URL(e.request.url);
