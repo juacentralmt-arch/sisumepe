@@ -800,6 +800,88 @@ app.post('/api/restore', auth(['admin']), upload.single('backup'), ah(async (req
 }));
 
 // PDF Termos
+
+function gerarTermoHTML(termo){
+  const dataFmt = (()=>{ if(!termo.dataEnvio) return '_______/_______/________'; try{ const d=new Date(termo.dataEnvio); if(!isNaN(d)) return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }catch(e){} return String(termo.dataEnvio); })();
+  const dest = termo.destinatario ? termo.destinatario : '_____________________________';
+  const eq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
+  while(eq.length<5) eq.push({tzpr04:'',fonte04:'',cinta:'',trava:''});
+  const rows = eq.slice(0,5).map(r=>`
+      <tr>
+        <td>${(r.tzpr04||'').toString().substring(0,20)}</td>
+        <td>${(r.fonte04||'').toString().substring(0,20)}</td>
+        <td>${(r.cinta||'').toString().substring(0,20)}</td>
+        <td>${(r.trava||'').toString().substring(0,20)}</td>
+      </tr>`).join('');
+  const brasaoSvg = `PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtZmFtaWx5PSJTZXJpZiIgZm9udC1zaXplPSIxMCIgZmlsbD0iIzAwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QlJBU8ODTzwvdGV4dD48L3N2Zz4=`;
+  // Brasão base64 simples (placeholder) - será substituído se logo_0.png existir, senão usa SVG
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 18mm 18mm 18mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; color: #000; line-height: 1.25; margin: 0; padding: 0; }
+  .header { text-align: center; margin-bottom: 10px; }
+  .header img { width: 58px; height: 62px; display: block; margin: 0 auto 6px auto; }
+  .header .gov1 { font-size: 11pt; font-weight: bold; margin: 0; line-height: 1.1; }
+  .header .gov2 { font-size: 13pt; font-weight: bold; margin: 0; line-height: 1.1; }
+  .header .sec { font-size: 9pt; font-weight: bold; margin-top: 4px; }
+  .data-envio { text-align: left; font-size: 9pt; margin: 18px 0 14px 0; }
+  .title { text-align: center; font-weight: bold; text-decoration: underline; font-size: 13pt; margin: 14px 0 14px 0; }
+  .subtitle { text-align: center; font-weight: bold; font-size: 9pt; line-height: 1.3; }
+  .subtitle span { font-weight: normal; }
+  .destinatario { text-align: left; font-size: 11pt; margin: 14px 0 18px 0; padding-left: 40px; }
+  .destinatario b { font-weight: bold; }
+  .destinatario .linha { border-bottom: 1px solid #000; display: inline-block; min-width: 280px; margin-left: 4px; text-align: center; padding-bottom: 1px; }
+  table { width: 100%; max-width: 440px; margin: 0 auto; border-collapse: collapse; }
+  th { background-color: #FFE4CC; border: 1px solid #000; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 10pt; }
+  td { border: 1px solid #000; padding: 7px 4px; text-align: center; font-size: 9pt; height: 18px; }
+  .assinatura { margin-top: 42px; text-align: center; }
+  .assinatura hr { border: none; border-top: 2px solid #000; margin: 0 auto; width: 88%; }
+  .assinatura .label { font-weight: bold; font-size: 10pt; margin-top: 6px; }
+  .assinatura .sub { font-size: 9pt; margin-top: 2px; }
+  .assinatura .nome { font-size: 9pt; margin-bottom: 6px; min-height: 14px; }
+  .spacer { height: 18px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <img src="data:image/svg+xml;base64,${brasaoSvg}" alt="Brasão">
+    <div class="gov1">GOVERNO DO</div>
+    <div class="gov2">ESTADO DO CEARÁ</div>
+    <div class="sec">Secretaria Administração Penitenciária</div>
+  </div>
+  <div class="data-envio">Data de envio: ${hasData(termo) ? dataFmt : '_______/_______/________'}</div>
+  <div class="title">LISTAGEM DE EQUIPAMENTOS</div>
+  <div class="subtitle">
+    <div>SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE</div>
+    <div><b>Remetente:</b> Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE</div>
+    <div>CÉLULA DE MONITORAÇÃO ELETRÔNICA -<i>SECÇÃO CARIRI</i></div>
+  </div>
+  <div class="destinatario"><b>Destinatário:</b> <span class="linha">${dest}</span></div>
+  <table>
+    <thead><tr><th>TZPR04</th><th>FONTE04</th><th>CINTA</th><th>TRAVA</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="assinatura">
+    <div class="nome">${termo.respEntrega ? termo.respEntrega : '&nbsp;'}</div>
+    <hr>
+    <div class="label">RESPONSÁVEL PELA ENTREGA</div>
+    <div class="sub">(RG/CPF/MATRICULA)</div>
+  </div>
+  <div class="assinatura">
+    <div class="nome">${termo.respRecebimento ? termo.respRecebimento : '&nbsp;'}</div>
+    <hr>
+    <div class="label">RESPONSÁVEL PELA RECEBIMENTO</div>
+    <div class="sub">(RG/CPF/MATRICULA)</div>
+  </div>
+</body>
+</html>`;
+  function hasData(t){ return t.dataEnvio && String(t.dataEnvio).trim() && !String(t.dataEnvio).includes('_'); }
+}
+
 async function gerarTermoPDF(termo){
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.32, 841.92]);
@@ -829,7 +911,9 @@ async function gerarTermoPDF(termo){
   const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13);
   page.drawText(gov1, { x: (595.32 - gov1W)/2, y: 740, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
   page.drawText(gov2, { x: (595.32 - gov2W)/2, y: 725, size: 13, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('Secretaria Administração Penitenciária', { x: 228.89, y: 731.62, size: 9, font: fontTimes, color: rgb(0,0,0) });
+  const secTxt = 'Secretaria Administração Penitenciária';
+  const secW = fontTimes.widthOfTextAtSize(secTxt, 9);
+  page.drawText(secTxt, { x: (595.32 - secW)/2, y: 712, size: 9, font: fontTimes, color: rgb(0,0,0) });
   // Data de envio - exato x=90.26, y=689.98
   let dataFmt = '_______/_______/________';
   let hasData = false;
@@ -857,19 +941,28 @@ async function gerarTermoPDF(termo){
   const titleW = fontTimesBold.widthOfTextAtSize(title, 12);
   page.drawLine({ start: {x: 224.09, y: 639.5}, end: {x: 224.09 + titleW, y: 639.5}, thickness: 0.9, color: rgb(0,0,0) });
   // Subtítulos - exatos
-  page.drawText('SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/', { x: 127.34, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('SAP', { x: 416.02, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('–', { x: 442.66, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('CE', { x: 452.02, y: 614.14, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('Remetente:', { x: 120.26, y: 600.34, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte', { x: 185.09, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
-  page.drawText('-', { x: 457.42, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
-  page.drawText('CE', { x: 460.78, y: 600.34, size: 11.04, font: fontTimes, color: rgb(0,0,0) });
-  page.drawText('CÉLULA DE MONITORAÇÃO ELETRÔNICA', { x: 131.54, y: 586.54, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('-', { x: 368.71, y: 586.54, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+  const sub1Full = 'SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE';
+  const sub1W = fontTimesBold.widthOfTextAtSize(sub1Full, 11);
+  page.drawText(sub1Full, { x: (595.32 - sub1W)/2, y: 614.14, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  const remL = 'Remetente: ';
+  const remR = 'Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
+  const remW = fontTimesBold.widthOfTextAtSize(remL, 11) + fontTimes.widthOfTextAtSize(remR, 10.5);
+  let remX = (595.32 - remW)/2;
+  page.drawText(remL, { x: remX, y: 600.34, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  remX += fontTimesBold.widthOfTextAtSize(remL, 11);
+  page.drawText(remR, { x: remX, y: 600.34, size: 10.5, font: fontTimes, color: rgb(0,0,0) });
   let fontItalic = fontTimesBold;
   try{ fontItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic); }catch(e){}
-  page.drawText('SECÇÃO CARIRI', { x: 372.43, y: 586.54, size: 12, font: fontItalic, color: rgb(0,0,0) });
+  const celA = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA ';
+  const celB = '- ';
+  const celC = 'SECÇÃO CARIRI';
+  const celW = fontTimesBold.widthOfTextAtSize(celA, 11) + fontTimesBold.widthOfTextAtSize(celB, 11) + fontItalic.widthOfTextAtSize(celC, 11);
+  let celX = (595.32 - celW)/2;
+  page.drawText(celA, { x: celX, y: 586.54, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  celX += fontTimesBold.widthOfTextAtSize(celA, 11);
+  page.drawText(celB, { x: celX, y: 586.54, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  celX += fontTimesBold.widthOfTextAtSize(celB, 11);
+  page.drawText(celC, { x: celX, y: 586.54, size: 11, font: fontItalic, color: rgb(0,0,0) });
   // Destinatário - x=170.09, y=558.91
   page.drawText('Destinatário', { x: 170.09, y: 558.91, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
   const destVal = (termo.destinatario || '').trim();
@@ -889,11 +982,13 @@ async function gerarTermoPDF(termo){
   // Header y=490.39, row tops 496.39,478.39,458.39,438.39,418.39,398.39, bottom 378.39
   // Header background
   page.drawRectangle({ x: tableLeft, y: 478.39, width: tableRight-tableLeft, height: 18, color: rgb(0.996, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.6 });
-  page.drawText('TZPR04', { x: 175.49, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('FONTE', { x: 242.09, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('04', { x: 277.75, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('CINTA', { x: 320.71, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText('TRAVA', { x: 385.90, y: 490.39, size: 11.04, font: fontTimesBold, color: rgb(0,0,0) });
+  const hdrCols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
+  const hdrBounds = [[110.42, 220.76], [220.76, 310.42], [310.42, 370.42], [370.42, 484.90]];
+  hdrCols.forEach((h, i) => {
+    const hw = fontTimesBold.widthOfTextAtSize(h, 11);
+    const hx = (hdrBounds[i][0] + hdrBounds[i][1]) / 2 - hw / 2;
+    page.drawText(h, { x: hx, y: 484.5, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  });
   // Grid vertical
   for(let i=0;i<colBounds.length;i++){
     const x = colBounds[i];
