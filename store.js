@@ -27,7 +27,7 @@ let mem = null;
 function loadFile() {
   try {
     if (!fs.existsSync(DB_FILE)) {
-      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1 };
+      mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1 };
       fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2));
       return mem;
     }
@@ -42,9 +42,11 @@ function loadFile() {
     if (!Array.isArray(mem.agenda)) mem.agenda = [];
     if (!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
     if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
+    if (!Array.isArray(mem.termos)) mem.termos = [];
+    if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1 };
     return mem;
   }
 }
@@ -54,6 +56,8 @@ loadFile();
 if(!mem.agenda) mem.agenda = [];
 if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
 if(!mem.googleTokens) mem.googleTokens = {};
+if(!mem.termos) mem.termos = [];
+if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
 
 // ---------------------------- SUPABASE -------------------------------
 let supa = null;
@@ -89,6 +93,9 @@ const AG = {
   id: 'id', user: 'user', title: 'title', description: 'description', start: 'start', end: 'end',
   personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', createdAt: 'createdat', updatedAt: 'updatedat'
 };
+const TM = {
+  id: 'id', user: 'user', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', createdAt: 'createdat', updatedAt: 'updatedat'
+};
 function toApp(row, map) {
   if (!row) return null;
   const o = {};
@@ -105,6 +112,7 @@ const appT = r => toApp(r, T);
 const appA = r => toApp(r, A);
 const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.to, text: r.text, anexos: r.anexos || [], at: r.at });
 const appAG = r => toApp(r, AG);
+const appTM = r => toApp(r, TM);
 
 // Fallback em memória (se a tabela sessions ainda não existir no Supabase)
 const memSessions = new Map();
@@ -365,6 +373,53 @@ const store = {
     }
   },
 
+  termos: {
+    async allByUser(user){
+      if(MODE==='file') return mem.termos.filter(x=>x.user===user).sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+      try{ return must(await supa.from('termos').select('*').eq('user', user).order('createdat', {ascending:false}), 'termos.allByUser').map(appTM); }catch(e){ console.warn('termos.allByUser fallback', e.message); return mem.termos.filter(x=>x.user===user).sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); }
+    },
+    async all(){
+      if(MODE==='file') return mem.termos;
+      try{ return must(await supa.from('termos').select('*').order('createdat', {ascending:false}), 'termos.all').map(appTM); }catch(e){ console.warn('termos.all fallback', e.message); return mem.termos; }
+    },
+    async byId(id){
+      if(MODE==='file') return mem.termos.find(x=>eqi(x.id,id))||null;
+      try{ const r=must(await supa.from('termos').select('*').eq('id', Number(id)).limit(1),'termos.byId'); return r.length?appTM(r[0]):null; }catch(e){ console.warn('termos.byId fallback', e.message); return mem.termos.find(x=>eqi(x.id,id))||null; }
+    },
+    async insert(t){
+      if(MODE==='file'){
+        const row={ id: mem.seqTermo++, ...t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        mem.termos.push(row); saveFile(); return row;
+      }
+      try{
+        const r=must(await supa.from('termos').insert(toRow(t, TM)).select().single(),'termos.insert');
+        return appTM(r);
+      }catch(e){
+        console.warn('termos.insert fallback', e.message);
+        const row={ id: mem.seqTermo++, ...t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        mem.termos.push(row); return row;
+      }
+    },
+    async patch(id, fields){
+      if(MODE==='file'){
+        const e=mem.termos.find(x=>eqi(x.id,id)); if(!e) return null;
+        Object.assign(e, fields, { updatedAt: new Date().toISOString() }); saveFile(); return e;
+      }
+      try{
+        const r=must(await supa.from('termos').update(toRow({...fields, updatedAt: new Date().toISOString()}, TM)).eq('id', Number(id)).select(),'termos.patch');
+        return r.length?appTM(r[0]):null;
+      }catch(e){
+        console.warn('termos.patch fallback', e.message);
+        const ee=mem.termos.find(x=>eqi(x.id,id)); if(!ee) return null;
+        Object.assign(ee, fields, { updatedAt: new Date().toISOString() }); return ee;
+      }
+    },
+    async remove(id){
+      if(MODE==='file'){ mem.termos=mem.termos.filter(x=>!eqi(x.id,id)); saveFile(); return; }
+      try{ must(await supa.from('termos').delete().eq('id', Number(id)),'termos.remove'); }catch(e){ console.warn('termos.remove fallback', e.message); mem.termos=mem.termos.filter(x=>!eqi(x.id,id)); }
+    }
+  },
+
   // Sessões persistentes (sobrevivem a restart do servidor)
   sessions: {
     async insert(token, row) {
@@ -411,15 +466,15 @@ const store = {
   },
 
   async backup() {
-    const [persons, tickets, chat, audit, users, agenda] = await Promise.all([
+    const [persons, tickets, chat, audit, users, agenda, termos] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
-      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[])
+      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[])
     ]);
     const mx = a => a.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
     return {
-      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500),
+      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500), termos: termos.slice(-500),
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
-      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1
+      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1
     };
   },
 
@@ -433,7 +488,9 @@ const store = {
       const keepSessions = (mem && mem.sessions) || {};
       const keepAgenda = (mem && mem.agenda) || [];
       const keepTokens = (mem && mem.googleTokens) || {};
+      const keepTermos = (mem && mem.termos) || [];
       const keepSeqAgenda = (mem && mem.seqAgenda) || 1;
+      const keepSeqTermo = (mem && mem.seqTermo) || 1;
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat.slice(-200) : [],
@@ -441,8 +498,9 @@ const store = {
         users: dump.users, sessions: keepSessions,
         agenda: Array.isArray(dump.agenda) ? dump.agenda.slice(-500) : keepAgenda,
         googleTokens: keepTokens,
+        termos: Array.isArray(dump.termos) ? dump.termos.slice(-500) : keepTermos,
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
-        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda
+        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo
       };
       saveFile();
       return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length };
@@ -462,6 +520,14 @@ const store = {
         }
       }catch(e){}
     }
+    if (Array.isArray(dump.termos) && dump.termos.length) {
+      try{
+        const allT = must(await supa.from('termos').select('id').limit(10000), 'restore.termos.list');
+        for (let i = 0; i < allT.length; i += 200) {
+          must(await supa.from('termos').delete().in('id', allT.slice(i, i + 200).map(x => x.id)), 'restore.termos.del');
+        }
+      }catch(e){}
+    }
     const cur = await supa.from('users').select('user');
     if (!cur.error && cur.data.length) must(await supa.from('users').delete().neq('user', '__impossivel__'), 'restore.usersdel');
     const chunk = async (table, rows, map) => {
@@ -476,6 +542,9 @@ const store = {
     await chunk('users', dump.users, { user: 'user', name: 'name', role: 'role', pass: 'pass', active: 'active' });
     if (Array.isArray(dump.agenda) && dump.agenda.length) {
       try{ await chunk('agenda', dump.agenda.slice(-500), AG); }catch(e){}
+    }
+    if (Array.isArray(dump.termos) && dump.termos.length) {
+      try{ await chunk('termos', dump.termos.slice(-500), TM); }catch(e){}
     }
     try{ must(await supa.rpc('reset_sequences'), 'restore.seq'); }catch(e){}
     return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length };

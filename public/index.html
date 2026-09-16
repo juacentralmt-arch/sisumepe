@@ -102,6 +102,9 @@
     <button data-tab="agenda" onclick="go('agenda')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       Agenda <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
+    <button data-tab="termos" onclick="go('termos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Termos <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
     <button data-tab="visao" onclick="go('visao')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
       Visão 360° <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">RESTRITO</span></button>
@@ -142,6 +145,7 @@
       <button data-tab="checkin" onclick="go('checkin')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">➕ Check-in</button>
       <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
       <button data-tab="agenda" onclick="go('agenda')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📅 Agenda</button>
+      <button data-tab="termos" onclick="go('termos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 Termos</button>
       <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
@@ -338,6 +342,63 @@
         <div class="card p-4">
           <h3 class="font-display font-bold text-sm mb-3">📋 Próximos agendamentos</h3>
           <div id="agendaList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TERMOS -->
+    <section id="tab-termos" class="hidden fade">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h2 class="font-display font-bold text-xl">Termos - Listagem de Equipamentos</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Gere o PDF oficial da SAP/CE totalmente preenchido</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
+          <button onclick="previewTermoPDF()" class="btn btn-ghost text-xs px-3.5 py-2">👁️ Visualizar PDF</button>
+          <button onclick="saveTermo()" class="btn btn-primary text-xs px-4 py-2.5">💾 Salvar termo</button>
+        </div>
+      </div>
+      <div class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📄 Gerar termo <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">DESTINATÁRIO *</label><input id="termoDest" placeholder="Ex: Comarca de Juazeiro..." class="inp mt-1 mb-2.5"></div>
+          </div>
+          <label class="lbl">EQUIPAMENTOS (até 5 linhas) *</label>
+          <div class="overflow-x-auto mt-1 mb-2.5">
+            <table class="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
+              <thead><tr class="bg-[#FFE4CC] text-[11px] font-extrabold"><th class="py-2 px-2 border border-slate-200">TZPR04</th><th class="py-2 px-2 border border-slate-200">FONTE04</th><th class="py-2 px-2 border border-slate-200">CINTA</th><th class="py-2 px-2 border border-slate-200">TRAVA</th></tr></thead>
+              <tbody id="termoEquipBody">
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="grid grid-cols-1 gap-2.5">
+            <div><label class="lbl">RESP. ENTREGA (RG/CPF/MATRÍCULA)</label><input id="termoRespEntrega" placeholder="Ex: João Silva - 123456" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">RESP. RECEBIMENTO (RG/CPF/MATRÍCULA)</label><input id="termoRespRec" placeholder="Ex: Maria Oliveira - 654321" class="inp mt-1 mb-2.5"></div>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
+            <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
+          </div>
+          <div id="termoPreviewWrap" class="hidden mt-4 border border-slate-200 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span class="text-xs font-bold">Pré-visualização PDF</span>
+              <button onclick="document.getElementById('termoPreviewWrap').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕ Fechar</button>
+            </div>
+            <iframe id="termoPreviewFrame" class="w-full h-[640px] bg-white"></iframe>
+          </div>
+          <p id="termoErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div class="card p-4">
+          <h3 class="font-display font-bold text-sm mb-3">📚 Histórico de termos</h3>
+          <div id="termosList" class="space-y-2 max-h-[640px] overflow-y-auto"></div>
         </div>
       </div>
     </section>
@@ -879,9 +940,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'visao', 'dash'],
-  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'visao', 'dash', 'usuarios']
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'termos', 'visao', 'usuarios'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash'],
+  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
   const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
@@ -905,12 +966,13 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
   if(tab==='dash') loadDash();
   if(tab==='agenda') loadAgenda();
+  if(tab==='termos') loadTermos();
   if(tab==='usuarios') loadUsersAdmin();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2315,6 +2377,164 @@ async function googleConnect(){
 async function googleDisconnect(){
   if(!confirm('Desconectar Google Agenda? Agendamentos locais permanecem.')) return;
   try{ await api('/api/auth/google/disconnect', { method:'POST' }); toast('🔓 Desconectado'); updateGoogleStatus(); }catch(e){ toast('⚠️ '+e.message); }
+}
+// --- TERMOS - LISTAGEM DE EQUIPAMENTOS ---
+let termosCache = [], editingTermoId = null;
+function getTermoFormData(){
+  const dataEnvio = document.getElementById('termoData').value;
+  const destinatario = document.getElementById('termoDest').value.trim();
+  const respEntrega = document.getElementById('termoRespEntrega').value.trim();
+  const respRec = document.getElementById('termoRespRec').value.trim();
+  const equipamentos = [];
+  for(let i=0;i<5;i++){
+    equipamentos.push({
+      tzpr04: (document.querySelector(`[data-termo-col="tzpr04"][data-termo-row="${i}"]`)?.value || '').trim(),
+      fonte04: (document.querySelector(`[data-termo-col="fonte04"][data-termo-row="${i}"]`)?.value || '').trim(),
+      cinta: (document.querySelector(`[data-termo-col="cinta"][data-termo-row="${i}"]`)?.value || '').trim(),
+      trava: (document.querySelector(`[data-termo-col="trava"][data-termo-row="${i}"]`)?.value || '').trim()
+    });
+  }
+  return { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento: respRec };
+}
+function setTermoFormData(t){
+  document.getElementById('termoData').value = t.dataEnvio ? String(t.dataEnvio).slice(0,10) : '';
+  document.getElementById('termoDest').value = t.destinatario || '';
+  document.getElementById('termoRespEntrega').value = t.respEntrega || '';
+  document.getElementById('termoRespRec').value = t.respRecebimento || '';
+  for(let i=0;i<5;i++){
+    const r = (t.equipamentos && t.equipamentos[i]) || {};
+    const set = (col, val) => { const el = document.querySelector(`[data-termo-col="${col}"][data-termo-row="${i}"]`); if(el) el.value = val || ''; };
+    set('tzpr04', r.tzpr04); set('fonte04', r.fonte04); set('cinta', r.cinta); set('trava', r.trava);
+  }
+  document.getElementById('termoEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
+  editingTermoId = t.id || null;
+}
+function clearTermoForm(){
+  editingTermoId = null;
+  document.getElementById('termoEditId').textContent = '';
+  document.getElementById('termoData').valueAsDate = new Date();
+  document.getElementById('termoDest').value = '';
+  document.getElementById('termoRespEntrega').value = session ? (session.name + ' (' + session.user + ')') : '';
+  document.getElementById('termoRespRec').value = '';
+  for(let i=0;i<5;i++){
+    ['tzpr04','fonte04','cinta','trava'].forEach(col=>{
+      const el = document.querySelector(`[data-termo-col="${col}"][data-termo-row="${i}"]`);
+      if(el) el.value = '';
+    });
+  }
+  document.getElementById('termoErr').classList.add('hidden');
+  document.getElementById('termoPreviewWrap').classList.add('hidden');
+}
+async function loadTermos(){
+  try{
+    const list = await api('/api/termos');
+    termosCache = list;
+    renderTermos();
+    // preenche data hoje se vazio
+    if(!document.getElementById('termoData').value) document.getElementById('termoData').valueAsDate = new Date();
+    if(!document.getElementById('termoRespEntrega').value && session) document.getElementById('termoRespEntrega').value = session.name + ' (' + session.user + ')';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+function renderTermos(){
+  const box = document.getElementById('termosList');
+  if(!box) return;
+  if(!termosCache.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum termo gerado.<br>Preencha ao lado e salve! 📄</p>'; return; }
+  box.innerHTML = termosCache.map(t=>{
+    const d = t.dataEnvio ? new Date(t.dataEnvio).toLocaleDateString('pt-BR') : '-';
+    const qtd = (t.equipamentos||[]).filter(r=>r.tzpr04||r.fonte04||r.cinta||r.trava).length;
+    return `<div class="border border-slate-200 rounded-xl p-3 bg-white card-hover">
+      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
+      <p class="text-xs font-bold truncate mt-1">${esc(t.destinatario||'Sem destinatário')}</p>
+      <p class="text-[11px] text-slate-500 truncate">Entrega: ${esc(t.respEntrega||'-')} → Receb.: ${esc(t.respRecebimento||'-')}</p>
+      <div class="flex gap-1.5 mt-2">
+        <button onclick="previewTermoExistente(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">👁️ Ver PDF</button>
+        <button onclick="editTermo(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✏️ Editar</button>
+        <button onclick="downloadTermoPDF(${t.id})" class="btn btn-primary flex-1 py-1.5 text-[11px]">⬇ PDF</button>
+      </div>
+      <button onclick="deleteTermo(${t.id})" class="w-full mt-1.5 text-[11px] font-bold text-rose-600 hover:text-rose-800">🗑️ Excluir</button>
+    </div>`;
+  }).join('');
+}
+async function saveTermo(){
+  const err = document.getElementById('termoErr');
+  err.classList.add('hidden');
+  const data = getTermoFormData();
+  if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório'; err.classList.remove('hidden'); return; }
+  if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
+  try{
+    let res;
+    if(editingTermoId){
+      res = await api('/api/termos/'+editingTermoId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      toast('✅ Termo atualizado');
+    } else {
+      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      toast('✅ Termo salvo');
+    }
+    await loadTermos();
+    // já abre o PDF do termo salvo
+    const id = res.id || editingTermoId;
+    if(id) downloadTermoPDF(id);
+    clearTermoForm();
+    // se editava, sai do modo edição
+    editingTermoId = null;
+    document.getElementById('termoEditId').textContent='';
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function previewTermoPDF(){
+  const err = document.getElementById('termoErr');
+  err.classList.add('hidden');
+  const data = getTermoFormData();
+  if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório para visualizar'; err.classList.remove('hidden'); return; }
+  if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
+  try{
+    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const frame = document.getElementById('termoPreviewFrame');
+    const wrap = document.getElementById('termoPreviewWrap');
+    frame.src = url;
+    wrap.classList.remove('hidden');
+    wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    // limpa URL antiga após 60s
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function previewTermoExistente(id){
+  try{
+    const res = await authFetch('/api/termos/'+id+'/pdf');
+    if(!res.ok) throw new Error('Erro ao gerar PDF');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const frame = document.getElementById('termoPreviewFrame');
+    const wrap = document.getElementById('termoPreviewWrap');
+    frame.src = url;
+    wrap.classList.remove('hidden');
+    wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function downloadTermoPDF(id){
+  try{
+    const res = await authFetch('/api/termos/'+id+'/pdf');
+    if(!res.ok) throw new Error('Erro');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'termo-'+id+'.pdf'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function editTermo(id){
+  const t = termosCache.find(x=>x.id===id);
+  if(!t) return;
+  setTermoFormData(t);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.getElementById('termoData').scrollIntoView({behavior:'smooth', block:'center'});
+}
+async function deleteTermo(id){
+  if(!confirm('Excluir o termo #' + id + '?')) return;
+  try{ await api('/api/termos/'+id, { method:'DELETE' }); toast('🗑️ Termo excluído'); loadTermos(); }catch(e){ toast('⚠️ '+e.message); }
 }
 // Regra Infinity: só o Júlio (ou admin) assume
 function podeAssumir(t){
