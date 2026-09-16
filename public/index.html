@@ -593,6 +593,24 @@
   </div>
 </div>
 
+<!-- MODAL REPASSAR ATENDIMENTO -->
+<div id="modalTransfer" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">↗</div>
+      <div><h3 class="font-display font-bold text-lg leading-tight">Repassar atendimento</h3><span id="trCode" class="text-xs font-bold text-indigo-600"></span></div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3 mb-3">Selecione o técnico que assumirá este atendimento. O ticket permanecerá <b>em atendimento</b> vinculado ao novo técnico.</p>
+    <label class="lbl">TÉCNICO DE DESTINO *</label>
+    <select id="trSelect" class="inp mt-1 mb-2.5"></select>
+    <p id="trErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeTransfer()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="confirmTransfer()" class="btn btn-primary flex-1 py-3 text-sm">Confirmar repasse</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="hidden fixed bottom-24 right-5 bg-slate-900 text-white text-sm font-medium pl-4 pr-5 py-3 rounded-2xl shadow-2xl z-50 border border-white/10"></div>
 
 <script>
@@ -1209,13 +1227,52 @@ async function restoreBackup(){
   inp.value = '';
 }
 
-// TECNICO
+// TECNICO — repasse e devolução à fila
 function atendBtn(t){
   const owner = ticketOwner(t);
   if(t.modeloTornozeleira === 'Infinity' && session && session.user !== 'julio' && session.role !== 'admin') return lockInfinity();
   const mine = session && owner && owner.toLowerCase() === String(session.user).toLowerCase();
-  if (mine || !owner) return `<button onclick="openModal(${t.id},'${esc(t.code)}')" class="btn btn-green mt-2 w-full py-2.5 text-xs">✔ Finalizar com relatório</button>`;
+  if (mine || !owner) return `<button onclick="openModal(${t.id},'${esc(t.code)}')" class="btn btn-green mt-2 w-full py-2.5 text-xs">✔ Finalizar com relatório</button>
+    <div class="grid grid-cols-2 gap-2 mt-2">
+      <button onclick="openTransfer(${t.id})" class="btn btn-ghost py-2.5 text-xs">↗ Repassar</button>
+      <button onclick="returnQueue(${t.id},'${esc(t.code)}')" class="btn py-2.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">↩ Devolver à fila</button>
+    </div>`;
   return `<p class="mt-2 text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Vinculado a ${esc(t.tecnico || owner)}</p>`;
+}
+let transferId = null;
+function openTransfer(id){
+  const t = tickets.find(x => x.id === id);
+  if(!t) return;
+  const owner = ticketOwner(t);
+  if(owner && session && owner.toLowerCase() !== String(session.user).toLowerCase()){ toast('🔒 Somente o técnico vinculado pode repassar'); return; }
+  transferId = id;
+  document.getElementById('trCode').textContent = t.code + ' • ' + ((t.person && t.person.nome) || '');
+  const sel = document.getElementById('trSelect');
+  const opts = allUsers.filter(u => u.role === 'tecnico' && u.active !== false && u.user !== session.user);
+  // Infinity só pode ir para Júlio
+  const filtered = t.modeloTornozeleira === 'Infinity' ? opts.filter(u => u.user === 'julio') : opts;
+  if(!filtered.length){
+    sel.innerHTML = '<option value="">Nenhum técnico disponível</option>';
+  } else {
+    sel.innerHTML = '<option value="">Selecione...</option>' + filtered.map(u => `<option value="${esc(u.user)}">${esc(u.name)} (@${esc(u.user)})</option>`).join('');
+  }
+  document.getElementById('trErr').classList.add('hidden');
+  document.getElementById('modalTransfer').classList.remove('hidden');
+}
+function closeTransfer(){ document.getElementById('modalTransfer').classList.add('hidden'); transferId = null; }
+async function confirmTransfer(){
+  const err = document.getElementById('trErr');
+  const toUser = document.getElementById('trSelect').value;
+  if(!toUser){ err.textContent='⚠️ Selecione o técnico de destino.'; err.classList.remove('hidden'); return; }
+  try{
+    await api('/api/tickets/' + transferId + '/transfer', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ toUser }) });
+    closeTransfer(); toast('↗ Ticket repassado!'); loadAll();
+  }catch(e){ err.textContent='⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function returnQueue(id, code){
+  if(!confirm('Devolver o ticket ' + code + ' para a fila? Ele voltará para aguardando e poderá ser assumido por qualquer técnico.')) return;
+  try{ await api('/api/tickets/' + id + '/return', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) }); toast('↩ Ticket devolvido à fila'); loadAll(); }
+  catch(e){ toast('⚠️ ' + e.message); }
 }
 function renderTec(){
   const ag=tickets.filter(t=>t.status==='aguardando'), at=tickets.filter(t=>t.status==='em_atendimento'), fi=tickets.filter(t=>t.status==='finalizado').slice(0,6);
@@ -1435,7 +1492,7 @@ async function loadDash(){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function auditItem(a){
-  const icon = a.kind === 'ticket' ? ({ criado: '🎫', iniciado: '▶', finalizado: '✔', editado: '📝', cancelado: '🚫', reaberto: '🔄' }[a.action] || '•') : '✏️';
+  const icon = a.kind === 'ticket' ? ({ criado: '🎫', iniciado: '▶', finalizado: '✔', editado: '📝', cancelado: '🚫', reaberto: '🔄', transferido: '↗', devolvido: '↩' }[a.action] || '•') : '✏️';
   const what = a.kind === 'ticket'
     ? `<b>${esc(a.ref || '')}</b> ${esc(a.action || '')} — ${esc(a.personName || '')}${a.summary ? ' • ' + esc(a.summary) : ''}`
     : `<b>${esc(a.personName || '')}</b> alterou cadastro (${(a.changes || []).map(c => esc(c.label)).join(', ')})`;

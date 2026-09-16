@@ -69,7 +69,9 @@ const T = {
   relatorio: 'relatorio', checklist: 'checklist', fotosPos: 'fotospos', createdBy: 'createdby',
   createdByName: 'createdbyname', called: 'called', calledAt: 'calledat', calledBy: 'calledby',
   createdAt: 'createdat', startedAt: 'startedat', finishedAt: 'finishedat', reopenedAt: 'reopenedat',
-  cancelledAt: 'cancelledat', cancelledBy: 'cancelledby'
+  cancelledAt: 'cancelledat', cancelledBy: 'cancelledby',
+  transferredAt: 'transferredat', transferredBy: 'transferredby', transferredFrom: 'transferredfrom',
+  returnedAt: 'returnedat', returnedBy: 'returnedby'
 };
 const A = {
   id: 'id', kind: 'kind', action: 'action', personId: 'personid', personName: 'personname',

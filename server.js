@@ -535,6 +535,76 @@ app.patch('/api/tickets/:id/reopen', auth(['tecnico']), ah(async (req, res) => {
   res.json(enrich(upd, persons));
 }));
 
+// Repassar atendimento para outro técnico (somente o dono do ticket)
+app.patch('/api/tickets/:id/transfer', auth(['tecnico']), ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível repassar tickets em atendimento.' });
+  const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
+  const by = String(req.auth.user).toLowerCase().trim();
+  if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode repassar este atendimento.' });
+  const actor = await store.users.byName(req.auth.user);
+  if (actor && actor.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const { toUser } = req.body || {};
+  const targetId = String(toUser || '').toLowerCase().trim();
+  if (!targetId) return res.status(400).json({ error: 'Selecione o técnico de destino.' });
+  if (targetId === by) return res.status(400).json({ error: 'Você já é o responsável por este ticket.' });
+  const target = await store.users.byName(targetId);
+  if (!target) return res.status(404).json({ error: 'Técnico de destino não encontrado.' });
+  if (target.active === false) return res.status(400).json({ error: 'Técnico de destino está desativado.' });
+  if (!['tecnico', 'admin'].includes(target.role)) return res.status(400).json({ error: 'O destino deve ser um técnico.' });
+  const block = infinityBlocked(t, target);
+  if (block) return res.status(403).json({ error: block });
+  const upd = await store.tickets.patch(t.id, {
+    tecnico: target.name + ' (' + target.user + ')',
+    tecnicoUser: target.user,
+    transferredAt: new Date().toISOString(),
+    transferredBy: by,
+    transferredFrom: owner
+  });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'transferido', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: by, byName: actor ? actor.name : by, byRole: 'tecnico',
+    summary: 'Repassado de ' + owner + ' para ' + target.user
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+// Devolver atendimento para a fila de espera (somente o dono)
+app.patch('/api/tickets/:id/return', auth(['tecnico']), ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível devolver tickets em atendimento.' });
+  const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
+  const by = String(req.auth.user).toLowerCase().trim();
+  if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode devolver este atendimento.' });
+  const actor = await store.users.byName(req.auth.user);
+  if (actor && actor.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const upd = await store.tickets.patch(t.id, {
+    status: 'aguardando',
+    tecnico: '',
+    tecnicoUser: '',
+    startedAt: null,
+    called: false,
+    calledAt: null,
+    calledBy: '',
+    returnedAt: new Date().toISOString(),
+    returnedBy: by
+  });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'devolvido', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: by, byName: actor ? actor.name : by, byRole: 'tecnico',
+    summary: 'Devolvido à fila por ' + by
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
 // Auditoria / dashboard / backup
 app.get('/api/audit', auth(['tecnico', 'admin']), ah(async (req, res) => {
   res.json(await store.audit.recent(req.query.limit));

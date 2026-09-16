@@ -41,8 +41,19 @@ create table if not exists tickets (
   finishedat timestamptz default null,
   reopenedat timestamptz default null,
   cancelledat timestamptz default null,
-  cancelledby text default ''
+  cancelledby text default '',
+  transferredat timestamptz default null,
+  transferredby text default '',
+  transferredfrom text default '',
+  returnedat timestamptz default null,
+  returnedby text default ''
 );
+-- Migração para bases já existentes (idempotente)
+alter table tickets add column if not exists transferredat timestamptz default null;
+alter table tickets add column if not exists transferredby text default '';
+alter table tickets add column if not exists transferredfrom text default '';
+alter table tickets add column if not exists returnedat timestamptz default null;
+alter table tickets add column if not exists returnedby text default '';
 
 create table if not exists chat (
   id serial primary key,
