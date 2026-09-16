@@ -136,14 +136,18 @@ create table if not exists google_tokens (
 create table if not exists termos (
   id serial primary key,
   "user" text not null,
+  tipo text default 'listagem',
   dataenvio date,
   destinatario text default '',
   equipamentos jsonb default '[]'::jsonb,
   respentrega text default '',
   resprecebimento text default '',
+  dados jsonb default '{}'::jsonb,
   createdat timestamptz default now(),
   updatedat timestamptz default now()
 );
+alter table termos add column if not exists tipo text default 'listagem';
+alter table termos add column if not exists dados jsonb default '{}'::jsonb;
 create index if not exists idx_termos_user on termos ("user");
 create index if not exists idx_termos_data on termos (dataenvio);
 

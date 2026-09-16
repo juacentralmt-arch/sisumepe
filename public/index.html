@@ -350,8 +350,12 @@
     <section id="tab-termos" class="hidden fade">
       <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
-          <h2 class="font-display font-bold text-xl">Termos - Listagem de Equipamentos</h2>
-          <p class="text-xs text-slate-500 mt-0.5">Gere o PDF oficial da SAP/CE totalmente preenchido</p>
+          <h2 class="font-display font-bold text-xl">Termos</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Gere os documentos oficiais totalmente preenchidos</p>
+        </div>
+        <div class="flex gap-2 bg-white border border-slate-200 rounded-xl p-1">
+          <button id="termoTipoListagem" onclick="setTermoTipo('listagem')" class="btn text-xs px-4 py-2">📋 Listagem</button>
+          <button id="termoTipoRecolhimento" onclick="setTermoTipo('recolhimento')" class="btn text-xs px-4 py-2">📦 Recolhimento</button>
         </div>
         <div class="flex gap-2">
           <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
@@ -360,8 +364,8 @@
         </div>
       </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
-        <div class="lg:col-span-2 card p-5">
-          <h3 class="font-display font-bold text-sm mb-3">📄 Gerar termo <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+        <div id="termoFormListagem" class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5"></div>
             <div><label class="lbl">DESTINATÁRIO *</label><input id="termoDest" placeholder="Ex: Comarca de Juazeiro..." class="inp mt-1 mb-2.5"></div>
@@ -395,6 +399,32 @@
             <iframe id="termoPreviewFrame" class="w-full h-[640px] bg-white"></iframe>
           </div>
           <p id="termoErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div id="termoFormRecolhimento" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📦 Termo de Recolhimento <span id="termoRecEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="col-span-2"><label class="lbl">ITENS RECEBIDOS</label><input id="termoRecItens" placeholder="Ex: 1 cinta FONTES" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">DATA / HORA *</label><input id="termoRecDataHora" type="datetime-local" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">DESCRIÇÃO</label><input id="termoRecDescCurta" placeholder="Resumo (opcional)" class="inp mt-1 mb-2.5" oninput="document.getElementById('termoRecDescricao').value=this.value"></div>
+          </div>
+          <div class="flex items-center justify-between mt-1 mb-2">
+            <label class="lbl">EQUIPAMENTOS * (toque SIM/NÃO em cada item)</label>
+            <button onclick="addRecEquip()" class="btn btn-ghost text-xs px-3 py-1.5">+ Adicionar equipamento</button>
+          </div>
+          <div id="termoRecEquips" class="space-y-2.5 mb-2.5"></div>
+          <label class="lbl">DESCRIÇÃO GERAL</label>
+          <textarea id="termoRecDescricao" rows="2" placeholder="Ex: 16/09/2026 11:46h - equipamentos recebidos..." class="inp mt-1 mb-2.5"></textarea>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">POLICIAL PENAL (nome)</label><input id="termoRecPolicial" placeholder="Nome do policial" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">MAT. POLICIAL</label><input id="termoRecPolicialMat" placeholder="Matrícula" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">TÉCNICO (nome)</label><input id="termoRecTecnico" placeholder="Nome do técnico" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">MAT. TÉCNICO</label><input id="termoRecTecnicoMat" placeholder="Matrícula" class="inp mt-1 mb-2.5"></div>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
+            <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
+          </div>
+          <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <div class="card p-4">
           <h3 class="font-display font-bold text-sm mb-3">📚 Histórico de termos</h3>
@@ -2428,6 +2458,16 @@ function setTermoFormData(t){
 function clearTermoForm(){
   editingTermoId = null;
   document.getElementById('termoEditId').textContent = '';
+  document.getElementById('termoRecEditId').textContent = '';
+  recEquips = []; renderRecEquips();
+  document.getElementById('termoRecItens').value = '';
+  document.getElementById('termoRecDescricao').value = '';
+  document.getElementById('termoRecDescCurta').value = '';
+  document.getElementById('termoRecPolicial').value = '';
+  document.getElementById('termoRecPolicialMat').value = '';
+  document.getElementById('termoRecTecnicoMat').value = '';
+  if(session) document.getElementById('termoRecTecnico').value = session.name;
+  document.getElementById('termoRecErr').classList.add('hidden');
   document.getElementById('termoData').valueAsDate = new Date();
   document.getElementById('termoDest').value = '';
   document.getElementById('termoRespEntrega').value = session ? (session.name + ' (' + session.user + ')') : '';
@@ -2441,6 +2481,72 @@ function clearTermoForm(){
   document.getElementById('termoErr').classList.add('hidden');
   document.getElementById('termoPreviewWrap').classList.add('hidden');
 }
+let termoTipoAtivo = 'listagem';
+const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
+let recEquips = [];
+function setTermoTipo(t){
+  termoTipoAtivo = t;
+  const bL = document.getElementById('termoTipoListagem'), bR = document.getElementById('termoTipoRecolhimento');
+  const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
+  if(bL){ bL.className = (t==='listagem' ? on : off) + (t==='listagem' ? '' : ' btn-ghost'); if(t==='listagem'){ bL.style.background='linear-gradient(135deg,#4f46e5,#7c3aed)'; } else { bL.style.background=''; } }
+  if(bR){ bR.className = (t==='recolhimento' ? on : off) + (t==='recolhimento' ? '' : ' btn-ghost'); if(t==='recolhimento'){ bR.style.background='linear-gradient(135deg,#4f46e5,#7c3aed)'; } else { bR.style.background=''; } }
+  document.getElementById('termoFormListagem').classList.toggle('hidden', t!=='listagem');
+  document.getElementById('termoFormRecolhimento').classList.toggle('hidden', t!=='recolhimento');
+  document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
+  document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
+  renderTermos();
+}
+function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
+function addRecEquip(data){
+  recEquips.push(Object.assign({ numero: '', danificado: false, checks: {} }, data||{}));
+  renderRecEquips();
+}
+function removeRecEquip(i){ recEquips.splice(i,1); renderRecEquips(); }
+function setRecCheck(i, k, v){
+  if(!recEquips[i].checks) recEquips[i].checks = {};
+  const cur = recEquips[i].checks[k];
+  const nv = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+  recEquips[i].checks[k] = (cur === nv) ? null : nv;
+  renderRecEquips();
+}
+function setRecDanificado(i, v){ recEquips[i].danificado = !!v; renderRecEquips(); }
+function renderRecEquips(){
+  const box = document.getElementById('termoRecEquips');
+  if(!box) return;
+  if(!recEquips.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-3 border border-dashed border-slate-300 rounded-xl">Nenhum equipamento. Toque em + Adicionar.</p>'; return; }
+  box.innerHTML = recEquips.map((eq,i)=>{
+    const rows = REC_CHECKS.map(([k,label])=>{
+      const st = recCheckState(eq,k);
+      const bS = st==='sim' ? 'background:#059669;color:#fff;border-color:#059669' : '';
+      const bN = st==='nao' ? 'background:#dc2626;color:#fff;border-color:#dc2626' : '';
+      return `<div class="flex items-center gap-1.5 py-1 border-b border-slate-100 last:border-0">
+        <span class="text-[11px] font-bold text-slate-600 flex-1">${label}</span>
+        <button onclick="setRecCheck(${i},'${k}','sim')" style="${bS}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">SIM</button>
+        <button onclick="setRecCheck(${i},'${k}','nao')" style="${bN}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">NÃO</button>
+      </div>`;
+    }).join('');
+    return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
+      <div class="flex gap-2 items-center mb-1.5">
+        <input value="${esc(eq.numero||'')}" oninput="recEquips[${i}].numero=this.value" placeholder="N° do equipamento *" class="inp !py-1.5 text-xs flex-1 font-bold">
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 whitespace-nowrap cursor-pointer"><input type="checkbox" ${eq.danificado?'checked':''} onchange="setRecDanificado(${i},this.checked)" class="w-4 h-4 accent-amber-600"> DANIFICADO</label>
+        <button onclick="removeRecEquip(${i})" class="text-rose-600 font-bold text-sm px-1">✕</button>
+      </div>
+      <div class="bg-slate-50 rounded-lg px-2">${rows}</div>
+    </div>`;
+  }).join('');
+}
+function getRecFormData(){
+  return {
+    itensRecebidos: document.getElementById('termoRecItens').value.trim(),
+    dataHora: document.getElementById('termoRecDataHora').value ? new Date(document.getElementById('termoRecDataHora').value).toISOString() : new Date().toISOString(),
+    equipamentos: recEquips.map(e=>({ numero: (e.numero||'').trim(), danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) })),
+    descricao: document.getElementById('termoRecDescricao').value.trim(),
+    policialNome: document.getElementById('termoRecPolicial').value.trim(),
+    policialMat: document.getElementById('termoRecPolicialMat').value.trim(),
+    tecnicoNome: document.getElementById('termoRecTecnico').value.trim() || (session ? session.name : ''),
+    tecnicoMat: document.getElementById('termoRecTecnicoMat').value.trim()
+  };
+}
 async function loadTermos(){
   try{
     const list = await api('/api/termos');
@@ -2449,19 +2555,28 @@ async function loadTermos(){
     // preenche data hoje se vazio
     if(!document.getElementById('termoData').value) document.getElementById('termoData').valueAsDate = new Date();
     if(!document.getElementById('termoRespEntrega').value && session) document.getElementById('termoRespEntrega').value = session.name + ' (' + session.user + ')';
+    if(!document.getElementById('termoRecDataHora').value){
+      const d = new Date(); const p = n=>String(n).padStart(2,'0');
+      document.getElementById('termoRecDataHora').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    if(!document.getElementById('termoRecTecnico').value && session) document.getElementById('termoRecTecnico').value = session.name;
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function renderTermos(){
   const box = document.getElementById('termosList');
   if(!box) return;
   if(!termosCache.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum termo gerado.<br>Preencha ao lado e salve! 📄</p>'; return; }
-  box.innerHTML = termosCache.map(t=>{
+  const visiveis = termosCache.filter(t=> (t.tipo||'listagem') === termoTipoAtivo);
+  if(!visiveis.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum termo deste tipo.<br>Preencha ao lado e salve! 📄</p>'; return; }
+  box.innerHTML = visiveis.map(t=>{
+    const isRec = (t.tipo||'listagem') === 'recolhimento';
     const d = t.dataEnvio ? new Date(t.dataEnvio).toLocaleDateString('pt-BR') : '-';
-    const qtd = (t.equipamentos||[]).filter(r=>r.tzpr04||r.fonte04||r.cinta||r.trava).length;
+    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (t.equipamentos||[]).filter(r=>r.tzpr04||r.fonte04||r.cinta||r.trava).length;
+    const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : esc(t.destinatario||'Sem destinatário');
     return `<div class="border border-slate-200 rounded-xl p-3 bg-white card-hover">
-      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
-      <p class="text-xs font-bold truncate mt-1">${esc(t.destinatario||'Sem destinatário')}</p>
-      <p class="text-[11px] text-slate-500 truncate">Entrega: ${esc(t.respEntrega||'-')} → Receb.: ${esc(t.respRecebimento||'-')}</p>
+      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${isRec?'bg-blue-100 text-blue-800':'bg-orange-100 text-orange-800'}">${isRec?'RECOLHIMENTO':'LISTAGEM'}</span><span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
+      <p class="text-xs font-bold truncate mt-1">${sub}</p>
+      <p class="text-[11px] text-slate-500 truncate">${isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-'))}</p>
       <div class="flex gap-1.5 mt-2">
         <button onclick="previewTermoExistente(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">👁️ Ver PDF</button>
         <button onclick="editTermo(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✏️ Editar</button>
@@ -2472,9 +2587,11 @@ function renderTermos(){
   }).join('');
 }
 async function saveTermo(){
+  if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
   const err = document.getElementById('termoErr');
   err.classList.add('hidden');
   const data = getTermoFormData();
+  data.tipo = 'listagem';
   if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório'; err.classList.remove('hidden'); return; }
   if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
   try{
@@ -2496,10 +2613,35 @@ async function saveTermo(){
     document.getElementById('termoEditId').textContent='';
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
+async function saveTermoRec(){
+  const err = document.getElementById('termoRecErr');
+  err.classList.add('hidden');
+  const rec = getRecFormData();
+  if(!rec.equipamentos.some(e=>e.numero)){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); return; }
+  const body = { tipo: 'recolhimento', dados: rec };
+  try{
+    let res;
+    if(editingTermoId){
+      res = await api('/api/termos/'+editingTermoId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Termo atualizado');
+    } else {
+      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Termo salvo');
+    }
+    await loadTermos();
+    const id = res.id || editingTermoId;
+    if(id) downloadTermoPDF(id);
+    clearTermoForm();
+    editingTermoId = null;
+    document.getElementById('termoRecEditId').textContent='';
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
 async function previewTermoPDF(){
+  if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF();
   const err = document.getElementById('termoErr');
   err.classList.add('hidden');
   const data = getTermoFormData();
+  data.tipo = 'listagem';
   if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório para visualizar'; err.classList.remove('hidden'); return; }
   if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
   try{
@@ -2541,9 +2683,46 @@ async function downloadTermoPDF(id){
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }catch(e){ toast('⚠️ '+e.message); }
 }
+async function previewTermoRecPDF(){
+  const err = document.getElementById('termoRecErr');
+  err.classList.add('hidden');
+  const rec = getRecFormData();
+  if(!rec.equipamentos.some(e=>e.numero)){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); return; }
+  try{
+    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo:'recolhimento', dados: rec }) });
+    if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const frame = document.getElementById('termoPreviewFrame');
+    const wrap = document.getElementById('termoPreviewWrap');
+    frame.src = url;
+    wrap.classList.remove('hidden');
+    wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
 async function editTermo(id){
   const t = termosCache.find(x=>x.id===id);
   if(!t) return;
+  if((t.tipo||'listagem') === 'recolhimento'){
+    setTermoTipo('recolhimento');
+    const d = t.dados || {};
+    document.getElementById('termoRecItens').value = d.itensRecebidos || '';
+    if(d.dataHora){ const dd = new Date(d.dataHora); const p = n=>String(n).padStart(2,'0'); document.getElementById('termoRecDataHora').value = `${dd.getFullYear()}-${p(dd.getMonth()+1)}-${p(dd.getDate())}T${p(dd.getHours())}:${p(dd.getMinutes())}`; }
+    document.getElementById('termoRecDescricao').value = d.descricao || '';
+    document.getElementById('termoRecDescCurta').value = '';
+    document.getElementById('termoRecPolicial').value = d.policialNome || '';
+    document.getElementById('termoRecPolicialMat').value = d.policialMat || '';
+    document.getElementById('termoRecTecnico').value = d.tecnicoNome || '';
+    document.getElementById('termoRecTecnicoMat').value = d.tecnicoMat || '';
+    recEquips = (d.equipamentos||[]).map(e=>({ numero: e.numero||'', danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) }));
+    renderRecEquips();
+    document.getElementById('termoRecEditId').textContent = '(editando #' + t.id + ')';
+    editingTermoId = t.id;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  setTermoTipo('listagem');
   setTermoFormData(t);
   window.scrollTo({ top: 0, behavior: 'smooth' });
   document.getElementById('termoData').scrollIntoView({behavior:'smooth', block:'center'});

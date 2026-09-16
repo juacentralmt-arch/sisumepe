@@ -94,7 +94,7 @@ const AG = {
   personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const TM = {
-  id: 'id', user: 'user', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', createdAt: 'createdat', updatedAt: 'updatedat'
+  id: 'id', user: 'user', tipo: 'tipo', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 function toApp(row, map) {
   if (!row) return null;
