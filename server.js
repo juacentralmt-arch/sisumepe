@@ -1038,8 +1038,166 @@ async function gerarTermoPDF(termo){
   return pdfBytes;
 }
 
-
-
+// PDF Termo de Recolhimento (unidades penais) - grade de cartoes 3 colunas
+async function gerarTermoRecolhimentoPDF(termo){
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const PW = 595.32, PH = 841.92;
+  const M = 32;
+  let logoPng = null;
+  try{
+    const logoPath = path.join(ROOT, 'public', 'logo-governo-ce.png');
+    if(fs.existsSync(logoPath)) logoPng = await pdfDoc.embedPng(fs.readFileSync(logoPath));
+  }catch(e){}
+  const eqList = Array.isArray(d.equipamentos) ? d.equipamentos : [];
+  const CHECKS = [
+    ['ladoExterno', 'LADO EXTERNO'], ['cinta', 'CINTA'], ['travas', 'TRAVAS'],
+    ['ladoInterno', 'LADO INTERNO'], ['abaDireita', 'ABA DIREITA'], ['abaEsquerda', 'ABA ESQUERDA']
+  ];
+  function drawCheckbox(pg, x, y, marked){
+    const s = 8;
+    pg.drawRectangle({ x, y: y - s, width: s, height: s, borderColor: rgb(0,0,0), borderWidth: 0.8, color: rgb(1,1,1) });
+    if(marked){
+      pg.drawLine({ start: {x: x+1.2, y: y-1.5}, end: {x: x+s-1.2, y: y-s+1.2}, thickness: 1.1, color: rgb(0,0,0) });
+      pg.drawLine({ start: {x: x+1.2, y: y-s+1.2}, end: {x: x+s-1.2, y: y-1.5}, thickness: 1.1, color: rgb(0,0,0) });
+    }
+  }
+  function drawCheckRow(pg, x, y, w, label, val){
+    pg.drawText(label, { x, y: y - 7.5, size: 7, font: fontBold, color: rgb(0,0,0) });
+    const simX = x + w - 62, naoX = x + w - 31;
+    pg.drawText('SIM', { x: simX, y: y - 7.5, size: 6.5, font, color: rgb(0,0,0) });
+    drawCheckbox(pg, simX + 15, y, val === true);
+    pg.drawText('NÃO', { x: naoX, y: y - 7.5, size: 6.5, font, color: rgb(0,0,0) });
+    drawCheckbox(pg, naoX + 16, y, val === false);
+    const labelW = fontBold.widthOfTextAtSize(label, 7);
+    const dotsW = simX - 3 - (x + labelW + 2);
+    if(dotsW > 4){
+      const dotW = font.widthOfTextAtSize('.', 7);
+      const n = Math.floor(dotsW / dotW);
+      pg.drawText('.'.repeat(n), { x: x + labelW + 2, y: y - 7.5, size: 7, font, color: rgb(0,0,0) });
+    }
+  }
+  function drawCard(pg, x, yTop, w, ev){
+    const h = 108;
+    const yBot = yTop - h;
+    pg.drawRectangle({ x, y: yBot, width: w, height: h, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
+    const headTxt = 'N°:' + (ev.numero || '') + (ev.danificado ? ' DANIFICADO' : '');
+    const headW = fontBold.widthOfTextAtSize(headTxt, 8);
+    pg.drawText(headTxt, { x: x + (w - headW)/2, y: yTop - 13, size: 8, font: fontBold, color: rgb(0,0,0) });
+    let ry = yTop - 24;
+    CHECKS.forEach(([k, label])=>{
+      const v = ev.checks ? ev.checks[k] : null;
+      const vv = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+      drawCheckRow(pg, x + 7, ry, w - 14, label, vv);
+      ry -= 13.2;
+    });
+    return h;
+  }
+  function drawHeader(pg){
+    let y = PH - 34;
+    pg.drawText('POLÍCIA PENAL', { x: M, y, size: 13, font: fontBold, color: rgb(0,0,0) });
+    pg.drawText('Coordenadoria de Monitoração', { x: M, y: y - 11, size: 7.5, font: fontBold, color: rgb(0,0,0) });
+    pg.drawText('Eletrônica de Pessoas - COMEP', { x: M, y: y - 20, size: 7.5, font: fontBold, color: rgb(0,0,0) });
+    if(logoPng){
+      const lw = 58, lh = lw * (logoPng.height / logoPng.width);
+      pg.drawImage(logoPng, { x: PW - M - 168, y: y - 4 - lh + 14, width: lw, height: lh });
+    }
+    const ceara = 'CEARÁ';
+    const cearaW = fontBold.widthOfTextAtSize(ceara, 20);
+    pg.drawText(ceara, { x: PW - M - cearaW, y, size: 20, font: fontBold, color: rgb(0.18,0.28,0.36) });
+    const g1 = 'GOVERNO DO ESTADO';
+    pg.drawText(g1, { x: PW - M - fontBold.widthOfTextAtSize(g1, 7.5), y: y - 11, size: 7.5, font: fontBold, color: rgb(0,0,0) });
+    const g2 = 'SECRETARIA DA ADMINISTRAÇÃO';
+    pg.drawText(g2, { x: PW - M - font.widthOfTextAtSize(g2, 6), y: y - 19, size: 6, font, color: rgb(0,0,0) });
+    const g3 = 'PENITENCIÁRIA E RESSOCIALIZAÇÃO';
+    pg.drawText(g3, { x: PW - M - font.widthOfTextAtSize(g3, 6), y: y - 26, size: 6, font, color: rgb(0,0,0) });
+    y -= 44;
+    const t1 = 'TERMO DE RECOLHIMENTO ENTREGUES PELAS UNIDADES PENAIS';
+    pg.drawText(t1, { x: (PW - fontBold.widthOfTextAtSize(t1, 10.5))/2, y, size: 10.5, font: fontBold, color: rgb(0,0,0) });
+    y -= 12;
+    const t2 = 'UNIDADE DE MONITORAMENTO ELETRONICO DE PESSOAS – NUCLEO JUAZEIRO';
+    pg.drawText(t2, { x: (PW - fontBold.widthOfTextAtSize(t2, 8))/2, y, size: 8, font: fontBold, color: rgb(0,0,0) });
+    return y - 14;
+  }
+  const perFirst = 12, perNext = 15;
+  const pages = [];
+  let rest = eqList.slice();
+  pages.push(rest.slice(0, perFirst)); rest = rest.slice(perFirst);
+  while(rest.length){ pages.push(rest.slice(0, perNext)); rest = rest.slice(perNext); }
+  if(!pages[0].length) pages[0] = [];
+  const dh = d.dataHora ? new Date(d.dataHora) : new Date();
+  const dhTxt = isNaN(dh) ? '' : dh.toLocaleDateString('pt-BR') + ' ' + String(dh.getHours()).padStart(2,'0') + ':' + String(dh.getMinutes()).padStart(2,'0') + 'h';
+  for(let pi=0; pi<pages.length; pi++){
+    const pg = pdfDoc.addPage([PW, PH]);
+    const isLast = pi === pages.length - 1;
+    let y = drawHeader(pg);
+    if(pi === 0){
+      const boxH = 26;
+      const leftW = PW - 2*M - 150;
+      pg.drawRectangle({ x: M, y: y - boxH, width: leftW, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
+      pg.drawText('Itens Rebidos: ' + (d.itensRecebidos || ''), { x: M + 6, y: y - 17, size: 8.5, font, color: rgb(0,0,0) });
+      pg.drawRectangle({ x: M + leftW + 8, y: y - boxH, width: 142, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
+      const dhW = font.widthOfTextAtSize(dhTxt, 8.5);
+      pg.drawText(dhTxt, { x: M + leftW + 8 + (142 - dhW)/2, y: y - 17, size: 8.5, font, color: rgb(0,0,0) });
+      y -= boxH + 8;
+      const barH = 20;
+      pg.drawRectangle({ x: M, y: y - barH, width: PW - 2*M, height: barH, color: rgb(0.82,0.82,0.82), borderColor: rgb(0,0,0), borderWidth: 1 });
+      const barT = 'DESCRIÇÃO DO EQUIPAMENTOS';
+      pg.drawText(barT, { x: (PW - fontBold.widthOfTextAtSize(barT, 9.5))/2, y: y - 14, size: 9.5, font: fontBold, color: rgb(0,0,0) });
+      y -= barH + 10;
+    } else {
+      y -= 4;
+    }
+    const gap = 10, cols = 3;
+    const cardW = (PW - 2*M - gap*(cols-1)) / cols;
+    const cardH = 108, rowGap = 10;
+    const list = pages[pi];
+    for(let i=0;i<list.length;i++){
+      const c = i % cols, r = Math.floor(i / cols);
+      const cx = M + c * (cardW + gap);
+      const cyTop = y - r * (cardH + rowGap);
+      drawCard(pg, cx, cyTop, cardW, list[i]);
+    }
+    const rowsUsed = Math.ceil(list.length / cols);
+    y = y - rowsUsed * (cardH + rowGap);
+    if(isLast){
+      y -= 2;
+      const descLines = d.descricao ? String(d.descricao).split('\n').slice(0,6) : [];
+      const descH = 52;
+      pg.drawRectangle({ x: M, y: y - descH, width: PW - 2*M, height: descH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
+      pg.drawText('Descrição:', { x: M + 6, y: y - 14, size: 8.5, font, color: rgb(0,0,0) });
+      descLines.forEach((ln, i)=>{ pg.drawText(String(ln).slice(0,110), { x: M + 6, y: y - 26 - i*10, size: 8, font, color: rgb(0,0,0) }); });
+      y -= descH + 18;
+      pg.drawText('Assinatura:', { x: M, y, size: 8.5, font: fontBold, color: rgb(0,0,0) });
+      const assW = fontBold.widthOfTextAtSize('Assinatura: ', 8.5);
+      pg.drawLine({ start: {x: M + assW, y: y - 2}, end: {x: M + 400, y: y - 2}, thickness: 0.7, color: rgb(0,0,0) });
+      y -= 34;
+      const midX = M + (PW - 2*M)/2;
+      pg.drawLine({ start: {x: M + 10, y}, end: {x: midX - 10, y}, thickness: 0.8, color: rgb(0,0,0) });
+      pg.drawLine({ start: {x: midX + 10, y}, end: {x: PW - M - 10, y}, thickness: 0.8, color: rgb(0,0,0) });
+      const pol = 'Policial penal / Mat.';
+      const tec = 'Técnico / Mat.';
+      pg.drawText(pol, { x: M + 10 + ((midX-20) - font.widthOfTextAtSize(pol, 7.5))/2, y: y - 11, size: 7.5, font, color: rgb(0,0,0) });
+      pg.drawText(tec, { x: midX + 10 + ((PW-M-10-(midX+10)) - font.widthOfTextAtSize(tec, 7.5))/2, y: y - 11, size: 7.5, font, color: rgb(0,0,0) });
+      if(d.policialNome || d.policialMat){
+        const pn = [d.policialNome, d.policialMat].filter(Boolean).join(' - ').slice(0,45);
+        pg.drawText(pn, { x: M + 10 + ((midX-20) - font.widthOfTextAtSize(pn, 7))/2, y: y + 9, size: 7, font, color: rgb(0,0,0) });
+      }
+      if(d.tecnicoNome || d.tecnicoMat){
+        const tn = [d.tecnicoNome, d.tecnicoMat].filter(Boolean).join(' - ').slice(0,45);
+        pg.drawText(tn, { x: midX + 10 + ((PW-M-10-(midX+10)) - font.widthOfTextAtSize(tn, 7))/2, y: y + 9, size: 7, font, color: rgb(0,0,0) });
+      }
+      y -= 26;
+      const foot = 'Unidade de Monitoração Eletrônica – UMEP Rua das Flores, S/N - Santa Tereza, Juazeiro do Norte - CE, 63050-325 Contatos: (88)35115726 Email: comep.cariri@sap.ce.gov.br';
+      const footW = fontBold.widthOfTextAtSize(foot, 5.5);
+      pg.drawText(foot, { x: Math.max(M, (PW - footW)/2), y: Math.max(28, y), size: 5.5, font: fontBold, color: rgb(0,0,0) });
+    }
+  }
+  const pdfBytes = await pdfDoc.save();
+  return pdfBytes;
+}
 
 
 // ============ GOOGLE AGENDA ============
@@ -1145,7 +1303,39 @@ app.get('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
   res.json(list);
 }));
 app.post('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
-  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
+  const t = (tipo === 'recolhimento') ? 'recolhimento' : 'listagem';
+  if(t === 'recolhimento'){
+    const d = (dados && typeof dados === 'object') ? dados : {};
+    const eq = Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : [];
+    const normEq = eq.map(r=>{
+      const checks = {};
+      ['ladoExterno','cinta','travas','ladoInterno','abaDireita','abaEsquerda'].forEach(k=>{
+        const v = r.checks ? r.checks[k] : null;
+        checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+      });
+      return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
+    }).filter(r=> r.numero);
+    if(!normEq.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
+    const termo = await store.termos.insert({
+      user: req.auth.user, tipo: 'recolhimento',
+      dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+      destinatario: '', equipamentos: [],
+      respEntrega: '', respRecebimento: '',
+      dados: {
+        itensRecebidos: String(d.itensRecebidos||'').trim().slice(0,200),
+        dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
+        equipamentos: normEq,
+        descricao: String(d.descricao||'').trim().slice(0,2000),
+        policialNome: String(d.policialNome||'').trim().slice(0,80),
+        policialMat: String(d.policialMat||'').trim().slice(0,30),
+        tecnicoNome: String(d.tecnicoNome||'').trim().slice(0,80),
+        tecnicoMat: String(d.tecnicoMat||'').trim().slice(0,30)
+      }
+    });
+    broadcast();
+    return res.status(201).json(termo);
+  }
   if(!destinatario || !String(destinatario).trim()) return res.status(400).json({ error: 'Destinatário é obrigatório' });
   let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
   // normaliza 5 linhas
@@ -1156,12 +1346,13 @@ app.post('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
   }
   if(!norm.some(r=> r.tzpr04||r.fonte04||r.cinta||r.trava)) return res.status(400).json({ error: 'Preencha ao menos um equipamento (TZPR04/FONTE04/CINTA/TRAVA)' });
   const termo = await store.termos.insert({
-    user: req.auth.user,
+    user: req.auth.user, tipo: 'listagem',
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
     destinatario: String(destinatario).trim().slice(0,120),
     equipamentos: norm,
     respEntrega: String(respEntrega||'').trim().slice(0,80),
-    respRecebimento: String(respRecebimento||'').trim().slice(0,80)
+    respRecebimento: String(respRecebimento||'').trim().slice(0,80),
+    dados: {}
   });
   broadcast();
   res.status(201).json(termo);
@@ -1176,9 +1367,31 @@ app.patch('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
-  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
   const patch={};
   if(dataEnvio) patch.dataEnvio = new Date(dataEnvio).toISOString().slice(0,10);
+  if(t.tipo === 'recolhimento' && dados && typeof dados === 'object'){
+    const d = dados;
+    const nd = Object.assign({}, t.dados||{});
+    if(d.itensRecebidos!=null) nd.itensRecebidos = String(d.itensRecebidos).trim().slice(0,200);
+    if(d.dataHora) nd.dataHora = new Date(d.dataHora).toISOString();
+    if(Array.isArray(d.equipamentos)){
+      nd.equipamentos = d.equipamentos.slice(0,60).map(r=>{
+        const checks = {};
+        ['ladoExterno','cinta','travas','ladoInterno','abaDireita','abaEsquerda'].forEach(k=>{
+          const v = r.checks ? r.checks[k] : null;
+          checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+        });
+        return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
+      }).filter(r=> r.numero);
+    }
+    if(d.descricao!=null) nd.descricao = String(d.descricao).trim().slice(0,2000);
+    if(d.policialNome!=null) nd.policialNome = String(d.policialNome).trim().slice(0,80);
+    if(d.policialMat!=null) nd.policialMat = String(d.policialMat).trim().slice(0,30);
+    if(d.tecnicoNome!=null) nd.tecnicoNome = String(d.tecnicoNome).trim().slice(0,80);
+    if(d.tecnicoMat!=null) nd.tecnicoMat = String(d.tecnicoMat).trim().slice(0,30);
+    patch.dados = nd;
+  }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
   if(equipamentos!=null){
     let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
@@ -1203,13 +1416,31 @@ app.get('/api/termos/:id/pdf', auth(['tecnico','admin']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
-  const pdf = await gerarTermoPDF(t);
+  const pdf = (t.tipo === 'recolhimento') ? await gerarTermoRecolhimentoPDF(t) : await gerarTermoPDF(t);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
   res.send(Buffer.from(pdf));
 }));
 app.post('/api/termos/pdf-preview', auth(['tecnico','admin']), ah(async (req,res)=>{
-  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento } = req.body||{};
+  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
+  if(tipo === 'recolhimento'){
+    const d = (dados && typeof dados === 'object') ? dados : {};
+    const termo = {
+      tipo: 'recolhimento',
+      dados: {
+        itensRecebidos: String(d.itensRecebidos||'').trim(),
+        dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
+        equipamentos: (Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : []).map(r=>({ numero: String(r.numero||''), danificado: !!r.danificado, checks: (r.checks||{}) })),
+        descricao: String(d.descricao||'').trim(),
+        policialNome: String(d.policialNome||'').trim(), policialMat: String(d.policialMat||'').trim(),
+        tecnicoNome: String(d.tecnicoNome||'').trim(), tecnicoMat: String(d.tecnicoMat||'').trim()
+      }
+    };
+    const pdf = await gerarTermoRecolhimentoPDF(termo);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(Buffer.from(pdf));
+  }
   const termo = {
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
     destinatario: String(destinatario||'').trim() || '_________________________',
