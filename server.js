@@ -807,8 +807,10 @@ async function gerarTermoPDF(termo){
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontTimes = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const margin = 50;
-  let y = 800;
+  // A4 pixel-perfect: 210mm x 297mm = 595.28 x 841.89 pt @72dpi
+  // Margens: 70pt esq/dir, como no original escaneado
+  let y = 815;
+  // Brasao - tenta carregar, fallback para espaco
   let brasaoImage = null;
   try{
     if(typeof fetch !== 'undefined'){
@@ -820,25 +822,28 @@ async function gerarTermoPDF(termo){
     }
   }catch(e){}
   if(brasaoImage){
-    const dims = brasaoImage.scale(0.18);
-    page.drawImage(brasaoImage, { x: (595.28 - dims.width)/2, y: y - 8, width: dims.width, height: dims.height });
-    y -= dims.height + 8;
+    const dims = brasaoImage.scale(0.19);
+    page.drawImage(brasaoImage, { x: (595.28 - dims.width)/2, y: y - 18, width: dims.width, height: dims.height });
+    y -= dims.height + 14;
   } else {
-    y -= 42;
+    y -= 48;
   }
+  // Header Governo - exatamente como no modelo
   const gov1 = 'GOVERNO DO';
   const gov1W = fontTimesBold.widthOfTextAtSize(gov1, 10);
-  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontTimesBold });
-  y -= 12;
-  const gov2 = 'ESTADO DO CEARÁ';
-  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13);
-  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 13, font: fontTimesBold });
+  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontTimesBold, color: rgb(0,0,0) });
   y -= 13;
+  const gov2 = 'ESTADO DO CEARÁ';
+  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13.5);
+  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 13.5, font: fontTimesBold, color: rgb(0,0,0) });
+  y -= 16;
   const sec = 'Secretaria Administração Penitenciária';
   const secW = fontTimesBold.widthOfTextAtSize(sec, 9);
-  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 9, font: fontTimesBold });
-  y -= 22;
-  let dataFmt = '______/______/____________';
+  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
+  y -= 32;
+  // Data de envio - esquerda, exatamente "Data de envio: _______/_______/________"
+  let dataFmt = '_______/_______/________';
+  let hasData = false;
   if(termo.dataEnvio){
     try{
       const d = new Date(termo.dataEnvio);
@@ -847,29 +852,37 @@ async function gerarTermoPDF(termo){
         const mm = String(d.getMonth()+1).padStart(2,'0');
         const yyyy = String(d.getFullYear());
         dataFmt = `${dd}/${mm}/${yyyy}`;
-      } else {
-        dataFmt = String(termo.dataEnvio);
+        hasData = true;
+      } else if(String(termo.dataEnvio).trim()){
+        dataFmt = String(termo.dataEnvio).trim();
+        hasData = true;
       }
-    }catch(e){ dataFmt = String(termo.dataEnvio); }
+    }catch(e){ dataFmt = String(termo.dataEnvio); hasData = true; }
   }
   const dataLabel = 'Data de envio:';
-  page.drawText(dataLabel, { x: 70, y, size: 9, font: fontTimes });
-  const dataValue = dataFmt.includes('_') ? '_______/_______/________' : dataFmt;
+  page.drawText(dataLabel, { x: 72, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
   const dataLabelW = fontTimes.widthOfTextAtSize(dataLabel + ' ', 9);
-  page.drawText(dataValue, { x: 70 + dataLabelW, y, size: 9, font: fontTimes });
-  if(!dataFmt.includes('_')){
-    const valW = fontTimes.widthOfTextAtSize(dataValue, 9);
-    page.drawLine({ start: {x: 70 + dataLabelW, y: y-2}, end: {x: 70 + dataLabelW + valW, y: y-2}, thickness: 0.5, color: rgb(0,0,0) });
+  if(hasData){
+    page.drawText(dataFmt, { x: 72 + dataLabelW, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
+    const valW = fontTimes.widthOfTextAtSize(dataFmt, 9);
+    page.drawLine({ start: {x: 72 + dataLabelW, y: y-2}, end: {x: 72 + dataLabelW + valW + 4, y: y-2}, thickness: 0.6, color: rgb(0,0,0) });
+  } else {
+    // traços originais
+    const trail = '_______/_______/________';
+    page.drawText(trail, { x: 72 + dataLabelW, y, size: 9, font: fontTimes, color: rgb(0,0,0) });
   }
-  y -= 28;
+  y -= 30;
+  // Título centralizado e sublinhado
   const title = 'LISTAGEM DE EQUIPAMENTOS';
   const titleW = fontTimesBold.widthOfTextAtSize(title, 13);
-  page.drawText(title, { x: (595.28 - titleW)/2, y, size: 13, font: fontTimesBold });
-  page.drawLine({ start: {x: (595.28 - titleW)/2, y: y-2}, end: {x: (595.28 + titleW)/2, y: y-2}, thickness: 1.2, color: rgb(0,0,0) });
-  y -= 22;
+  const titleX = (595.28 - titleW)/2;
+  page.drawText(title, { x: titleX, y, size: 13, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawLine({ start: {x: titleX, y: y-2.5}, end: {x: titleX + titleW, y: y-2.5}, thickness: 1.1, color: rgb(0,0,0) });
+  y -= 24;
+  // Subtítulos centralizados
   const sub1 = 'SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE';
   const sub1W = fontTimesBold.widthOfTextAtSize(sub1, 9);
-  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 9, font: fontTimesBold });
+  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
   y -= 11;
   const remBold = 'Remetente:';
   const remAddr = ' Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
@@ -877,41 +890,48 @@ async function gerarTermoPDF(termo){
   const remAddrW = fontTimes.widthOfTextAtSize(remAddr, 8);
   const remTotalW = remBoldW + remAddrW;
   const remX = (595.28 - remTotalW)/2;
-  page.drawText(remBold, { x: remX, y, size: 8, font: fontTimesBold });
-  page.drawText(remAddr, { x: remX + remBoldW, y, size: 8, font: fontTimes });
+  page.drawText(remBold, { x: remX, y, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText(remAddr, { x: remX + remBoldW, y, size: 8, font: fontTimes, color: rgb(0,0,0) });
   y -= 10;
   const sub3a = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA -';
   const sub3b = 'SECÇÃO CARIRI';
   const sub3aW = fontTimesBold.widthOfTextAtSize(sub3a + ' ', 8);
   const sub3bW = fontTimesBold.widthOfTextAtSize(sub3b, 8);
+  // SECÇÃO CARIRI em itálico no original - usa TimesBoldOblique se disponível, fallback Bold
+  let fontItalic = fontTimesBold;
+  try{ fontItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic); }catch(e){}
   const sub3TotalW = sub3aW + sub3bW;
   const sub3X = (595.28 - sub3TotalW)/2;
-  page.drawText(sub3a + ' ', { x: sub3X, y, size: 8, font: fontTimesBold });
-  page.drawText(sub3b, { x: sub3X + sub3aW, y, size: 8, font: fontTimesBold });
-  y -= 26;
+  page.drawText(sub3a + ' ', { x: sub3X, y, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText(sub3b, { x: sub3X + sub3aW, y, size: 8, font: fontItalic, color: rgb(0,0,0) });
+  y -= 28;
+  // Destinatário - exatamente como no modelo: "Destinatário: _____________________________"
   const destLabel = 'Destinatário:';
   const destLabelW = fontTimesBold.widthOfTextAtSize(destLabel + ' ', 10);
-  page.drawText(destLabel, { x: 110, y, size: 10, font: fontTimesBold });
-  const destVal = termo.destinatario || '';
+  const destX = 125;
+  page.drawText(destLabel, { x: destX, y, size: 10, font: fontTimesBold, color: rgb(0,0,0) });
+  const destVal = (termo.destinatario || '').trim();
   if(destVal){
-    page.drawText(destVal, { x: 110 + destLabelW, y, size: 10, font: fontTimes });
+    page.drawText(destVal, { x: destX + destLabelW, y, size: 10, font: fontTimes, color: rgb(0,0,0) });
     const destValW = fontTimes.widthOfTextAtSize(destVal, 10);
-    page.drawLine({ start: {x: 110 + destLabelW, y: y-2}, end: {x: 110 + destLabelW + destValW + 60, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+    page.drawLine({ start: {x: destX + destLabelW, y: y-2}, end: {x: destX + destLabelW + destValW + 50, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
   } else {
-    page.drawLine({ start: {x: 110 + destLabelW, y: y-2}, end: {x: 110 + destLabelW + 280, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+    page.drawLine({ start: {x: destX + destLabelW, y: y-2}, end: {x: destX + destLabelW + 260, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
   }
-  y -= 32;
+  y -= 36;
+  // Tabela - 4 colunas, header peach #FFE4CC, 5 linhas, bordas pretas 0.5-0.9
   const cols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
   const colW = [110, 110, 110, 110];
   const tableWidth = colW.reduce((a,b)=>a+b,0);
   const startX = (595.28 - tableWidth)/2;
-  const rowH = 20, headerH = 18;
-  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.996, 0.91, 0.80), borderColor: rgb(0,0,0), borderWidth: 0.7 });
+  const rowH = 19, headerH = 17;
+  // Header
+  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.996, 0.894, 0.8), borderColor: rgb(0,0,0), borderWidth: 0.7 });
   let cx = startX;
   cols.forEach((col,i)=>{
     const tw = fontTimesBold.widthOfTextAtSize(col, 8);
-    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 12.5, size: 8, font: fontTimesBold });
-    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.7, color: rgb(0,0,0) });
+    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 11.5, size: 8, font: fontTimesBold, color: rgb(0,0,0) });
+    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.6, color: rgb(0,0,0) });
     cx += colW[i];
   });
   y -= headerH;
@@ -925,41 +945,43 @@ async function gerarTermoPDF(termo){
       const txt = String(v).substring(0,20);
       if(txt){
         const tw = fontTimes.widthOfTextAtSize(txt, 8);
-        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 6.5, size: 8, font: fontTimes });
+        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 6, size: 8, font: fontTimes, color: rgb(0,0,0) });
       }
       cx += colW[i];
     });
   }
   page.drawRectangle({ x: startX, y: y - 5*rowH, width: tableWidth, height: 5*rowH + headerH, borderColor: rgb(0,0,0), borderWidth: 0.9 });
-  y = y - 5*rowH - 55;
-  const sigLineW = 420;
+  y = y - 5*rowH - 60;
+  // Rodapé - duas assinaturas com linhas longas
+  const sigLineW = 440;
   const sigX = (595.28 - sigLineW)/2;
   let sigY = y;
   page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
   const sig1 = 'RESPONSÁVEL PELA ENTREGA';
   const sig1W = fontTimesBold.widthOfTextAtSize(sig1, 9);
-  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 13, size: 9, font: fontTimesBold });
+  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 13, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
   const sigSub = '(RG/CPF/MATRICULA)';
   const sigSubW = fontTimes.widthOfTextAtSize(sigSub, 7);
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes });
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes, color: rgb(0,0,0) });
   if(termo.respEntrega){
     const rw = fontTimes.widthOfTextAtSize(String(termo.respEntrega), 8);
-    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 9, size: 8, font: fontTimes });
+    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 10, size: 8, font: fontTimes, color: rgb(0,0,0) });
   }
-  y -= 70;
+  y -= 75;
   sigY = y;
   page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
   const sig2 = 'RESPONSÁVEL PELA RECEBIMENTO';
   const sig2W = fontTimesBold.widthOfTextAtSize(sig2, 9);
-  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 13, size: 9, font: fontTimesBold });
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes });
+  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 13, size: 9, font: fontTimesBold, color: rgb(0,0,0) });
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes, color: rgb(0,0,0) });
   if(termo.respRecebimento){
     const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 8);
-    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 9, size: 8, font: fontTimes });
+    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 10, size: 8, font: fontTimes, color: rgb(0,0,0) });
   }
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
 }
+
 
 
 // ============ GOOGLE AGENDA ============
