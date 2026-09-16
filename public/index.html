@@ -1559,19 +1559,62 @@ function parseDocFields(raw){
         }
       }
     }
-    if(/FILIACAO|FILIA[ÇC]AO/.test(up)){
+    if(/FILI/.test(up)){
       const cands = [];
-      for(let k=i+1;k<Math.min(i+5, lines.length);k++){
-        const cand = lines[k].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim();
-        if(cand.split(/\s+/).length>=2 && cand.length>6 && cand.length<70 && !/NASC|CPF|RG|CNH/i.test(cand.toUpperCase())) cands.push(cand.replace(/\s+/g,' ').trim());
+      // mesmo linha: texto após FILI...
+      const idx = up.indexOf('FILI');
+      let remainder = '';
+      try{ remainder = lines[i].substring(idx).replace(/^FILI[A-ZÀ-ÿÇ\/\- ]*/i, '').trim(); }catch(e){}
+      // limpa caracteres não letras
+      remainder = remainder.replace(/^[^A-Za-zÀ-ÿ]+/, '').trim();
+      if(remainder && remainder.split(/\s+/).length>=2 && remainder.length>6 && remainder.length<70){
+        // se vier "JOSE DA SILVA E MARIA DA SILVA" na mesma linha, separa por " E "
+        if(/\sE\s/i.test(remainder) && remainder.split(/\s+E\s/i).length===2){
+          const parts = remainder.split(/\s+E\s/i).map(s=>s.replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim()).filter(s=>s.split(/\s+/).length>=2);
+          if(parts.length===2) cands.push(...parts);
+          else cands.push(remainder.replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim());
+        } else {
+          cands.push(remainder.replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim());
+        }
       }
-      if(cands.length>=2) nomeMae = cands[1];
-      else if(cands.length===1) nomeMae = cands[0];
+      for(let k=i+1;k<Math.min(i+6, lines.length);k++){
+        const cand = lines[k].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim();
+        if(cand.split(/\s+/).length>=2 && cand.length>6 && cand.length<70 && !/NASC|CPF|RG|CNH|HABILITACAO|VALIDADE|ASSINATURA|EMISSOR|PERMISSAO/i.test(cand.toUpperCase())) cands.push(cand.replace(/\s+/g,' ').trim());
+        // para se já achou 2 e próxima linha parece outro campo (ex: PERMISSÃO)
+        if(cands.length>=2 && /PERMISSAO|VALIDADE|ASSINATURA/i.test(lines[k].toUpperCase())) break;
+      }
+      // remove duplicatas e pega a mãe (2ª)
+      const uniq = [...new Set(cands.filter(Boolean))];
+      if(uniq.length>=2) nomeMae = uniq[1];
+      else if(uniq.length===1) nomeMae = uniq[0];
+      // fallback: se ainda vazio e raw tem " E " perto de FILI, tenta regex global
+      if(!nomeMae){
+        const filBlock = lines.slice(i, i+4).join(' ');
+        const m = filBlock.match(/FILI[^\n]*?([A-ZÀ-Ÿ][A-ZÀ-ÿ\s]{8,60})\s+E\s+([A-ZÀ-Ÿ][A-ZÀ-ÿ\s]{8,60})/i);
+        if(m) nomeMae = m[2].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim();
+      }
     }
     if(!dataNasc && /DATA NASC|NASCIMENTO/.test(up)){
       for(let k=i;k<Math.min(i+3, lines.length);k++){
         const m = lines[k].match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/);
         if(m){ dataNasc = m[1].replace(/[\-\.]/g,'/'); break; }
+      }
+    }
+  }
+  // fallback extra para mãe via "MÃE"/"MAE" se FILI não achou
+  if(!nomeMae){
+    for(let i=0;i<lines.length;i++){
+      const up2 = lines[i].toUpperCase();
+      if(/M[ÃA]E/.test(up2)){
+        const idx = up2.indexOf('MÃE') !== -1 ? up2.indexOf('MÃE') : up2.indexOf('MAE');
+        let after = '';
+        try{ after = lines[i].substring(idx).replace(/^M[ÃA]E[^A-Za-zÀ-ÿ]*/i,'').trim(); }catch(e){}
+        after = after.replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim();
+        if(after && after.split(/\s+/).length>=2 && after.length>6 && after.length<70){ nomeMae = after; break; }
+        if(lines[i+1]){
+          const cand = lines[i+1].replace(/[^A-Za-zÀ-ÿ\s'\-]/g,'').trim().replace(/\s+/g,' ').trim();
+          if(cand.split(/\s+/).length>=2 && cand.length>6 && cand.length<70) { nomeMae = cand; break; }
+        }
       }
     }
   }
