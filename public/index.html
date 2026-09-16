@@ -581,22 +581,31 @@
   <span id="chatBadge" class="hidden absolute -top-1.5 -right-1.5 bg-rose-600 text-[11px] font-extrabold min-w-[1.25rem] h-5 px-1 rounded-full items-center justify-center">0</span>
 </button>
 <div id="chatPanel" class="chat-hidden fixed bottom-24 right-5 z-40 w-80 max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
-  <div class="px-4 py-3.5 flex items-center gap-2.5 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
+  <div class="px-4 py-3.5 flex items-center gap-2 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
     <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
     <span class="font-display font-bold text-sm">Chat da equipe</span>
-    <button onclick="toggleChat()" class="ml-auto text-slate-300 hover:text-white text-xl leading-none">×</button>
+    <button onclick="toggleChatSearch()" title="Buscar mensagem" class="ml-auto text-slate-300 hover:text-white text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition">🔍</button>
+    <button onclick="toggleChat()" class="text-slate-300 hover:text-white text-xl leading-none ml-1">×</button>
+  </div>
+  <div id="chatSearchBox" class="hidden px-2.5 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
+    <input id="chatSearchInput" oninput="onChatSearchInput()" placeholder="Buscar mensagens..." class="inp !py-1 !text-xs !bg-white">
+    <button onclick="clearChatSearch()" class="text-xs text-slate-400 hover:text-slate-600 font-bold px-1">✕</button>
   </div>
   <div id="chatTabs" class="flex gap-1.5 px-2.5 py-2 border-b border-slate-100 bg-white overflow-x-auto"></div>
   <div id="notifyBanner" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
     <span class="text-[11px] font-bold text-amber-800">🔔 Ative as notificações para receber mensagens no computador e celular</span>
     <button onclick="requestNotifyPermission()" class="ml-auto btn btn-primary text-[11px] px-2.5 py-1.5 flex-none">Ativar</button>
   </div>
-  <div id="chatMsgs" class="h-72 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
+  <div id="chatMsgs" onscroll="onChatScroll()" class="h-72 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
+  <div id="chatTyping" class="hidden px-3 py-1 bg-indigo-50 border-t border-indigo-100 text-[11px] text-indigo-700 font-medium italic animate-pulse flex items-center gap-1.5">
+    <span>💬</span><span id="chatTypingText">digitando...</span>
+  </div>
   <div id="chatPending" class="hidden px-2.5 pt-2 flex flex-wrap gap-1.5 bg-white"></div>
   <div class="p-2.5 border-t border-slate-100 flex gap-2 bg-white items-center">
-    <input id="chatFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" class="hidden" onchange="chatFilesChanged()">
+    <input id="chatFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,audio/*" class="hidden" onchange="chatFilesChanged()">
     <button onclick="document.getElementById('chatFiles').click()" title="Anexar foto ou arquivo" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none">📎</button>
-    <input id="chatInput" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-2">
+    <button id="chatMicBtn" onclick="toggleAudioRecord()" title="Gravar áudio" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none text-slate-600 hover:text-indigo-600">🎙️</button>
+    <input id="chatInput" oninput="onChatInputType()" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-2">
     <button onclick="sendChat()" class="btn btn-primary px-4 text-sm flex-none">➤</button>
   </div>
 </div>
@@ -3302,14 +3311,41 @@ let chatOpen = false, lastChatId = Number(localStorage.getItem('te_lastchat') ||
 function toggleChat(){
   chatOpen = !chatOpen;
   document.getElementById('chatPanel').classList.toggle('chat-hidden', !chatOpen);
-  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); updateNotifyBanner(); }
+  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); updateNotifyBanner(); markChatRead(); }
   else { updateNotifyBanner(); }
 }
-let chatMaxId = 0, chatCache = [];
+let chatMaxId = 0, chatCache = [], oldestChatId = null, hasMoreChat = true, loadingOlderChat = false;
+let chatSearchQuery = '';
+
+function toggleChatSearch(){
+  const box = document.getElementById('chatSearchBox');
+  if(!box) return;
+  box.classList.toggle('hidden');
+  if(!box.classList.contains('hidden')){
+    document.getElementById('chatSearchInput').focus();
+  } else {
+    clearChatSearch();
+  }
+}
+function clearChatSearch(){
+  chatSearchQuery = '';
+  const inp = document.getElementById('chatSearchInput');
+  if(inp) inp.value = '';
+  const box = document.getElementById('chatSearchBox');
+  if(box) box.classList.add('hidden');
+  renderChatMessages(false);
+}
+function onChatSearchInput(){
+  const inp = document.getElementById('chatSearchInput');
+  chatSearchQuery = (inp ? inp.value : '').toLowerCase().trim();
+  renderChatMessages(false);
+}
+
 function fmtSize(b){ b=Number(b||0); if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 function chatAnexo(a, mine){
-  const isImg = (a.mimetype||'').startsWith('image/');
-  if (isImg) return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}"><img src="${esc(a.url)}" loading="lazy" class="mt-1.5 rounded-xl max-h-36 max-w-full border border-white/20"></a>`;
+  const mime = (a.mimetype || '').toLowerCase();
+  if (mime.startsWith('image/')) return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}"><img src="${esc(a.url)}" loading="lazy" class="mt-1.5 rounded-xl max-h-36 max-w-full border border-white/20"></a>`;
+  if (mime.startsWith('audio/')) return `<div class="mt-1.5 flex items-center gap-2"><audio controls src="${esc(a.url)}" class="w-full h-8 rounded-lg max-w-[210px]"></audio></div>`;
   return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}" class="mt-1.5 flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold break-all ${mine?'bg-white/20 text-white':'bg-slate-100 text-slate-700'}"><span class="text-sm flex-none">📄</span><span class="min-w-0 truncate">${esc(a.name)}</span><span class="flex-none opacity-70">${fmtSize(a.size)}</span></a>`;
 }
 let activeConvo = 'todos', allUsers = [];
@@ -3335,8 +3371,8 @@ function renderTabs(){
   box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : 'TEC ') + esc(u.name))).join('');
 }
 function setConvo(to){
-  activeConvo = to; renderTabs(); updateChatPlaceholder(); loadChat();
-  if(chatOpen){ lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); renderTabs(); }
+  activeConvo = to; oldestChatId = null; hasMoreChat = true; renderTabs(); updateChatPlaceholder(); loadChat();
+  if(chatOpen){ lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); renderTabs(); markChatRead(); }
 }
 function updateChatPlaceholder(){
   const inp = document.getElementById('chatInput');
@@ -3344,6 +3380,85 @@ function updateChatPlaceholder(){
   if(activeConvo === 'todos') inp.placeholder = 'Mensagem para todos...';
   else { const u = allUsers.find(x => x.user === activeConvo); inp.placeholder = 'Mensagem para ' + (u ? u.name : activeConvo) + '...'; }
 }
+
+// Audio Recording
+let isRecordingAudio = false, mediaRecorder = null, audioChunks = [], recordTimer = null, recordSeconds = 0;
+async function toggleAudioRecord(){
+  const btn = document.getElementById('chatMicBtn');
+  if (isRecordingAudio) {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return toast('⚠️ Seu navegador não suporta gravação de áudio');
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(recordTimer);
+      isRecordingAudio = false;
+      if (btn) { btn.textContent = '🎙️'; btn.classList.remove('text-rose-600', 'animate-pulse'); }
+      updateChatPlaceholder();
+      if (audioChunks.length > 0) {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+        pendingFiles.push(audioFile);
+        renderPending();
+      }
+    };
+    mediaRecorder.start();
+    isRecordingAudio = true;
+    recordSeconds = 0;
+    if (btn) { btn.textContent = '🔴'; btn.classList.add('text-rose-600', 'animate-pulse'); }
+    const inp = document.getElementById('chatInput');
+    if (inp) inp.placeholder = 'Gravando áudio (0s)...';
+    recordTimer = setInterval(() => {
+      recordSeconds++;
+      if (inp) inp.placeholder = `Gravando áudio (${recordSeconds}s)... clique em 🔴 para parar`;
+    }, 1000);
+  } catch(e) {
+    toast('⚠️ Permissão de áudio negada ou erro no microfone');
+  }
+}
+
+// Typing status
+let typingTimeout = null, typingUsers = {};
+function onChatInputType(){
+  if (!session) return;
+  authFetch('/api/chat/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: activeConvo, isTyping: true }) }).catch(()=>{});
+  if (typingTimeout) clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    authFetch('/api/chat/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: activeConvo, isTyping: false }) }).catch(()=>{});
+  }, 2000);
+}
+
+function handleTypingEvent(data){
+  if (!data || data.from === (session && session.user)) return;
+  typingUsers[data.from] = data.isTyping;
+  const isTarget = activeConvo === 'todos' ? data.to === 'todos' : (data.from === activeConvo);
+  const isTyping = isTarget && data.isTyping;
+  const box = document.getElementById('chatTyping');
+  const txt = document.getElementById('chatTypingText');
+  if (box && txt) {
+    const u = allUsers.find(x => x.user === data.from);
+    txt.textContent = (u ? u.name : data.from) + ' está digitando...';
+    box.classList.toggle('hidden', !isTyping);
+  }
+}
+
+function markChatRead(){
+  if (!session || !chatOpen) return;
+  authFetch('/api/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: activeConvo, lastReadId: chatMaxId }) }).catch(()=>{});
+}
+
+function handleReadEvent(data){
+  // can be used to update UI if showing read checks
+}
+
 let audioCtx = null;
 function chime(){
   try{
@@ -3367,7 +3482,6 @@ function updateNotifyBanner(){
   const b = document.getElementById('notifyBanner');
   if(!b) return;
   const needs = 'Notification' in window && Notification.permission !== 'granted';
-  // mostra banner se ainda não concedeu e não negou permanentemente (mas mesmo se negou, mostra dica)
   const show = 'Notification' in window && Notification.permission !== 'granted';
   b.classList.toggle('hidden', !show);
   if(show && Notification.permission === 'denied'){
@@ -3388,7 +3502,6 @@ function requestNotifyPermission(){
     updateNotifyBanner();
     if(p === 'granted'){
       toast('🔔 Notificações ativadas no computador e celular!');
-      // teste imediato: tenta via Service Worker (funciona em segundo plano e no celular)
       try{
         if(navigator.serviceWorker && navigator.serviceWorker.controller){
           navigator.serviceWorker.ready.then(reg => reg.showNotification('SISUMEPE Juazeiro', { body: 'Notificações ativadas — você receberá mensagens mesmo com o app em segundo plano', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', vibrate: [200,100,200], tag: 'sisumepe-test' })).catch(()=>{ try{ new Notification('SISUMEPE', { body: 'Notificações ativadas', icon: '/icons/icon-192.png' }); }catch(e){} });
@@ -3408,10 +3521,8 @@ function showChatNotification(m){
   const body = m.text || ((m.anexos && m.anexos.length) ? 'enviou um anexo 📎' : 'Nova mensagem');
   const tag = 'te-chat-' + m.id;
   const opts = { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag, vibrate: [200,100,200], data: { url: '/', chat: isDM ? (m.user === session.user ? m.to : m.user) : 'todos' } };
-  // tenta via Service Worker (melhor para celular e segundo plano)
   if(navigator.serviceWorker && navigator.serviceWorker.ready){
     navigator.serviceWorker.ready.then(reg => {
-      // se já tem controller, usa SW, senão fallback para Notification constructor
       if(reg && reg.showNotification) return reg.showNotification(title, opts);
       throw new Error('no SW');
     }).catch(() => {
@@ -3440,37 +3551,74 @@ function notifyIncoming(m){
     if(canNotify()) showChatNotification(m);
   }catch(e){}
 }
+
 async function loadChat(){
   if (!session) return;
   try{
     const msgs = await api('/api/chat?user=' + encodeURIComponent(session.user));
     const prevMax = chatMaxId;
     chatCache = msgs;
-    chatMaxId = msgs.length ? msgs[msgs.length-1].id : 0;
-    const me = session.user;
-    const visible = msgs.filter(m => {
-      const to = String(m.to || 'todos').toLowerCase();
-      if (activeConvo === 'todos') return to === 'todos';
-      return (m.user === me && to === activeConvo) || (m.user === activeConvo && to === me);
-    });
-    const box = document.getElementById('chatMsgs');
-    box.innerHTML = visible.length ? visible.map(m => {
-      const mine = session && m.user === session.user;
-      return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} fade">
-        <div class="max-w-[85%] px-3.5 py-2 text-[13px] leading-relaxed ${mine ? 'text-white rounded-2xl rounded-br-md' : 'bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm'}" ${mine ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>
-          <p class="text-[10px] font-bold ${mine ? 'text-indigo-200' : 'text-slate-400'}">${esc(m.name)} • ${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
-          ${m.text?`<p>${esc(m.text)}</p>`:''}
-          ${(m.anexos||[]).map(a=>chatAnexo(a,mine)).join('')}
-        </div></div>`;
-    }).join('') : '<p class="text-xs text-slate-400 text-center pt-6">Nenhuma mensagem.<br>Diga oi! 👋</p>';
-    box.scrollTop = box.scrollHeight;
-    const fresh = msgs.filter(m => m.id > prevMax && m.user !== me);
+    if (msgs.length) {
+      chatMaxId = msgs[msgs.length - 1].id;
+      if (!oldestChatId) oldestChatId = msgs[0].id;
+    }
+    renderChatMessages(true);
+    const fresh = msgs.filter(m => m.id > prevMax && m.user !== session.user);
     if (fresh.length && prevMax > 0) notifyIncoming(fresh[fresh.length - 1]);
     else renderTabs();
     if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
     updateNotifyBanner();
   }catch(e){ updateNotifyBanner(); }
 }
+
+async function onChatScroll(){
+  const box = document.getElementById('chatMsgs');
+  if (!box || loadingOlderChat || !hasMoreChat || !oldestChatId) return;
+  if (box.scrollTop < 30) {
+    loadingOlderChat = true;
+    const oldScrollHeight = box.scrollHeight;
+    try {
+      const res = await api(`/api/chat?paginated=true&beforeId=${oldestChatId}&to=${encodeURIComponent(activeConvo)}&user=${encodeURIComponent(session.user)}`);
+      if (res && Array.isArray(res.messages) && res.messages.length) {
+        const newMsgs = res.messages.filter(m => !chatCache.some(existing => existing.id === m.id));
+        chatCache = [...newMsgs, ...chatCache];
+        oldestChatId = res.firstId || (chatCache.length ? chatCache[0].id : null);
+        hasMoreChat = res.hasMore;
+        renderChatMessages(false);
+        box.scrollTop = box.scrollHeight - oldScrollHeight;
+      } else {
+        hasMoreChat = false;
+      }
+    } catch(e) {}
+    loadingOlderChat = false;
+  }
+}
+
+function renderChatMessages(autoScroll = true){
+  if (!session) return;
+  const me = session.user;
+  let visible = chatCache.filter(m => {
+    const to = String(m.to || 'todos').toLowerCase();
+    if (activeConvo === 'todos') return to === 'todos';
+    return (m.user === me && to === activeConvo) || (m.user === activeConvo && to === me);
+  });
+  if (chatSearchQuery) {
+    visible = visible.filter(m => (m.text && m.text.toLowerCase().includes(chatSearchQuery)) || (m.name && m.name.toLowerCase().includes(chatSearchQuery)));
+  }
+  const box = document.getElementById('chatMsgs');
+  if (!box) return;
+  box.innerHTML = visible.length ? visible.map(m => {
+    const mine = session && m.user === session.user;
+    return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} fade">
+      <div class="max-w-[85%] px-3.5 py-2 text-[13px] leading-relaxed ${mine ? 'text-white rounded-2xl rounded-br-md' : 'bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm'}" ${mine ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>
+        <p class="text-[10px] font-bold ${mine ? 'text-indigo-200' : 'text-slate-400'}">${esc(m.name)} • ${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
+        ${m.text?`<p>${esc(m.text)}</p>`:''}
+        ${(m.anexos||[]).map(a=>chatAnexo(a,mine)).join('')}
+      </div></div>`;
+  }).join('') : `<p class="text-xs text-slate-400 text-center pt-6">${chatSearchQuery ? 'Nenhuma mensagem encontrada.' : 'Nenhuma mensagem.<br>Diga oi! 👋'}</p>`;
+  if (autoScroll) box.scrollTop = box.scrollHeight;
+}
+
 function paintBadge(){
   const n = chatCache.filter(m => m.id > lastChatId && (!session || m.user !== session.user)).length;
   const b = document.getElementById('chatBadge');
@@ -3529,7 +3677,22 @@ function connectSSE(){
   if(!session || !session.token) return;
   try{
     es = new EventSource('/api/events?token=' + encodeURIComponent(session.token));
-    es.onmessage = () => { if(session){ loadAll(); loadChat(); } };
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.type === 'chat_msg') {
+          if (session) { loadAll(); loadChat(); }
+        } else if (data.type === 'chat_typing') {
+          handleTypingEvent(data);
+        } else if (data.type === 'chat_read') {
+          handleReadEvent(data);
+        } else {
+          if(session){ loadAll(); loadChat(); }
+        }
+      } catch(e) {
+        if(session){ loadAll(); loadChat(); }
+      }
+    };
     es.onerror = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-amber-500'; };
     es.onopen = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500'; };
   }catch(e){}
