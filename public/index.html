@@ -414,9 +414,9 @@
         <div id="termoFormRecolhimento" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📦 Termo de Recolhimento <span id="termoRecEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
-            <div class="col-span-2"><label class="lbl">ITENS RECEBIDOS</label><input id="termoRecItens" placeholder="Ex: 1 cinta FONTES" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">DATA / HORA *</label><input id="termoRecDataHora" type="datetime-local" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">DESCRIÇÃO</label><input id="termoRecDescCurta" placeholder="Resumo (opcional)" class="inp mt-1 mb-2.5" oninput="document.getElementById('termoRecDescricao').value=this.value"></div>
+            <div class="col-span-2"><label class="lbl">ITENS RECEBIDOS</label><input id="termoRecItens" placeholder="Ex: 1 cinta FONTES" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></div>
+            <div><label class="lbl">DATA / HORA *</label><input id="termoRecDataHora" type="datetime-local" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()" onchange="scheduleRecPreview()"></div>
+            <div><label class="lbl">DESCRIÇÃO</label><input id="termoRecDescCurta" placeholder="Resumo (opcional)" class="inp mt-1 mb-2.5" oninput="document.getElementById('termoRecDescricao').value=this.value;scheduleRecPreview()"></div>
           </div>
           <div class="flex items-center justify-between mt-1 mb-2">
             <label class="lbl">EQUIPAMENTOS * (toque SIM/NÃO em cada item)</label>
@@ -424,16 +424,24 @@
           </div>
           <div id="termoRecEquips" class="space-y-2.5 mb-2.5"></div>
           <label class="lbl">DESCRIÇÃO GERAL</label>
-          <textarea id="termoRecDescricao" rows="2" placeholder="Ex: 16/09/2026 11:46h - equipamentos recebidos..." class="inp mt-1 mb-2.5"></textarea>
+          <textarea id="termoRecDescricao" rows="2" placeholder="Ex: 16/09/2026 11:46h - equipamentos recebidos..." class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></textarea>
           <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">POLICIAL PENAL (nome)</label><input id="termoRecPolicial" placeholder="Nome do policial" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">MAT. POLICIAL</label><input id="termoRecPolicialMat" placeholder="Matrícula" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">TÉCNICO (nome)</label><input id="termoRecTecnico" placeholder="Nome do técnico" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">MAT. TÉCNICO</label><input id="termoRecTecnicoMat" placeholder="Matrícula" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">POLICIAL PENAL (nome)</label><input id="termoRecPolicial" placeholder="Nome do policial" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></div>
+            <div><label class="lbl">MAT. POLICIAL</label><input id="termoRecPolicialMat" placeholder="Matrícula" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></div>
+            <div><label class="lbl">TÉCNICO (nome)</label><input id="termoRecTecnico" placeholder="Nome do técnico" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></div>
+            <div><label class="lbl">MAT. TÉCNICO</label><input id="termoRecTecnicoMat" placeholder="Matrícula" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()"></div>
           </div>
           <div class="flex gap-2 mt-2">
             <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
             <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
+          </div>
+          <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="termoRecAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleRecPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="termoRecPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
+          <div id="termoRecPreviewWrap" class="hidden mt-3 border border-slate-200 rounded-xl overflow-hidden">
+            <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span class="text-xs font-bold">Pré-visualização em tempo real</span>
+              <button onclick="document.getElementById('termoRecPreviewWrap').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕ Fechar</button>
+            </div>
+            <iframe id="termoRecPreviewFrame" class="w-full h-[640px] bg-white"></iframe>
           </div>
           <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
@@ -2495,6 +2503,9 @@ function clearTermoForm(){
   document.getElementById('termoRecTecnicoMat').value = '';
   if(session) document.getElementById('termoRecTecnico').value = session.name;
   document.getElementById('termoRecErr').classList.add('hidden');
+  document.getElementById('termoRecPreviewWrap').classList.add('hidden');
+  document.getElementById('termoRecPreviewStatus').textContent = '';
+  clearTimeout(recPreviewTimer);
   document.getElementById('termoData').valueAsDate = new Date();
   document.getElementById('termoDest').value = '';
   document.getElementById('termoDestOutro').value = '';
@@ -2543,6 +2554,7 @@ function renderRecEquips(){
   const box = document.getElementById('termoRecEquips');
   if(!box) return;
   if(!recEquips.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-3 border border-dashed border-slate-300 rounded-xl">Nenhum equipamento. Toque em + Adicionar.</p>'; return; }
+  scheduleRecPreview();
   box.innerHTML = recEquips.map((eq,i)=>{
     const rows = REC_CHECKS.map(([k,label])=>{
       const st = recCheckState(eq,k);
@@ -2556,7 +2568,7 @@ function renderRecEquips(){
     }).join('');
     return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
       <div class="flex gap-2 items-center mb-1.5">
-        <input value="${esc(eq.numero||'')}" oninput="recEquips[${i}].numero=this.value" placeholder="N° do equipamento *" class="inp !py-1.5 text-xs flex-1 font-bold">
+        <input value="${esc(eq.numero||'')}" oninput="recEquips[${i}].numero=this.value;scheduleRecPreview()" placeholder="N° do equipamento *" class="inp !py-1.5 text-xs flex-1 font-bold">
         <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 whitespace-nowrap cursor-pointer"><input type="checkbox" ${eq.danificado?'checked':''} onchange="setRecDanificado(${i},this.checked)" class="w-4 h-4 accent-amber-600"> DANIFICADO</label>
         <button onclick="removeRecEquip(${i})" class="text-rose-600 font-bold text-sm px-1">✕</button>
       </div>
@@ -2689,12 +2701,15 @@ async function previewTermoPDF(){
 }
 async function previewTermoExistente(id){
   try{
+    const t = termosCache.find(x=>x.id===id);
+    const isRec = t && (t.tipo||'listagem') === 'recolhimento';
     const res = await authFetch('/api/termos/'+id+'/pdf');
     if(!res.ok) throw new Error('Erro ao gerar PDF');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrame');
-    const wrap = document.getElementById('termoPreviewWrap');
+    const frame = document.getElementById(isRec ? 'termoRecPreviewFrame' : 'termoPreviewFrame');
+    const wrap = document.getElementById(isRec ? 'termoRecPreviewWrap' : 'termoPreviewWrap');
+    if(!frame || !wrap) throw new Error('Pré-visualização indisponível nesta aba');
     frame.src = url;
     wrap.classList.remove('hidden');
     wrap.scrollIntoView({behavior:'smooth', block:'center'});
@@ -2712,23 +2727,40 @@ async function downloadTermoPDF(id){
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }catch(e){ toast('⚠️ '+e.message); }
 }
-async function previewTermoRecPDF(){
+async function previewTermoRecPDF(silent){
   const err = document.getElementById('termoRecErr');
   err.classList.add('hidden');
   const rec = getRecFormData();
-  if(!rec.equipamentos.some(e=>e.numero)){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); return; }
+  if(!rec.equipamentos.some(e=>e.numero)){
+    if(!silent){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
+    return;
+  }
+  const status = document.getElementById('termoRecPreviewStatus');
   try{
+    if(status) status.textContent = silent ? '⏳ atualizando...' : '';
     const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo:'recolhimento', dados: rec }) });
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrame');
-    const wrap = document.getElementById('termoPreviewWrap');
-    frame.src = url;
-    wrap.classList.remove('hidden');
-    wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    const frame = document.getElementById('termoRecPreviewFrame');
+    const wrap = document.getElementById('termoRecPreviewWrap');
+    if(frame) frame.src = url;
+    if(wrap) wrap.classList.remove('hidden');
+    if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     setTimeout(()=>URL.revokeObjectURL(url), 60000);
-  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+  }catch(e){
+    if(status) status.textContent = '';
+    if(!silent){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+  }
+}
+let recPreviewTimer = null;
+function scheduleRecPreview(now){
+  const tgl = document.getElementById('termoRecAutoPreview');
+  if(tgl && !tgl.checked) return;
+  if(termoTipoAtivo !== 'recolhimento') return;
+  clearTimeout(recPreviewTimer);
+  recPreviewTimer = setTimeout(()=> previewTermoRecPDF(true), now ? 400 : 1500);
 }
 async function editTermo(id){
   const t = termosCache.find(x=>x.id===id);
