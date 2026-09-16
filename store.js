@@ -292,36 +292,47 @@ const store = {
   agenda: {
     async allByUser(user){
       if(MODE==='file') return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start));
-      return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG);
+      try{ return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG); }catch(e){ console.warn('agenda.allByUser fallback (tabela não existe?)', e.message); return []; }
     },
     async all(){
       if(MODE==='file') return mem.agenda;
-      return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG);
+      try{ return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG); }catch(e){ console.warn('agenda.all fallback', e.message); return []; }
     },
     async byId(id){
       if(MODE==='file') return mem.agenda.find(x=>eqi(x.id,id))||null;
-      const r=must(await supa.from('agenda').select('*').eq('id', Number(id)).limit(1),'agenda.byId');
-      return r.length?appAG(r[0]):null;
+      try{ const r=must(await supa.from('agenda').select('*').eq('id', Number(id)).limit(1),'agenda.byId'); return r.length?appAG(r[0]):null; }catch(e){ console.warn('agenda.byId fallback', e.message); return mem.agenda.find(x=>eqi(x.id,id))||null; }
     },
     async insert(ev){
       if(MODE==='file'){
         const row={ id: mem.seqAgenda++, ...ev, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
         mem.agenda.push(row); saveFile(); return row;
       }
-      const r=must(await supa.from('agenda').insert(toRow(ev, AG)).select().single(),'agenda.insert');
-      return appAG(r);
+      try{
+        const r=must(await supa.from('agenda').insert(toRow(ev, AG)).select().single(),'agenda.insert');
+        return appAG(r);
+      }catch(e){
+        console.warn('agenda.insert fallback para file', e.message);
+        const row={ id: mem.seqAgenda++, ...ev, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        mem.agenda.push(row); if(MODE==='file') saveFile(); return row;
+      }
     },
     async patch(id, fields){
       if(MODE==='file'){
         const e=mem.agenda.find(x=>eqi(x.id,id)); if(!e) return null;
         Object.assign(e, fields, { updatedAt: new Date().toISOString() }); saveFile(); return e;
       }
-      const r=must(await supa.from('agenda').update(toRow({...fields, updatedAt: new Date().toISOString()}, AG)).eq('id', Number(id)).select(),'agenda.patch');
-      return r.length?appAG(r[0]):null;
+      try{
+        const r=must(await supa.from('agenda').update(toRow({...fields, updatedAt: new Date().toISOString()}, AG)).eq('id', Number(id)).select(),'agenda.patch');
+        return r.length?appAG(r[0]):null;
+      }catch(e){
+        console.warn('agenda.patch fallback', e.message);
+        const ee=mem.agenda.find(x=>eqi(x.id,id)); if(!ee) return null;
+        Object.assign(ee, fields, { updatedAt: new Date().toISOString() }); return ee;
+      }
     },
     async remove(id){
       if(MODE==='file'){ mem.agenda=mem.agenda.filter(x=>!eqi(x.id,id)); saveFile(); return; }
-      must(await supa.from('agenda').delete().eq('id', Number(id)),'agenda.remove');
+      try{ must(await supa.from('agenda').delete().eq('id', Number(id)),'agenda.remove'); }catch(e){ console.warn('agenda.remove fallback', e.message); mem.agenda=mem.agenda.filter(x=>!eqi(x.id,id)); }
     }
   },
 
@@ -329,20 +340,24 @@ const store = {
     async get(user){
       const id=String(user||'').toLowerCase().trim();
       if(MODE==='file') return mem.googleTokens[id]||null;
-      const r=must(await supa.from('google_tokens').select('*').eq('user', id).limit(1),'googleTokens.get');
-      return r.length?r[0]:null;
+      try{
+        const r=must(await supa.from('google_tokens').select('*').eq('user', id).limit(1),'googleTokens.get');
+        return r.length?r[0]:null;
+      }catch(e){ console.warn('googleTokens.get fallback (tabela não existe?)', e.message); return null; }
     },
     async set(user, tokens){
       const id=String(user||'').toLowerCase().trim();
       const row={ user:id, access_token: tokens.access_token||tokens.accessToken||'', refresh_token: tokens.refresh_token||tokens.refreshToken||'', expiry_date: tokens.expiry_date||tokens.expiryDate||null, scope: tokens.scope||'', token_type: tokens.token_type||tokens.tokenType||'Bearer' };
       if(MODE==='file'){ mem.googleTokens[id]=row; saveFile(); return row; }
-      const r=must(await supa.from('google_tokens').upsert(row, {onConflict:'user'}).select(),'googleTokens.set');
-      return r.length?r[0]:row;
+      try{
+        const r=must(await supa.from('google_tokens').upsert(row, {onConflict:'user'}).select(),'googleTokens.set');
+        return r.length?r[0]:row;
+      }catch(e){ console.warn('googleTokens.set fallback', e.message); mem.googleTokens[id]=row; return row; }
     },
     async del(user){
       const id=String(user||'').toLowerCase().trim();
       if(MODE==='file'){ delete mem.googleTokens[id]; saveFile(); return; }
-      must(await supa.from('google_tokens').delete().eq('user', id),'googleTokens.del');
+      try{ must(await supa.from('google_tokens').delete().eq('user', id),'googleTokens.del'); }catch(e){ console.warn('googleTokens.del fallback', e.message); delete mem.googleTokens[id]; }
     }
   },
 
