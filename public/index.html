@@ -439,6 +439,10 @@
     <button onclick="toggleChat()" class="ml-auto text-slate-300 hover:text-white text-xl leading-none">×</button>
   </div>
   <div id="chatTabs" class="flex gap-1.5 px-2.5 py-2 border-b border-slate-100 bg-white overflow-x-auto"></div>
+  <div id="notifyBanner" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+    <span class="text-[11px] font-bold text-amber-800">🔔 Ative as notificações para receber mensagens no computador e celular</span>
+    <button onclick="requestNotifyPermission()" class="ml-auto btn btn-primary text-[11px] px-2.5 py-1.5 flex-none">Ativar</button>
+  </div>
   <div id="chatMsgs" class="h-72 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
   <div id="chatPending" class="hidden px-2.5 pt-2 flex flex-wrap gap-1.5 bg-white"></div>
   <div class="p-2.5 border-t border-slate-100 flex gap-2 bg-white items-center">
@@ -813,7 +817,7 @@ function applyNavOrder(){
 function enterApp(){
   document.getElementById('loginOverlay').classList.add('hidden');
   paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
-  try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){}
+  setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
 }
 function canSee(t){
   if(!session) return false;
@@ -2111,7 +2115,8 @@ let chatOpen = false, lastChatId = Number(localStorage.getItem('te_lastchat') ||
 function toggleChat(){
   chatOpen = !chatOpen;
   document.getElementById('chatPanel').classList.toggle('chat-hidden', !chatOpen);
-  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); }
+  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); updateNotifyBanner(); }
+  else { updateNotifyBanner(); }
 }
 let chatMaxId = 0, chatCache = [];
 function fmtSize(b){ b=Number(b||0); if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
@@ -2168,6 +2173,72 @@ function chime(){
       o.start(t0); o.stop(t0 + 0.18);
     });
   }catch(e){}
+  try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
+}
+function canNotify(){ return 'Notification' in window && Notification.permission === 'granted'; }
+function updateNotifyBanner(){
+  const b = document.getElementById('notifyBanner');
+  if(!b) return;
+  const needs = 'Notification' in window && Notification.permission !== 'granted';
+  // mostra banner se ainda não concedeu e não negou permanentemente (mas mesmo se negou, mostra dica)
+  const show = 'Notification' in window && Notification.permission !== 'granted';
+  b.classList.toggle('hidden', !show);
+  if(show && Notification.permission === 'denied'){
+    b.querySelector('span').textContent = '🔕 Notificações bloqueadas — libere nas configurações do navegador';
+    b.querySelector('button').textContent = 'Como liberar';
+  } else if(show){
+    b.querySelector('span').textContent = '🔔 Ative as notificações para receber mensagens no computador e celular';
+    b.querySelector('button').textContent = 'Ativar';
+  }
+}
+function requestNotifyPermission(){
+  if(!('Notification' in window)) return toast('🔔 Seu navegador não suporta notificações');
+  if(Notification.permission === 'denied'){
+    toast('🔕 Bloqueado. No celular: configurações do site → notificações → permitir. No PC: ícone de cadeado na barra de endereço → notificações.');
+    return;
+  }
+  Notification.requestPermission().then(p => {
+    updateNotifyBanner();
+    if(p === 'granted'){
+      toast('🔔 Notificações ativadas no computador e celular!');
+      // teste imediato: tenta via Service Worker (funciona em segundo plano e no celular)
+      try{
+        if(navigator.serviceWorker && navigator.serviceWorker.controller){
+          navigator.serviceWorker.ready.then(reg => reg.showNotification('SISUMEPE Juazeiro', { body: 'Notificações ativadas — você receberá mensagens mesmo com o app em segundo plano', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', vibrate: [200,100,200], tag: 'sisumepe-test' })).catch(()=>{ try{ new Notification('SISUMEPE', { body: 'Notificações ativadas', icon: '/icons/icon-192.png' }); }catch(e){} });
+        } else {
+          new Notification('SISUMEPE Juazeiro', { body: 'Notificações ativadas', icon: '/icons/icon-192.png' });
+        }
+      }catch(e){}
+    } else if(p === 'denied'){
+      toast('🔕 Você bloqueou as notificações');
+    }
+  }).catch(()=> toast('⚠️ Não foi possível pedir permissão'));
+}
+function showChatNotification(m){
+  const to = String(m.to || 'todos').toLowerCase();
+  const isDM = to !== 'todos';
+  const title = (isDM ? '[privado] ' : '') + m.name;
+  const body = m.text || ((m.anexos && m.anexos.length) ? 'enviou um anexo 📎' : 'Nova mensagem');
+  const tag = 'te-chat-' + m.id;
+  const opts = { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag, vibrate: [200,100,200], data: { url: '/', chat: isDM ? (m.user === session.user ? m.to : m.user) : 'todos' } };
+  // tenta via Service Worker (melhor para celular e segundo plano)
+  if(navigator.serviceWorker && navigator.serviceWorker.ready){
+    navigator.serviceWorker.ready.then(reg => {
+      // se já tem controller, usa SW, senão fallback para Notification constructor
+      if(reg && reg.showNotification) return reg.showNotification(title, opts);
+      throw new Error('no SW');
+    }).catch(() => {
+      try{
+        const nn = new Notification(title, { body, icon: '/icons/icon-192.png', tag });
+        nn.onclick = () => { try{ window.focus(); if(!chatOpen) toggleChat(); setConvo(opts.data.chat); }catch(e){} };
+      }catch(e){}
+    });
+  } else {
+    try{
+      const nn = new Notification(title, { body, icon: '/icons/icon-192.png', tag });
+      nn.onclick = () => { try{ window.focus(); if(!chatOpen) toggleChat(); setConvo(opts.data.chat); }catch(e){} };
+    }catch(e){}
+  }
 }
 function notifyIncoming(m){
   renderTabs();
@@ -2179,20 +2250,7 @@ function notifyIncoming(m){
   if(viewing) return;
   chime();
   try{
-    if('Notification' in window && Notification.permission === 'granted'){
-      const isDM = to !== 'todos';
-      const nn = new Notification((isDM ? '[privado] ' : '') + m.name, {
-        body: m.text || ((m.anexos && m.anexos.length) ? 'enviou um anexo' : 'Nova mensagem'),
-        tag: 'te-chat-' + m.id
-      });
-      nn.onclick = () => {
-        try{
-          window.focus();
-          if(!chatOpen) toggleChat();
-          setConvo(isDM ? (m.user === session.user ? m.to : m.user) : 'todos');
-        }catch(e){}
-      };
-    }
+    if(canNotify()) showChatNotification(m);
   }catch(e){}
 }
 async function loadChat(){
@@ -2223,7 +2281,8 @@ async function loadChat(){
     if (fresh.length && prevMax > 0) notifyIncoming(fresh[fresh.length - 1]);
     else renderTabs();
     if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
-  }catch(e){}
+    updateNotifyBanner();
+  }catch(e){ updateNotifyBanner(); }
 }
 function paintBadge(){
   const n = chatCache.filter(m => m.id > lastChatId && (!session || m.user !== session.user)).length;
