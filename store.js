@@ -222,18 +222,18 @@ const store = {
   chat: {
     async list() {
       if (MODE === 'file') return mem.chat;
-      return must(await supa.from('chat').select('*').order('id').limit(500), 'chat.list').map(appC);
+      return must(await supa.from('chat').select('*').order('id').limit(2000), 'chat.list').map(appC);
     },
     async insert(m) {
       if (MODE === 'file') {
         const row = { id: mem.seqChat++, ...m };
         mem.chat.push(row);
-        if (mem.chat.length > 200) mem.chat = mem.chat.slice(-200);
+        if (mem.chat.length > 2000) mem.chat = mem.chat.slice(-2000);
         saveFile();
         return row;
       }
       const r = must(await supa.from('chat').insert({ user: m.user, name: m.name, role: m.role, to: m.to, text: m.text, anexos: m.anexos || [] }).select().single(), 'chat.insert');
-      const old = must(await supa.from('chat').select('id').order('id', { ascending: false }).range(200, 5000), 'chat.trim');
+      const old = must(await supa.from('chat').select('id').order('id', { ascending: false }).range(2000, 10000), 'chat.trim');
       if (old.length) must(await supa.from('chat').delete().in('id', old.map(x => x.id)), 'chat.trimdel');
       return appC(r);
     }
@@ -555,11 +555,11 @@ const store = {
   async saveFileUpload(file) {
     const orig = String(file.originalname || 'arquivo');
     const ext = (orig.split('.').pop() || '').toLowerCase();
-    const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv'];
+    const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'webm', 'mp3', 'ogg', 'm4a', 'wav', 'oga'];
     const okMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain', 'text/csv'];
+      'text/plain', 'text/csv', 'audio/webm', 'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/wave', 'audio/x-wav'];
     if (!okExt.includes(ext) || !okMime.includes(file.mimetype)) {
       const e = new Error('Tipo de arquivo não permitido: ' + orig);
       e.status = 400;
