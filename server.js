@@ -275,7 +275,6 @@ app.post('/api/persons', auth(), ah(async (req, res) => {
   const { nome, cpf, rg, nomeMae, dataNascimento, modeloTornozeleira } = req.body || {};
   if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!cpf && !rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
-  if (!nomeMae) return res.status(400).json({ error: 'Nome da mãe é obrigatório' });
   if (!['Spacecom', 'Infinity'].includes(modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
   const cpfN = (cpf || '').replace(/\D/g, '');
   const all = await store.persons.all();
