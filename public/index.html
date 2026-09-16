@@ -218,6 +218,12 @@
             <input id="q" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." autocomplete="off" class="inp flex-1">
             <button onclick="buscarPessoa()" class="btn btn-primary text-sm px-5 w-full sm:w-auto">Buscar</button>
           </div>
+          <div class="flex gap-2 mt-2">
+            <button type="button" onclick="openDocReader(true)" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar CPF/RG</button>
+            <button type="button" onclick="openDocReader(false)" class="btn btn-ghost flex-1 py-2.5 text-xs">🖼️ Ler documento</button>
+          </div>
+          <input id="docReaderCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="docReaderChanged(this)">
+          <input id="docReaderPick" type="file" accept="image/*" class="hidden" onchange="docReaderChanged(this)">
           <div id="searchRes" class="mt-3 space-y-2"></div>
           <div class="flex items-center gap-3 my-5"><span class="flex-1 h-px bg-slate-200"></span><span class="text-[11px] font-bold text-slate-400">NOVO CADASTRO</span><span class="flex-1 h-px bg-slate-200"></span></div>
           <div class="grid grid-cols-2 gap-2.5">
@@ -507,6 +513,36 @@
     <div class="flex gap-2.5 mt-3">
       <button type="button" onclick="closeScan()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
       <button type="button" onclick="attachScan()" class="btn btn-green flex-1 py-3 text-sm">Anexar ao ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LER DOCUMENTO (OCR) -->
+<div id="modalDocReader" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl fade max-h-[92vh] overflow-y-auto">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">🔍</div>
+      <div><h3 class="font-display font-bold text-lg leading-tight">Ler CPF/RG do documento</h3><p class="text-xs text-slate-500">Foto do documento → OCR local → busca automática</p></div>
+    </div>
+    <div id="docPreviewWrap" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2 hidden">
+      <img id="docPreviewImg" class="w-full max-h-52 object-contain rounded-lg bg-white">
+      <canvas id="docCanvas" class="hidden"></canvas>
+    </div>
+    <div id="docProgress" class="hidden mt-3 rounded-xl bg-indigo-50 border border-indigo-200 p-3">
+      <div class="flex items-center gap-2 text-xs font-bold text-indigo-700"><span class="w-4 h-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin"></span><span id="docProgressTxt">Carregando OCR...</span></div>
+      <div class="w-full h-2 bg-white rounded-full mt-2 overflow-hidden"><div id="docProgressBar" class="h-full bg-indigo-600 transition-all" style="width:0%"></div></div>
+    </div>
+    <div id="docResult" class="hidden mt-3">
+      <label class="lbl">TEXTO DETECTADO</label>
+      <pre id="docOcrText" class="mt-1 max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded-xl p-3 text-[11px] leading-relaxed whitespace-pre-wrap"></pre>
+      <div id="docDetected" class="mt-3 space-y-2"></div>
+      <p id="docNoMatch" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">Nenhum CPF/RG detectado. Tente aproximar, melhorar iluminação ou digitar manualmente.</p>
+    </div>
+    <p id="docErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button type="button" onclick="closeDocReader()" class="btn btn-ghost flex-1 py-3 text-sm">Fechar</button>
+      <button type="button" id="docRetryBtn" onclick="retryDocReader()" class="btn btn-dark flex-1 py-3 text-sm hidden">📷 Nova foto</button>
+      <button type="button" id="docAnalyzeBtn" onclick="analyzeDoc()" class="btn btn-primary flex-1 py-3 text-sm">🔍 Analisar</button>
     </div>
   </div>
 </div>
@@ -1281,6 +1317,170 @@ function getCropNormPos(e){
   // inicializa após DOM pronto
   setTimeout(() => { const w = document.getElementById('scanWrap'); if(w) w.style.touchAction = 'none'; }, 500);
 })();
+// --- LER DOCUMENTO (OCR CPF/RG) ---
+let docImg = null, docTesseractReady = false, docTesseractLoading = false;
+function ensureTesseract(){
+  return new Promise((res, rej) => {
+    if(docTesseractReady && typeof Tesseract !== 'undefined') return res();
+    if(docTesseractLoading){
+      const iv = setInterval(() => { if(docTesseractReady) { clearInterval(iv); res(); } }, 300);
+      setTimeout(() => { clearInterval(iv); rej(new Error('timeout tesseract')); }, 30000);
+      return;
+    }
+    docTesseractLoading = true;
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload = () => { docTesseractReady = true; docTesseractLoading = false; res(); };
+    s.onerror = () => { docTesseractLoading = false; rej(new Error('Falha ao carregar OCR. Verifique internet.')); };
+    document.head.appendChild(s);
+  });
+}
+function openDocReader(camera){
+  (camera ? document.getElementById('docReaderCam') : document.getElementById('docReaderPick')).click();
+}
+function closeDocReader(){
+  document.getElementById('modalDocReader').classList.add('hidden');
+  document.getElementById('docProgress').classList.add('hidden');
+  document.getElementById('docResult').classList.add('hidden');
+  document.getElementById('docErr').classList.add('hidden');
+  document.getElementById('docProgressBar').style.width = '0%';
+}
+function retryDocReader(){
+  closeDocReader();
+  setTimeout(() => openDocReader(true), 200);
+}
+function docReaderChanged(inp){
+  if(!inp.files || !inp.files.length) return;
+  const file = inp.files[0];
+  const img = new Image();
+  img.onload = () => {
+    docImg = img;
+    const pv = document.getElementById('docPreviewImg');
+    const wrap = document.getElementById('docPreviewWrap');
+    pv.src = img.src;
+    wrap.classList.remove('hidden');
+    document.getElementById('docResult').classList.add('hidden');
+    document.getElementById('docProgress').classList.add('hidden');
+    document.getElementById('docErr').classList.add('hidden');
+    document.getElementById('docAnalyzeBtn').classList.remove('hidden');
+    document.getElementById('docRetryBtn').classList.add('hidden');
+    document.getElementById('modalDocReader').classList.remove('hidden');
+    // auto-analisa após 400ms para dar tempo de ver a foto
+    setTimeout(() => analyzeDoc(), 400);
+  };
+  img.onerror = () => toast('⚠️ Falha ao ler imagem');
+  img.src = URL.createObjectURL(file);
+  inp.value = '';
+}
+function preprocessForOCR(img){
+  const maxW = 1400;
+  const sc = Math.min(1, maxW / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+  const c = document.getElementById('docCanvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  // grayscale + contraste para melhorar OCR
+  const id = ctx.getImageData(0, 0, w, h), d = id.data;
+  for(let i=0;i<d.length;i+=4){
+    let g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+    // aumento de contraste
+    g = (g - 128) * 1.6 + 128;
+    g = g < 0 ? 0 : g > 255 ? 255 : g;
+    // binariza suave
+    d[i]=d[i+1]=d[i+2]=g;
+  }
+  ctx.putImageData(id,0,0);
+  return c;
+}
+async function analyzeDoc(){
+  if(!docImg) return toast('⚠️ Tire a foto do documento primeiro');
+  const prog = document.getElementById('docProgress');
+  const bar = document.getElementById('docProgressBar');
+  const txt = document.getElementById('docProgressTxt');
+  const err = document.getElementById('docErr');
+  const resBox = document.getElementById('docResult');
+  prog.classList.remove('hidden'); resBox.classList.add('hidden'); err.classList.add('hidden');
+  bar.style.width = '10%'; txt.textContent = 'Carregando OCR...';
+  try{
+    await ensureTesseract();
+    bar.style.width = '30%'; txt.textContent = 'Preparando imagem...';
+    const canvas = preprocessForOCR(docImg);
+    bar.style.width = '50%'; txt.textContent = 'Lendo documento (pode levar ~5-10s)...';
+    const worker = await Tesseract.createWorker('por', 1, {
+      logger: m => {
+        if(m.status === 'recognizing text' && m.progress != null){
+          const p = 50 + Math.round(m.progress * 45);
+          bar.style.width = p + '%';
+          txt.textContent = 'Lendo... ' + Math.round(m.progress*100) + '%';
+        }
+      }
+    });
+    const { data: { text } } = await worker.recognize(canvas);
+    await worker.terminate();
+    bar.style.width = '100%'; txt.textContent = 'Concluído!';
+    setTimeout(() => prog.classList.add('hidden'), 800);
+    document.getElementById('docOcrText').textContent = (text || '').trim() || '(nenhum texto detectado)';
+    resBox.classList.remove('hidden');
+    document.getElementById('docAnalyzeBtn').classList.add('hidden');
+    document.getElementById('docRetryBtn').classList.remove('hidden');
+    renderDocDetected(text || '');
+  }catch(e){
+    prog.classList.add('hidden');
+    err.textContent = '⚠️ ' + (e.message || 'Falha no OCR');
+    err.classList.remove('hidden');
+  }
+}
+function renderDocDetected(raw){
+  const box = document.getElementById('docDetected');
+  const noMatch = document.getElementById('docNoMatch');
+  const t = (raw || '').replace(/\s+/g, ' ');
+  // CPF: 11 dígitos com ou sem pontuação
+  const cpfRe = /\b\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}\b/g;
+  const rgRe = /\b\d{1,2}\.?\d{3}\.?\d{3}[- ]?\d{1,2}\b|\b\d{7,9}\b/g;
+  const cpfM = (t.match(cpfRe) || []).map(s => s.replace(/\D/g,'')).filter(s => s.length===11);
+  const uniqCpf = [...new Set(cpfM)].slice(0,2);
+  // RG: tenta pegar, evita duplicar CPF
+  let rgM = (t.match(rgRe) || []).map(s => s.replace(/\D/g,'')).filter(s => s.length>=7 && s.length<=9 && !uniqCpf.includes(s));
+  rgM = [...new Set(rgM)].slice(0,2);
+  // Nome: tenta linha após "NOME"
+  let nome = '';
+  const upper = (raw || '').toUpperCase();
+  const lines = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+  for(let i=0;i<lines.length;i++){
+    if(/NOME/.test(lines[i].toUpperCase()) && lines[i+1] && lines[i+1].length > 5){
+      const cand = lines[i+1].replace(/[^A-Za-zÀ-ÿ\s]/g,'').trim();
+      if(cand.split(/\s+/).length >= 2) { nome = cand; break; }
+    }
+  }
+  if(!nome){
+    // fallback: maior linha com 2+ palavras e sem números
+    let best = '';
+    for(const l of lines){ const clean = l.replace(/[^A-Za-zÀ-ÿ\s]/g,'').trim(); if(clean.split(/\s+/).length>=2 && clean.length > best.length && !/\d/.test(clean)) best = clean; }
+    if(best.length > 8 && best.length < 60) nome = best;
+  }
+  let html = '';
+  uniqCpf.forEach(cpf => {
+    const fmt = cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+    html += `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><span class="text-xs font-bold text-emerald-800">CPF: ${esc(fmt)}</span><button onclick="searchWithDoc('${esc(cpf)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar este CPF</button></div>`;
+  });
+  rgM.forEach(rg => {
+    html += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5"><span class="text-xs font-bold text-blue-800">RG: ${esc(rg)}</span><button onclick="searchWithDoc('${esc(rg)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar este RG</button></div>`;
+  });
+  if(nome){
+    html += `<div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl p-2.5"><span class="text-xs font-bold text-violet-800 truncate">Nome: ${esc(nome)}</span><button onclick="searchWithDoc('${esc(nome)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Buscar nome</button></div>`;
+  }
+  box.innerHTML = html;
+  const has = uniqCpf.length || rgM.length || nome;
+  noMatch.classList.toggle('hidden', !!has);
+  if(!has) box.innerHTML = '';
+}
+function searchWithDoc(q){
+  document.getElementById('q').value = q;
+  closeDocReader();
+  buscarPessoa();
+  toast('🔍 Buscando por: ' + q);
+}
 function removeScanFile(i){
   const cur = document.getElementById('tFiles');
   const dt = new DataTransfer();
