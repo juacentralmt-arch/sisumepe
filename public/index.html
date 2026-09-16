@@ -247,6 +247,7 @@
           <div id="selPerson" class="rounded-xl p-3.5 text-sm mb-4 border border-dashed border-slate-300 bg-slate-50 text-slate-500">Nenhum atendido selecionado. Busque ao lado e clique em <b>Selecionar</b>.</div>
           <label class="lbl">MOTIVO *</label>
           <select id="tMotivo" class="inp mt-1 mb-3">
+            <option value="" disabled selected>Selecione o motivo *</option>
             <option>Botão do Pânico</option>
             <option>Instalação de Tornozeleira</option>
             <option>Retirada de Tornozeleira</option>
@@ -604,6 +605,7 @@
     <p class="text-xs text-slate-500 mt-1 mb-3">Somente tickets aguardando. A correção entra na auditoria.</p>
     <label class="lbl">MOTIVO</label>
     <select id="teMotivo" class="inp mt-1 mb-2.5">
+      <option value="" disabled selected>Selecione o motivo *</option>
       <option>Botão do Pânico</option>
       <option>Instalação de Tornozeleira</option>
       <option>Retirada de Tornozeleira</option>
@@ -1026,17 +1028,19 @@ function paintModelo(){
 }
 async function abrirTicket(){
   if(!selPersonId) return toast('⚠️ Selecione o atendido primeiro');
+  const motivoSel = document.getElementById('tMotivo').value;
+  if(!motivoSel) return toast('⚠️ Selecione o motivo do atendimento');
   if(!modeloSel) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
   if([...document.getElementById('tFiles').files].length > 5) return toast('⚠️ Máximo de 5 anexos por ticket');
   const fd=new FormData();
-  fd.append('personId',selPersonId); fd.append('motivo',document.getElementById('tMotivo').value);
+  fd.append('personId',selPersonId); fd.append('motivo',motivoSel);
   fd.append('descricao',document.getElementById('tDesc').value); fd.append('prioridadeLegal',prio);
   fd.append('modeloTornozeleira',modeloSel);
   fd.append('tecnicoRecepcao',document.getElementById('tResp').value);
   fd.append('createdBy', session ? session.user : '');
   [...document.getElementById('tFiles').files].forEach(f=>fd.append('anexos',f));
   try{ const t=await authFetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
-    toast('🎫 Ticket '+t.code+' criado!'); document.getElementById('tDesc').value=''; document.getElementById('tFiles').value='';
+    toast('🎫 Ticket '+t.code+' criado!'); document.getElementById('tDesc').value=''; document.getElementById('tFiles').value=''; document.getElementById('tMotivo').value='';
     refreshScanPreview();
     modeloSel=''; paintModelo(); prio=false;
     const pb=document.getElementById('prioBtn'); pb.textContent='NÃO'; pb.className='px-5 py-2 rounded-full text-xs font-extrabold transition bg-white border border-slate-200 text-slate-500';
@@ -1959,8 +1963,10 @@ function openTicketEdit(id){
 function closeTicketEdit(){ document.getElementById('modalTicket').classList.add('hidden'); editTicketId = null; }
 async function saveTicketEdit(){
   const err = document.getElementById('teErr');
+  const mot = document.getElementById('teMotivo').value;
+  if(!mot){ err.textContent='⚠️ Selecione o motivo'; err.classList.remove('hidden'); return; }
   try{
-    await api('/api/tickets/' + editTicketId + '/edit', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: session.user, motivo: document.getElementById('teMotivo').value, modeloTornozeleira: ticketModelo, descricao: document.getElementById('teDesc').value, prioridadeLegal: document.getElementById('tePrio').checked }) });
+    await api('/api/tickets/' + editTicketId + '/edit', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: session.user, motivo: mot, modeloTornozeleira: ticketModelo, descricao: document.getElementById('teDesc').value, prioridadeLegal: document.getElementById('tePrio').checked }) });
     closeTicketEdit(); toast('Ticket corrigido!'); loadAll();
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
