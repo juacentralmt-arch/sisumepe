@@ -326,10 +326,10 @@
       <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
           <h2 class="font-display font-bold text-xl">Agenda do técnico</h2>
-          <p class="text-xs text-slate-500 mt-0.5">Seus agendamentos vinculados ao Google Agenda</p>
+          <p class="text-xs text-slate-500 mt-0.5">Seus agendamentos locais</p>
         </div>
         <div class="flex gap-2">
-          <button id="googleConnectBtn" onclick="googleConnect()" class="btn btn-ghost text-xs px-3.5 py-2">🔗 Conectar Google</button>
+          <button id="googleConnectBtn" onclick="googleConnect()" class="hidden btn btn-ghost text-xs px-3.5 py-2">🔗 Conectar Google</button>
           <button id="googleDisconnectBtn" onclick="googleDisconnect()" class="hidden btn btn-ghost text-xs px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200">🔓 Desconectar</button>
           <button onclick="openAgendaModal()" class="btn btn-primary text-xs px-4 py-2.5">➕ Novo agendamento</button>
         </div>
@@ -692,7 +692,7 @@
 <div id="modalAgenda" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl fade max-h-[92vh] overflow-y-auto">
     <h3 class="font-display font-bold text-lg"><span id="agendaModalTitle">Novo agendamento</span> <span id="agendaModalId" class="text-xs font-bold text-indigo-600"></span></h3>
-    <p class="text-xs text-slate-500 mt-1 mb-3">Sincroniza automaticamente com seu Google Agenda quando conectado.</p>
+    <p class="text-xs text-slate-500 mt-1 mb-3">Agendamento local do técnico.</p>
     <label class="lbl">TÍTULO *</label>
     <input id="agTitle" placeholder="Ex: Instalação - João da Silva" class="inp mt-1 mb-2.5">
     <label class="lbl">DESCRIÇÃO</label>
@@ -2206,7 +2206,7 @@ function ensureFullCalendar(){
 }
 async function loadAgenda(){
   try{
-    await updateGoogleStatus();
+    if(role === 'admin') await updateGoogleStatus().catch(()=>{});
     const list = await api('/api/agenda');
     agendaEvents = list;
     renderAgendaList();
@@ -2223,11 +2223,10 @@ async function renderAgendaCalendar(){
     start: ev.start,
     end: ev.end,
     extendedProps: ev,
-    backgroundColor: ev.googleEventId ? '#6366f1' : '#0ea5e9',
-    borderColor: ev.googleEventId ? '#6366f1' : '#0ea5e9'
+    backgroundColor: '#0ea5e9',
+    borderColor: '#0ea5e9'
   }));
   if(agendaCalendar){ agendaCalendar.destroy(); agendaCalendar = null; }
-  // FullCalendar precisa estar visível para calcular tamanho
   setTimeout(()=>{
     agendaCalendar = new FullCalendar.Calendar(el, {
       initialView: 'dayGridMonth',
@@ -2239,7 +2238,24 @@ async function renderAgendaCalendar(){
       dateClick: info => openAgendaModal(null, info.dateStr),
       selectable: true,
       select: info => openAgendaModal(null, info.startStr, info.endStr),
-      buttonText: { today: 'hoje', month: 'mês', week: 'semana', day: 'dia', list: 'lista' }
+      buttonText: { today: 'hoje', month: 'mês', week: 'semana', day: 'dia', list: 'lista' },
+      dayCellDidMount: function(info){
+        const dateStr = info.date.toISOString().slice(0,10);
+        const count = agendaEvents.filter(ev => {
+          const evStart = new Date(ev.start).toISOString().slice(0,10);
+          const evEnd = new Date(ev.end).toISOString().slice(0,10);
+          return dateStr >= evStart && dateStr <= evEnd;
+        }).length;
+        if(count > 0){
+          info.el.style.backgroundColor = '#eff6ff';
+          info.el.style.borderBottom = '3px solid #3b82f6';
+          const badge = document.createElement('div');
+          badge.style.cssText = 'position:absolute;top:2px;right:4px;background:#3b82f6;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:2;';
+          badge.textContent = count;
+          info.el.style.position = 'relative';
+          info.el.appendChild(badge);
+        }
+      }
     });
     agendaCalendar.render();
   }, 100);
@@ -2253,7 +2269,7 @@ function renderAgendaList(){
   box.innerHTML = upcoming.map(ev=>{
     const s = new Date(ev.start), e = new Date(ev.end);
     const isPast = e < now;
-    const gBadge = ev.googleEventId ? '<span class="text-[9px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Google</span>' : '<span class="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Local</span>';
+    const gBadge = '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>';
     return `<div class="border ${isPast?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPast?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})">
       <div class="flex items-center gap-2"><b class="text-xs flex-1 truncate">${esc(ev.title)}</b>${gBadge}</div>
       <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleString('pt-BR')} → ${e.toLocaleString('pt-BR')}</p>
@@ -2272,7 +2288,7 @@ function openAgendaModal(id, dateStr, endStr){
     const ev = agendaEvents.find(x=>x.id===id);
     if(!ev) return;
     document.getElementById('agendaModalTitle').textContent = 'Editar agendamento';
-    document.getElementById('agendaModalId').textContent = '#' + ev.id + (ev.googleEventId ? ' • Google' : '');
+    document.getElementById('agendaModalId').textContent = '#' + ev.id;
     document.getElementById('agTitle').value = ev.title || '';
     document.getElementById('agDesc').value = ev.description || '';
     document.getElementById('agStart').value = toLocalDT(ev.start);
@@ -2321,7 +2337,7 @@ async function saveAgenda(){
 }
 async function deleteAgenda(){
   if(!editingAgendaId) return;
-  if(!confirm('Excluir este agendamento? Se estiver no Google, também será removido.')) return;
+  if(!confirm('Excluir este agendamento?')) return;
   try{ await api('/api/agenda/'+editingAgendaId, { method:'DELETE' }); toast('🗑️ Agendamento excluído'); closeAgendaModal(); loadAgenda(); }catch(e){ toast('⚠️ '+e.message); }
 }
 async function searchAgPerson(){
