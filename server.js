@@ -805,59 +805,113 @@ async function gerarTermoPDF(termo){
   const page = pdfDoc.addPage([595.28, 841.89]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontTimes = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
   const margin = 50;
   let y = 800;
-  // Brasão placeholder + Governo
+  let brasaoImage = null;
+  try{
+    if(typeof fetch !== 'undefined'){
+      const res = await fetch('https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bras%C3%A3o_do_Cear%C3%A1.svg/200px-Bras%C3%A3o_do_Cear%C3%A1.png').catch(()=>null);
+      if(res && res.ok){
+        const buf = await res.arrayBuffer();
+        brasaoImage = await pdfDoc.embedPng(Buffer.from(buf));
+      }
+    }
+  }catch(e){}
+  if(brasaoImage){
+    const dims = brasaoImage.scale(0.18);
+    page.drawImage(brasaoImage, { x: (595.28 - dims.width)/2, y: y - 8, width: dims.width, height: dims.height });
+    y -= dims.height + 8;
+  } else {
+    y -= 42;
+  }
   const gov1 = 'GOVERNO DO';
-  const gov1W = fontBold.widthOfTextAtSize(gov1, 10);
-  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontBold });
+  const gov1W = fontTimesBold.widthOfTextAtSize(gov1, 10);
+  page.drawText(gov1, { x: (595.28 - gov1W)/2, y, size: 10, font: fontTimesBold });
   y -= 12;
   const gov2 = 'ESTADO DO CEARÁ';
-  const gov2W = fontBold.widthOfTextAtSize(gov2, 10);
-  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 10, font: fontBold });
-  y -= 12;
+  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13);
+  page.drawText(gov2, { x: (595.28 - gov2W)/2, y, size: 13, font: fontTimesBold });
+  y -= 13;
   const sec = 'Secretaria Administração Penitenciária';
-  const secW = font.widthOfTextAtSize(sec, 8);
-  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 8, font });
-  y -= 28;
-  let dataFmt = '___/___/______';
+  const secW = fontTimesBold.widthOfTextAtSize(sec, 9);
+  page.drawText(sec, { x: (595.28 - secW)/2, y, size: 9, font: fontTimesBold });
+  y -= 22;
+  let dataFmt = '______/______/____________';
   if(termo.dataEnvio){
-    try{ const d = new Date(termo.dataEnvio); if(!isNaN(d)) dataFmt = d.toLocaleDateString('pt-BR'); else dataFmt = String(termo.dataEnvio); }catch(e){ dataFmt = String(termo.dataEnvio); }
+    try{
+      const d = new Date(termo.dataEnvio);
+      if(!isNaN(d)){
+        const dd = String(d.getDate()).padStart(2,'0');
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const yyyy = String(d.getFullYear());
+        dataFmt = `${dd}/${mm}/${yyyy}`;
+      } else {
+        dataFmt = String(termo.dataEnvio);
+      }
+    }catch(e){ dataFmt = String(termo.dataEnvio); }
   }
-  page.drawText(`Data de envio: ${dataFmt}`, { x: margin, y, size: 8, font });
+  const dataLabel = 'Data de envio:';
+  page.drawText(dataLabel, { x: 70, y, size: 9, font: fontTimes });
+  const dataValue = dataFmt.includes('_') ? '_______/_______/________' : dataFmt;
+  const dataLabelW = fontTimes.widthOfTextAtSize(dataLabel + ' ', 9);
+  page.drawText(dataValue, { x: 70 + dataLabelW, y, size: 9, font: fontTimes });
+  if(!dataFmt.includes('_')){
+    const valW = fontTimes.widthOfTextAtSize(dataValue, 9);
+    page.drawLine({ start: {x: 70 + dataLabelW, y: y-2}, end: {x: 70 + dataLabelW + valW, y: y-2}, thickness: 0.5, color: rgb(0,0,0) });
+  }
   y -= 28;
   const title = 'LISTAGEM DE EQUIPAMENTOS';
-  const titleW = fontBold.widthOfTextAtSize(title, 12);
-  page.drawText(title, { x: (595.28 - titleW)/2, y, size: 12, font: fontBold });
-  page.drawLine({ start: { x: (595.28 - titleW)/2, y: y-2 }, end: { x: (595.28 + titleW)/2, y: y-2 }, thickness: 1, color: rgb(0,0,0) });
+  const titleW = fontTimesBold.widthOfTextAtSize(title, 13);
+  page.drawText(title, { x: (595.28 - titleW)/2, y, size: 13, font: fontTimesBold });
+  page.drawLine({ start: {x: (595.28 - titleW)/2, y: y-2}, end: {x: (595.28 + titleW)/2, y: y-2}, thickness: 1.2, color: rgb(0,0,0) });
   y -= 22;
   const sub1 = 'SECRETARIA DE ADMINISTRAÇÃO PENITENCIÁRIA/SAP – CE';
-  const sub1W = fontBold.widthOfTextAtSize(sub1, 8);
-  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 8, font: fontBold });
+  const sub1W = fontTimesBold.widthOfTextAtSize(sub1, 9);
+  page.drawText(sub1, { x: (595.28 - sub1W)/2, y, size: 9, font: fontTimesBold });
+  y -= 11;
+  const remBold = 'Remetente:';
+  const remAddr = ' Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
+  const remBoldW = fontTimesBold.widthOfTextAtSize(remBold, 8);
+  const remAddrW = fontTimes.widthOfTextAtSize(remAddr, 8);
+  const remTotalW = remBoldW + remAddrW;
+  const remX = (595.28 - remTotalW)/2;
+  page.drawText(remBold, { x: remX, y, size: 8, font: fontTimesBold });
+  page.drawText(remAddr, { x: remX + remBoldW, y, size: 8, font: fontTimes });
   y -= 10;
-  const sub2 = 'Remetente: Rua das Flores, s/n, Bairro Santa Tereza, Juazeiro do Norte-CE';
-  const sub2W = font.widthOfTextAtSize(sub2, 7);
-  page.drawText(sub2, { x: (595.28 - sub2W)/2, y, size: 7, font });
-  y -= 9;
-  const sub3 = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA - SECÇÃO CARIRI';
-  const sub3W = fontBold.widthOfTextAtSize(sub3, 7);
-  page.drawText(sub3, { x: (595.28 - sub3W)/2, y, size: 7, font: fontBold, color: rgb(0,0,0) });
+  const sub3a = 'CÉLULA DE MONITORAÇÃO ELETRÔNICA -';
+  const sub3b = 'SECÇÃO CARIRI';
+  const sub3aW = fontTimesBold.widthOfTextAtSize(sub3a + ' ', 8);
+  const sub3bW = fontTimesBold.widthOfTextAtSize(sub3b, 8);
+  const sub3TotalW = sub3aW + sub3bW;
+  const sub3X = (595.28 - sub3TotalW)/2;
+  page.drawText(sub3a + ' ', { x: sub3X, y, size: 8, font: fontTimesBold });
+  page.drawText(sub3b, { x: sub3X + sub3aW, y, size: 8, font: fontTimesBold });
   y -= 26;
-  const dest = termo.destinatario || '_________________________________';
-  page.drawText(`Destinatário: ${dest}`, { x: margin, y, size: 9, font: fontBold });
-  y -= 28;
+  const destLabel = 'Destinatário:';
+  const destLabelW = fontTimesBold.widthOfTextAtSize(destLabel + ' ', 10);
+  page.drawText(destLabel, { x: 110, y, size: 10, font: fontTimesBold });
+  const destVal = termo.destinatario || '';
+  if(destVal){
+    page.drawText(destVal, { x: 110 + destLabelW, y, size: 10, font: fontTimes });
+    const destValW = fontTimes.widthOfTextAtSize(destVal, 10);
+    page.drawLine({ start: {x: 110 + destLabelW, y: y-2}, end: {x: 110 + destLabelW + destValW + 60, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+  } else {
+    page.drawLine({ start: {x: 110 + destLabelW, y: y-2}, end: {x: 110 + destLabelW + 280, y: y-2}, thickness: 0.7, color: rgb(0,0,0) });
+  }
+  y -= 32;
   const cols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
   const colW = [110, 110, 110, 110];
   const tableWidth = colW.reduce((a,b)=>a+b,0);
   const startX = (595.28 - tableWidth)/2;
-  const rowH = 22, headerH = 20;
-  // Header background
-  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.99, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.5 });
+  const rowH = 20, headerH = 18;
+  page.drawRectangle({ x: startX, y: y - headerH, width: tableWidth, height: headerH, color: rgb(0.996, 0.91, 0.80), borderColor: rgb(0,0,0), borderWidth: 0.7 });
   let cx = startX;
   cols.forEach((col,i)=>{
-    const tw = fontBold.widthOfTextAtSize(col, 8);
-    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 14, size: 8, font: fontBold });
-    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.5, color: rgb(0,0,0) });
+    const tw = fontTimesBold.widthOfTextAtSize(col, 8);
+    page.drawText(col, { x: cx + (colW[i]-tw)/2, y: y - 12.5, size: 8, font: fontTimesBold });
+    if(i>0) page.drawLine({ start: {x: cx, y: y}, end: {x: cx, y: y - headerH - 5*rowH}, thickness: 0.7, color: rgb(0,0,0) });
     cx += colW[i];
   });
   y -= headerH;
@@ -870,44 +924,43 @@ async function gerarTermoPDF(termo){
     vals.forEach((v,i)=>{
       const txt = String(v).substring(0,20);
       if(txt){
-        const tw = font.widthOfTextAtSize(txt, 8);
-        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 7, size: 8, font });
+        const tw = fontTimes.widthOfTextAtSize(txt, 8);
+        page.drawText(txt, { x: cx + (colW[i]-tw)/2, y: rowY + 6.5, size: 8, font: fontTimes });
       }
       cx += colW[i];
     });
   }
-  // outer border
-  page.drawRectangle({ x: startX, y: y - 5*rowH, width: tableWidth, height: 5*rowH + headerH, borderColor: rgb(0,0,0), borderWidth: 0.8 });
-  y = y - 5*rowH - 45;
-  const sigLineW = 380;
+  page.drawRectangle({ x: startX, y: y - 5*rowH, width: tableWidth, height: 5*rowH + headerH, borderColor: rgb(0,0,0), borderWidth: 0.9 });
+  y = y - 5*rowH - 55;
+  const sigLineW = 420;
   const sigX = (595.28 - sigLineW)/2;
-  // Entrega
   let sigY = y;
-  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 1, color: rgb(0,0,0) });
+  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
   const sig1 = 'RESPONSÁVEL PELA ENTREGA';
-  const sig1W = fontBold.widthOfTextAtSize(sig1, 8);
-  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 12, size: 8, font: fontBold });
+  const sig1W = fontTimesBold.widthOfTextAtSize(sig1, 9);
+  page.drawText(sig1, { x: (595.28 - sig1W)/2, y: sigY - 13, size: 9, font: fontTimesBold });
   const sigSub = '(RG/CPF/MATRICULA)';
-  const sigSubW = font.widthOfTextAtSize(sigSub, 7);
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 22, size: 7, font });
+  const sigSubW = fontTimes.widthOfTextAtSize(sigSub, 7);
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes });
   if(termo.respEntrega){
-    const rw = font.widthOfTextAtSize(String(termo.respEntrega), 8);
-    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 8, size: 8, font });
+    const rw = fontTimes.widthOfTextAtSize(String(termo.respEntrega), 8);
+    page.drawText(String(termo.respEntrega), { x: (595.28 - rw)/2, y: sigY + 9, size: 8, font: fontTimes });
   }
-  y -= 60;
+  y -= 70;
   sigY = y;
-  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 1, color: rgb(0,0,0) });
+  page.drawLine({ start: {x: sigX, y: sigY}, end: {x: sigX+sigLineW, y: sigY}, thickness: 0.9, color: rgb(0,0,0) });
   const sig2 = 'RESPONSÁVEL PELA RECEBIMENTO';
-  const sig2W = fontBold.widthOfTextAtSize(sig2, 8);
-  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 12, size: 8, font: fontBold });
-  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 22, size: 7, font });
+  const sig2W = fontTimesBold.widthOfTextAtSize(sig2, 9);
+  page.drawText(sig2, { x: (595.28 - sig2W)/2, y: sigY - 13, size: 9, font: fontTimesBold });
+  page.drawText(sigSub, { x: (595.28 - sigSubW)/2, y: sigY - 23, size: 7, font: fontTimes });
   if(termo.respRecebimento){
-    const rw = font.widthOfTextAtSize(String(termo.respRecebimento), 8);
-    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 8, size: 8, font });
+    const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 8);
+    page.drawText(String(termo.respRecebimento), { x: (595.28 - rw)/2, y: sigY + 9, size: 8, font: fontTimes });
   }
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
 }
+
 
 // ============ GOOGLE AGENDA ============
 const pendingGoogleStates = new Map();
