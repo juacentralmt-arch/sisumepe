@@ -368,7 +368,18 @@
           <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">DESTINATÁRIO *</label><input id="termoDest" placeholder="Ex: Comarca de Juazeiro..." class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">DESTINATÁRIO *</label>
+              <select id="termoDest" class="inp mt-1 mb-2.5" onchange="toggleTermoDestOutro()">
+                <option value="" disabled selected>Selecione o destinatário *</option>
+                <option>UP-JUAZEIRO</option>
+                <option>UPF-CRATO</option>
+                <option>UP-CARIRI</option>
+                <option>FÓRUM CRATO - Juizado da Violência Doméstica e Familiar Contra a Mulher da Comarca de Crato</option>
+                <option>FÓRUM JARDIM</option>
+                <option value="__OUTRO__">Outro (digitar...)</option>
+              </select>
+              <input id="termoDestOutro" placeholder="Digite o destinatário..." class="inp mt-1 mb-2.5 hidden">
+            </div>
           </div>
           <label class="lbl">EQUIPAMENTOS (até 5 linhas) *</label>
           <div class="overflow-x-auto mt-1 mb-2.5">
@@ -2426,9 +2437,20 @@ async function googleDisconnect(){
 }
 // --- TERMOS - LISTAGEM DE EQUIPAMENTOS ---
 let termosCache = [], editingTermoId = null;
+function getTermoDestinatario(){
+  const sel = document.getElementById('termoDest').value;
+  if(sel === '__OUTRO__') return document.getElementById('termoDestOutro').value.trim();
+  return (sel || '').trim();
+}
+function toggleTermoDestOutro(){
+  const outro = document.getElementById('termoDestOutro');
+  const isOutro = document.getElementById('termoDest').value === '__OUTRO__';
+  outro.classList.toggle('hidden', !isOutro);
+  if(isOutro) outro.focus();
+}
 function getTermoFormData(){
   const dataEnvio = document.getElementById('termoData').value;
-  const destinatario = document.getElementById('termoDest').value.trim();
+  const destinatario = getTermoDestinatario();
   const respEntrega = document.getElementById('termoRespEntrega').value.trim();
   const respRec = document.getElementById('termoRespRec').value.trim();
   const equipamentos = [];
@@ -2444,7 +2466,12 @@ function getTermoFormData(){
 }
 function setTermoFormData(t){
   document.getElementById('termoData').value = t.dataEnvio ? String(t.dataEnvio).slice(0,10) : '';
-  document.getElementById('termoDest').value = t.destinatario || '';
+  const sel = document.getElementById('termoDest');
+  const outro = document.getElementById('termoDestOutro');
+  const val = t.destinatario || '';
+  const existe = [...sel.options].some(o => o.value === val);
+  if(val && !existe){ sel.value = '__OUTRO__'; outro.value = val; outro.classList.remove('hidden'); }
+  else { sel.value = val || ''; outro.value = ''; outro.classList.add('hidden'); }
   document.getElementById('termoRespEntrega').value = t.respEntrega || '';
   document.getElementById('termoRespRec').value = t.respRecebimento || '';
   for(let i=0;i<5;i++){
@@ -2470,6 +2497,8 @@ function clearTermoForm(){
   document.getElementById('termoRecErr').classList.add('hidden');
   document.getElementById('termoData').valueAsDate = new Date();
   document.getElementById('termoDest').value = '';
+  document.getElementById('termoDestOutro').value = '';
+  document.getElementById('termoDestOutro').classList.add('hidden');
   document.getElementById('termoRespEntrega').value = session ? (session.name + ' (' + session.user + ')') : '';
   document.getElementById('termoRespRec').value = '';
   for(let i=0;i<5;i++){
