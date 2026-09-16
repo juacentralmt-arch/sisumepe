@@ -966,14 +966,33 @@ async function gerarTermoPDF(termo){
   page.drawText(celB, { x: celX, y: 586.54, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
   celX += fontTimesBold.widthOfTextAtSize(celB, 11);
   page.drawText(celC, { x: celX, y: 586.54, size: 11, font: fontItalic, color: rgb(0,0,0) });
-  // Destinatário - x=170.09, y=558.91
+  // Destinatário - x=170.09, y=558.91 (com quebra de linha para textos longos)
   page.drawText('Destinatário', { x: 170.09, y: 558.91, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
   const destVal = (termo.destinatario || '').trim();
   if(destVal){
-    page.drawText(': ' + destVal, { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
-    const full = ': ' + destVal;
-    const fullW = fontTimes.widthOfTextAtSize(full, 12);
-    page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fullW + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+    const maxW = 595.32 - 235.25 - 40;
+    let dSize = 12;
+    let dTxt = ': ' + destVal;
+    while(dSize > 8 && fontTimes.widthOfTextAtSize(dTxt, dSize) > maxW){ dSize -= 0.5; }
+    if(fontTimes.widthOfTextAtSize(dTxt, dSize) <= maxW){
+      page.drawText(dTxt, { x: 235.25, y: 558.91, size: dSize, font: fontTimes, color: rgb(0,0,0) });
+      const fullW = fontTimes.widthOfTextAtSize(dTxt, dSize);
+      page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fullW + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+    } else {
+      // quebra em 2 linhas
+      const words = destVal.split(/\s+/);
+      let l1 = ': ', l2 = '';
+      for(const w of words){
+        if(fontTimes.widthOfTextAtSize(l1 === ': ' ? ': '+w : l1 + ' ' + w, 10) <= maxW) l1 = l1 === ': ' ? ': '+w : l1 + ' ' + w;
+        else l2 += (l2 ? ' ' : '') + w;
+      }
+      page.drawText(l1, { x: 235.25, y: 558.91, size: 10, font: fontTimes, color: rgb(0,0,0) });
+      page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fontTimes.widthOfTextAtSize(l1, 10) + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+      if(l2){
+        page.drawText(l2, { x: 235.25, y: 545.5, size: 10, font: fontTimes, color: rgb(0,0,0) });
+        page.drawLine({ start: {x: 235.25, y: 543.5}, end: {x: 235.25 + fontTimes.widthOfTextAtSize(l2, 10) + 10, y: 543.5}, thickness: 0.6, color: rgb(0,0,0) });
+      }
+    }
   } else {
     page.drawText(': _____________________________', { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
   }
