@@ -641,17 +641,27 @@ app.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
   const t = all;
   const today = new Date().toISOString().slice(0, 10);
   const byMotivo = {}, byModelo = {}, byTec = {}, byDay = {};
+  const byMotivoDetalhado = {};
+  MOTIVOS_OK.forEach(m => { byMotivoDetalhado[m] = { total: 0, finalizados: 0, aguardando: 0, em_atendimento: 0, hoje: 0, hojeFinalizados: 0 }; });
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
     byDay[d] = 0;
   }
   let waitSum = 0, waitN = 0, svcSum = 0, svcN = 0, todayN = 0, todayFin = 0;
   t.forEach(x => {
-    byMotivo[x.motivo || 'Outros'] = (byMotivo[x.motivo || 'Outros'] || 0) + 1;
+    const mot = MOTIVOS_OK.includes(x.motivo) ? x.motivo : 'Outros';
+    byMotivo[mot] = (byMotivo[mot] || 0) + 1;
     byModelo[x.modeloTornozeleira || 'Não informado'] = (byModelo[x.modeloTornozeleira || 'Não informado'] || 0) + 1;
     const day = String(x.createdAt || '').slice(0, 10);
     if (day in byDay) byDay[day]++;
     if (day === today) { todayN++; if (x.status === 'finalizado') todayFin++; }
+    // Detalhado por motivo
+    if (!byMotivoDetalhado[mot]) byMotivoDetalhado[mot] = { total: 0, finalizados: 0, aguardando: 0, em_atendimento: 0, hoje: 0, hojeFinalizados: 0 };
+    byMotivoDetalhado[mot].total++;
+    if (x.status === 'finalizado') byMotivoDetalhado[mot].finalizados++;
+    else if (x.status === 'aguardando') byMotivoDetalhado[mot].aguardando++;
+    else if (x.status === 'em_atendimento') byMotivoDetalhado[mot].em_atendimento++;
+    if (day === today) { byMotivoDetalhado[mot].hoje++; if (x.status === 'finalizado') byMotivoDetalhado[mot].hojeFinalizados++; }
     const key = x.tecnico || '—';
     byTec[key] = byTec[key] || { tecnico: key, iniciados: 0, finalizados: 0 };
     if (x.startedAt) {
@@ -664,6 +674,8 @@ app.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
     }
   });
   const mins = ms => Math.round(ms / 60000);
+  const byMotivoFinalizados = {};
+  Object.keys(byMotivoDetalhado).forEach(m => { byMotivoFinalizados[m] = byMotivoDetalhado[m].finalizados; });
   res.json({
     total: t.length,
     aguardando: t.filter(x => x.status === 'aguardando').length,
@@ -676,6 +688,7 @@ app.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
     cancelados: (await store.tickets.all()).filter(x => x.status === 'cancelado').length,
     prioridade: t.filter(x => x.prioridadeLegal && x.status !== 'finalizado').length,
     byMotivo, byModelo,
+    byMotivoDetalhado, byMotivoFinalizados,
     byTec: Object.values(byTec).sort((a, b) => b.finalizados - a.finalizados),
     byDay
   });

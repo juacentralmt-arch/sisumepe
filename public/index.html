@@ -322,13 +322,25 @@
         <button onclick="exportCSV()" class="btn btn-ghost text-xs px-3.5 py-2">⬇ Exportar CSV</button>
       </div>
       <div id="dashCards" class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4"></div>
+      <!-- Quantitativo por tipo -->
+      <div id="dashMotivoCards" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4"></div>
+      <div class="card p-5 mb-4 overflow-x-auto">
+        <h3 class="font-display font-bold text-sm mb-3">📊 Quantitativo por tipo de atendimento (todos × finalizados × pendentes)</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead><tr class="text-[11px] font-bold tracking-wide text-slate-500 border-b border-slate-200"><th class="text-left py-2 px-2">Motivo</th><th class="text-center py-2 px-2">Total</th><th class="text-center py-2 px-2 text-emerald-700">Finalizados</th><th class="text-center py-2 px-2 text-amber-700">Pendentes</th><th class="text-center py-2 px-2 text-blue-700">Em atendimento</th><th class="text-center py-2 px-2">Hoje</th></tr></thead>
+            <tbody id="dashMotivoTable"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="grid lg:grid-cols-2 gap-4 items-start">
-        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por motivo</h3><div class="h-56"><canvas id="chMotivo"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por motivo (total)</h3><div class="h-56"><canvas id="chMotivo"></canvas></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Finalizados por motivo</h3><div class="h-56"><canvas id="chMotivoFin"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por modelo</h3><div class="h-56"><canvas id="chModelo"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Últimos 7 dias</h3><div class="h-56"><canvas id="chDias"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por técnico</h3><div id="dashTec" class="space-y-2"></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">🕘 Atividade recente (auditoria)</h3><div id="dashFeed" class="space-y-2 max-h-[320px] overflow-y-auto"></div></div>
       </div>
-      <div class="card p-5 mt-4"><h3 class="font-display font-bold text-sm mb-3">🕘 Atividade recente (auditoria)</h3><div id="dashFeed" class="space-y-2"></div></div>
     </section>
 
     <!-- USUÁRIOS (ADMIN) -->
@@ -1783,7 +1795,7 @@ async function saveEdit(){
 }
 
 // --- DASHBOARD GERENCIAL ---
-let chM = null, chMo = null, chD = null;
+let chM = null, chMF = null, chMo = null, chD = null;
 function ensureChart(){
   return new Promise((res, rej) => {
     if(typeof Chart !== 'undefined') return res();
@@ -1809,13 +1821,48 @@ async function loadDash(){
       dashCard('PRIORIDADE NA FILA', d.prioridade, 'text-rose-600') +
       dashCard('ESPERA +30MIN', (d.esperaAlta == null ? 0 : d.esperaAlta), 'text-orange-600') +
       dashCard('ATENDIDOS', document.getElementById('stPes').textContent, 'text-slate-800');
+    // Quantitativo por motivo
+    const det = d.byMotivoDetalhado || {};
+    const ordem = ['Manutenção','Retirada de Tornozeleira','Instalação de Tornozeleira','Botão do Pânico','Outros'];
+    const motivos = Object.keys(det).length ? Object.keys(det).sort((a,b) => (det[b].total||0)-(det[a].total||0)) : Object.keys(d.byMotivo||{});
+    const sortedMotivos = ordem.filter(m => motivos.includes(m)).concat(motivos.filter(m => !ordem.includes(m)));
+    const motifCard = (label, total, fin, pend) => {
+      const pct = total ? Math.round(fin/total*100) : 0;
+      return `<div class="card p-4"><p class="text-[11px] font-bold tracking-wide text-slate-500">${esc(label).toUpperCase()}</p><p class="font-display text-2xl font-extrabold leading-none text-emerald-700 mt-1">${fin}<span class="text-sm font-bold text-slate-400">/${total}</span></p><p class="text-[11px] text-slate-500 mt-1">${pct}% finalizados • <span class="text-amber-700 font-bold">${pend} pendentes</span></p><div class="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${pct}%"></div></div></div>`;
+    };
+    const cardsEl = document.getElementById('dashMotivoCards');
+    if(cardsEl){
+      if(!sortedMotivos.length) cardsEl.innerHTML = '<div class="col-span-full text-xs text-slate-400 text-center py-4">Sem atendimentos registrados.</div>';
+      else cardsEl.innerHTML = sortedMotivos.map(m => {
+        const v = det[m] || { total: d.byMotivo[m]||0, finalizados: 0, aguardando: 0, em_atendimento: 0 };
+        const pend = (v.aguardando||0) + (v.em_atendimento||0);
+        return motifCard(m, v.total||0, v.finalizados||0, pend);
+      }).join('');
+    }
+    const tableEl = document.getElementById('dashMotivoTable');
+    if(tableEl){
+      if(!sortedMotivos.length) tableEl.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">Sem dados</td></tr>';
+      else tableEl.innerHTML = sortedMotivos.map(m => {
+        const v = det[m] || { total: d.byMotivo[m]||0, finalizados: 0, aguardando: 0, em_atendimento: 0, hoje: 0, hojeFinalizados: 0 };
+        const pend = (v.aguardando||0)+(v.em_atendimento||0);
+        return `<tr class="border-b border-slate-100 last:border-0"><td class="py-2.5 px-2 font-semibold text-slate-700">${esc(m)}</td><td class="text-center py-2.5 px-2 font-bold">${v.total||0}</td><td class="text-center py-2.5 px-2 font-extrabold text-emerald-700">${v.finalizados||0}</td><td class="text-center py-2.5 px-2 font-bold text-amber-700">${pend}</td><td class="text-center py-2.5 px-2 text-blue-700">${v.em_atendimento||0}</td><td class="text-center py-2.5 px-2"><span class="font-bold">${v.hoje||0}</span><span class="text-slate-400"> (${v.hojeFinalizados||0} fin.)</span></td></tr>`;
+      }).join('');
+    }
     try{ await ensureChart(); }catch(e){}
     if(typeof Chart !== 'undefined'){
-      if(chM) chM.destroy(); if(chMo) chMo.destroy(); if(chD) chD.destroy();
+      if(chM) chM.destroy(); if(chMF) chMF.destroy(); if(chMo) chMo.destroy(); if(chD) chD.destroy();
       const grid = { color: '#eef2f7' };
       chM = new Chart(document.getElementById('chMotivo'), { type: 'bar',
         data: { labels: Object.keys(d.byMotivo), datasets: [{ data: Object.values(d.byMotivo), backgroundColor: '#6366f1', borderRadius: 8 }] },
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
+      const finLabels = Object.keys(d.byMotivoFinalizados || d.byMotivo);
+      const finData = finLabels.map(k => (d.byMotivoFinalizados && d.byMotivoFinalizados[k] != null) ? d.byMotivoFinalizados[k] : 0);
+      const elFin = document.getElementById('chMotivoFin');
+      if(elFin){
+        chMF = new Chart(elFin, { type: 'bar',
+          data: { labels: finLabels, datasets: [{ label: 'Finalizados', data: finData, backgroundColor: '#10b981', borderRadius: 8 }] },
+          options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
+      }
       chMo = new Chart(document.getElementById('chModelo'), { type: 'doughnut',
         data: { labels: Object.keys(d.byModelo), datasets: [{ data: Object.values(d.byModelo), backgroundColor: ['#06b6d4', '#d946ef', '#94a3b8'] }] },
         options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false } });
