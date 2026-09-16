@@ -819,6 +819,7 @@ function enterApp(){
   document.getElementById('loginOverlay').classList.add('hidden');
   paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
+  setTimeout(preloadOCR, 1200);
 }
 function canSee(t){
   if(!session) return false;
@@ -1351,8 +1352,24 @@ function getCropNormPos(e){
   // inicializa após DOM pronto
   setTimeout(() => { const w = document.getElementById('scanWrap'); if(w) w.style.touchAction = 'none'; }, 500);
 })();
-// --- LER DOCUMENTO (OCR CPF/RG) ---
+// --- LER DOCUMENTO (OCR CPF/RG) - OTIMIZADO VELOZ ---
 let docImg = null, docTesseractReady = false, docTesseractLoading = false;
+let docWorker = null, docWorkerReady = false;
+async function getDocWorker(logger){
+  if(docWorker && docWorkerReady) return docWorker;
+  await ensureTesseract();
+  if(docWorker && docWorkerReady) return docWorker;
+  const w = await Tesseract.createWorker('por', 1, { logger, cacheMethod: 'refresh', gzip: true });
+  await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+  docWorker = w; docWorkerReady = true;
+  return w;
+}
+function preloadOCR(){
+  // pré-carrega OCR em segundo plano (~2MB) para a 1ª leitura ser 3-4s mais rápida
+  if(docWorkerReady || docTesseractLoading) return;
+  ensureTesseract().then(()=> getDocWorker(()=>{}).catch(()=>{})).catch(()=>{});
+  if(!cvReady && !cvLoading) ensureCV().catch(()=>{});
+}
 function ensureTesseract(){
   return new Promise((res, rej) => {
     if(docTesseractReady && typeof Tesseract !== 'undefined') return res();
@@ -1423,12 +1440,12 @@ function cleanOcrForCPF(t){
 }
 function preprocessForOCR(img){
   const c = document.getElementById('docCanvas');
-  // Upscale se muito pequeno (CNH fotografada de longe), limita a 1800 para não estourar memória
+  // Rápido: limita a 1600px (CNH nítida já é suficiente, 30% mais rápido)
   let w = img.naturalWidth, h = img.naturalHeight;
   const maxSide = Math.max(w,h);
   let scale = 1;
-  if(maxSide < 1200) scale = 1800 / maxSide;
-  else if(maxSide > 2200) scale = 2200 / maxSide;
+  if(maxSide < 1100) scale = 1400 / maxSide;
+  else if(maxSide > 1600) scale = 1600 / maxSide;
   w = Math.round(w*scale); h = Math.round(h*scale);
   c.width = w; c.height = h;
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -1468,49 +1485,46 @@ async function analyzeDoc(){
   prog.classList.remove('hidden'); resBox.classList.add('hidden'); err.classList.add('hidden');
   document.getElementById('docFields').classList.add('hidden');
   document.getElementById('docFieldsActions').classList.add('hidden');
-  bar.style.width = '10%'; txt.textContent = 'Carregando OCR...';
+  const a = document.getElementById('docAutoStatus'); if(a){ a.classList.add('hidden'); a.textContent=''; }
+  bar.style.width = '15%'; txt.textContent = docWorkerReady ? 'Preparando imagem...' : 'Inicializando OCR...';
   try{
-    await ensureTesseract();
-    // garante OpenCV disponível para pré-processamento (opcional)
-    if(!cvReady && !cvLoading) ensureCV().catch(()=>{});
-    bar.style.width = '30%'; txt.textContent = 'Preparando imagem...';
-    const canvas = preprocessForOCR(docImg);
-    bar.style.width = '50%'; txt.textContent = 'Lendo documento (pode levar ~8-12s)...';
-    const worker = await Tesseract.createWorker('por', 1, {
-      logger: m => {
-        if(m.status === 'recognizing text' && m.progress != null){
-          const p = 50 + Math.round(m.progress * 45);
-          bar.style.width = p + '%';
-          txt.textContent = 'Lendo... ' + Math.round(m.progress*100) + '%';
-        }
+    const worker = await getDocWorker(m => {
+      if(m.status === 'recognizing text' && m.progress != null){
+        const p = 45 + Math.round(m.progress * 50);
+        bar.style.width = p + '%';
+        txt.textContent = 'Lendo... ' + Math.round(m.progress*100) + '%';
       }
     });
-    await worker.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+    bar.style.width = '35%'; txt.textContent = 'Preparando imagem...';
+    const canvas = preprocessForOCR(docImg);
+    bar.style.width = '45%'; txt.textContent = 'Lendo documento...';
+    try{ await worker.setParameters({ tessedit_pageseg_mode: '6' }); }catch(e){}
     let { data: { text } } = await worker.recognize(canvas);
-    // Se não achou CPF, tenta segunda passada com PSM 11 (esparso) + correção O→0
     if(!/\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}/.test(text)){
       const cleaned = cleanOcrForCPF(text);
       if(/\d{11}/.test(cleaned.replace(/\D/g,''))){
         text = cleaned;
-      } else {
+      } else if((text||'').trim().length < 80){
         try{
           await worker.setParameters({ tessedit_pageseg_mode: '11' });
           const r2 = await worker.recognize(canvas);
           if(r2.data.text && r2.data.text.length > text.length) text = r2.data.text;
-        }catch{}
+          await worker.setParameters({ tessedit_pageseg_mode: '6' });
+        }catch(e){}
       }
     }
-    await worker.terminate();
     bar.style.width = '100%'; txt.textContent = 'Concluído!';
-    setTimeout(() => prog.classList.add('hidden'), 800);
+    setTimeout(() => prog.classList.add('hidden'), 700);
     document.getElementById('docOcrText').textContent = (text || '').trim() || '(nenhum texto detectado)';
     resBox.classList.remove('hidden');
     document.getElementById('docAnalyzeBtn').classList.add('hidden');
     document.getElementById('docRetryBtn').classList.remove('hidden');
     renderDocDetected(text || '');
   }catch(e){
+    try{ if(docWorker){ await docWorker.terminate(); } }catch(e){}
+    docWorker = null; docWorkerReady = false;
     prog.classList.add('hidden');
-    err.textContent = '⚠️ ' + (e.message || 'Falha no OCR');
+    err.textContent = '⚠️ ' + (e.message || 'Falha no OCR. Tente aproximar e melhorar a luz.');
     err.classList.remove('hidden');
   }
 }
