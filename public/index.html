@@ -289,12 +289,12 @@
           <input id="scanPick" type="file" accept="image/*" class="hidden" onchange="scanFileChanged(this)">
           <div id="scanPreview" class="flex gap-1.5 flex-wrap mt-2"></div>
           <input id="tResp" placeholder="Responsável recepção (opcional)" autocomplete="off" class="inp mb-4">
-          <button onclick="abrirTicket()" class="btn btn-green w-full py-3.5 text-sm hidden lg:inline-flex">🎫 Abrir ticket e entrar na fila</button>
+          <button onclick="abrirTicket()" data-abrir-ticket class="btn btn-green w-full py-3.5 text-sm hidden lg:inline-flex">🎫 Abrir ticket e entrar na fila</button>
         </div>
       </div>
       <!-- barra de ação fixa no celular -->
       <div class="lg:hidden sticky bottom-3 mt-4">
-        <button onclick="abrirTicket()" class="btn btn-green w-full py-4 text-base shadow-2xl">🎫 Abrir ticket e entrar na fila</button>
+        <button onclick="abrirTicket()" data-abrir-ticket class="btn btn-green w-full py-4 text-base shadow-2xl">🎫 Abrir ticket e entrar na fila</button>
       </div>
     </section>
 
@@ -337,11 +337,23 @@
       <div id="googleStatus" class="hidden mb-4 rounded-xl p-3 text-xs font-semibold border"></div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="lg:col-span-2 card p-4">
+          <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px] font-bold">
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-rose-200 border border-rose-400"></span> Feriado (não trabalhamos)</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-amber-200 border border-amber-400"></span> Ponto facultativo</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-indigo-500"></span> Agendamento</span>
+          </div>
           <div id="agendaCalendar" class="min-h-[420px]"></div>
         </div>
-        <div class="card p-4">
-          <h3 class="font-display font-bold text-sm mb-3">📋 Próximos agendamentos</h3>
-          <div id="agendaList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        <div class="space-y-4">
+          <div class="card p-4">
+            <h3 class="font-display font-bold text-sm mb-3">📋 Próximos agendamentos</h3>
+            <div id="agendaList" class="space-y-2 max-h-[300px] overflow-y-auto"></div>
+          </div>
+          <div class="card p-4">
+            <h3 class="font-display font-bold text-sm mb-1">🎉 Feriados <span class="text-[10px] font-normal text-slate-400">Juazeiro do Norte-CE</span></h3>
+            <p class="text-[11px] text-slate-500 mb-2">Dias em que não trabalhamos</p>
+            <div id="feriadosList" class="space-y-1.5 max-h-[260px] overflow-y-auto"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -367,9 +379,9 @@
         <div id="termoFormListagem" class="lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()" onchange="scheduleListagemPreview()"></div>
             <div><label class="lbl">DESTINATÁRIO *</label>
-              <select id="termoDest" class="inp mt-1 mb-2.5" onchange="toggleTermoDestOutro()">
+              <select id="termoDest" class="inp mt-1 mb-2.5" onchange="toggleTermoDestOutro(); scheduleListagemPreview()">
                 <option value="" disabled selected>Selecione o destinatário *</option>
                 <option>UP-JUAZEIRO</option>
                 <option>UPF-CRATO</option>
@@ -378,7 +390,7 @@
                 <option>FÓRUM JARDIM</option>
                 <option value="__OUTRO__">Outro (digitar...)</option>
               </select>
-              <input id="termoDestOutro" placeholder="Digite o destinatário..." class="inp mt-1 mb-2.5 hidden">
+              <input id="termoDestOutro" placeholder="Digite o destinatário..." class="inp mt-1 mb-2.5 hidden" oninput="scheduleListagemPreview()">
             </div>
           </div>
           <label class="lbl">EQUIPAMENTOS (até 5 linhas) *</label>
@@ -386,29 +398,23 @@
             <table class="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
               <thead><tr class="bg-[#FFE4CC] text-[11px] font-extrabold"><th class="py-2 px-2 border border-slate-200">TZPR04</th><th class="py-2 px-2 border border-slate-200">FONTE04</th><th class="py-2 px-2 border border-slate-200">CINTA</th><th class="py-2 px-2 border border-slate-200">TRAVA</th></tr></thead>
               <tbody id="termoEquipBody">
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="0" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="1" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="2" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="3" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="4" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
+                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
               </tbody>
             </table>
           </div>
           <div class="grid grid-cols-1 gap-2.5">
-            <div><label class="lbl">RESP. ENTREGA (RG/CPF/MATRÍCULA)</label><input id="termoRespEntrega" placeholder="Ex: João Silva - 123456" class="inp mt-1 mb-2.5"></div>
-            <div><label class="lbl">RESP. RECEBIMENTO (RG/CPF/MATRÍCULA)</label><input id="termoRespRec" placeholder="Ex: Maria Oliveira - 654321" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">RESP. ENTREGA (RG/CPF/MATRÍCULA)</label><input id="termoRespEntrega" placeholder="Ex: João Silva - 123456" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()"></div>
+            <div><label class="lbl">RESP. RECEBIMENTO (RG/CPF/MATRÍCULA)</label><input id="termoRespRec" placeholder="Ex: Maria Oliveira - 654321" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()"></div>
           </div>
           <div class="flex gap-2 mt-2">
             <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
             <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
           </div>
-          <div id="termoPreviewWrap" class="hidden mt-4 border border-slate-200 rounded-xl overflow-hidden">
-            <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <span class="text-xs font-bold">Pré-visualização PDF</span>
-              <button onclick="document.getElementById('termoPreviewWrap').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕ Fechar</button>
-            </div>
-            <iframe id="termoPreviewFrame" class="w-full h-[640px] bg-white"></iframe>
-          </div>
+          <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="termoListAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleListagemPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="termoListPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
           <p id="termoErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <div id="termoFormRecolhimento" class="hidden lg:col-span-2 card p-5">
@@ -436,18 +442,20 @@
             <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
           </div>
           <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="termoRecAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleRecPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="termoRecPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
-          <div id="termoRecPreviewWrap" class="hidden mt-3 border border-slate-200 rounded-xl overflow-hidden">
-            <div class="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <span class="text-xs font-bold">Pré-visualização em tempo real</span>
-              <button onclick="document.getElementById('termoRecPreviewWrap').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕ Fechar</button>
-            </div>
-            <iframe id="termoRecPreviewFrame" class="w-full h-[640px] bg-white"></iframe>
-          </div>
           <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
-        <div class="card p-4">
-          <h3 class="font-display font-bold text-sm mb-3">📚 Histórico de termos</h3>
-          <div id="termosList" class="space-y-2 max-h-[640px] overflow-y-auto"></div>
+        <div class="space-y-4">
+          <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-display font-bold text-sm">👁️ Pré-visualização <span id="termoPreviewTitle" class="text-[10px] font-bold text-indigo-600"></span></h3>
+              <button onclick="document.getElementById('termoPreviewWrapSide').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕</button>
+            </div>
+            <iframe id="termoPreviewFrameSide" class="w-full h-[560px] bg-white rounded-xl border border-slate-200"></iframe>
+          </div>
+          <div class="card p-4">
+            <h3 class="font-display font-bold text-sm mb-3">📚 Histórico de termos</h3>
+            <div id="termosList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -747,9 +755,10 @@
     <label class="lbl">DESCRIÇÃO</label>
     <textarea id="agDesc" rows="2" placeholder="Detalhes, endereço, observações..." class="inp mt-1 mb-2.5"></textarea>
     <div class="grid grid-cols-2 gap-2.5">
-      <div><label class="lbl">INÍCIO *</label><input id="agStart" type="datetime-local" class="inp mt-1 mb-2.5"></div>
+      <div><label class="lbl">INÍCIO *</label><input id="agStart" type="datetime-local" class="inp mt-1 mb-2.5" oninput="checkAgFeriado()" onchange="checkAgFeriado()"></div>
       <div><label class="lbl">FIM *</label><input id="agEnd" type="datetime-local" class="inp mt-1 mb-2.5"></div>
     </div>
+    <div id="agFeriadoWarn" class="hidden rounded-xl p-2.5 mb-2.5 text-xs font-bold border"></div>
     <label class="lbl">ATENDIDO (opcional)</label>
     <div class="flex gap-2 mt-1 mb-2.5">
       <input id="agPersonQ" placeholder="Buscar por nome/CPF..." class="inp flex-1" onkeydown="if(event.key==='Enter')searchAgPerson()">
@@ -1196,12 +1205,24 @@ function paintModelo(){
     if (chk) chk.style.display = on ? 'flex' : 'none';
   });
 }
+let abrirTicketBusy = false;
+function setAbrirTicketBusy(b){
+  abrirTicketBusy = b;
+  document.querySelectorAll('[data-abrir-ticket]').forEach(btn=>{
+    btn.disabled = b;
+    btn.classList.toggle('opacity-60', b);
+    if(b){ btn.dataset.labelOrig = btn.innerHTML; btn.innerHTML = '⏳ Abrindo ticket...'; }
+    else if(btn.dataset.labelOrig){ btn.innerHTML = btn.dataset.labelOrig; delete btn.dataset.labelOrig; }
+  });
+}
 async function abrirTicket(){
+  if(abrirTicketBusy) return;
   if(!selPersonId) return toast('⚠️ Selecione o atendido primeiro');
   const motivoSel = document.getElementById('tMotivo').value;
   if(!motivoSel) return toast('⚠️ Selecione o motivo do atendimento');
   if(!modeloSel) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
   if([...document.getElementById('tFiles').files].length > 5) return toast('⚠️ Máximo de 5 anexos por ticket');
+  setAbrirTicketBusy(true);
   const fd=new FormData();
   fd.append('personId',selPersonId); fd.append('motivo',motivoSel);
   fd.append('descricao',document.getElementById('tDesc').value); fd.append('prioridadeLegal',prio);
@@ -1210,12 +1231,14 @@ async function abrirTicket(){
   fd.append('createdBy', session ? session.user : '');
   [...document.getElementById('tFiles').files].forEach(f=>fd.append('anexos',f));
   try{ const t=await authFetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
-    toast('🎫 Ticket '+t.code+' criado!'); document.getElementById('tDesc').value=''; document.getElementById('tFiles').value=''; document.getElementById('tMotivo').value='';
+    toast(t.duplicated ? ('🎫 Ticket '+t.code+' já havia sido criado!') : ('🎫 Ticket '+t.code+' criado!'));
+    document.getElementById('tDesc').value=''; document.getElementById('tFiles').value=''; document.getElementById('tMotivo').value='';
     refreshScanPreview();
     modeloSel=''; paintModelo(); prio=false;
     const pb=document.getElementById('prioBtn'); pb.textContent='NÃO'; pb.className='px-5 py-2 rounded-full text-xs font-extrabold transition bg-white border border-slate-200 text-slate-500';
     loadAll(); go('fila');
   }catch(e){ toast('⚠️ '+e.message); }
+  finally{ setAbrirTicketBusy(false); }
 }
 
 // --- DIGITALIZAR DOCUMENTOS + RECORTE LIVRE ---
@@ -2238,6 +2261,79 @@ function renderTec(){
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
 }
+// --- FERIADOS (Nacionais + CE + Juazeiro do Norte-CE) ---
+// Fontes: Portaria MGI 11.460/2025 + Circular CDL Juazeiro 01/2026
+function pascoa(ano){
+  // Computus (Meeus/Jones/Butcher)
+  const a = ano % 19, b = Math.floor(ano/100), c = ano % 100;
+  const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3);
+  const h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c/4), k = c % 4;
+  const l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l)/451);
+  const mes = Math.floor((h + l - 7*m + 114)/31), dia = ((h + l - 7*m + 114) % 31) + 1;
+  return new Date(ano, mes-1, dia);
+}
+function fmtData(d){ const p = n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function addDias(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function getFeriados(ano){
+  const F = []; // {data:'AAAA-MM-DD', nome, tipo:'feriado'|'facultativo', ambito:'nacional'|'estadual'|'municipal'}
+  const P = pascoa(ano);
+  const fixos = [
+    ['01-01','Confraternização Universal','feriado','nacional'],
+    ['04-21','Tiradentes','feriado','nacional'],
+    ['05-01','Dia do Trabalho','feriado','nacional'],
+    ['09-07','Independência do Brasil','feriado','nacional'],
+    ['10-12','Nossa Senhora Aparecida','feriado','nacional'],
+    ['11-02','Finados','feriado','nacional'],
+    ['11-15','Proclamação da República','feriado','nacional'],
+    ['11-20','Consciência Negra','feriado','nacional'],
+    ['12-25','Natal','feriado','nacional'],
+    ['03-19','São José (padroeiro do Ceará)','feriado','estadual'],
+    ['03-25','Data Magna do Ceará','feriado','estadual'],
+    ['03-24','Aniversário do Padre Cícero','feriado','municipal'],
+    ['07-22','Dia do Município (Juazeiro do Norte)','feriado','municipal'],
+    ['09-15','N. Sra. das Dores (padroeira Juazeiro)','feriado','municipal'],
+    ['11-30','Dia do Evangélico (Juazeiro do Norte)','feriado','municipal'],
+    ['10-28','Dia do Servidor Público','facultativo','nacional'],
+    ['12-24','Véspera de Natal','facultativo','nacional'],
+    ['12-31','Véspera de Ano Novo','facultativo','nacional']
+  ];
+  fixos.forEach(([md,nome,tipo,ambito])=> F.push({ data: `${ano}-${md}`, nome, tipo, ambito }));
+  F.push({ data: fmtData(addDias(P,-47)), nome: 'Carnaval (segunda-feira)', tipo: 'facultativo', ambito: 'nacional' });
+  F.push({ data: fmtData(addDias(P,-46)), nome: 'Carnaval (terça-feira)', tipo: 'facultativo', ambito: 'nacional' });
+  F.push({ data: fmtData(addDias(P,-45)), nome: 'Quarta-feira de Cinzas', tipo: 'facultativo', ambito: 'nacional' });
+  F.push({ data: fmtData(addDias(P,-2)), nome: 'Paixão de Cristo (Sexta-feira Santa)', tipo: 'feriado', ambito: 'nacional' });
+  F.push({ data: fmtData(addDias(P,60)), nome: 'Corpus Christi', tipo: 'facultativo', ambito: 'nacional' });
+  if(ano === 2026){
+    F.push({ data: '2026-04-20', nome: 'Ponto facultativo (véspera de Tiradentes)', tipo: 'facultativo', ambito: 'nacional' });
+    F.push({ data: '2026-06-05', nome: 'Ponto facultativo (pós-Corpus Christi)', tipo: 'facultativo', ambito: 'nacional' });
+  }
+  return F.sort((a,b)=> a.data < b.data ? -1 : 1);
+}
+function feriadoEm(dataISO){
+  if(!dataISO) return null;
+  const dia = String(dataISO).slice(0,10);
+  const ano = Number(dia.slice(0,4));
+  return getFeriados(ano).find(f=> f.data === dia) || getFeriados(ano+1).find(f=> f.data === dia) || null;
+}
+function renderFeriadosList(){
+  const box = document.getElementById('feriadosList');
+  if(!box) return;
+  const hoje = new Date().toISOString().slice(0,10);
+  const ano = new Date().getFullYear();
+  const prox = getFeriados(ano).concat(getFeriados(ano+1)).filter(f=> f.data >= hoje).slice(0,25);
+  const badge = a => a === 'nacional' ? '<span class="text-[9px] font-extrabold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">NAC</span>' : a === 'estadual' ? '<span class="text-[9px] font-extrabold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">CE</span>' : '<span class="text-[9px] font-extrabold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">JUAZEIRO</span>';
+  box.innerHTML = prox.length ? prox.map(f=>{
+    const dt = new Date(f.data+'T12:00:00');
+    const isFac = f.tipo === 'facultativo';
+    return `<div class="flex items-center gap-2 border ${isFac?'border-amber-200 bg-amber-50/50':'border-rose-200 bg-rose-50/50'} rounded-lg px-2.5 py-1.5 text-xs">
+      <span class="font-extrabold ${isFac?'text-amber-700':'text-rose-700'} flex-none">${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}</span>
+      <span class="flex-1 min-w-0"><b class="block truncate">${esc(f.nome)}</b><span class="text-[10px] text-slate-500">${dt.toLocaleDateString('pt-BR',{weekday:'short'})} • ${isFac?'ponto facultativo':'feriado — não trabalhamos'}</span></span>
+      ${badge(f.ambito)}
+    </div>`;
+  }).join('') : '<p class="text-xs text-slate-400">Sem feriados próximos.</p>';
+}
 // --- AGENDA TÉCNICO + GOOGLE CALENDAR ---
 let agendaEvents = [], agendaCalendar = null, editingAgendaId = null, agPersonSel = null;
 function ensureFullCalendar(){
@@ -2259,6 +2355,7 @@ async function loadAgenda(){
     const list = await api('/api/agenda');
     agendaEvents = list;
     renderAgendaList();
+    renderFeriadosList();
     await renderAgendaCalendar();
   }catch(e){ toast('⚠️ ' + e.message); }
 }
@@ -2275,6 +2372,25 @@ async function renderAgendaCalendar(){
     backgroundColor: '#0ea5e9',
     borderColor: '#0ea5e9'
   }));
+  // Feriados visíveis como eventos com destaque (vermelho = feriado não trabalhamos, âmbar = facultativo)
+  try{
+    const anoAtual = new Date().getFullYear();
+    [anoAtual-1, anoAtual, anoAtual+1, anoAtual+2].forEach(a=>{
+      getFeriados(a).forEach(f=>{
+        const isFac = f.tipo === 'facultativo';
+        events.push({
+          id: 'feriado-' + f.data,
+          title: (isFac ? '☆ ' : '★ ') + f.nome + (isFac ? ' (Ponto Facultativo)' : ' (Não Trabalhamos)'),
+          start: f.data,
+          allDay: true,
+          backgroundColor: isFac ? '#d97706' : '#dc2626',
+          textColor: '#ffffff',
+          borderColor: isFac ? '#b45309' : '#b91c1c',
+          extendedProps: { feriado: f }
+        });
+      });
+    });
+  }catch(e){}
   if(agendaCalendar){ agendaCalendar.destroy(); agendaCalendar = null; }
   setTimeout(()=>{
     agendaCalendar = new FullCalendar.Calendar(el, {
@@ -2283,20 +2399,38 @@ async function renderAgendaCalendar(){
       headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
       height: 520,
       events,
-      eventClick: info => openAgendaModal(Number(info.event.id)),
+      eventClick: info => {
+        if(info.event.extendedProps && info.event.extendedProps.feriado){
+          const f = info.event.extendedProps.feriado;
+          const isFac = f.tipo === 'facultativo';
+          toast((isFac ? '☆ ' : '★ ') + f.nome + ' — ' + (isFac ? 'Ponto facultativo' : 'Feriado: Não trabalhamos!'));
+          return;
+        }
+        openAgendaModal(Number(info.event.id));
+      },
       dateClick: info => openAgendaModal(null, info.dateStr),
       selectable: true,
       select: info => openAgendaModal(null, info.startStr, info.endStr),
       buttonText: { today: 'hoje', month: 'mês', week: 'semana', day: 'dia', list: 'lista' },
       dayCellDidMount: function(info){
-        const dateStr = info.date.toISOString().slice(0,10);
+        const dateStr = info.dateStr || (info.date.getFullYear() + '-' + String(info.date.getMonth()+1).padStart(2,'0') + '-' + String(info.date.getDate()).padStart(2,'0'));
+        const fer = feriadoEm(dateStr);
+        if(fer){
+          const isFac = fer.tipo === 'facultativo';
+          info.el.style.backgroundColor = isFac ? '#fef3c7' : '#fee2e2';
+          info.el.style.position = 'relative';
+          const tag = document.createElement('div');
+          tag.style.cssText = 'margin:2px 2px 0 2px; padding:2px 4px; border-radius:4px; font-size:10px; font-weight:800; line-height:1.2; text-align:left; ' + (isFac ? 'background:#d97706; color:#fff;' : 'background:#dc2626; color:#fff;');
+          tag.innerHTML = (isFac ? '☆ FACULTATIVO<br>' : '★ NÃO TRABALHA<br>') + esc(fer.nome);
+          info.el.appendChild(tag);
+        }
         const count = agendaEvents.filter(ev => {
           const evStart = new Date(ev.start).toISOString().slice(0,10);
           const evEnd = new Date(ev.end).toISOString().slice(0,10);
           return dateStr >= evStart && dateStr <= evEnd;
         }).length;
         if(count > 0){
-          info.el.style.backgroundColor = '#eff6ff';
+          if(!fer) info.el.style.backgroundColor = '#eff6ff';
           info.el.style.borderBottom = '3px solid #3b82f6';
           const badge = document.createElement('div');
           badge.style.cssText = 'position:absolute;top:2px;right:4px;background:#3b82f6;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:2;';
@@ -2356,6 +2490,17 @@ function openAgendaModal(id, dateStr, endStr){
     delBtn.classList.add('hidden');
   }
   document.getElementById('modalAgenda').classList.remove('hidden');
+  checkAgFeriado();
+}
+function checkAgFeriado(){
+  const box = document.getElementById('agFeriadoWarn');
+  if(!box) return;
+  const v = document.getElementById('agStart').value;
+  const f = v ? feriadoEm(v) : null;
+  if(!f){ box.classList.add('hidden'); return; }
+  const isFac = f.tipo === 'facultativo';
+  box.className = 'rounded-xl p-2.5 mb-2.5 text-xs font-bold border ' + (isFac ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-rose-50 border-rose-300 text-rose-800');
+  box.textContent = (isFac ? '☆ Ponto facultativo: ' : '★ Feriado (não trabalhamos): ') + f.nome + ' — ' + new Date(f.data+'T12:00:00').toLocaleDateString('pt-BR');
 }
 function toLocalDT(iso){
   const d = new Date(iso);
@@ -2503,7 +2648,7 @@ function clearTermoForm(){
   document.getElementById('termoRecTecnicoMat').value = '';
   if(session) document.getElementById('termoRecTecnico').value = session.name;
   document.getElementById('termoRecErr').classList.add('hidden');
-  document.getElementById('termoRecPreviewWrap').classList.add('hidden');
+  document.getElementById('termoPreviewWrapSide').classList.add('hidden');
   document.getElementById('termoRecPreviewStatus').textContent = '';
   clearTimeout(recPreviewTimer);
   document.getElementById('termoData').valueAsDate = new Date();
@@ -2519,7 +2664,7 @@ function clearTermoForm(){
     });
   }
   document.getElementById('termoErr').classList.add('hidden');
-  document.getElementById('termoPreviewWrap').classList.add('hidden');
+  document.getElementById('termoPreviewWrapSide').classList.add('hidden');
 }
 let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
@@ -2535,6 +2680,8 @@ function setTermoTipo(t){
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
   renderTermos();
+  if(t === 'listagem') scheduleListagemPreview(true);
+  else scheduleRecPreview(true);
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -2601,6 +2748,8 @@ async function loadTermos(){
       document.getElementById('termoRecDataHora').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
     }
     if(!document.getElementById('termoRecTecnico').value && session) document.getElementById('termoRecTecnico').value = session.name;
+    if(termoTipoAtivo === 'listagem') scheduleListagemPreview(true);
+    else scheduleRecPreview(true);
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function renderTermos(){
@@ -2678,26 +2827,46 @@ async function saveTermoRec(){
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function previewTermoPDF(){
-  if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF();
+  if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF(false);
+  return previewTermoListagemPDF(false);
+}
+let listPreviewTimer = null;
+function scheduleListagemPreview(now){
+  const tgl = document.getElementById('termoListAutoPreview');
+  if(tgl && !tgl.checked) return;
+  if(termoTipoAtivo !== 'listagem') return;
+  clearTimeout(listPreviewTimer);
+  listPreviewTimer = setTimeout(()=> previewTermoListagemPDF(true), now ? 400 : 1500);
+}
+async function previewTermoListagemPDF(silent){
   const err = document.getElementById('termoErr');
-  err.classList.add('hidden');
+  if(err) err.classList.add('hidden');
   const data = getTermoFormData();
   data.tipo = 'listagem';
-  if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório para visualizar'; err.classList.remove('hidden'); return; }
-  if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
+  if(!silent && !data.destinatario){
+    if(err){ err.textContent='⚠️ Destinatário é obrigatório para visualizar'; err.classList.remove('hidden'); }
+    return;
+  }
+  const status = document.getElementById('termoListPreviewStatus');
   try{
+    if(status) status.textContent = silent ? '⏳ atualizando...' : '';
     const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrame');
-    const wrap = document.getElementById('termoPreviewWrap');
-    frame.src = url;
-    wrap.classList.remove('hidden');
-    wrap.scrollIntoView({behavior:'smooth', block:'center'});
-    // limpa URL antiga após 60s
+    const frame = document.getElementById('termoPreviewFrameSide');
+    const wrap = document.getElementById('termoPreviewWrapSide');
+    const title = document.getElementById('termoPreviewTitle');
+    if(frame) frame.src = url;
+    if(title) title.textContent = '— Termo de Listagem';
+    if(wrap) wrap.classList.remove('hidden');
+    if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     setTimeout(()=>URL.revokeObjectURL(url), 60000);
-  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+  }catch(e){
+    if(status) status.textContent = '';
+    if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+  }
 }
 async function previewTermoExistente(id){
   try{
@@ -2707,10 +2876,12 @@ async function previewTermoExistente(id){
     if(!res.ok) throw new Error('Erro ao gerar PDF');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById(isRec ? 'termoRecPreviewFrame' : 'termoPreviewFrame');
-    const wrap = document.getElementById(isRec ? 'termoRecPreviewWrap' : 'termoPreviewWrap');
+    const frame = document.getElementById('termoPreviewFrameSide');
+    const wrap = document.getElementById('termoPreviewWrapSide');
+    const title = document.getElementById('termoPreviewTitle');
     if(!frame || !wrap) throw new Error('Pré-visualização indisponível nesta aba');
     frame.src = url;
+    if(title) title.textContent = '— Termo #' + id + (isRec ? ' (Recolhimento)' : ' (Listagem)');
     wrap.classList.remove('hidden');
     wrap.scrollIntoView({behavior:'smooth', block:'center'});
     setTimeout(()=>URL.revokeObjectURL(url), 60000);
@@ -2729,10 +2900,10 @@ async function downloadTermoPDF(id){
 }
 async function previewTermoRecPDF(silent){
   const err = document.getElementById('termoRecErr');
-  err.classList.add('hidden');
+  if(err) err.classList.add('hidden');
   const rec = getRecFormData();
   if(!rec.equipamentos.some(e=>e.numero)){
-    if(!silent){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
+    if(!silent && err){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
     return;
   }
   const status = document.getElementById('termoRecPreviewStatus');
@@ -2742,16 +2913,18 @@ async function previewTermoRecPDF(silent){
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoRecPreviewFrame');
-    const wrap = document.getElementById('termoRecPreviewWrap');
+    const frame = document.getElementById('termoPreviewFrameSide');
+    const wrap = document.getElementById('termoPreviewWrapSide');
+    const title = document.getElementById('termoPreviewTitle');
     if(frame) frame.src = url;
+    if(title) title.textContent = '— Termo de Recolhimento';
     if(wrap) wrap.classList.remove('hidden');
     if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
     if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     setTimeout(()=>URL.revokeObjectURL(url), 60000);
   }catch(e){
     if(status) status.textContent = '';
-    if(!silent){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+    if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
   }
 }
 let recPreviewTimer = null;

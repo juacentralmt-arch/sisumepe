@@ -424,6 +424,17 @@ app.post('/api/tickets', auth(), upload.array('anexos', 5), ah(async (req, res) 
   if (!person) return res.status(400).json({ error: 'Atendido inválido. Selecione ou cadastre a pessoa.' });
   if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
   if (!modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  // Anti-duplicidade: mesmo atendido + motivo + criador nos últimos 20s = duplo clique
+  try{
+    const recent = (await store.tickets.all()).filter(x =>
+      String(x.personId) === String(person.id) && x.motivo === motivo &&
+      (x.createdBy || '') === req.auth.user && (Date.now() - new Date(x.createdAt).getTime()) < 20000
+    ).sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt))[0];
+    if(recent){
+      const persons = await store.persons.all();
+      return res.json(Object.assign(enrich(recent, persons), { duplicated: true }));
+    }
+  }catch(e){}
   const files = await mapFiles(req.files);
   const creator = await store.users.byName(req.auth.user);
   const ticket = await store.tickets.insert({
