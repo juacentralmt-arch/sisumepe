@@ -304,11 +304,11 @@ const store = {
   agenda: {
     async allByUser(user){
       if(MODE==='file') return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start));
-      try{ return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG); }catch(e){ console.warn('agenda.allByUser fallback (tabela não existe?)', e.message); return []; }
+      try{ return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG); }catch(e){ console.warn('agenda.allByUser fallback (tabela não existe?)', e.message); return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start)); }
     },
     async all(){
       if(MODE==='file') return mem.agenda;
-      try{ return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG); }catch(e){ console.warn('agenda.all fallback', e.message); return []; }
+      try{ return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG); }catch(e){ console.warn('agenda.all fallback', e.message); return mem.agenda; }
     },
     async byId(id){
       if(MODE==='file') return mem.agenda.find(x=>eqi(x.id,id))||null;
@@ -325,7 +325,7 @@ const store = {
       }catch(e){
         console.warn('agenda.insert fallback para file', e.message);
         const row={ id: mem.seqAgenda++, ...ev, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        mem.agenda.push(row); if(MODE==='file') saveFile(); return row;
+        mem.agenda.push(row); saveFile(); return row;
       }
     },
     async patch(id, fields){
