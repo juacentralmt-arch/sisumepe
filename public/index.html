@@ -474,12 +474,27 @@
 <div id="modalScan" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl fade max-h-[92vh] overflow-y-auto">
     <h3 class="font-display font-bold text-lg">📄 Digitalizar documento</h3>
-    <p class="text-xs text-slate-500 mt-1">Fotografe o documento impresso e aplique o filtro para melhor leitura.</p>
-    <canvas id="scanCanvas" class="w-full rounded-xl border border-slate-200 bg-slate-100 mt-3"></canvas>
+    <p class="text-xs text-slate-500 mt-1">Fotografe o documento, <b>recorte</b> só o que deseja e aplique o filtro.</p>
+    <div id="scanWrap" class="relative w-full mt-3 select-none" style="touch-action:none">
+      <canvas id="scanCanvas" class="w-full rounded-xl border border-slate-200 bg-slate-100 block"></canvas>
+      <div id="cropOverlay" class="hidden absolute inset-0 rounded-xl overflow-hidden">
+        <div id="cropBox" class="absolute border-2 border-indigo-600 bg-indigo-500/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" style="cursor:move; touch-action:none">
+          <div class="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-handle="nw" style="cursor:nw-resize"></div>
+          <div class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-handle="ne" style="cursor:ne-resize"></div>
+          <div class="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-handle="sw" style="cursor:sw-resize"></div>
+          <div class="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-sm" data-handle="se" style="cursor:se-resize"></div>
+        </div>
+      </div>
+    </div>
     <div class="flex items-center gap-2 mt-2">
       <button type="button" id="straightBtn" onclick="toggleStraighten()" class="btn btn-ghost flex-1 py-2.5 text-xs">📐 Endireitar: ON</button>
       <span id="scanStatus" class="flex-1 text-[11px] text-slate-500 text-center"></span>
     </div>
+    <div class="flex gap-2 mt-2">
+      <button type="button" id="cropToggleBtn" onclick="toggleCrop()" class="btn btn-ghost flex-1 py-2.5 text-xs">✂️ Recortar: OFF</button>
+      <button type="button" onclick="resetCrop()" class="btn btn-ghost flex-1 py-2.5 text-xs">↺ Reset recorte</button>
+    </div>
+    <p id="cropHint" class="hidden text-[11px] text-indigo-600 font-semibold text-center mt-1.5">Arraste na imagem para criar o recorte • arraste a caixa para mover • puxe as alças para redimensionar</p>
     <div class="grid grid-cols-3 gap-2 mt-3">
       <button type="button" data-sf="orig" onclick="setScanFilter('orig')" class="rounded-xl border-2 border-slate-200 py-2.5 text-xs font-bold">Original</button>
       <button type="button" data-sf="pb" onclick="setScanFilter('pb')" class="rounded-xl border-2 border-slate-200 py-2.5 text-xs font-bold">Doc. P&amp;B</button>
@@ -942,10 +957,12 @@ async function abrirTicket(){
   }catch(e){ toast('⚠️ '+e.message); }
 }
 
-// --- DIGITALIZAR DOCUMENTOS ---
+// --- DIGITALIZAR DOCUMENTOS + RECORTE LIVRE ---
 let scanImg = null, scanAngle = 0, scanFilter = 'orig', scanModeCam = false;
 let scanStraighten = true, scanQuad = null, scanWarped = null;
 let cvReady = false, cvLoading = false;
+// Recorte livre
+let cropEnabled = false, cropRect = null, cropDrag = null, cropOrig = null;
 function ensureCV(){
   return new Promise((res, rej) => {
     try{
@@ -1082,6 +1099,10 @@ function scanFileChanged(inp){
     scanImg = img; scanAngle = 0;
     scanFilter = scanModeCam ? 'orig' : 'pb';
     scanStraighten = !scanModeCam;
+    cropEnabled = false; cropRect = null; cropDrag = null;
+    const tb = document.getElementById('cropToggleBtn'); if(tb) tb.textContent = '✂️ Recortar: OFF';
+    const hint = document.getElementById('cropHint'); if(hint) hint.classList.add('hidden');
+    const ov = document.getElementById('cropOverlay'); if(ov) ov.classList.add('hidden');
     runStraighten();
     document.getElementById('modalScan').classList.remove('hidden');
     URL.revokeObjectURL(img.src);
@@ -1127,22 +1148,139 @@ function drawScan(){
     ctx.putImageData(id, 0, 0);
   }
   paintScanFilters();
+  if(cropEnabled) updateCropBox();
 }
-function closeScan(){ document.getElementById('modalScan').classList.add('hidden'); }
+function closeScan(){
+  document.getElementById('modalScan').classList.add('hidden');
+  cropEnabled = false; cropRect = null; cropDrag = null;
+  const ov = document.getElementById('cropOverlay'); if(ov) ov.classList.add('hidden');
+  const tb = document.getElementById('cropToggleBtn'); if(tb) tb.textContent = '✂️ Recortar: OFF';
+  const hint = document.getElementById('cropHint'); if(hint) hint.classList.add('hidden');
+}
 function attachScan(){
   const cv = document.getElementById('scanCanvas');
   if(!scanImg || !cv.width) return;
-  cv.toBlob(blob => {
-    if(!blob) return toast('⚠️ Falha ao processar imagem');
-    const cur = document.getElementById('tFiles');
-    if(cur.files.length >= 5) return toast('⚠️ Máximo de 5 anexos por ticket');
-    const dt = new DataTransfer();
-    [...cur.files].forEach(f => dt.items.add(f));
-    dt.items.add(new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
-    cur.files = dt.files;
-    refreshScanPreview(); closeScan(); toast('Documento digitalizado e anexado!');
-  }, 'image/jpeg', 0.85);
+  const doAttach = (canvas) => {
+    canvas.toBlob(blob => {
+      if(!blob) return toast('⚠️ Falha ao processar imagem');
+      const cur = document.getElementById('tFiles');
+      if(cur.files.length >= 5) return toast('⚠️ Máximo de 5 anexos por ticket');
+      const dt = new DataTransfer();
+      [...cur.files].forEach(f => dt.items.add(f));
+      dt.items.add(new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
+      cur.files = dt.files;
+      refreshScanPreview(); closeScan(); toast(cropEnabled && cropRect ? 'Imagem recortada e anexada!' : 'Documento digitalizado e anexado!');
+    }, 'image/jpeg', 0.85);
+  };
+  if(cropEnabled && cropRect){
+    const sx = Math.round(Math.max(0, Math.min(1, cropRect.x)) * cv.width);
+    const sy = Math.round(Math.max(0, Math.min(1, cropRect.y)) * cv.height);
+    const sw = Math.round(Math.max(20, Math.min(cv.width - sx, cropRect.w * cv.width)));
+    const sh = Math.round(Math.max(20, Math.min(cv.height - sy, cropRect.h * cv.height)));
+    if(sw < 10 || sh < 10) return toast('⚠️ Área de recorte muito pequena');
+    const tmp = document.createElement('canvas');
+    tmp.width = sw; tmp.height = sh;
+    tmp.getContext('2d').drawImage(cv, sx, sy, sw, sh, 0, 0, sw, sh);
+    doAttach(tmp);
+  } else {
+    doAttach(cv);
+  }
 }
+// --- Recorte livre ---
+function toggleCrop(){
+  cropEnabled = !cropEnabled;
+  const tb = document.getElementById('cropToggleBtn');
+  const ov = document.getElementById('cropOverlay');
+  const hint = document.getElementById('cropHint');
+  if(tb) tb.textContent = cropEnabled ? '✂️ Recortar: ON' : '✂️ Recortar: OFF';
+  if(cropEnabled){
+    if(!cropRect) cropRect = { x: 0.08, y: 0.08, w: 0.84, h: 0.84 };
+    if(ov) ov.classList.remove('hidden');
+    if(hint) hint.classList.remove('hidden');
+    updateCropBox();
+    setScanStatus('Recorte ativo: arraste para criar/mover, puxe as alças para ajustar');
+  } else {
+    if(ov) ov.classList.add('hidden');
+    if(hint) hint.classList.add('hidden');
+    setScanStatus('');
+  }
+}
+function resetCrop(){
+  if(!cropEnabled) toggleCrop();
+  cropRect = { x: 0.08, y: 0.08, w: 0.84, h: 0.84 };
+  updateCropBox();
+}
+function updateCropBox(){
+  const box = document.getElementById('cropBox');
+  const ov = document.getElementById('cropOverlay');
+  if(!box || !ov || !cropRect) return;
+  box.style.left = (cropRect.x * 100) + '%';
+  box.style.top = (cropRect.y * 100) + '%';
+  box.style.width = (cropRect.w * 100) + '%';
+  box.style.height = (cropRect.h * 100) + '%';
+}
+function getCropNormPos(e){
+  const wrap = document.getElementById('scanWrap');
+  const r = wrap.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+  return { x: Math.max(0, Math.min(1, (cx - r.left) / r.width)), y: Math.max(0, Math.min(1, (cy - r.top) / r.height)) };
+}
+(function initCropHandlers(){
+  const wrap = document.getElementById('scanWrap');
+  if(!wrap) return;
+  const box = document.getElementById('cropBox');
+  wrap.addEventListener('pointerdown', (e) => {
+    if(!cropEnabled) return;
+    const pos = getCropNormPos(e);
+    const handle = e.target && e.target.getAttribute && e.target.getAttribute('data-handle');
+    if(handle){
+      cropDrag = handle; cropOrig = { ...cropRect }; e.preventDefault();
+      try{ e.target.setPointerCapture(e.pointerId); }catch{}
+      return;
+    }
+    const inside = cropRect && pos.x >= cropRect.x && pos.x <= cropRect.x + cropRect.w && pos.y >= cropRect.y && pos.y <= cropRect.y + cropRect.h;
+    if(inside){
+      cropDrag = 'move'; cropOrig = { ...cropRect, dx: pos.x - cropRect.x, dy: pos.y - cropRect.y };
+    } else {
+      cropDrag = 'create'; cropOrig = { x: pos.x, y: pos.y };
+      cropRect = { x: pos.x, y: pos.y, w: 0.02, h: 0.02 };
+    }
+    wrap.setPointerCapture && wrap.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', (e) => {
+    if(!cropEnabled || !cropDrag) return;
+    const pos = getCropNormPos(e);
+    if(cropDrag === 'move'){
+      let nx = pos.x - cropOrig.dx, ny = pos.y - cropOrig.dy;
+      nx = Math.max(0, Math.min(1 - cropOrig.w, nx)); ny = Math.max(0, Math.min(1 - cropOrig.h, ny));
+      cropRect.x = nx; cropRect.y = ny;
+    } else if(cropDrag === 'create'){
+      let x = Math.min(cropOrig.x, pos.x), y = Math.min(cropOrig.y, pos.y);
+      let w = Math.abs(pos.x - cropOrig.x), h = Math.abs(pos.y - cropOrig.y);
+      w = Math.max(0.05, w); h = Math.max(0.05, h);
+      if(x + w > 1) w = 1 - x; if(y + h > 1) h = 1 - y;
+      cropRect = { x, y, w, h };
+    } else {
+      let { x, y, w, h } = cropOrig;
+      if(cropDrag === 'nw'){ const nx = pos.x, ny = pos.y; w = (x + w) - nx; h = (y + h) - ny; x = nx; y = ny; }
+      else if(cropDrag === 'ne'){ const ny = pos.y; w = pos.x - x; h = (y + h) - ny; y = ny; }
+      else if(cropDrag === 'sw'){ const nx = pos.x; w = (x + w) - nx; h = pos.y - y; x = nx; }
+      else if(cropDrag === 'se'){ w = pos.x - x; h = pos.y - y; }
+      if(w < 0.05){ w = 0.05; if(cropDrag.includes('w')) x = cropOrig.x + cropOrig.w - w; }
+      if(h < 0.05){ h = 0.05; if(cropDrag.includes('n')) y = cropOrig.y + cropOrig.h - h; }
+      x = Math.max(0, Math.min(1 - w, x)); y = Math.max(0, Math.min(1 - h, y));
+      if(x + w > 1) w = 1 - x; if(y + h > 1) h = 1 - y;
+      cropRect = { x, y, w, h };
+    }
+    updateCropBox();
+  });
+  window.addEventListener('pointerup', () => { cropDrag = null; });
+  wrap.addEventListener('touchmove', (e) => { if(cropEnabled && cropDrag) e.preventDefault(); }, { passive: false });
+  // inicializa após DOM pronto
+  setTimeout(() => { const w = document.getElementById('scanWrap'); if(w) w.style.touchAction = 'none'; }, 500);
+})();
 function removeScanFile(i){
   const cur = document.getElementById('tFiles');
   const dt = new DataTransfer();
