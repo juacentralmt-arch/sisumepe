@@ -48,8 +48,12 @@ function loadFile() {
     return mem;
   }
 }
-function saveFile() { fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2)); }
-if (MODE === 'file') loadFile();
+function saveFile() { try{ fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2)); }catch(e){} }
+loadFile();
+// garante estrutura para fallback mesmo em modo supabase (quando tabela ainda não existe)
+if(!mem.agenda) mem.agenda = [];
+if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
+if(!mem.googleTokens) mem.googleTokens = {};
 
 // ---------------------------- SUPABASE -------------------------------
 let supa = null;
