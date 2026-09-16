@@ -889,28 +889,31 @@ async function gerarTermoPDF(termo){
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontTimes = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  // Brasão - tenta carregar, fallback espaço
-  let brasaoImage = null;
+  // Logo oficial Governo do Ceará (brasão + texto) - arquivo local, sem depender de internet
+  let logoImage = null;
   try{
-    if(typeof fetch !== 'undefined'){
-      const res = await fetch('https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bras%C3%A3o_do_Cear%C3%A1.svg/200px-Bras%C3%A3o_do_Cear%C3%A1.png').catch(()=>null);
-      if(res && res.ok){
-        const buf = await res.arrayBuffer();
-        brasaoImage = await pdfDoc.embedPng(Buffer.from(buf));
-      }
+    const logoPath = path.join(ROOT, 'public', 'logo-governo-ce.png');
+    if(fs.existsSync(logoPath)){
+      logoImage = await pdfDoc.embedPng(fs.readFileSync(logoPath));
     }
   }catch(e){}
-  if(brasaoImage){
-    const dims = brasaoImage.scale(0.165);
-    page.drawImage(brasaoImage, { x: (595.32 - dims.width)/2, y: 758, width: dims.width, height: dims.height });
+  if(!logoImage){
+    try{
+      if(typeof fetch !== 'undefined'){
+        const res = await fetch('https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Bras%C3%A3o_do_Cear%C3%A1.svg/200px-Bras%C3%A3o_do_Cear%C3%A1.png').catch(()=>null);
+        if(res && res.ok){
+          const buf = await res.arrayBuffer();
+          logoImage = await pdfDoc.embedPng(Buffer.from(buf));
+        }
+      }
+    }catch(e){}
   }
-  // Header Governo - posições exatas do original (estimado topo)
-  const gov1 = 'GOVERNO DO';
-  const gov2 = 'ESTADO DO CEARÁ';
-  const gov1W = fontTimesBold.widthOfTextAtSize(gov1, 11);
-  const gov2W = fontTimesBold.widthOfTextAtSize(gov2, 13);
-  page.drawText(gov1, { x: (595.32 - gov1W)/2, y: 740, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
-  page.drawText(gov2, { x: (595.32 - gov2W)/2, y: 725, size: 13, font: fontTimesBold, color: rgb(0,0,0) });
+  if(logoImage){
+    // Logo 680x426 -> 130pt de largura, centralizada no topo
+    const logoW = 130;
+    const logoH = logoW * (logoImage.height / logoImage.width);
+    page.drawImage(logoImage, { x: (595.32 - logoW)/2, y: 810 - logoH, width: logoW, height: logoH });
+  }
   const secTxt = 'Secretaria Administração Penitenciária';
   const secW = fontTimes.widthOfTextAtSize(secTxt, 9);
   page.drawText(secTxt, { x: (595.32 - secW)/2, y: 712, size: 9, font: fontTimes, color: rgb(0,0,0) });
