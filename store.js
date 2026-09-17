@@ -135,15 +135,15 @@ const store = {
       if (MODE === 'file') return mem.persons;
       return must(await supa.from('persons').select('*').order('id'), 'persons.all').map(appP);
     },
-    async search(q) {
+    async search(q, limit) {
       const list = await store.persons.all();
       q = (q || '').toLowerCase().trim();
-      if (!q) return [...list].reverse();
-      return list.filter(p =>
+      const out = !q ? [...list].reverse() : list.filter(p =>
         (p.nome || '').toLowerCase().includes(q) ||
         (p.cpf || '').toLowerCase().includes(q) ||
         (p.rg || '').toLowerCase().includes(q)
       ).reverse();
+      return limit ? out.slice(0, limit) : out;
     },
     async byId(id) {
       if (MODE === 'file') return mem.persons.find(x => eqi(x.id, id)) || null;
