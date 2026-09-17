@@ -290,7 +290,7 @@
             <button id="prioBtn" onclick="togglePrio()" class="px-5 py-2 rounded-full text-xs font-extrabold bg-white border border-slate-200 text-slate-500">NÃO</button>
           </div>
           <label class="lbl">ANEXOS / FOTOS (ATÉ 20)</label>
-          <p class="text-[11px] text-slate-400 mt-0.5">As fotos são otimizadas, convertidas e unidas automaticamente em um único PDF.</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">As fotos são otimizadas em preto e branco, convertidas e unidas automaticamente em um único PDF.</p>
           <input id="tFiles" type="file" multiple accept="image/*,.pdf" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" onchange="refreshScanPreview()">
           <div class="flex gap-2 mt-2">
             <button type="button" onclick="openScan(true)" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar</button>
@@ -916,7 +916,7 @@
     <input id="mTec" readonly title="Técnico vinculado ao atendimento" placeholder="Técnico vinculado" class="inp mb-2.5 !bg-slate-100 font-bold">
     <textarea id="mRel" rows="4" placeholder="Ex: Realizada troca da pulseira, teste de sinal OK, bateria 100%, orientado sobre carregamento diário..." class="inp"></textarea>
     <label class="lbl mt-3 block">FOTOS DO SERVIÇO (antes/depois, até 20)</label>
-    <p class="text-[11px] text-slate-400 mt-0.5">As fotos são otimizadas, convertidas e unidas automaticamente em um único PDF.</p>
+    <p class="text-[11px] text-slate-400 mt-0.5">As fotos são otimizadas em preto e branco, convertidas e unidas automaticamente em um único PDF.</p>
     <input id="mFotos" type="file" multiple accept="image/*" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
     <p id="mErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
     <div class="flex gap-2.5 mt-5">
@@ -1305,14 +1305,14 @@ function setAbrirTicketBusy(b){
     else if(btn.dataset.labelOrig){ btn.innerHTML = btn.dataset.labelOrig; delete btn.dataset.labelOrig; }
   });
 }
-// Comprime fotos no navegador antes do upload (máx 1600px, JPEG q0.82).
+// Comprime fotos no navegador antes do upload (máx 1600px, JPEG q0.82,
+// preto e branco para melhor leitura de documentos).
 // Reduz drasticamente o tamanho do PDF unificado e o tempo de envio.
 async function compressImageFile(f){
   if(!((f.type || '').startsWith('image/'))) return f;
   try{
     const bmp = await createImageBitmap(f);
     const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    if(scale >= 1 && /jpe?g/i.test(f.type || '') && f.size < 600 * 1024){ if(bmp.close) bmp.close(); return f; }
     const cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.round(bmp.width * scale));
     cv.height = Math.max(1, Math.round(bmp.height * scale));
@@ -1320,6 +1320,13 @@ async function compressImageFile(f){
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
     if(bmp.close) bmp.close();
+    const id = ctx.getImageData(0, 0, cv.width, cv.height);
+    const px = id.data;
+    for(let i = 0; i < px.length; i += 4){
+      const g = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) | 0;
+      px[i] = px[i + 1] = px[i + 2] = g;
+    }
+    ctx.putImageData(id, 0, 0);
     const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.82));
     if(!blob) return f;
     const base = String(f.name || 'foto').replace(/\.[^.]+$/, '');

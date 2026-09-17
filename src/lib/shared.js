@@ -102,7 +102,7 @@ function addTextPages(pdf, font, title, text) {
 }
 async function consolidateTicketFiles(files, prefix) {
   files = files || [];
-  if (!files.length) return files;
+  if (!files.length) return { files, merged: false };
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const kept = [];
@@ -132,13 +132,25 @@ async function consolidateTicketFiles(files, prefix) {
       kept.push(f);
     }
   }
-  if (!mergedNames.length) return files;
+  if (!mergedNames.length) return { files, merged: false };
   const bytes = await pdf.save();
   const buf = Buffer.from(bytes);
-  return [
-    { originalname: (prefix || 'anexos-unificados') + '-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
-    ...kept
-  ];
+  return {
+    files: [
+      { originalname: (prefix || 'anexos-unificados') + '-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
+      ...kept
+    ],
+    merged: true
+  };
+}
+// Nome do PDF unificado conforme o motivo do atendimento
+// (sem acentos para não quebrar URLs/storage).
+function pdfPrefixForMotivo(motivo, fallback) {
+  const m = String(motivo || '').toLowerCase();
+  if (m.includes('instala')) return 'pdfinstalacao';
+  if (m.includes('retirada')) return 'pdfretirada';
+  if (m.includes('manuten')) return 'pdfmanutencao';
+  return fallback || 'anexos-unificados';
 }
 
 function sortQueue(list) {
@@ -252,7 +264,7 @@ module.exports = {
   ROOT, PORT, store,
   ah, broadcast, sseClients,
   loginRateLimit, issueToken, auth, isHash,
-  upload, mapFiles, consolidateTicketFiles,
+  upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
