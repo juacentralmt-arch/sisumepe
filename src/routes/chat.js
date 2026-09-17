@@ -65,6 +65,24 @@ router.post('/api/chat/read', auth(), (req, res) => {
   res.json({ ok: true });
 });
 
+// Sinalização de chamadas de voz (WebRTC 1:1) — retransmite via SSE
+const CALL_KINDS = ['offer', 'answer', 'ice', 'reject', 'busy', 'end'];
+router.post('/api/call/signal', auth(), ah(async (req, res) => {
+  const { to, kind, sdp, candidate } = req.body || {};
+  if (!CALL_KINDS.includes(kind)) return res.status(400).json({ error: 'Sinal inválido' });
+  const target = String(to || '').toLowerCase().trim();
+  if (!target) return res.status(400).json({ error: 'Destinatário inválido' });
+  if (target === req.auth.user) return res.status(400).json({ error: 'Não é possível ligar para você mesmo' });
+  const u = await store.users.byName(target);
+  if (!u || u.active === false) return res.status(404).json({ error: 'Usuário indisponível' });
+  const me = await store.users.byName(req.auth.user);
+  broadcast({
+    type: 'call_signal', from: req.auth.user, fromName: me ? me.name : req.auth.user,
+    to: target, signal: { kind, sdp: sdp || null, candidate: candidate || null }
+  });
+  res.json({ ok: true });
+}));
+
 router.post('/api/chat', auth(), upload.array('arquivos', 5), ah(async (req, res) => {
   const { text } = req.body || {};
   const u = await store.users.byName(req.auth.user);
