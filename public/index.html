@@ -4259,7 +4259,22 @@ async function startCall(){
       if(callState === 'calling' && !callRingAck) callStatus(callPeerName + ' pode estar offline — chame pelo chat');
     }, 8000);
     callTimeout = setTimeout(() => {
-      if(callState === 'calling'){ callSignal(target, 'end', {}).catch(() => {}); teardownCall(); toast('📵 ' + callPeerName + ' não atendeu'); }
+      if(callState === 'calling'){
+        const peer = callPeer, peerName = callPeerName;
+        const rang = callRingAck;
+        callSignal(peer, 'end', {}).catch(() => {});
+        teardownCall();
+        toast('📵 ' + peerName + ' não atendeu');
+        // Garante que o destinatário veja a chamada perdida mesmo se estava offline:
+        // registra no chat da conversa
+        try{
+          const hh = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          authFetch('/api/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: peer, text: '📞 Chamada de voz ' + (rang ? 'não atendida' : 'perdida (você estava offline)') + ' às ' + hh })
+          }).catch(() => {});
+        }catch(e){}
+      }
     }, 30000);
   }catch(e){ teardownCall(); toast('⚠️ Falha ao iniciar ligação'); }
 }
