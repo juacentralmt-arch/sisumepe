@@ -63,11 +63,11 @@ async function mapFiles(files) {
   return out;
 }
 
-// Se o ticket recebe mais de 3 arquivos, une os conversíveis (imagens JPG/PNG,
-// PDFs e textos) em UM único PDF. Tipos não-conversíveis (áudio, Office etc.)
-// são mantidos avulsos para não perder nenhum dado.
+// Toda foto/imagem anexada ao ticket é convertida em PDF e tudo o que for
+// conversível (imagens JPG/PNG, PDFs e textos) é unido em UM único arquivo.
+// Tipos não-conversíveis (áudio, Office etc.) são mantidos avulsos para não
+// perder nenhum dado.
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
-const MERGE_THRESHOLD = 3;
 function addFittedImagePage(pdf, img) {
   const W = 595.28, H = 841.89, M = 36;
   const page = pdf.addPage([W, H]);
@@ -100,9 +100,9 @@ function addTextPages(pdf, font, title, text) {
     y -= lh;
   }
 }
-async function consolidateTicketFiles(files) {
+async function consolidateTicketFiles(files, prefix) {
   files = files || [];
-  if (files.length <= MERGE_THRESHOLD) return files;
+  if (!files.length) return files;
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const kept = [];
@@ -136,7 +136,7 @@ async function consolidateTicketFiles(files) {
   const bytes = await pdf.save();
   const buf = Buffer.from(bytes);
   return [
-    { originalname: 'anexos-unificados-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
+    { originalname: (prefix || 'anexos-unificados') + '-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
     ...kept
   ];
 }
