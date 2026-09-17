@@ -419,7 +419,7 @@
         <div id="termoFormListagem" class="lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">DATA DE ENVIO *</label><input id="termoData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()" onchange="scheduleListagemPreview()"></div>
+            <div><label class="lbl">DATA DE ENVIO</label><input id="termoData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()" onchange="scheduleListagemPreview()"></div>
             <div><label class="lbl">DESTINATÁRIO *</label>
               <select id="termoDest" class="inp mt-1 mb-2.5" onchange="toggleTermoDestOutro(); scheduleListagemPreview()">
                 <option value="" disabled selected>Selecione o destinatário *</option>
@@ -433,17 +433,14 @@
               <input id="termoDestOutro" placeholder="Digite o destinatário..." class="inp mt-1 mb-2.5 hidden" oninput="scheduleListagemPreview()">
             </div>
           </div>
-          <label class="lbl">EQUIPAMENTOS (até 5 linhas) *</label>
+          <div class="flex items-center gap-2 mt-1 mb-2">
+            <label class="lbl">EQUIPAMENTOS *</label>
+            <button type="button" onclick="addTermoEquipRow()" class="ml-auto btn btn-ghost text-xs px-3 py-1.5">＋ Adicionar linha</button>
+          </div>
           <div class="overflow-x-auto mt-1 mb-2.5">
             <table class="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
-              <thead><tr class="bg-[#FFE4CC] text-[11px] font-extrabold"><th class="py-2 px-2 border border-slate-200">TZPR04</th><th class="py-2 px-2 border border-slate-200">FONTE04</th><th class="py-2 px-2 border border-slate-200">CINTA</th><th class="py-2 px-2 border border-slate-200">TRAVA</th></tr></thead>
-              <tbody id="termoEquipBody">
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="0" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="1" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="2" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="3" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-                <tr><td class="border border-slate-200 p-1"><input data-termo-col="tzpr04" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="fonte04" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="cinta" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td><td class="border border-slate-200 p-1"><input data-termo-col="trava" data-termo-row="4" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td></tr>
-              </tbody>
+              <thead><tr class="bg-[#FFE4CC] text-[11px] font-extrabold"><th class="py-2 px-2 border border-slate-200">TZPR04</th><th class="py-2 px-2 border border-slate-200">FONTE04</th><th class="py-2 px-2 border border-slate-200">CINTA</th><th class="py-2 px-2 border border-slate-200">TRAVA</th><th class="py-2 px-1 border border-slate-200" style="width:34px"></th></tr></thead>
+              <tbody id="termoEquipBody"></tbody>
             </table>
           </div>
           <div class="grid grid-cols-1 gap-2.5">
@@ -2966,20 +2963,44 @@ function toggleTermoDestOutro(){
   outro.classList.toggle('hidden', !isOutro);
   if(isOutro) outro.focus();
 }
+const TERMO_MAX_ROWS = 30;
+function termoEquipRowHtml(i, v){
+  v = v || {};
+  const cell = (col) => `<td class="border border-slate-200 p-1"><input data-termo-col="${col}" data-termo-row="${i}" value="${esc(v[col] || '')}" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td>`;
+  return `<tr>${cell('tzpr04')}${cell('fonte04')}${cell('cinta')}${cell('trava')}<td class="border border-slate-200 p-1 text-center" style="width:34px"><button type="button" onclick="removeTermoEquipRow(${i})" title="Remover linha" class="text-rose-400 hover:text-rose-600 font-bold text-sm px-1">✕</button></td></tr>`;
+}
+function getTermoEquipamentos(){
+  const out = [];
+  document.querySelectorAll('#termoEquipBody tr').forEach(tr => {
+    const g = (col) => ((tr.querySelector(`[data-termo-col="${col}"]`) || {}).value || '').trim();
+    out.push({ tzpr04: g('tzpr04'), fonte04: g('fonte04'), cinta: g('cinta'), trava: g('trava') });
+  });
+  return out;
+}
+function renderTermoEquipRows(list){
+  const rows = (list && list.length ? list.slice(0, TERMO_MAX_ROWS) : [{}, {}, {}, {}, {}]);
+  while(rows.length < 5) rows.push({});
+  document.getElementById('termoEquipBody').innerHTML = rows.map((r, i) => termoEquipRowHtml(i, r)).join('');
+}
+function addTermoEquipRow(){
+  const cur = getTermoEquipamentos();
+  if(cur.length >= TERMO_MAX_ROWS) return toast('⚠️ Máximo de ' + TERMO_MAX_ROWS + ' linhas');
+  cur.push({});
+  renderTermoEquipRows(cur);
+  scheduleListagemPreview();
+}
+function removeTermoEquipRow(i){
+  const cur = getTermoEquipamentos().filter((_, j) => j !== i);
+  renderTermoEquipRows(cur.length ? cur : [{}]);
+  scheduleListagemPreview();
+}
+renderTermoEquipRows();
 function getTermoFormData(){
   const dataEnvio = document.getElementById('termoData').value;
   const destinatario = getTermoDestinatario();
   const respEntrega = document.getElementById('termoRespEntrega').value.trim();
   const respRec = document.getElementById('termoRespRec').value.trim();
-  const equipamentos = [];
-  for(let i=0;i<5;i++){
-    equipamentos.push({
-      tzpr04: (document.querySelector(`[data-termo-col="tzpr04"][data-termo-row="${i}"]`)?.value || '').trim(),
-      fonte04: (document.querySelector(`[data-termo-col="fonte04"][data-termo-row="${i}"]`)?.value || '').trim(),
-      cinta: (document.querySelector(`[data-termo-col="cinta"][data-termo-row="${i}"]`)?.value || '').trim(),
-      trava: (document.querySelector(`[data-termo-col="trava"][data-termo-row="${i}"]`)?.value || '').trim()
-    });
-  }
+  const equipamentos = getTermoEquipamentos();
   return { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento: respRec };
 }
 function setTermoFormData(t){
@@ -2992,11 +3013,7 @@ function setTermoFormData(t){
   else { sel.value = val || ''; outro.value = ''; outro.classList.add('hidden'); }
   document.getElementById('termoRespEntrega').value = t.respEntrega || '';
   document.getElementById('termoRespRec').value = t.respRecebimento || '';
-  for(let i=0;i<5;i++){
-    const r = (t.equipamentos && t.equipamentos[i]) || {};
-    const set = (col, val) => { const el = document.querySelector(`[data-termo-col="${col}"][data-termo-row="${i}"]`); if(el) el.value = val || ''; };
-    set('tzpr04', r.tzpr04); set('fonte04', r.fonte04); set('cinta', r.cinta); set('trava', r.trava);
-  }
+  renderTermoEquipRows(t.equipamentos && t.equipamentos.length ? t.equipamentos : [{}, {}, {}, {}, {}]);
   document.getElementById('termoEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
 }
@@ -3016,18 +3033,13 @@ function clearTermoForm(){
   document.getElementById('termoPreviewWrapSide').classList.add('hidden');
   document.getElementById('termoRecPreviewStatus').textContent = '';
   clearTimeout(recPreviewTimer);
-  document.getElementById('termoData').valueAsDate = new Date();
+  document.getElementById('termoData').value = '';
   document.getElementById('termoDest').value = '';
   document.getElementById('termoDestOutro').value = '';
   document.getElementById('termoDestOutro').classList.add('hidden');
   document.getElementById('termoRespEntrega').value = session ? (session.name + ' (' + session.user + ')') : '';
   document.getElementById('termoRespRec').value = '';
-  for(let i=0;i<5;i++){
-    ['tzpr04','fonte04','cinta','trava'].forEach(col=>{
-      const el = document.querySelector(`[data-termo-col="${col}"][data-termo-row="${i}"]`);
-      if(el) el.value = '';
-    });
-  }
+  renderTermoEquipRows([{}, {}, {}, {}, {}]);
   document.getElementById('termoErr').classList.add('hidden');
   document.getElementById('termoPreviewWrapSide').classList.add('hidden');
 }
@@ -3105,8 +3117,6 @@ async function loadTermos(){
     const list = await api('/api/termos');
     termosCache = list;
     renderTermos();
-    // preenche data hoje se vazio
-    if(!document.getElementById('termoData').value) document.getElementById('termoData').valueAsDate = new Date();
     if(!document.getElementById('termoRespEntrega').value && session) document.getElementById('termoRespEntrega').value = session.name + ' (' + session.user + ')';
     if(!document.getElementById('termoRecDataHora').value){
       const d = new Date(); const p = n=>String(n).padStart(2,'0');
