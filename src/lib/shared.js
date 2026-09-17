@@ -63,6 +63,84 @@ async function mapFiles(files) {
   return out;
 }
 
+// Se o ticket recebe mais de 3 arquivos, une os conversíveis (imagens JPG/PNG,
+// PDFs e textos) em UM único PDF. Tipos não-conversíveis (áudio, Office etc.)
+// são mantidos avulsos para não perder nenhum dado.
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const MERGE_THRESHOLD = 3;
+function addFittedImagePage(pdf, img) {
+  const W = 595.28, H = 841.89, M = 36;
+  const page = pdf.addPage([W, H]);
+  const s = Math.min((W - 2 * M) / img.width, (H - 2 * M) / img.height);
+  const w = img.width * s, h = img.height * s;
+  page.drawImage(img, { x: (W - w) / 2, y: (H - h) / 2, width: w, height: h });
+}
+function addTextPages(pdf, font, title, text) {
+  const W = 595.28, H = 841.89, M = 36, size = 10, lh = 14;
+  const maxW = W - 2 * M;
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const t = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(t, size) > maxW && cur) { lines.push(cur); cur = w; }
+    else cur = t;
+  }
+  if (cur) lines.push(cur);
+  if (!lines.length) lines.push('(arquivo vazio)');
+  let page = pdf.addPage([W, H]);
+  page.drawText(String(title || 'texto').slice(0, 80), { x: M, y: H - M, size: 12, font, color: rgb(0.2, 0.2, 0.6) });
+  let y = H - M - 24;
+  for (const ln of lines) {
+    if (y < M + 10) {
+      page = pdf.addPage([W, H]);
+      y = H - M;
+    }
+    page.drawText(ln, { x: M, y, size, font, color: rgb(0, 0, 0) });
+    y -= lh;
+  }
+}
+async function consolidateTicketFiles(files) {
+  files = files || [];
+  if (files.length <= MERGE_THRESHOLD) return files;
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const kept = [];
+  const mergedNames = [];
+  for (const f of files) {
+    const mime = String(f.mimetype || '');
+    const ext = (String(f.originalname || '').split('.').pop() || '').toLowerCase();
+    try {
+      if (mime === 'application/pdf' || ext === 'pdf') {
+        const src = await PDFDocument.load(f.buffer);
+        const pages = await pdf.copyPages(src, src.getPageIndices());
+        pages.forEach(p => pdf.addPage(p));
+        mergedNames.push(f.originalname);
+      } else if (mime === 'image/jpeg' || ext === 'jpg' || ext === 'jpeg') {
+        addFittedImagePage(pdf, await pdf.embedJpg(f.buffer));
+        mergedNames.push(f.originalname);
+      } else if (mime === 'image/png' || ext === 'png') {
+        addFittedImagePage(pdf, await pdf.embedPng(f.buffer));
+        mergedNames.push(f.originalname);
+      } else if (mime.startsWith('text/') || ext === 'txt' || ext === 'csv') {
+        addTextPages(pdf, font, f.originalname, f.buffer.toString('utf8').slice(0, 20000));
+        mergedNames.push(f.originalname);
+      } else {
+        kept.push(f);
+      }
+    } catch {
+      kept.push(f);
+    }
+  }
+  if (!mergedNames.length) return files;
+  const bytes = await pdf.save();
+  const buf = Buffer.from(bytes);
+  return [
+    { originalname: 'anexos-unificados-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
+    ...kept
+  ];
+}
+
 function sortQueue(list) {
   return [...list].sort((a, b) => {
     if (!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
@@ -174,7 +252,7 @@ module.exports = {
   ROOT, PORT, store,
   ah, broadcast, sseClients,
   loginRateLimit, issueToken, auth, isHash,
-  upload, mapFiles,
+  upload, mapFiles, consolidateTicketFiles,
   sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,

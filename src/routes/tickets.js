@@ -1,6 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Tickets
@@ -41,7 +41,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
       return res.json(Object.assign(enrich(recent, persons), { duplicated: true }));
     }
   }catch(e){}
-  const files = await mapFiles(req.files);
+  const files = await mapFiles(await consolidateTicketFiles(req.files));
   const creator = await store.users.byName(req.auth.user);
   const ticket = await store.tickets.insert({
     personId: person.id,
