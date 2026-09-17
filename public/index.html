@@ -223,7 +223,7 @@
           <div class="flex items-center gap-2.5 mb-1"><span class="step-num">1</span><h3 class="font-display font-bold">Localizar atendido</h3></div>
           <p class="text-xs text-slate-500 mb-3 ml-9">Busca rápida por CPF, RG ou nome</p>
           <div class="flex flex-col sm:flex-row gap-2">
-            <input id="q" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." autocomplete="off" class="inp flex-1">
+            <input id="q" oninput="checkinTyping()" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." autocomplete="off" class="inp flex-1">
             <button onclick="buscarPessoa()" class="btn btn-primary text-sm px-5 w-full sm:w-auto">Buscar</button>
           </div>
           <div class="flex gap-2 mt-2">
@@ -547,6 +547,27 @@
           <button onclick="buscarVisao()" class="btn btn-dark text-sm px-5">Buscar</button>
         </div>
         <div id="visaoRes" class="grid sm:grid-cols-2 md:grid-cols-3 gap-2.5 mb-4"></div>
+        <div id="visaoFilters" class="hidden card p-3.5 mb-4 flex flex-wrap gap-2 items-center">
+          <select id="vStatus" onchange="renderVisaoDetail()" class="inp !w-auto !py-2 text-xs font-bold">
+            <option value="">📋 Todos os status</option>
+            <option value="aguardando">🟡 Aguardando</option>
+            <option value="em_atendimento">🔵 Em atendimento</option>
+            <option value="finalizado">🟢 Finalizado</option>
+            <option value="cancelado">🔴 Cancelado</option>
+          </select>
+          <select id="vMotivo" onchange="renderVisaoDetail()" class="inp !w-auto !py-2 text-xs font-bold">
+            <option value="">🏷️ Todos os motivos</option>
+            <option>Botão do Pânico</option>
+            <option>Instalação de Tornozeleira</option>
+            <option>Retirada de Tornozeleira</option>
+            <option>Manutenção</option>
+            <option>Outros</option>
+          </select>
+          <input id="vDataIni" type="date" onchange="renderVisaoDetail()" title="De" class="inp !w-auto !py-2 text-xs">
+          <input id="vDataFim" type="date" onchange="renderVisaoDetail()" title="Até" class="inp !w-auto !py-2 text-xs">
+          <button onclick="limparFiltrosVisao()" class="btn btn-ghost text-xs px-3 py-2">Limpar</button>
+          <span id="vCount" class="ml-auto text-[11px] font-bold text-slate-400"></span>
+        </div>
         <div id="visaoDetail" class="grid lg:grid-cols-3 gap-4 items-start"></div>
       </div>
     </section>
@@ -1132,7 +1153,7 @@ function waitBadge(t){
 }
 function cardFila(t,i){
   const prioB = t.prioridadeLegal ? '<span class="text-[10px] font-extrabold tracking-wide text-white px-2.5 py-1 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">⚖️ PRIORIDADE LEGAL</span>' : '';
-  return `<div class="card card-hover p-4 sm:p-5 ${t.prioridadeLegal&&t.status!=='finalizado'?'prio-glow':''}">
+  return `<div data-ticket="${t.id}" class="card card-hover p-4 sm:p-5 ${t.prioridadeLegal&&t.status!=='finalizado'?'prio-glow':''}">
     <div class="flex items-center gap-2 flex-wrap mb-3">
       <span class="font-display font-extrabold text-lg text-slate-800 w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-sm">${i+1}</span>
       <span class="text-xs font-extrabold text-indigo-600 tracking-wide">${esc(t.code)}</span>${prioB}${statusPill(t.status)}${modeloBadge(t.modeloTornozeleira)}${waitBadge(t)}
@@ -1181,17 +1202,24 @@ function renderFila(){
 }
 
 // CHECKIN
+let checkinTimer = null;
+function checkinTyping(){
+  clearTimeout(checkinTimer);
+  checkinTimer = setTimeout(buscarPessoa, 400);
+}
 async function buscarPessoa(){
   const q=document.getElementById('q').value.trim();
   const box=document.getElementById('searchRes');
+  if(q && q.length < 2){ box.innerHTML='<p class="text-xs text-slate-400">Digite ao menos 2 letras para buscar.</p>'; return; }
   box.innerHTML='<p class="text-xs text-slate-500">Buscando...</p>';
   try{
-    const list=await api('/api/persons?q='+encodeURIComponent(q));
-    box.innerHTML = list.length? list.map(p=>`<div class="border border-slate-200 rounded-xl p-3 flex items-center gap-3 text-sm bg-white">
+    const list=await api('/api/persons?limit=10&q='+encodeURIComponent(q));
+    const more = list.length >= 10 ? '<p class="text-[11px] text-slate-400 text-center">Mostrando 10 primeiros — refine a busca.</p>' : '';
+    box.innerHTML = (list.length? list.map(p=>`<div class="border border-slate-200 rounded-xl p-3 flex items-center gap-3 text-sm bg-white">
       <span class="avatar w-9 h-9 text-xs">${initials(p.nome)}</span>
       <div class="flex-1 min-w-0"><b class="truncate block">${esc(p.nome)}</b><span class="text-xs text-slate-500">CPF: ${esc(p.cpf||'-')} • RG: ${esc(p.rg||'-')}</span> ${modeloBadge(p.modeloTornozeleira)}</div>
       <button onclick="selectPerson(${p.id},'${esc(p.nome).replace(/'/g,"\\'")}','${esc(p.modeloTornozeleira||'')}')" class="btn btn-primary text-xs px-3.5 py-2">Selecionar</button>
-    </div>`).join('') : '<p class="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-3 text-center">Nenhum resultado. Cadastre abaixo. ⬇️</p>';
+    </div>`).join('') : '<p class="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-3 text-center">Nenhum resultado. Cadastre abaixo. ⬇️</p>')+more;
   }catch(e){ box.innerHTML='<p class="text-xs text-rose-600">Erro na busca</p>'; }
 }
 function selectPerson(id,nome,modelo){ selPersonId=id; selPersonName=nome; document.getElementById('selPerson').className='rounded-xl p-3.5 text-sm mb-4 border border-emerald-300 bg-emerald-50 text-emerald-900'; document.getElementById('selPerson').innerHTML=`✅ <b>${esc(nome)}</b> selecionado (ID ${id}). Pronto para abrir o ticket.`; toast('Atendido selecionado: '+nome); if(modelo==='Spacecom'||modelo==='Infinity'){ modeloSel=modelo; paintModelo(); } if(window.innerWidth<1024){ setTimeout(()=>{ const el=document.getElementById('tMotivo'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },150); } }
@@ -3044,42 +3072,91 @@ function renderVisaoGate(){
   document.getElementById('visaoBody').classList.toggle('hidden',lock);
 }
 // Busca instantânea enquanto digita (com debounce)
-let visaoTimer = null;
+let visaoTimer = null, visaoHist = [];
 function visaoTyping(){
   clearTimeout(visaoTimer);
-  visaoTimer = setTimeout(buscarVisao, 350);
+  visaoTimer = setTimeout(buscarVisao, 500);
 }
 async function buscarVisao(){
   const q=document.getElementById('vQ').value.trim();
+  if(q && q.length < 2){ document.getElementById('visaoRes').innerHTML='<p class="text-xs text-slate-400">Digite ao menos 2 letras para buscar.</p>'; return; }
   try{
-    const list=await api('/api/persons?q='+encodeURIComponent(q));
-    document.getElementById('visaoRes').innerHTML=list.map(p=>`<button onclick="openVisao(${p.id})" class="card card-hover p-3.5 text-left flex items-center gap-3"><span class="avatar w-10 h-10 text-sm">${initials(p.nome)}</span><span class="min-w-0"><b class="text-sm block truncate">${esc(p.nome)}</b><span class="text-xs text-slate-500">${esc(p.cpf||p.rg||'')}</span> ${modeloBadge(p.modeloTornozeleira)}</span></button>`).join('')||'<p class="text-sm text-slate-500">Nada encontrado.</p>';
+    const list=await api('/api/persons?limit=10&q='+encodeURIComponent(q));
+    const more = list.length >= 10 ? '<p class="text-[11px] text-slate-400 col-span-full text-center">Mostrando 10 primeiros — refine a busca.</p>' : '';
+    document.getElementById('visaoRes').innerHTML=list.map(p=>`<button onclick="openVisao(${p.id})" class="card card-hover p-3.5 text-left flex items-center gap-3"><span class="avatar w-10 h-10 text-sm">${initials(p.nome)}</span><span class="min-w-0"><b class="text-sm block truncate">${esc(p.nome)}</b><span class="text-xs text-slate-500">${esc(p.cpf||p.rg||'')}</span> ${modeloBadge(p.modeloTornozeleira)}</span></button>`).join('')+more||'<p class="text-sm text-slate-500">Nada encontrado.</p>';
   }catch(e){ toast(e.message); }
+}
+function visaoMetricas(hist){
+  const fin = hist.filter(t=>t.status==='finalizado');
+  const tempos = fin.filter(t=>t.startedAt&&t.finishedAt).map(t=>new Date(t.finishedAt)-new Date(t.startedAt));
+  const medMin = tempos.length ? Math.round(tempos.reduce((a,b)=>a+b,0)/tempos.length/60000) : 0;
+  const last30 = hist.filter(t=>(Date.now()-new Date(t.createdAt))<30*864e5).length;
+  const last = hist.length ? new Date(hist[0].createdAt).toLocaleDateString('pt-BR') : '—';
+  return { total: hist.length, fin: fin.length, medMin, last30, last };
+}
+function limparFiltrosVisaoSilent(){
+  document.getElementById('vStatus').value=''; document.getElementById('vMotivo').value='';
+  document.getElementById('vDataIni').value=''; document.getElementById('vDataFim').value='';
+}
+function limparFiltrosVisao(){
+  limparFiltrosVisaoSilent();
+  renderVisaoDetail();
+}
+function visaoFiltrados(){
+  const st=document.getElementById('vStatus').value, mo=document.getElementById('vMotivo').value;
+  const di=document.getElementById('vDataIni').value, df=document.getElementById('vDataFim').value;
+  return visaoHist.filter(t=>{
+    if(st && t.status!==st) return false;
+    if(mo && t.motivo!==mo) return false;
+    const day=String(t.createdAt||'').slice(0,10);
+    if(di && day<di) return false;
+    if(df && day>df) return false;
+    return true;
+  });
+}
+function visaoTimelineHtml(list){
+  return list.map(t=>`
+    <div class="relative"><span class="absolute -left-10 top-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow ${t.status==='finalizado'?'text-white':''}" style="${t.status==='finalizado'?'background:linear-gradient(135deg,#059669,#10b981)':'background:#fbbf24;color:#78350f'}">${t.status==='finalizado'?'✓':'•'}</span>
+    <div class="border rounded-2xl p-3.5 text-sm bg-white ${t.prioridadeLegal?'border-rose-300':'border-slate-200'}">
+      <div class="flex gap-2 flex-wrap items-center"><button onclick="goTicket(${t.id})" title="Abrir na fila" class="text-indigo-600 text-xs font-extrabold underline hover:text-indigo-800">${esc(t.code)}</button><span class="text-xs font-bold">${esc(t.motivo)}</span>${modeloBadge(t.modeloTornozeleira)}${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE LEGAL</span>':''}<span class="ml-auto text-[11px] text-slate-400">${new Date(t.createdAt).toLocaleString('pt-BR')}</span></div>
+      ${t.descricao?`<p class="text-xs mt-1.5 text-slate-600">${esc(t.descricao)}</p>`:''}
+      ${t.relatorio?`<p class="text-xs mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 leading-relaxed"><b>Relatório (${esc(t.tecnico||'técnico')}):</b> ${esc(t.relatorio)}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}`:''}
+      ${t.anexos?.length?`<p class="text-[11px] mt-1.5">📎 ${t.anexos.map(a=>`<a class="text-indigo-600 underline font-semibold" target="_blank" href="${a.url}">${esc(a.name)}</a>`).join(' • ')}</p>`:''}
+    </div></div>`).join('')||'<p class="text-sm text-slate-500">Sem chamados para estes filtros.</p>';
+}
+function renderVisaoDetail(){
+  const box=document.getElementById('visaoTimeline');
+  if(!box) return;
+  const list=visaoFiltrados();
+  box.innerHTML=visaoTimelineHtml(list);
+  const c=document.getElementById('vCount');
+  if(c) c.textContent=list.length+' de '+visaoHist.length+' chamados';
+}
+function goTicket(id){
+  go('fila');
+  setTimeout(()=>{ const el=document.querySelector('[data-ticket="'+id+'"]'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('ring-2','ring-indigo-500'); setTimeout(()=>el.classList.remove('ring-2','ring-indigo-500'),2500); } },150);
 }
 async function openVisao(id){
   try{
     const {person,tickets:hist,audit=[]}=await api('/api/persons/'+id);
     lastVisaoPerson = person;
-    const total=hist.length, fin=hist.filter(t=>t.status==='finalizado').length;
+    visaoHist = hist;
+    document.getElementById('visaoFilters').classList.remove('hidden');
+    limparFiltrosVisaoSilent();
+    const m=visaoMetricas(hist);
     document.getElementById('visaoDetail').innerHTML=`
       <div class="card p-6 text-center">
         <span class="avatar w-16 h-16 text-xl mx-auto">${initials(person.nome)}</span>
         <h3 class="font-display font-bold mt-3 leading-tight">${esc(person.nome)}</h3>
         <p class="mt-1.5">${modeloBadge(person.modeloTornozeleira) || '<span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">MODELO NÃO INFORMADO</span>'}</p>
         <div class="text-xs text-slate-600 mt-3 space-y-1.5 text-left bg-slate-50 border border-slate-100 rounded-xl p-3.5"><p>CPF: <b>${esc(person.cpf||'-')}</b></p><p>RG: <b>${esc(person.rg||'-')}</b></p><p>Mãe: <b>${esc(person.nomeMae||'-')}</b></p><p>Nasc.: <b>${esc(person.dataNascimento||'-')}</b></p><p>Desde: ${new Date(person.createdAt).toLocaleDateString('pt-BR')}</p></div>
-        <div class="grid grid-cols-2 gap-2 mt-3 text-center"><div class="rounded-xl p-2.5 bg-indigo-50 border border-indigo-100"><p class="font-display font-extrabold text-lg text-indigo-700">${total}</p><p class="text-[10px] font-bold text-indigo-500">CHAMADOS</p></div><div class="rounded-xl p-2.5 bg-emerald-50 border border-emerald-100"><p class="font-display font-extrabold text-lg text-emerald-700">${fin}</p><p class="text-[10px] font-bold text-emerald-600">FINALIZADOS</p></div></div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-center"><div class="rounded-xl p-2.5 bg-indigo-50 border border-indigo-100"><p class="font-display font-extrabold text-lg text-indigo-700">${m.total}</p><p class="text-[10px] font-bold text-indigo-500">CHAMADOS</p></div><div class="rounded-xl p-2.5 bg-emerald-50 border border-emerald-100"><p class="font-display font-extrabold text-lg text-emerald-700">${m.fin}</p><p class="text-[10px] font-bold text-emerald-600">FINALIZADOS</p></div><div class="rounded-xl p-2.5 bg-amber-50 border border-amber-100"><p class="font-display font-extrabold text-lg text-amber-700">${m.last30}</p><p class="text-[10px] font-bold text-amber-600">ÚLTIMOS 30D</p></div><div class="rounded-xl p-2.5 bg-sky-50 border border-sky-100"><p class="font-display font-extrabold text-lg text-sky-700">${m.medMin?m.medMin+'m':'—'}</p><p class="text-[10px] font-bold text-sky-600">TEMPO MÉDIO</p></div></div>
+        <p class="text-[11px] text-slate-400 mt-2">Último chamado: <b>${m.last}</b></p>
         <button onclick="openEditModal()" class="btn btn-primary w-full mt-3 py-2.5 text-xs">✏️ Editar dados cadastrais</button>
       </div>
       <div class="lg:col-span-2 card p-5 sm:p-6">
         <h3 class="font-display font-bold mb-4">🕘 Linha do tempo — histórico completo</h3>
-        <div class="relative timeline pl-10 space-y-4">${hist.map(t=>`
-          <div class="relative"><span class="absolute -left-10 top-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shadow ${t.status==='finalizado'?'text-white':''}" style="${t.status==='finalizado'?'background:linear-gradient(135deg,#059669,#10b981)':'background:#fbbf24;color:#78350f'}">${t.status==='finalizado'?'✓':'•'}</span>
-          <div class="border rounded-2xl p-3.5 text-sm bg-white ${t.prioridadeLegal?'border-rose-300':'border-slate-200'}">
-            <div class="flex gap-2 flex-wrap items-center"><b class="text-indigo-600 text-xs">${esc(t.code)}</b><span class="text-xs font-bold">${esc(t.motivo)}</span>${modeloBadge(t.modeloTornozeleira)}${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE LEGAL</span>':''}<span class="ml-auto text-[11px] text-slate-400">${new Date(t.createdAt).toLocaleString('pt-BR')}</span></div>
-            ${t.descricao?`<p class="text-xs mt-1.5 text-slate-600">${esc(t.descricao)}</p>`:''}
-            ${t.relatorio?`<p class="text-xs mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 leading-relaxed"><b>Relatório (${esc(t.tecnico||'técnico')}):</b> ${esc(t.relatorio)}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}`:''}
-            ${t.anexos?.length?`<p class="text-[11px] mt-1.5">📎 ${t.anexos.map(a=>`<a class="text-indigo-600 underline font-semibold" target="_blank" href="${a.url}">${esc(a.name)}</a>`).join(' • ')}</p>`:''}
-          </div></div>`).join('')||'<p class="text-sm text-slate-500">Sem chamados.</p>'}</div>
+        <div id="visaoTimeline" class="relative timeline pl-10 space-y-4">${visaoTimelineHtml(hist)}</div>
       </div>
       <div class="card p-5 sm:p-6 lg:col-span-3">
         <h3 class="font-display font-bold mb-1">🕵️ Histórico de alterações (auditoria)</h3>
@@ -3125,6 +3202,10 @@ async function saveEdit(){
     editedBy: session ? session.user : ''
   };
   if(!editModelo){ err.textContent = '⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity).'; err.classList.remove('hidden'); return; }
+  const p = lastVisaoPerson;
+  const preview = ['nome','cpf','rg','nomeMae','dataNascimento','modeloTornozeleira'].filter(f=>String(body[f]||'')!==String(p[f]||''));
+  if(!preview.length){ err.textContent='⚠️ Nenhuma alteração detectada.'; err.classList.remove('hidden'); return; }
+  if(!confirm('Salvar '+preview.length+' alteração(ões) em '+p.nome+'? Fica registrado na auditoria.')) return;
   try{
     const r = await api('/api/persons/' + lastVisaoPerson.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     closeEditModal();
