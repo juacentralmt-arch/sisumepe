@@ -289,7 +289,7 @@
             <div><p class="text-sm font-bold text-rose-700">⚖️ Prioridade legal</p><p class="text-[11px] text-rose-600">Idoso, gestante, PCD, medida urgente → topo da fila</p></div>
             <button id="prioBtn" onclick="togglePrio()" class="px-5 py-2 rounded-full text-xs font-extrabold bg-white border border-slate-200 text-slate-500">NÃO</button>
           </div>
-          <label class="lbl">ANEXOS / FOTOS (ATÉ 5)</label>
+          <label class="lbl">ANEXOS / FOTOS (ATÉ 20)</label>
           <input id="tFiles" type="file" multiple accept="image/*,.pdf" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" onchange="refreshScanPreview()">
           <div class="flex gap-2 mt-2">
             <button type="button" onclick="openScan(true)" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar</button>
@@ -914,7 +914,7 @@
     <p class="text-xs text-slate-500 mt-3 mb-3">É obrigatório informar o <b>relatório da ação realizada</b> (procedimento, peça trocada, teste, orientação).</p>
     <input id="mTec" readonly title="Técnico vinculado ao atendimento" placeholder="Técnico vinculado" class="inp mb-2.5 !bg-slate-100 font-bold">
     <textarea id="mRel" rows="4" placeholder="Ex: Realizada troca da pulseira, teste de sinal OK, bateria 100%, orientado sobre carregamento diário..." class="inp"></textarea>
-    <label class="lbl mt-3 block">FOTOS DO SERVIÇO (antes/depois, até 4)</label>
+    <label class="lbl mt-3 block">FOTOS DO SERVIÇO (antes/depois, até 20)</label>
     <input id="mFotos" type="file" multiple accept="image/*" class="w-full text-xs mt-1 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
     <p id="mErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
     <div class="flex gap-2.5 mt-5">
@@ -1292,7 +1292,7 @@ async function abrirTicket(){
   const motivoSel = document.getElementById('tMotivo').value;
   if(!motivoSel) return toast('⚠️ Selecione o motivo do atendimento');
   if(!modeloSel) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
-  if([...document.getElementById('tFiles').files].length > 5) return toast('⚠️ Máximo de 5 anexos por ticket');
+  if([...document.getElementById('tFiles').files].length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
   setAbrirTicketBusy(true);
   const fd=new FormData();
   fd.append('personId',selPersonId); fd.append('motivo',motivoSel);
@@ -1519,7 +1519,7 @@ function attachScan(){
     canvas.toBlob(blob => {
       if(!blob) return toast('⚠️ Falha ao processar imagem');
       const cur = document.getElementById('tFiles');
-      if(cur.files.length >= 5) return toast('⚠️ Máximo de 5 anexos por ticket');
+      if(cur.files.length >= 20) return toast('⚠️ Máximo de 20 anexos por ticket');
       const dt = new DataTransfer();
       [...cur.files].forEach(f => dt.items.add(f));
       dt.items.add(new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
@@ -3146,7 +3146,7 @@ async function confirmFinish(){
   try{
     const fd=new FormData();
     fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
-    [...document.getElementById('mFotos').files].slice(0,4).forEach(f=>fd.append('fotos',f));
+    [...document.getElementById('mFotos').files].slice(0,20).forEach(f=>fd.append('fotos',f));
     const r=await authFetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||'Erro ao finalizar');

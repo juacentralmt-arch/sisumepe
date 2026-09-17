@@ -24,7 +24,7 @@ router.get('/api/stats', auth(), ah(async (req, res) => {
   });
 }));
 
-router.post('/api/tickets', auth(), upload.array('anexos', 5), ah(async (req, res) => {
+router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, res) => {
   const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira } = req.body || {};
   const person = await store.persons.byId(personId);
   if (!person) return res.status(400).json({ error: 'Atendido inválido. Selecione ou cadastre a pessoa.' });
@@ -104,7 +104,7 @@ router.patch('/api/tickets/:id/start', auth(['tecnico']), ah(async (req, res) =>
   res.json(enrich(upd, persons));
 }));
 
-router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 4), ah(async (req, res) => {
+router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos', 20), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   const { relatorio } = req.body || {};
@@ -128,7 +128,7 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
     relatorio: relatorio.trim(),
     tecnico: t.tecnico,
     ...(cl ? { checklist: { sinal: !!cl.sinal, bateria: !!cl.bateria, pulseira: !!cl.pulseira, orientacao: !!cl.orientacao } } : {}),
-    fotosPos: (t.fotosPos || []).concat(pos).slice(-8),
+    fotosPos: (t.fotosPos || []).concat(pos).slice(-20),
     finishedAt: new Date().toISOString()
   });
   const person = await store.persons.byId(t.personId);

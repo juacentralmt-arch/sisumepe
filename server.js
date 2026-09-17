@@ -76,7 +76,7 @@ app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html'))
 // Erros de upload viram 400 JSON (nunca HTML)
 app.use((err, req, res, next) => {
   if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'))
-    return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 5 por vez).' });
+    return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 20 por vez).' });
   next(err);
 });
 
