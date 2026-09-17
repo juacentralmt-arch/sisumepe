@@ -1,6 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Tickets
@@ -41,9 +41,11 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
       return res.json(Object.assign(enrich(recent, persons), { duplicated: true }));
     }
   }catch(e){}
-  const files = await mapFiles(await consolidateTicketFiles(req.files));
+  const pdfPrefix = pdfPrefixForMotivo(motivo);
+  const consolidated = await consolidateTicketFiles(req.files, pdfPrefix);
+  const files = await mapFiles(consolidated.files);
   const creator = await store.users.byName(req.auth.user);
-  const ticket = await store.tickets.insert({
+  let ticket = await store.tickets.insert({
     personId: person.id,
     motivo, descricao: descricao || '',
     prioridadeLegal: String(prioridadeLegal) === 'true' || prioridadeLegal === true || prioridadeLegal === '1',
@@ -57,6 +59,16 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
     called: false, calledAt: null, calledBy: '',
     createdAt: new Date().toISOString(), startedAt: null, finishedAt: null
   });
+  // Renomeia o PDF unificado com o código do ticket (ex.: pdfinstalacao-TK-0007.pdf)
+  if (consolidated.merged && files.length && Array.isArray(ticket.anexos)) {
+    const mergedName = files[0].name;
+    const upd = await store.tickets.patch(ticket.id, {
+      anexos: ticket.anexos.map(a =>
+        (a.name === mergedName) ? { ...a, name: pdfPrefix + '-' + ticket.code + '.pdf' } : a
+      )
+    });
+    if (upd) ticket = upd;
+  }
   if (modeloTornozeleira && person.modeloTornozeleira !== modeloTornozeleira) {
     const fromMod = person.modeloTornozeleira || '';
     await store.persons.patch(person.id, { modeloTornozeleira });
@@ -122,7 +134,12 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
   if (blockFin) return res.status(403).json({ error: blockFin });
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
   if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
-  const pos = await mapFiles(await consolidateTicketFiles(req.files, 'fotos-servico'));
+  const finishPrefix = pdfPrefixForMotivo(t.motivo, 'fotos-servico');
+  const consolidatedPos = await consolidateTicketFiles(req.files, finishPrefix);
+  const mergedPosName = consolidatedPos.merged && consolidatedPos.files[0] ? consolidatedPos.files[0].originalname : null;
+  const pos = (await mapFiles(consolidatedPos.files)).map(a =>
+    (mergedPosName && a.name === mergedPosName) ? { ...a, name: finishPrefix + '-' + t.code + '.pdf' } : a
+  );
   const upd = await store.tickets.patch(t.id, {
     status: 'finalizado',
     relatorio: relatorio.trim(),
