@@ -50,6 +50,16 @@
   .avatar{background:linear-gradient(135deg,#4f46e5,#0ea5e9);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:9999px;flex:none}
   .fade{animation:fade .15s ease-out}
   @keyframes fade{from{opacity:0}to{opacity:1}}
+  .logout-fade{opacity:0;transform:scale(.985);filter:blur(2px);transition:opacity .45s ease,transform .45s ease,filter .45s ease}
+  #appShell{transition:opacity .45s ease,transform .45s ease,filter .45s ease}
+  #logoutOverlay{transition:opacity .3s ease}
+  .logout-wave{display:inline-flex;gap:4px;margin-top:10px}
+  .logout-wave span{width:8px;height:8px;border-radius:9999px;background:#a5b4fc;animation:logoutWave 1s ease-in-out infinite}
+  .logout-wave span:nth-child(2){animation-delay:.15s}
+  .logout-wave span:nth-child(3){animation-delay:.3s}
+  @keyframes logoutWave{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(-6px);opacity:1}}
+  .logout-wave-bar{height:4px;border-radius:9999px;background:linear-gradient(90deg,#6366f1,#8b5cf6,#22d3ee);background-size:200% 100%;animation:logoutBar 1.1s linear infinite}
+  @keyframes logoutBar{from{background-position:200% 0}to{background-position:-200% 0}}
   .timeline::before{content:'';position:absolute;left:13px;top:10px;bottom:10px;width:2px;background:linear-gradient(#c7d2fe,#e2e8f0)}
   .toggle-on{background:linear-gradient(135deg,#dc2626,#ef4444)!important;color:#fff!important;border-color:transparent!important;box-shadow:0 6px 14px -6px rgba(220,38,38,.6)}
   #chatPanel{transition:opacity .15s ease}
@@ -123,7 +133,7 @@
   </div>
 </aside>
 
-<div class="lg:pl-[270px] min-h-screen flex flex-col">
+<div id="appShell" class="lg:pl-[270px] min-h-screen flex flex-col">
 
   <!-- ============ TOPBAR ============ -->
   <header class="sticky top-0 z-30 backdrop-blur-xl bg-white/75 border-b border-slate-200/70">
@@ -578,6 +588,17 @@
   </footer>
 </div>
 
+<!-- LOGOUT -->
+<div id="logoutOverlay" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4" style="background:rgba(11,18,32,.72);backdrop-filter:blur(6px)">
+  <div class="bg-white rounded-3xl max-w-xs w-full p-6 text-center shadow-2xl fade">
+    <div class="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center font-display font-extrabold text-white text-lg" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">SJ</div>
+    <p class="font-display font-extrabold mt-3">Até logo! 👋</p>
+    <p class="text-xs text-slate-500 mt-1">Encerrando sua sessão...</p>
+    <div class="logout-wave-bar mt-4"></div>
+    <div class="logout-wave justify-center"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
 <!-- LOGIN -->
 <div id="loginOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden" style="background:#0b1220">
   <div class="blob w-[500px] h-[500px] bg-indigo-600 -top-40 -left-40"></div>
@@ -997,7 +1018,7 @@ async function doLogin(){
     toast('Bem-vindo(a), ' + s.name + '!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
-function logout(silent){
+function finishLogout(silent){
   try{
     const s = JSON.parse(localStorage.getItem('te_session') || 'null');
     if(s && s.token) fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {});
@@ -1008,7 +1029,20 @@ function logout(silent){
   es = null;
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('chatPanel').classList.add('chat-hidden');
+  document.getElementById('logoutOverlay').classList.add('hidden');
+  const shell = document.getElementById('appShell');
+  if(shell) shell.classList.remove('logout-fade');
+  chatOpen = false;
   if(!silent) toast('Sessão encerrada');
+}
+function logout(silent){
+  if(silent) return finishLogout(true);
+  const shell = document.getElementById('appShell');
+  const ov = document.getElementById('logoutOverlay');
+  if(shell) shell.classList.add('logout-fade');
+  if(chatOpen) toggleChat();
+  if(ov) ov.classList.remove('hidden');
+  setTimeout(()=>finishLogout(false), 900);
 }
 function paintUser(){
   const chip = document.getElementById('userChip');
@@ -1818,19 +1852,38 @@ function validarCPF(cpf){
 }
 function cleanOcrForCPF(t){
   // Corrige confusões comuns do OCR: O→0, l/I→1, B→8, S→5, etc. apenas em sequências numéricas
-  return t.replace(/[OQ]/g,'0').replace(/[lI]/g,'1').replace(/S/g,'5');
+  return t.replace(/[OQ]/g,'0').replace(/D/g,'0').replace(/[lI|]/g,'1').replace(/B/g,'8').replace(/S/g,'5').replace(/A/g,'4').replace(/G/g,'6').replace(/,/g,'.').replace(/—/g,'-');
 }
-function preprocessForOCR(img){
+function docOcrScore(text){
+  // Pontua qualidade do OCR: CPF válido vale muito, CPF formatado vale menos, dígitos valem pouco
+  const t = cleanOcrForCPF(text||'');
+  let score = 0;
+  const cpfRe = /\b\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}\b/g;
+  const cpfs = (t.match(cpfRe) || []).map(s=>s.replace(/\D/g,'')).filter(s=>s.length===11);
+  for(const c of cpfs) score += validarCPF(c) ? 100 : 30;
+  const digits = (t.replace(/\D/g,'')||'').length;
+  score += Math.min(digits, 60);
+  if((text||'').trim().length > 50) score += 10;
+  return score;
+}
+function preprocessForOCR(img, mode){
   const c = document.getElementById('docCanvas');
-  // Rápido: limita a 1600px (CNH nítida já é suficiente, 30% mais rápido)
+  // mode: 'fast' (adaptativo OpenCV) ou 'sharp' (upscale + contraste forte, melhor p/ foto tremida)
+  mode = mode || 'fast';
   let w = img.naturalWidth, h = img.naturalHeight;
   const maxSide = Math.max(w,h);
   let scale = 1;
-  if(maxSide < 1100) scale = 1400 / maxSide;
-  else if(maxSide > 1600) scale = 1600 / maxSide;
+  if(mode === 'sharp'){
+    if(maxSide < 2000) scale = 2000 / maxSide;
+    else if(maxSide > 2400) scale = 2400 / maxSide;
+  } else {
+    if(maxSide < 1100) scale = 1400 / maxSide;
+    else if(maxSide > 1600) scale = 1600 / maxSide;
+  }
   w = Math.round(w*scale); h = Math.round(h*scale);
   c.width = w; c.height = h;
   const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, w, h);
   // Se recorte ativo, recorta a área selecionada (muito mais rápido e preciso)
   if(docCropEnabled && docCropRect){
@@ -1844,6 +1897,24 @@ function preprocessForOCR(img){
       c.getContext('2d').drawImage(tmp, 0, 0);
       w = sw; h = sh;
     }
+  }
+  if(mode === 'sharp'){
+    // Passada nítida: upscale + sharpen + contraste forte (foto tremida/escura)
+    try{
+      const id = ctx.getImageData(0, 0, w, h), d = id.data;
+      const src = new Uint8ClampedArray(d);
+      const at = (x,y)=>{ x=Math.max(0,Math.min(w-1,x)); y=Math.max(0,Math.min(h-1,y)); return (y*w+x)*4; };
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+        const i=(y*w+x)*4;
+        for(let k=0;k<3;k++){
+          let v = 5*src[i+k] - src[at(x-1,y)+k] - src[at(x+1,y)+k] - src[at(x,y-1)+k] - src[at(x,y+1)+k];
+          v = (v - 128) * 2.1 + 128;
+          d[i+k] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+      }
+      ctx.putImageData(id,0,0);
+    }catch(e){}
+    return c;
   }
   // Tenta usar OpenCV para binarização adaptativa (muito melhor para CNH com brilho)
   try{
@@ -1891,22 +1962,33 @@ async function analyzeDoc(){
       }
     });
     bar.style.width = '35%'; txt.textContent = 'Preparando imagem...';
-    const canvas = preprocessForOCR(docImg);
-    bar.style.width = '45%'; txt.textContent = 'Lendo documento...';
+    // Multi-tentativa: combina 2 pré-processamentos x PSM 6/11, fica com melhor score
+    const passes = [
+      { mode: 'fast', psm: '6' },
+      { mode: 'sharp', psm: '6' },
+      { mode: 'fast', psm: '11' }
+    ];
+    let text = '', best = -1;
+    for(let i=0;i<passes.length;i++){
+      const p = passes[i];
+      bar.style.width = (40 + i*18) + '%'; txt.textContent = 'Lendo documento (' + (i+1) + '/3)...';
+      try{
+        const canvas = preprocessForOCR(docImg, p.mode);
+        try{ await worker.setParameters({ tessedit_pageseg_mode: p.psm }); }catch(e){}
+        const r = await worker.recognize(canvas);
+        const t = (r.data.text || '');
+        const s = docOcrScore(t);
+        if(s > best){ best = s; text = t; }
+        // CPF válido já é o melhor resultado possível — para cedo
+        const ck = cleanOcrForCPF(t);
+        const m = ck.match(/\b\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}\b/g) || [];
+        if(m.map(x=>x.replace(/\D/g,'')).some(validarCPF)) break;
+      }catch(e){}
+    }
     try{ await worker.setParameters({ tessedit_pageseg_mode: '6' }); }catch(e){}
-    let { data: { text } } = await worker.recognize(canvas);
     if(!/\d{3}[\.\s]?\d{3}[\.\s]?\d{3}[-.\s]?\d{2}/.test(text)){
       const cleaned = cleanOcrForCPF(text);
-      if(/\d{11}/.test(cleaned.replace(/\D/g,''))){
-        text = cleaned;
-      } else if((text||'').trim().length < 80){
-        try{
-          await worker.setParameters({ tessedit_pageseg_mode: '11' });
-          const r2 = await worker.recognize(canvas);
-          if(r2.data.text && r2.data.text.length > text.length) text = r2.data.text;
-          await worker.setParameters({ tessedit_pageseg_mode: '6' });
-        }catch(e){}
-      }
+      if(/\d{11}/.test(cleaned.replace(/\D/g,''))) text = cleaned;
     }
     bar.style.width = '100%'; txt.textContent = 'Concluído!';
     setTimeout(() => prog.classList.add('hidden'), 700);
@@ -1931,7 +2013,15 @@ function parseDocFields(raw){
   let cpfs = (t.match(cpfRe) || []).map(s=>s.replace(/\D/g,'')).filter(s=>s.length===11);
   // valida e prioriza CPFs válidos
   const valids = cpfs.filter(validarCPF);
-  const uniqCpf = (valids.length ? valids : cpfs).filter((v,i,a)=>a.indexOf(v)===i).slice(0,2);
+  let uniqCpf = (valids.length ? valids : cpfs).filter((v,i,a)=>a.indexOf(v)===i).slice(0,2);
+  if(!uniqCpf.length){
+    // fallback: CPF sem formatação perdido no meio do texto (OCR colou dígitos)
+    const all = t.replace(/\D/g,'');
+    for(let i=0;i+11<=all.length && uniqCpf.length<2;i++){
+      const cand = all.slice(i,i+11);
+      if(validarCPF(cand) && !uniqCpf.includes(cand)) uniqCpf.push(cand);
+    }
+  }
   // RG / DOC - na CNH é "DOC IDENTIDADE" ou "REGISTRO", formato variado
   const rgRe = /\b\d{1,2}\.?\d{3}\.?\d{3}[- ]?\d{1,2}\b|\b\d{7,9}\b|\b\d{10,11}\b/g;
   let rgM = (t.match(rgRe) || []).map(s=>s.replace(/\D/g,'')).filter(s=> s.length>=7 && s.length<=11 && !uniqCpf.includes(s) && !valids.includes(s));
@@ -3463,20 +3553,25 @@ function updateChatPlaceholder(){
 }
 
 // Audio Recording
-let isRecordingAudio = false, mediaRecorder = null, audioChunks = [], recordTimer = null, recordSeconds = 0;
+let isRecordingAudio = false, mediaRecorder = null, audioChunks = [], recordTimer = null, recordSeconds = 0, recordMime = 'audio/webm';
 async function toggleAudioRecord(){
   const btn = document.getElementById('chatMicBtn');
   if (isRecordingAudio) {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     return;
   }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     return toast('⚠️ Seu navegador não suporta gravação de áudio');
+  }
+  if (window.isSecureContext === false) {
+    return toast('⚠️ Áudio exige HTTPS ou localhost');
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+    recordMime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(m => { try { return MediaRecorder.isTypeSupported(m); } catch(e) { return false; } }) || '';
+    mediaRecorder = recordMime ? new MediaRecorder(stream, { mimeType: recordMime }) : new MediaRecorder(stream);
+    recordMime = (mediaRecorder.mimeType || recordMime || 'audio/webm').split(';')[0];
     mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
@@ -3485,10 +3580,12 @@ async function toggleAudioRecord(){
       if (btn) { btn.textContent = '🎙️'; btn.classList.remove('text-rose-600', 'animate-pulse'); }
       updateChatPlaceholder();
       if (audioChunks.length > 0) {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
-        pendingFiles.push(audioFile);
+        const ext = recordMime.includes('mp4') ? 'mp4' : recordMime.includes('mpeg') ? 'mp3' : recordMime.includes('ogg') ? 'ogg' : 'webm';
+        const audioBlob = new Blob(audioChunks, { type: recordMime });
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.${ext}`, { type: recordMime });
+        pendingFiles = [...pendingFiles, audioFile].slice(0, 5);
         renderPending();
+        toast('🎙️ Áudio pronto — toque em ➤ para enviar');
       }
     };
     mediaRecorder.start();
@@ -3502,7 +3599,11 @@ async function toggleAudioRecord(){
       if (inp) inp.placeholder = `Gravando áudio (${recordSeconds}s)... clique em 🔴 para parar`;
     }, 1000);
   } catch(e) {
-    toast('⚠️ Permissão de áudio negada ou erro no microfone');
+    const n = (e && e.name) || '';
+    if (n === 'NotAllowedError' || n === 'SecurityError') toast('⚠️ Microfone bloqueado. Ícone cadeado na barra → Permissões → Microfone → Permitir, recarregue.');
+    else if (n === 'NotFoundError' || n === 'OverconstrainedError') toast('⚠️ Nenhum microfone encontrado no dispositivo.');
+    else if (n === 'NotReadableError') toast('⚠️ Microfone em uso por outro app. Feche e tente de novo.');
+    else toast('⚠️ Erro no microfone (' + (n || 'desconhecido') + ')');
   }
 }
 
