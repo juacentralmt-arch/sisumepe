@@ -44,17 +44,18 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
     return res.status(201).json(termo);
   }
   if(!destinatario || !String(destinatario).trim()) return res.status(400).json({ error: 'Destinatário é obrigatório' });
-  let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
-  // normaliza 5 linhas
-  const norm = [];
-  for(let i=0;i<5;i++){
-    const r = eq[i]||{};
-    norm.push({ tzpr04: String(r.tzpr04||'').trim().slice(0,30), fonte04: String(r.fonte04||'').trim().slice(0,30), cinta: String(r.cinta||'').trim().slice(0,30), trava: String(r.trava||'').trim().slice(0,30) });
-  }
-  if(!norm.some(r=> r.tzpr04||r.fonte04||r.cinta||r.trava)) return res.status(400).json({ error: 'Preencha ao menos um equipamento (TZPR04/FONTE04/CINTA/TRAVA)' });
+  const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
+  // normaliza somente linhas preenchidas (até 30)
+  const norm = eqIn.map(r => ({
+    tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
+    fonte04: String((r && r.fonte04) || '').trim().slice(0, 30),
+    cinta: String((r && r.cinta) || '').trim().slice(0, 30),
+    trava: String((r && r.trava) || '').trim().slice(0, 30)
+  })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
+  if(!norm.length) return res.status(400).json({ error: 'Preencha ao menos um equipamento (TZPR04/FONTE04/CINTA/TRAVA)' });
   const termo = await store.termos.insert({
     user: req.auth.user, tipo: 'listagem',
-    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null,
     destinatario: String(destinatario).trim().slice(0,120),
     equipamentos: norm,
     respEntrega: String(respEntrega||'').trim().slice(0,80),
@@ -76,7 +77,7 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
   const patch={};
-  if(dataEnvio) patch.dataEnvio = new Date(dataEnvio).toISOString().slice(0,10);
+  if(dataEnvio !== undefined) patch.dataEnvio = dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null;
   if(t.tipo === 'recolhimento' && dados && typeof dados === 'object'){
     const d = dados;
     const nd = Object.assign({}, t.dados||{});
@@ -101,9 +102,13 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
   if(equipamentos!=null){
-    let eq = Array.isArray(equipamentos) ? equipamentos.slice(0,5) : [];
-    const norm=[]; for(let i=0;i<5;i++){ const r=eq[i]||{}; norm.push({ tzpr04: String(r.tzpr04||'').trim().slice(0,30), fonte04: String(r.fonte04||'').trim().slice(0,30), cinta: String(r.cinta||'').trim().slice(0,30), trava: String(r.trava||'').trim().slice(0,30) }); }
-    patch.equipamentos = norm;
+    const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
+    patch.equipamentos = eqIn.map(r => ({
+      tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
+      fonte04: String((r && r.fonte04) || '').trim().slice(0, 30),
+      cinta: String((r && r.cinta) || '').trim().slice(0, 30),
+      trava: String((r && r.trava) || '').trim().slice(0, 30)
+    })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
   }
   if(respEntrega!=null) patch.respEntrega = String(respEntrega).trim().slice(0,80);
   if(respRecebimento!=null) patch.respRecebimento = String(respRecebimento).trim().slice(0,80);
@@ -149,9 +154,9 @@ router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
     return res.send(Buffer.from(pdf));
   }
   const termo = {
-    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : '',
     destinatario: String(destinatario||'').trim() || '_________________________',
-    equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,5).map(r=>({ tzpr04: String(r.tzpr04||''), fonte04: String(r.fonte04||''), cinta: String(r.cinta||''), trava: String(r.trava||'') })) : [],
+    equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,30).map(r=>({ tzpr04: String((r&&r.tzpr04)||''), fonte04: String((r&&r.fonte04)||''), cinta: String((r&&r.cinta)||''), trava: String((r&&r.trava)||'') })) : [],
     respEntrega: String(respEntrega||'').trim(),
     respRecebimento: String(respRecebimento||'').trim()
   };

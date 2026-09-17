@@ -10,7 +10,7 @@ function gerarTermoHTML(termo){
   const dest = termo.destinatario ? termo.destinatario : '_____________________________';
   const eq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
   while(eq.length<5) eq.push({tzpr04:'',fonte04:'',cinta:'',trava:''});
-  const rows = eq.slice(0,5).map(r=>`
+  const rows = eq.slice(0,30).map(r=>`
       <tr>
         <td>${(r.tzpr04||'').toString().substring(0,20)}</td>
         <td>${(r.fonte04||'').toString().substring(0,20)}</td>
@@ -225,10 +225,43 @@ async function gerarTermoPDF(termo){
   for(const y of hLines){
     page.drawLine({ start: {x: tableLeft, y}, end: {x: tableRight, y}, thickness: 0.6, color: rgb(0,0,0) });
   }
-  // Dados - 5 linhas, y central 468.39,448.39,428.39,408.39,388.39
+  // Dados: até 5 linhas usa o layout clássico exato; acima disso, tabela
+  // fluida com paginação (mesma geometria de colunas/fontes)
+  const storedEq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
+  const normEq = r => ({
+    tzpr04: String((r && r.tzpr04) || '').trim().substring(0, 18),
+    fonte04: String((r && r.fonte04) || '').trim().substring(0, 18),
+    cinta: String((r && r.cinta) || '').trim().substring(0, 18),
+    trava: String((r && r.trava) || '').trim().substring(0, 18)
+  });
+  const isFilled = r => r.tzpr04 || r.fonte04 || r.cinta || r.trava;
+  const filledEq = storedEq.map(normEq).filter(isFilled).slice(0, 30);
+  const useFlow = filledEq.length > 5;
+  const drawSigBlock = (p, lineY) => {
+    if(termo.respEntrega){
+      const rw = fontTimes.widthOfTextAtSize(String(termo.respEntrega), 9);
+      p.drawText(String(termo.respEntrega), { x: (595.32 - rw)/2, y: lineY + 10, size: 9, font: fontTimes, color: rgb(0,0,0) });
+    }
+    p.drawLine({ start: {x: 60, y: lineY}, end: {x: 535.32, y: lineY}, thickness: 0.9, color: rgb(0,0,0) });
+    p.drawText('RESPONSÁVEL PELA ENTREGA', { x: 207.89, y: lineY - 14.63, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+    p.drawText('(', { x: 236.81, y: lineY - 28.43, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    p.drawText('RG/CPF/MATRICULA', { x: 240.41, y: lineY - 28.43, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    p.drawText(')', { x: 354.79, y: lineY - 28.43, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    if(termo.respRecebimento){
+      const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 9);
+      p.drawText(String(termo.respRecebimento), { x: (595.32 - rw)/2, y: lineY - 62, size: 9, font: fontTimes, color: rgb(0,0,0) });
+    }
+    p.drawLine({ start: {x: 60, y: lineY - 72}, end: {x: 535.32, y: lineY - 72}, thickness: 0.9, color: rgb(0,0,0) });
+    p.drawText('RESPONSÁVEL PELA RECEBIMENTO', { x: 193.49, y: lineY - 86.06, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
+    p.drawText('(', { x: 236.81, y: lineY - 99.86, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    p.drawText('RG/CPF/MATRICULA', { x: 240.41, y: lineY - 99.86, size: 12, font: fontTimes, color: rgb(0,0,0) });
+    p.drawText(')', { x: 354.79, y: lineY - 99.86, size: 12, font: fontTimes, color: rgb(0,0,0) });
+  };
+  if(!useFlow){
+  // 5 linhas clássicas, y central 468.39,448.39,428.39,408.39,388.39
   const rowYs = [468.39, 448.39, 428.39, 408.39, 388.39];
   for(let r=0;r<5;r++){
-    const row = termo.equipamentos && termo.equipamentos[r] ? termo.equipamentos[r] : {};
+    const row = storedEq[r] ? normEq(storedEq[r]) : {};
     const vals = [row.tzpr04||'', row.fonte04||'', row.cinta||'', row.trava||''];
     for(let c=0;c<4;c++){
       const txt = String(vals[c]).trim().substring(0,18);
@@ -256,6 +289,47 @@ async function gerarTermoPDF(termo){
   if(termo.respRecebimento){
     const rw = fontTimes.widthOfTextAtSize(String(termo.respRecebimento), 9);
     page.drawText(String(termo.respRecebimento), { x: (595.32 - rw)/2, y: 248, size: 9, font: fontTimes, color: rgb(0,0,0) });
+  }
+  } else {
+  // Tabela fluida com paginação
+  const ROW_H = 20, BOTTOM = 70, NEWTOP = 760;
+  const drawFlowHeader = (p, top) => {
+    p.drawRectangle({ x: tableLeft, y: top - 18, width: tableRight - tableLeft, height: 18, color: rgb(0.996, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.6 });
+    hdrCols.forEach((h, i) => {
+      const hw = fontTimesBold.widthOfTextAtSize(h, 11);
+      p.drawText(h, { x: (hdrBounds[i][0] + hdrBounds[i][1]) / 2 - hw / 2, y: top - 11.5, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+    });
+    p.drawLine({ start: {x: tableLeft, y: top}, end: {x: tableRight, y: top}, thickness: 0.6, color: rgb(0,0,0) });
+  };
+  const drawVerticals = (p, yTop, yBottom) => {
+    for(const x of colBounds) p.drawLine({ start: {x, y: yTop}, end: {x, y: yBottom}, thickness: 0.6, color: rgb(0,0,0) });
+  };
+  let pg = page, top = 496.39, segTop = 496.39;
+  drawFlowHeader(pg, top);
+  top -= 18;
+  for(const row of filledEq){
+    if(top - ROW_H < BOTTOM){
+      drawVerticals(pg, segTop, top);
+      pg = pdfDoc.addPage([595.32, 841.92]);
+      top = NEWTOP; segTop = NEWTOP;
+      drawFlowHeader(pg, top);
+      top -= 18;
+    }
+    const vals = [row.tzpr04, row.fonte04, row.cinta, row.trava];
+    for(let c=0;c<4;c++){
+      const txt = String(vals[c] || '').trim().substring(0, 24);
+      if(txt){
+        const tw = fontTimes.widthOfTextAtSize(txt, 9);
+        pg.drawText(txt, { x: colCenters[c] - tw/2, y: top - 10, size: 9, font: fontTimes, color: rgb(0,0,0) });
+      }
+    }
+    top -= ROW_H;
+    pg.drawLine({ start: {x: tableLeft, y: top}, end: {x: tableRight, y: top}, thickness: 0.6, color: rgb(0,0,0) });
+  }
+  drawVerticals(pg, segTop, top);
+  let sigY = top - 48;
+  if(sigY < 260){ pg = pdfDoc.addPage([595.32, 841.92]); sigY = 730; }
+  drawSigBlock(pg, sigY);
   }
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
