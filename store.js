@@ -574,6 +574,56 @@ const store = {
     if (up.error) throw new Error('upload: ' + up.error.message);
     const pub = supa.storage.from('anexos').getPublicUrl(safe);
     return { url: pub.data.publicUrl, name: file.originalname, size: file.size, mimetype: file.mimetype };
+  },
+
+  // Apaga o arquivo físico de um anexo (ignora erros: pode já ter sumido)
+  async deleteStoredFile(url) {
+    const u = String(url || '');
+    try {
+      if (MODE === 'file') {
+        const m = u.match(/\/uploads\/([^/?#]+)$/);
+        if (!m) return;
+        await fs.promises.unlink(path.join(UPLOAD_DIR, path.basename(m[1]))).catch(() => {});
+        return;
+      }
+      const key = decodeURIComponent(u.split('/anexos/')[1] || '').split('?')[0];
+      if (!key) return;
+      await supa.storage.from('anexos').remove([key]);
+    } catch {}
+  },
+
+  // Expira anexos de tickets fechados há mais de maxAgeMs (padrão 24h).
+  // Apaga o arquivo físico e deixa um marcador {expired:true} no lugar.
+  // Tickets ativos (aguardando/em_atendimento) NUNCA são tocados.
+  async cleanupExpiredFiles(maxAgeMs) {
+    const ttl = typeof maxAgeMs === 'number' ? maxAgeMs : (Number(process.env.FILES_TTL_HOURS) || 24) * 3600e3;
+    const now = Date.now();
+    let filesRemoved = 0, ticketsTouched = 0;
+    const tickets = await store.tickets.all();
+    for (const t of tickets) {
+      if (!['finalizado', 'cancelado'].includes(t.status)) continue;
+      const ref = t.finishedAt || t.cancelledAt || t.createdAt;
+      if (!ref || now - new Date(ref).getTime() < ttl) continue;
+      const cleanList = async (list) => {
+        if (!Array.isArray(list)) return list;
+        const out = [];
+        for (const a of list) {
+          if (!a || a.expired || !a.url) { out.push(a); continue; }
+          await store.deleteStoredFile(a.url);
+          filesRemoved++;
+          out.push({ name: a.name || 'arquivo', expired: true, expiredAt: new Date().toISOString() });
+        }
+        return out;
+      };
+      const before = JSON.stringify([t.anexos, t.fotosPos]);
+      const anexos = await cleanList(t.anexos);
+      const fotosPos = await cleanList(t.fotosPos);
+      if (JSON.stringify([anexos, fotosPos]) !== before) {
+        await store.tickets.patch(t.id, { anexos, fotosPos });
+        ticketsTouched++;
+      }
+    }
+    return { filesRemoved, ticketsTouched };
   }
 };
 
