@@ -228,42 +228,39 @@
         <h2 class="font-display font-bold text-xl">Check-in da recepção</h2>
         <p class="text-xs text-slate-500 mt-0.5">Busque o atendido, cadastre se preciso e abra o ticket</p>
       </div>
-      <div class="grid lg:grid-cols-2 gap-4 items-start">
-        <div class="card p-5 sm:p-6">
-          <div class="flex items-center gap-2.5 mb-1"><span class="step-num">1</span><h3 class="font-display font-bold">Localizar atendido</h3></div>
-          <p class="text-xs text-slate-500 mb-3 ml-9">Busca rápida por CPF, RG ou nome</p>
-          <div class="flex flex-col sm:flex-row gap-2">
-            <input id="q" oninput="checkinTyping()" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." autocomplete="off" class="inp flex-1">
-            <button onclick="buscarPessoa()" class="btn btn-primary text-sm px-5 w-full sm:w-auto">Buscar</button>
-          </div>
-          <div class="flex gap-2 mt-2">
-            <button type="button" onclick="openDocReader(true)" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar CPF/RG</button>
-            <button type="button" onclick="openDocReader(false)" class="btn btn-ghost flex-1 py-2.5 text-xs">🖼️ Ler documento</button>
-          </div>
-          <input id="docReaderCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="docReaderChanged(this)">
-          <input id="docReaderPick" type="file" accept="image/*" class="hidden" onchange="docReaderChanged(this)">
-          <div id="searchRes" class="mt-3 space-y-2"></div>
-          <div class="flex items-center gap-3 my-5"><span class="flex-1 h-px bg-slate-200"></span><span class="text-[11px] font-bold text-slate-400">NOVO CADASTRO</span><span class="flex-1 h-px bg-slate-200"></span></div>
-          <div class="grid grid-cols-2 gap-2.5">
-            <input id="cNome" placeholder="Nome completo *" autocomplete="name" class="inp col-span-2">
-            <input id="cCpf" placeholder="CPF" inputmode="numeric" autocomplete="off" class="inp">
-            <input id="cRg" placeholder="RG" class="inp">
-            <input id="cMae" placeholder="Nome da mãe (opcional)" class="inp col-span-2">
-            <label class="col-span-2 lbl flex items-center gap-2">DATA DE NASCIMENTO <input id="cNasc" type="date" class="inp !w-auto"></label>
-          </div>
-          <label class="lbl mt-3 block">MODELO DA TORNOZELEIRA *</label>
-          <div class="grid grid-cols-2 gap-2.5 mt-1">
-            <button type="button" data-cmodelo="Spacecom" onclick="pickCadModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
-            <button type="button" data-cmodelo="Infinity" onclick="pickCadModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
-          </div>
-          <button onclick="cadastrarPessoa()" class="btn btn-dark w-full py-3 text-sm mt-4">Cadastrar atendido</button>
+      <div class="card p-5 sm:p-6 max-w-3xl">
+        <div class="flex items-center gap-2.5 mb-1"><span class="step-num">1</span><h3 class="font-display font-bold">Atendido</h3></div>
+        <p class="text-xs text-slate-500 mb-3 ml-9">Busca rápida por CPF, RG ou nome — ou cadastre logo abaixo</p>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="q" oninput="checkinTyping()" onkeydown="if(event.key==='Enter')buscarPessoa()" placeholder="Ex: 123.456.789-00, RG ou Maria..." autocomplete="off" class="inp flex-1">
+          <button onclick="buscarPessoa()" class="btn btn-primary text-sm px-5 w-full sm:w-auto">Buscar</button>
         </div>
+        <div class="flex gap-2 mt-2">
+          <button type="button" onclick="openDocReader(true)" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar CPF/RG</button>
+          <button type="button" onclick="openDocReader(false)" class="btn btn-ghost flex-1 py-2.5 text-xs">🖼️ Ler documento</button>
+        </div>
+        <input id="docReaderCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="docReaderChanged(this)">
+        <input id="docReaderPick" type="file" accept="image/*" class="hidden" onchange="docReaderChanged(this)">
+        <div id="searchRes" class="mt-3 space-y-2"></div>
+        <div id="selPerson" class="rounded-xl p-3.5 text-sm mt-3 mb-4 border border-dashed border-slate-300 bg-slate-50 text-slate-500">Nenhum atendido selecionado. Busque acima e clique em <b>Selecionar</b>.</div>
+        <div class="flex items-center gap-3 my-5"><span class="flex-1 h-px bg-slate-200"></span><span class="text-[11px] font-bold text-slate-400">AINDA NÃO CADASTRADO?</span><span class="flex-1 h-px bg-slate-200"></span></div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <input id="cNome" placeholder="Nome completo *" autocomplete="name" class="inp col-span-2">
+          <input id="cCpf" placeholder="CPF" inputmode="numeric" autocomplete="off" class="inp">
+          <input id="cRg" placeholder="RG" class="inp">
+          <input id="cMae" placeholder="Nome da mãe (opcional)" class="inp col-span-2">
+          <label class="col-span-2 lbl flex items-center gap-2">DATA DE NASCIMENTO <input id="cNasc" type="date" class="inp !w-auto"></label>
+        </div>
+        <label class="lbl mt-3 block">MODELO DA TORNOZELEIRA *</label>
+        <div class="grid grid-cols-2 gap-2.5 mt-1">
+          <button type="button" data-cmodelo="Spacecom" onclick="pickCadModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+          <button type="button" data-cmodelo="Infinity" onclick="pickCadModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+        </div>
+        <button onclick="cadastrarPessoa()" class="btn btn-dark w-full py-3 text-sm mt-4">Cadastrar atendido</button>
 
-        <div class="card p-5 sm:p-6 lg:sticky lg:top-24">
-          <div class="flex items-center gap-2.5 mb-1"><span class="step-num">2</span><h3 class="font-display font-bold">Abrir ticket</h3></div>
-          <p class="text-xs text-slate-500 mb-3 ml-9">Selecione o atendido e o motivo</p>
-          <div id="selPerson" class="rounded-xl p-3.5 text-sm mb-4 border border-dashed border-slate-300 bg-slate-50 text-slate-500">Nenhum atendido selecionado. Busque ao lado e clique em <b>Selecionar</b>.</div>
-          <label class="lbl">MOTIVO *</label>
+        <div class="flex items-center gap-2.5 mt-7 mb-1"><span class="step-num">2</span><h3 class="font-display font-bold">Ticket</h3></div>
+        <p class="text-xs text-slate-500 mb-3 ml-9">Motivo, fotos e responsável — usa o atendido selecionado acima</p>
+        <label class="lbl">MOTIVO *</label>
           <select id="tMotivo" class="inp mt-1 mb-3">
             <option value="" disabled selected>Selecione o motivo *</option>
             <option>Botão do Pânico</option>
@@ -301,7 +298,6 @@
           <div id="scanPreview" class="flex gap-1.5 flex-wrap mt-2"></div>
           <input id="tResp" placeholder="Responsável recepção (opcional)" autocomplete="off" class="inp mb-4">
           <button onclick="abrirTicket()" data-abrir-ticket class="btn btn-green w-full py-3.5 text-sm hidden lg:inline-flex">🎫 Abrir ticket e entrar na fila</button>
-        </div>
       </div>
       <!-- barra de ação fixa no celular -->
       <div class="lg:hidden sticky bottom-3 mt-4">
