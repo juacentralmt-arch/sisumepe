@@ -4037,6 +4037,7 @@ function hideCallUI(){
   document.getElementById('callBar').classList.add('hidden');
   document.getElementById('callIncoming').classList.add('hidden');
   stopRing();
+  stopCallAlerts();
 }
 function callTick(){
   const s = Math.floor((Date.now() - callStartTs) / 1000);
@@ -4141,7 +4142,33 @@ function toggleCallMute(){
   t.enabled = !t.enabled;
   document.getElementById('callMuteBtn').textContent = t.enabled ? '🎙️' : '🔇';
 }
-let callOfferSdp = null;
+let callOfferSdp = null, callTitleInt = null, callNotif = null, origTitle = null;
+function stopCallAlerts(){
+  if(callTitleInt){ clearInterval(callTitleInt); callTitleInt = null; }
+  if(origTitle !== null){ try{ document.title = origTitle; }catch(e){} origTitle = null; }
+  try{ if(callNotif) callNotif.close(); }catch(e){}
+  callNotif = null;
+  try{ if(navigator.vibrate) navigator.vibrate(0); }catch(e){}
+}
+function fireCallAlerts(name){
+  // Título da aba piscando (visível mesmo com a janela minimizada)
+  try{
+    if(origTitle === null) origTitle = document.title;
+    let on = false;
+    if(callTitleInt) clearInterval(callTitleInt);
+    callTitleInt = setInterval(() => { try{ document.title = on ? origTitle : '📞 Chamada de ' + name; }catch(e){} on = !on; }, 1000);
+  }catch(e){}
+  // Vibração no celular
+  try{ if(navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 800]); }catch(e){}
+  // Notificação do sistema (funciona com a aba em segundo plano)
+  try{
+    if('Notification' in window && Notification.permission === 'granted'){
+      try{ if(callNotif) callNotif.close(); }catch(e){}
+      callNotif = new Notification('📞 Chamada de voz', { body: name + ' está ligando para você...', tag: 'sisumepe-call', requireInteraction: true });
+      callNotif.onclick = () => { try{ window.focus(); }catch(e){} try{ callNotif.close(); }catch(e2){} };
+    }
+  }catch(e){}
+}
 function handleCallSignal(data){
   if(!session || data.to !== session.user) return;
   const from = data.from, sig = data.signal || {};
@@ -4155,6 +4182,7 @@ function handleCallSignal(data){
     document.getElementById('callInName').textContent = callPeerName;
     document.getElementById('callIncoming').classList.remove('hidden');
     startRing();
+    fireCallAlerts(callPeerName);
     if(callTimeout) clearTimeout(callTimeout);
     callTimeout = setTimeout(() => {
       if(callState === 'incoming'){ teardownCall(); toast('📵 Chamada perdida de ' + callPeerName); }
