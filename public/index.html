@@ -4124,6 +4124,15 @@ async function sendChat(){
 if (session) { enterApp(); } else { document.getElementById('loginOverlay').classList.remove('hidden'); }
 // Polling de segurança a cada 30s (o tempo real vem via SSE); pausa com aba oculta
 setInterval(()=>{ if(session && !document.hidden){ loadAll(); loadChat(); } }, 30000);
+// Fallback de sinalização: busca sinais de chamada mesmo com o SSE caído
+async function pollCallPending(){
+  if(!session) return;
+  try{
+    const list = await api('/api/call/pending');
+    (list || []).forEach(s => handleCallSignal({ id: s.id, from: s.from, fromName: s.fromName, to: session.user, signal: s.signal }));
+  }catch(e){}
+}
+setInterval(()=>{ if(session) pollCallPending(); }, 8000);
 // Agrupa rajadas de eventos SSE num único refresh (evita N renders seguidos)
 let refreshTimer = null;
 function scheduleRefresh(){
@@ -4195,6 +4204,8 @@ function callTick(){
 function teardownCall(){
   if(callTimeout){ clearTimeout(callTimeout); callTimeout = null; }
   if(callTimerInt){ clearInterval(callTimerInt); callTimerInt = null; }
+  if(callNoAckTimer){ clearTimeout(callNoAckTimer); callNoAckTimer = null; }
+  callRingAck = false;
   try{ if(callPc){ callPc.onicecandidate = null; callPc.ontrack = null; callPc.close(); } }catch(e){}
   try{ if(callStream) callStream.getTracks().forEach(t => t.stop()); }catch(e){}
   try{ const a = document.getElementById('callAudio'); a.srcObject = null; }catch(e){}
@@ -4239,8 +4250,14 @@ async function startCall(){
     await callPc.setLocalDescription(offer);
     await callSignal(target, 'offer', { sdp: offer });
     callState = 'calling';
+    callRingAck = false;
     showCallBar(callPeerName, 'Chamando...');
     if(!chatOpen) toggleChat();
+    if(callNoAckTimer) clearTimeout(callNoAckTimer);
+    callNoAckTimer = setTimeout(() => {
+      callNoAckTimer = null;
+      if(callState === 'calling' && !callRingAck) callStatus(callPeerName + ' pode estar offline — chame pelo chat');
+    }, 8000);
     callTimeout = setTimeout(() => {
       if(callState === 'calling'){ callSignal(target, 'end', {}).catch(() => {}); teardownCall(); toast('📵 ' + callPeerName + ' não atendeu'); }
     }, 30000);
@@ -4291,6 +4308,7 @@ function toggleCallMute(){
   document.getElementById('callMuteBtn').textContent = t.enabled ? '🎙️' : '🔇';
 }
 let callOfferSdp = null, callTitleInt = null, callNotif = null, origTitle = null;
+let seenSignalIds = [], callRingAck = false, callNoAckTimer = null;
 function stopCallAlerts(){
   if(callTitleInt){ clearInterval(callTitleInt); callTitleInt = null; }
   if(origTitle !== null){ try{ document.title = origTitle; }catch(e){} origTitle = null; }
@@ -4319,6 +4337,12 @@ function fireCallAlerts(name){
 }
 function handleCallSignal(data){
   if(!session || data.to !== session.user) return;
+  // Deduplica (sinal pode chegar via SSE + polling de fallback)
+  if(data.id){
+    if(seenSignalIds.includes(data.id)) return;
+    seenSignalIds.push(data.id);
+    if(seenSignalIds.length > 30) seenSignalIds = seenSignalIds.slice(-30);
+  }
   const from = data.from, sig = data.signal || {};
   if(from === session.user) return;
   if(sig.kind === 'offer'){
@@ -4331,6 +4355,8 @@ function handleCallSignal(data){
     document.getElementById('callIncoming').classList.remove('hidden');
     startRing();
     fireCallAlerts(callPeerName);
+    // Confirma ao chamador que o aparelho está tocando (via POST: funciona mesmo com SSE falho)
+    callSignal(from, 'ringing', {}).catch(() => {});
     if(callTimeout) clearTimeout(callTimeout);
     callTimeout = setTimeout(() => {
       if(callState === 'incoming'){ teardownCall(); toast('📵 Chamada perdida de ' + callPeerName); }
@@ -4360,6 +4386,12 @@ function handleCallSignal(data){
     })();
   } else if(sig.kind === 'reject'){
     teardownCall(); toast('📵 ' + callPeerName + ' recusou a chamada');
+  } else if(sig.kind === 'ringing'){
+    if(from === callPeer && callState === 'calling'){
+      callRingAck = true;
+      if(callNoAckTimer){ clearTimeout(callNoAckTimer); callNoAckTimer = null; }
+      callStatus('Tocando no aparelho de ' + callPeerName + '...');
+    }
   } else if(sig.kind === 'busy'){
     teardownCall(); toast('📵 ' + callPeerName + ' está em outra ligação');
   } else if(sig.kind === 'end'){
@@ -4400,6 +4432,13 @@ function connectSSE(){
     es.onopen = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-emerald-500'; };
   }catch(e){}
 }
+// Recupera o SSE ao voltar para a aba ou reconectar a rede
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && session && (!es || (typeof EventSource !== 'undefined' && es.readyState === EventSource.CLOSED))) connectSSE();
+});
+window.addEventListener('online', () => {
+  if(session && (!es || (typeof EventSource !== 'undefined' && es.readyState === EventSource.CLOSED))) connectSSE();
+});
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
 </script>
