@@ -115,6 +115,9 @@
     <button data-tab="termos" onclick="go('termos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Termos <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
+    <button data-tab="scanner" onclick="go('scanner')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Scanner <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
     <button data-tab="visao" onclick="go('visao')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
       Visão 360° <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">RESTRITO</span></button>
@@ -156,6 +159,7 @@
       <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
       <button data-tab="agenda" onclick="go('agenda')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📅 Agenda</button>
       <button data-tab="termos" onclick="go('termos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 Termos</button>
+      <button data-tab="scanner" onclick="go('scanner')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📷 Scanner</button>
       <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
@@ -305,6 +309,32 @@
       <!-- barra de ação fixa no celular -->
       <div class="lg:hidden sticky bottom-3 mt-4">
         <button onclick="abrirTicket()" data-abrir-ticket class="btn btn-green w-full py-4 text-base shadow-2xl">🎫 Abrir ticket e entrar na fila</button>
+      </div>
+    </section>
+
+    <!-- SCANNER -->
+    <section id="tab-scanner" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">📷 Scanner</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Digitalize páginas e gere um PDF único — como no CamScanner</p>
+      </div>
+      <div class="card p-5 sm:p-6 max-w-3xl">
+        <div class="flex gap-2">
+          <button type="button" onclick="openScan(true,'scanner')" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar página</button>
+          <button type="button" onclick="openScan(false,'scanner')" class="btn btn-primary flex-1 py-2.5 text-xs">📄 Digitalizar documento</button>
+        </div>
+        <button type="button" onclick="document.getElementById('scannerPick').click()" class="btn btn-ghost w-full py-2.5 text-xs mt-2">🖼️ Escolher da galeria</button>
+        <input id="scannerPick" type="file" accept="image/*" multiple class="hidden" onchange="scannerPickChanged(this)">
+        <p class="text-[11px] text-slate-400 mt-2">Na digitalização use os filtros (Doc. P&amp;B), recorte e giro. Toque nas setas para reordenar as páginas.</p>
+        <div id="scannerGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3"></div>
+        <label class="lbl mt-4 block">ANEXAR AO MEU TICKET (opcional)</label>
+        <select id="scannerTicket" class="inp mt-1 mb-3"><option value="">Só gerar o PDF (sem anexar)</option></select>
+        <div id="scannerResult" class="hidden mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm"></div>
+        <p id="scannerErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
+        <div class="flex gap-2.5 mt-4">
+          <button onclick="scannerClear()" class="btn btn-ghost flex-1 py-3 text-sm">Limpar</button>
+          <button id="scannerGoBtn" onclick="scannerGenerate()" class="btn btn-green flex-1 py-3 text-sm">📄 Gerar PDF</button>
+        </div>
       </div>
     </section>
 
@@ -1053,6 +1083,7 @@ async function finishLogout(silent){
   lastTicketsHash = null; lastFullRenderAt = 0;
   try{ chatCache = []; chatMaxId = 0; oldestChatId = null; hasMoreChat = true; }catch(e){}
   try{ if(typeof endCall === 'function') endCall(true); }catch(e){}
+  try{ scannerFiles = []; if(typeof renderScanner === 'function') renderScanner(); }catch(e){}
   localStorage.removeItem('te_session');
   try{ if(es) es.close(); }catch(e){}
   es = null;
@@ -1101,9 +1132,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash'],
-  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash', 'usuarios']
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash'],
+  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
   const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
@@ -1127,10 +1158,11 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
+  if(tab==='scanner') loadScannerTickets();
   if(tab==='dash') loadDash();
   if(tab==='agenda') loadAgenda();
   if(tab==='termos') loadTermos();
@@ -1557,7 +1589,9 @@ function scanSource(){
   }
   return scanImg._full;
 }
-function openScan(camera){
+let scanTarget = 'ticket';
+function openScan(camera, target){
+  scanTarget = target || 'ticket';
   scanModeCam = !!camera;
   (camera ? document.getElementById('scanCam') : document.getElementById('scanPick')).click();
 }
@@ -1632,11 +1666,13 @@ function attachScan(){
   const doAttach = (canvas) => {
     canvas.toBlob(blob => {
       if(!blob) return toast('⚠️ Falha ao processar imagem');
+      const f = new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+      if(scanTarget === 'scanner'){ scannerAddFiles([f]); closeScan(); toast('📄 Página adicionada ao Scanner!'); return; }
       const cur = document.getElementById('tFiles');
       if(cur.files.length >= 20) return toast('⚠️ Máximo de 20 anexos por ticket');
       const dt = new DataTransfer();
-      [...cur.files].forEach(f => dt.items.add(f));
-      dt.items.add(new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' }));
+      [...cur.files].forEach(x => dt.items.add(x));
+      dt.items.add(f);
       cur.files = dt.files;
       refreshScanPreview(); closeScan(); toast(cropEnabled && cropRect ? 'Imagem recortada e anexada!' : 'Documento digitalizado e anexado!');
     }, 'image/jpeg', 0.85);
@@ -2501,6 +2537,94 @@ function renderTec(){
   document.getElementById('tecAguard').innerHTML=ag.length?ag.map(t=>mini(t,startBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nada aguardando.</p>';
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
+}
+// --- SCANNER (digitalizar páginas → PDF único) ---
+let scannerFiles = [];
+function scannerAddFiles(list){
+  const imgs = [...(list || [])].filter(f => ((f.type || '').startsWith('image/')));
+  if(!imgs.length) return toast('⚠️ Selecione imagens');
+  const room = 20 - scannerFiles.length;
+  if(room <= 0) return toast('⚠️ Máximo de 20 páginas');
+  scannerFiles = scannerFiles.concat(imgs.slice(0, room));
+  if(imgs.length > room) toast('⚠️ Máximo de 20 páginas — excedentes ignorados');
+  renderScanner();
+}
+function scannerPickChanged(inp){
+  scannerAddFiles(inp.files);
+  inp.value = '';
+}
+function scannerRemove(i){
+  scannerFiles = scannerFiles.filter((_, j) => j !== i);
+  renderScanner();
+}
+function scannerMove(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= scannerFiles.length) return;
+  const tmp = scannerFiles[i];
+  scannerFiles[i] = scannerFiles[j];
+  scannerFiles[j] = tmp;
+  renderScanner();
+}
+function scannerClear(){
+  scannerFiles = [];
+  document.getElementById('scannerResult').classList.add('hidden');
+  document.getElementById('scannerErr').classList.add('hidden');
+  renderScanner();
+}
+function renderScanner(){
+  const box = document.getElementById('scannerGrid');
+  if(!box) return;
+  box.innerHTML = scannerFiles.length ? scannerFiles.map((f, i) => `
+    <div class="relative rounded-xl overflow-hidden border border-slate-200 bg-white">
+      <img src="${URL.createObjectURL(f)}" loading="lazy" class="w-full h-28 object-cover block">
+      <span class="absolute top-1 left-1 text-[10px] font-extrabold bg-slate-900/70 text-white px-1.5 py-0.5 rounded-md">${i + 1}</span>
+      <button onclick="scannerRemove(${i})" title="Remover" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-rose-600 text-white text-[11px] font-bold">✕</button>
+      <div class="flex">
+        <button onclick="scannerMove(${i},-1)" class="flex-1 text-xs py-1 bg-slate-50 hover:bg-slate-100 border-t border-slate-200">◀</button>
+        <button onclick="scannerMove(${i},1)" class="flex-1 text-xs py-1 bg-slate-50 hover:bg-slate-100 border-t border-l border-slate-200">▶</button>
+      </div>
+    </div>`).join('')
+    : '<p class="col-span-full text-xs text-slate-400 text-center border border-dashed border-slate-300 rounded-xl p-4">Nenhuma página. Fotografe, digitalize ou escolha da galeria. ⬆️</p>';
+  const btn = document.getElementById('scannerGoBtn');
+  if(btn){ btn.disabled = !scannerFiles.length; btn.classList.toggle('opacity-60', !scannerFiles.length); }
+}
+async function loadScannerTickets(){
+  const sel = document.getElementById('scannerTicket');
+  if(!sel || !session) return;
+  const mine = (tickets || []).filter(t => t.status === 'em_atendimento' && String(ticketOwner(t) || '').toLowerCase() === String(session.user).toLowerCase());
+  sel.innerHTML = '<option value="">Só gerar o PDF (sem anexar)</option>' + mine.map(t =>
+    `<option value="${t.id}">${esc(t.code)} • ${esc((t.person && t.person.nome) || '')} • ${esc(t.motivo || '')}</option>`).join('');
+}
+async function scannerGenerate(){
+  const err = document.getElementById('scannerErr');
+  const box = document.getElementById('scannerResult');
+  err.classList.add('hidden'); box.classList.add('hidden');
+  if(!scannerFiles.length) return toast('⚠️ Adicione ao menos 1 página');
+  const btn = document.getElementById('scannerGoBtn');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Gerando PDF...';
+  try{
+    const fd = new FormData();
+    scannerFiles.forEach(f => fd.append('pages', f));
+    const tid = document.getElementById('scannerTicket').value;
+    if(tid) fd.append('ticketId', tid);
+    const r = await authFetch('/api/scanner/pdf', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || 'Erro ao gerar PDF');
+    box.innerHTML = `<p class="font-bold text-emerald-800">✅ PDF gerado (${scannerFiles.length} ${scannerFiles.length > 1 ? 'páginas' : 'página'})</p>
+      <p class="text-xs text-slate-600 mt-1 truncate">📄 ${esc(j.pdf.name)}</p>
+      <div class="flex gap-2 mt-2">
+        <a href="${esc(j.pdf.url)}" target="_blank" class="btn btn-primary flex-1 py-2 text-xs text-center">Abrir PDF</a>
+        <a href="${esc(j.pdf.url)}" download="${esc(j.pdf.name)}" class="btn btn-ghost flex-1 py-2 text-xs text-center">⬇️ Baixar</a>
+      </div>
+      ${j.attachedTo ? `<p class="text-xs font-bold text-emerald-700 mt-2">📎 Anexado ao ticket ${esc(j.attachedTo)}</p>` : ''}`;
+    box.classList.remove('hidden');
+    scannerFiles = [];
+    renderScanner();
+    loadAll();
+    toast('📄 PDF gerado com sucesso!');
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+  finally{ btn.disabled = !scannerFiles.length; btn.innerHTML = orig; }
 }
 // --- FERIADOS (Nacionais + CE + Juazeiro do Norte-CE) ---
 // Fontes: Portaria MGI 11.460/2025 + Circular CDL Juazeiro 01/2026

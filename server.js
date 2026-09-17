@@ -52,6 +52,7 @@ app.use(require('./src/routes/admin'));
 app.use(require('./src/routes/google'));
 app.use(require('./src/routes/agenda'));
 app.use(require('./src/routes/termos'));
+app.use(require('./src/routes/scanner'));
 
 // Painel TV público (sem login): só o mínimo necessário à chamada
 app.get('/api/tv', shared.ah(async (req, res) => {
