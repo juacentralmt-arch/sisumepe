@@ -1175,6 +1175,16 @@ function fotosPosHtml(list){
   if(!list || !list.length) return '';
   return `<div class="mt-1.5 flex gap-1.5 flex-wrap">${list.map(a => `<a href="${esc(a.url)}" target="_blank"><img src="${esc(a.url)}" loading="lazy" class="w-14 h-14 rounded-lg object-cover border border-slate-200"></a>`).join('')}</div>`;
 }
+function anexosHtml(list){
+  if(!list || !list.length) return '';
+  return `<div class="mt-1.5 flex gap-1.5 flex-wrap items-center"><span class="text-[11px] font-bold text-slate-500">📎</span>${list.map(a => {
+    const url = esc(a.url || ''), name = esc(a.name || 'arquivo');
+    const isImg = ((a.mimetype || '').startsWith('image/')) || /\.(jpe?g|png|webp|gif)$/i.test(a.url || '');
+    return isImg
+      ? `<a href="${url}" target="_blank" title="${name}"><img src="${url}" loading="lazy" class="w-14 h-14 rounded-lg object-cover border border-slate-200"></a>`
+      : `<a class="text-indigo-600 underline font-semibold text-[11px]" target="_blank" title="${name}" href="${url}">📄 ${name}</a>`;
+  }).join('')}</div>`;
+}
 function statusPill(st){
   if(st==='aguardando') return '<span class="text-[10px] font-extrabold tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">AGUARDANDO</span>';
   if(st==='em_atendimento') return '<span class="text-[10px] font-extrabold tracking-wide bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">EM ATENDIMENTO</span>';
@@ -1199,6 +1209,7 @@ function cardFila(t,i){
       <p class="text-xs text-slate-500 truncate">${esc(t.person?.cpf||t.person?.rg||'sem doc.')} • ${esc(t.motivo)}</p></div>
     </div>
     ${t.descricao?`<p class="text-xs mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 leading-relaxed">${esc(t.descricao)}</p>`:''}
+    ${anexosHtml(t.anexos)}
     ${filaActions(t)}
   </div>`;
 }
@@ -2383,7 +2394,7 @@ function renderTec(){
   const mini=(t,btn)=>`<div class="card card-hover p-4 text-sm ${t.prioridadeLegal?'prio-glow':''}">
     <div class="flex gap-2 items-center flex-wrap"><b class="text-indigo-600 text-xs tracking-wide">${esc(t.code)}</b>${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE</span>':''}${modeloBadge(t.modeloTornozeleira)}<span class="ml-auto text-[11px] font-semibold text-slate-400">${tempo(t.createdAt)}</span></div>
     <div class="flex items-center gap-2.5 mt-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(t.person?.nome)}</span>
-    <div><p class="font-bold leading-tight">${esc(t.person?.nome||'')}</p><p class="text-xs text-slate-500">${esc(t.motivo)}</p></div></div>${btn||''}</div>`;
+    <div><p class="font-bold leading-tight">${esc(t.person?.nome||'')}</p><p class="text-xs text-slate-500">${esc(t.motivo)}</p></div></div>${anexosHtml(t.anexos)}${btn||''}</div>`;
   document.getElementById('tecAguard').innerHTML=ag.length?ag.map(t=>mini(t,startBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nada aguardando.</p>';
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
@@ -3211,7 +3222,7 @@ function visaoTimelineHtml(list){
       <div class="flex gap-2 flex-wrap items-center"><button onclick="goTicket(${t.id})" title="Abrir na fila" class="text-indigo-600 text-xs font-extrabold underline hover:text-indigo-800">${esc(t.code)}</button><span class="text-xs font-bold">${esc(t.motivo)}</span>${modeloBadge(t.modeloTornozeleira)}${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE LEGAL</span>':''}<span class="ml-auto text-[11px] text-slate-400">${new Date(t.createdAt).toLocaleString('pt-BR')}</span></div>
       ${t.descricao?`<p class="text-xs mt-1.5 text-slate-600">${esc(t.descricao)}</p>`:''}
       ${t.relatorio?`<p class="text-xs mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 leading-relaxed"><b>Relatório (${esc(t.tecnico||'técnico')}):</b> ${esc(t.relatorio)}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}`:''}
-      ${t.anexos?.length?`<p class="text-[11px] mt-1.5">📎 ${t.anexos.map(a=>`<a class="text-indigo-600 underline font-semibold" target="_blank" href="${a.url}">${esc(a.name)}</a>`).join(' • ')}</p>`:''}
+      ${anexosHtml(t.anexos)}
     </div></div>`).join('')||'<p class="text-sm text-slate-500">Sem chamados para estes filtros.</p>';
 }
 function renderVisaoDetail(){
