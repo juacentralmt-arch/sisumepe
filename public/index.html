@@ -1027,6 +1027,8 @@ async function finishLogout(silent){
   }catch(e){}
   session = null; role = null;
   tickets = []; visaoHist = [];
+  lastTicketsHash = null; lastFullRenderAt = 0;
+  try{ chatCache = []; chatMaxId = 0; oldestChatId = null; hasMoreChat = true; }catch(e){}
   localStorage.removeItem('te_session');
   try{ if(es) es.close(); }catch(e){}
   es = null;
@@ -1145,9 +1147,17 @@ function deveAlertar(t){
   if(t.modeloTornozeleira === 'Infinity') return session.user === 'julio' || session.role === 'admin';
   return session.role === 'tecnico' || session.role === 'admin';
 }
+let lastTicketsHash = null, lastFullRenderAt = 0;
 async function loadAll(){
   try{
     tickets = await api('/api/tickets');
+    // Evita re-render quando nada mudou (o maior custo: DOM + Tailwind JIT).
+    // Força atualização a cada 60s para refrescar os "há X min".
+    const hash = JSON.stringify(tickets);
+    const now = Date.now();
+    if(hash === lastTicketsHash && now - lastFullRenderAt < 60000) return;
+    lastTicketsHash = hash;
+    lastFullRenderAt = now;
     if(!seenInit){ seenMaxTicket = tickets.length ? Math.max(...tickets.map(t => t.id)) : 0; seenInit = true; }
     else if(tickets.length){
       const news = tickets.filter(t => t.id > seenMaxTicket && t.status === 'aguardando' && (!session || t.createdBy !== session.user));
@@ -3819,10 +3829,18 @@ async function loadChat(){
   try{
     const msgs = await api('/api/chat?user=' + encodeURIComponent(session.user));
     const prevMax = chatMaxId;
+    const newMax = msgs.length ? msgs[msgs.length - 1].id : 0;
+    const sameAsCache = newMax === prevMax && msgs.length === chatCache.length && !chatSearchQuery && !loadingOlderChat;
     chatCache = msgs;
     if (msgs.length) {
-      chatMaxId = msgs[msgs.length - 1].id;
+      chatMaxId = newMax;
       if (!oldestChatId) oldestChatId = msgs[0].id;
+    }
+    // Sem mensagem nova: só atualiza selo/banner, sem redesenhar (não rouba o scroll)
+    if (sameAsCache) {
+      if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
+      updateNotifyBanner();
+      return;
     }
     renderChatMessages(true);
     const fresh = msgs.filter(m => m.id > prevMax && m.user !== session.user);
@@ -3930,7 +3948,15 @@ async function sendChat(){
 }
 
 if (session) { enterApp(); } else { document.getElementById('loginOverlay').classList.remove('hidden'); }
-setInterval(()=>{ if(session){ loadAll(); loadChat(); } }, 5000);
+// Polling de segurança a cada 30s (o tempo real vem via SSE); pausa com aba oculta
+setInterval(()=>{ if(session && !document.hidden){ loadAll(); loadChat(); } }, 30000);
+// Agrupa rajadas de eventos SSE num único refresh (evita N renders seguidos)
+let refreshTimer = null;
+function scheduleRefresh(){
+  if(!session) return;
+  if(refreshTimer) return;
+  refreshTimer = setTimeout(() => { refreshTimer = null; if(session){ loadAll(); loadChat(); } }, 400);
+}
 // SSE realtime
 let es = null;
 function connectSSE(){
@@ -3943,16 +3969,16 @@ function connectSSE(){
       try {
         const data = JSON.parse(evt.data);
         if (data.type === 'chat_msg') {
-          if (session) { loadAll(); loadChat(); }
+          if (session) { scheduleRefresh(); }
         } else if (data.type === 'chat_typing') {
           handleTypingEvent(data);
         } else if (data.type === 'chat_read') {
           handleReadEvent(data);
         } else {
-          if(session){ loadAll(); loadChat(); }
+          if(session){ scheduleRefresh(); }
         }
       } catch(e) {
-        if(session){ loadAll(); loadChat(); }
+        if(session){ scheduleRefresh(); }
       }
     };
     es.onerror = () => { const d = document.getElementById('liveDot'); if(d) d.className = 'inline-block h-2.5 w-2.5 rounded-full bg-amber-500'; };
