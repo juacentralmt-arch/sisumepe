@@ -122,7 +122,7 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
   if (blockFin) return res.status(403).json({ error: blockFin });
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
   if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
-  const pos = await mapFiles(req.files);
+  const pos = await mapFiles(await consolidateTicketFiles(req.files, 'fotos-servico'));
   const upd = await store.tickets.patch(t.id, {
     status: 'finalizado',
     relatorio: relatorio.trim(),
