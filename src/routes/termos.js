@@ -5,15 +5,11 @@ const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, 
 const router = express.Router();
 
 // Termos - Listagem de Equipamentos
-router.get('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.get('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
   const list = await store.termos.allByUser(req.auth.user);
-  if(req.auth.role==='admin' && req.query.all==='1'){
-    const all = await store.termos.all();
-    return res.json(all);
-  }
   res.json(list);
 }));
-router.post('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
   const t = (tipo === 'recolhimento') ? 'recolhimento' : 'listagem';
   if(t === 'recolhimento'){
@@ -68,16 +64,16 @@ router.post('/api/termos', auth(['tecnico','admin']), ah(async (req,res)=>{
   broadcast();
   res.status(201).json(termo);
 }));
-router.get('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.get('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
-  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   res.json(t);
 }));
-router.patch('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
-  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
   const patch={};
   if(dataEnvio) patch.dataEnvio = new Date(dataEnvio).toISOString().slice(0,10);
@@ -115,24 +111,24 @@ router.patch('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
   broadcast();
   res.json(upd);
 }));
-router.delete('/api/termos/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.delete('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
-  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   await store.termos.remove(t.id);
   broadcast();
   res.json({ ok: true });
 }));
-router.get('/api/termos/:id/pdf', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.get('/api/termos/:id/pdf', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
-  if(t.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   const pdf = (t.tipo === 'recolhimento') ? await gerarTermoRecolhimentoPDF(t) : await gerarTermoPDF(t);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
   res.send(Buffer.from(pdf));
 }));
-router.post('/api/termos/pdf-preview', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
   if(tipo === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
