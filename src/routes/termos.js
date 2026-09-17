@@ -43,7 +43,7 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
     broadcast();
     return res.status(201).json(termo);
   }
-  if(!destinatario || !String(destinatario).trim()) return res.status(400).json({ error: 'Destinatário é obrigatório' });
+  // Listagem permite tudo em branco (destinatário e equipamentos opcionais)
   const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
   // normaliza somente linhas preenchidas (até 30)
   const norm = eqIn.map(r => ({
@@ -52,7 +52,6 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
     cinta: String((r && r.cinta) || '').trim().slice(0, 30),
     trava: String((r && r.trava) || '').trim().slice(0, 30)
   })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
-  if(!norm.length) return res.status(400).json({ error: 'Preencha ao menos um equipamento (TZPR04/FONTE04/CINTA/TRAVA)' });
   const termo = await store.termos.insert({
     user: req.auth.user, tipo: 'listagem',
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null,

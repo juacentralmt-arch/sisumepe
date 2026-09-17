@@ -420,9 +420,9 @@
           <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">DATA DE ENVIO</label><input id="termoData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleListagemPreview()" onchange="scheduleListagemPreview()"></div>
-            <div><label class="lbl">DESTINATÁRIO *</label>
+            <div><label class="lbl">DESTINATÁRIO</label>
               <select id="termoDest" class="inp mt-1 mb-2.5" onchange="toggleTermoDestOutro(); scheduleListagemPreview()">
-                <option value="" disabled selected>Selecione o destinatário *</option>
+                <option value="" disabled selected>Selecione o destinatário</option>
                 <option>UP-JUAZEIRO</option>
                 <option>UPF-CRATO</option>
                 <option>UP-CARIRI</option>
@@ -3171,8 +3171,6 @@ async function saveTermo(){
   err.classList.add('hidden');
   const data = getTermoFormData();
   data.tipo = 'listagem';
-  if(!data.destinatario) { err.textContent='⚠️ Destinatário é obrigatório'; err.classList.remove('hidden'); return; }
-  if(!data.equipamentos.some(r=>r.tzpr04||r.fonte04||r.cinta||r.trava)){ err.textContent='⚠️ Preencha ao menos um equipamento'; err.classList.remove('hidden'); return; }
   try{
     let res;
     if(editingTermoId){
@@ -3232,10 +3230,6 @@ async function previewTermoListagemPDF(silent){
   if(err) err.classList.add('hidden');
   const data = getTermoFormData();
   data.tipo = 'listagem';
-  if(!silent && !data.destinatario){
-    if(err){ err.textContent='⚠️ Destinatário é obrigatório para visualizar'; err.classList.remove('hidden'); }
-    return;
-  }
   const status = document.getElementById('termoListPreviewStatus');
   try{
     if(status) status.textContent = silent ? '⏳ atualizando...' : '';
