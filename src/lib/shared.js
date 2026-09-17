@@ -56,7 +56,7 @@ function broadcast(event) {
 }
 
 // Uploads em memória -> disco local (file) ou Supabase Storage (supabase)
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 5 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 20 } });
 async function mapFiles(files) {
   const out = [];
   for (const f of (files || [])) out.push(await store.saveFileUpload(f));
