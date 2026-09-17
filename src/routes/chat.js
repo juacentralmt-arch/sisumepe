@@ -66,7 +66,26 @@ router.post('/api/chat/read', auth(), (req, res) => {
 });
 
 // Sinalização de chamadas de voz (WebRTC 1:1) — retransmite via SSE
-const CALL_KINDS = ['offer', 'answer', 'ice', 'reject', 'busy', 'end'];
+// + fila curta por usuário (fallback caso o SSE do destino esteja caído)
+const CALL_KINDS = ['offer', 'answer', 'ice', 'reject', 'busy', 'end', 'ringing'];
+const pendingCalls = new Map(); // user -> [{id, from, fromName, signal, at}]
+const CALL_TTL = 60e3;
+function queueCallSignal(to, item) {
+  const q = pendingCalls.get(to) || [];
+  q.push(item);
+  while (q.length > 5) q.shift();
+  pendingCalls.set(to, q);
+  setTimeout(() => {
+    const cur = pendingCalls.get(to) || [];
+    const i = cur.indexOf(item);
+    if (i >= 0) cur.splice(i, 1);
+  }, CALL_TTL).unref();
+}
+router.get('/api/call/pending', auth(), (req, res) => {
+  const q = pendingCalls.get(req.auth.user) || [];
+  pendingCalls.set(req.auth.user, []);
+  res.json(q.filter(i => Date.now() - i.at < CALL_TTL));
+});
 router.post('/api/call/signal', auth(), ah(async (req, res) => {
   const { to, kind, sdp, candidate } = req.body || {};
   if (!CALL_KINDS.includes(kind)) return res.status(400).json({ error: 'Sinal inválido' });
@@ -76,10 +95,10 @@ router.post('/api/call/signal', auth(), ah(async (req, res) => {
   const u = await store.users.byName(target);
   if (!u || u.active === false) return res.status(404).json({ error: 'Usuário indisponível' });
   const me = await store.users.byName(req.auth.user);
-  broadcast({
-    type: 'call_signal', from: req.auth.user, fromName: me ? me.name : req.auth.user,
-    to: target, signal: { kind, sdp: sdp || null, candidate: candidate || null }
-  });
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const signal = { kind, sdp: sdp || null, candidate: candidate || null };
+  broadcast({ type: 'call_signal', id, from: req.auth.user, fromName: me ? me.name : req.auth.user, to: target, signal });
+  queueCallSignal(target, { id, from: req.auth.user, fromName: me ? me.name : req.auth.user, signal, at: Date.now() });
   res.json({ ok: true });
 }));
 
