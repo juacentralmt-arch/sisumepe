@@ -1188,6 +1188,7 @@ function fotosPosHtml(list){
   if(!list || !list.length) return '';
   return `<div class="mt-1.5 flex gap-1.5 flex-wrap items-center">${list.map(a => {
     const url = esc(a.url || '');
+    if(a.expired) return `<span class="text-[11px] text-slate-400 italic" title="Arquivo removido automaticamente após 24h">🗑️ ${esc(a.name || 'arquivo')} (expirado)</span>`;
     const isImg = ((a.mimetype || '').startsWith('image/')) || /\.(jpe?g|png|webp|gif)$/i.test(a.url || '');
     return isImg
       ? `<a href="${url}" target="_blank"><img src="${url}" loading="lazy" class="w-14 h-14 rounded-lg object-cover border border-slate-200"></a>`
@@ -1197,6 +1198,7 @@ function fotosPosHtml(list){
 function anexosHtml(list){
   if(!list || !list.length) return '';
   return `<div class="mt-1.5 flex gap-1.5 flex-wrap items-center"><span class="text-[11px] font-bold text-slate-500">📎</span>${list.map(a => {
+    if(a.expired) return `<span class="text-[11px] text-slate-400 italic" title="Arquivo removido automaticamente após 24h">🗑️ ${esc(a.name || 'arquivo')} (expirado)</span>`;
     const url = esc(a.url || ''), name = esc(a.name || 'arquivo');
     const isImg = ((a.mimetype || '').startsWith('image/')) || /\.(jpe?g|png|webp|gif)$/i.test(a.url || '');
     return isImg
