@@ -1055,14 +1055,14 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios';
-    else if(r === 'admin') show = t !== 'tecnico';
+    else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos';
     b.classList.toggle('hidden', !show);
   });
   applyNavOrder();
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'termos', 'visao', 'usuarios'],
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios'],
   tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'visao', 'dash', 'usuarios']
 };
@@ -1082,7 +1082,7 @@ function enterApp(){
 }
 function canSee(t){
   if(!session) return false;
-  if(session.role==='admin') return t!=='tecnico';
+  if(session.role==='admin') return t!=='tecnico' && t!=='termos';
   if(session.role==='recepcao') return ['fila','checkin'].includes(t);
   return t!=='usuarios';
 }
