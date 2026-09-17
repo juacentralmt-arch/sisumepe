@@ -1070,10 +1070,16 @@ async function doLogin(){
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
 async function finishLogout(silent){
-  // Encerra a sessão no servidor (aguarda para garantir a invalidação)
+  // Encerra a sessão no servidor, mas nunca trava a tela: timeout de 3s
+  // (ex.: servidor "acordando" no plano grátis) — a sessão expira sozinha.
   try{
     const s = JSON.parse(localStorage.getItem('te_session') || 'null');
-    if(s && s.token) await fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {});
+    if(s && s.token){
+      await Promise.race([
+        fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {}),
+        new Promise(res => setTimeout(res, 3000))
+      ]);
+    }
   }catch(e){}
   session = null; role = null;
   tickets = []; visaoHist = [];
@@ -1109,7 +1115,15 @@ function logout(silent){
   if(shell) shell.classList.add('logout-fade');
   if(chatOpen) toggleChat();
   if(ov) ov.classList.remove('hidden');
-  setTimeout(()=>finishLogout(false), 900);
+  setTimeout(()=>{ try{ finishLogout(false); }catch(e){} }, 900);
+  // Rede de segurança: garante a tela de login em até 6s, aconteça o que acontecer
+  setTimeout(() => {
+    try{
+      session = null;
+      document.getElementById('loginOverlay').classList.remove('hidden');
+      document.getElementById('logoutOverlay').classList.add('hidden');
+    }catch(e){}
+  }, 6000);
 }
 function paintUser(){
   const chip = document.getElementById('userChip');
