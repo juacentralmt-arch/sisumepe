@@ -627,6 +627,7 @@
     <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
     <span class="font-display font-bold text-sm">Chat da equipe</span>
     <button onclick="toggleChatSearch()" title="Buscar mensagem" class="ml-auto text-slate-300 hover:text-white text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition">🔍</button>
+    <button id="chatCallBtn" onclick="startCall()" title="Ligar (chamada de voz)" class="hidden text-slate-300 hover:text-white text-base px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 transition">📞</button>
     <button onclick="toggleChat()" class="text-slate-300 hover:text-white text-xl leading-none ml-1">×</button>
   </div>
   <div id="chatSearchBox" class="hidden px-2.5 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
@@ -651,6 +652,28 @@
     <button onclick="sendChat()" class="btn btn-primary px-4 text-sm flex-none">➤</button>
   </div>
 </div>
+
+<!-- CHAMADA DE VOZ RECEBIDA -->
+<div id="callIncoming" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-xs w-full p-6 text-center shadow-2xl fade">
+    <span id="callInAvatar" class="avatar w-16 h-16 text-xl mx-auto">?</span>
+    <h3 id="callInName" class="font-display font-bold text-lg mt-3">Chamada</h3>
+    <p class="text-xs text-slate-500 mt-1 animate-pulse">📞 Chamada de voz recebida...</p>
+    <div class="flex gap-2.5 mt-5">
+      <button onclick="rejectCall()" class="btn flex-1 py-3 text-sm bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">✖ Recusar</button>
+      <button onclick="acceptCall()" class="btn btn-green flex-1 py-3 text-sm">✔ Atender</button>
+    </div>
+  </div>
+</div>
+
+<!-- BARRA DE CHAMADA ATIVA -->
+<div id="callBar" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] bg-slate-900 text-white rounded-2xl shadow-2xl border border-white/10 pl-4 pr-3 py-3 flex items-center gap-3 max-w-[calc(100vw-2rem)]">
+  <span class="relative flex-none"><span id="callBarAvatar" class="avatar w-10 h-10 text-sm">?</span><span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse"></span></span>
+  <div class="min-w-0"><p id="callBarName" class="font-bold text-sm truncate">Ligação</p><p id="callBarStatus" class="text-[11px] text-slate-300">Chamando...</p></div>
+  <button id="callMuteBtn" onclick="toggleCallMute()" title="Mudo" class="btn btn-ghost w-10 h-10 !rounded-xl text-lg flex-none bg-white/10">🎙️</button>
+  <button onclick="endCall()" title="Encerrar" class="w-10 h-10 rounded-xl text-lg flex-none bg-rose-600 hover:bg-rose-500">📵</button>
+</div>
+<audio id="callAudio" autoplay playsinline class="hidden"></audio>
 
 <!-- MODAL EDITAR USUÁRIO (ADMIN) -->
 <div id="modalUser" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1029,6 +1052,7 @@ async function finishLogout(silent){
   tickets = []; visaoHist = [];
   lastTicketsHash = null; lastFullRenderAt = 0;
   try{ chatCache = []; chatMaxId = 0; oldestChatId = null; hasMoreChat = true; }catch(e){}
+  try{ if(typeof endCall === 'function') endCall(true); }catch(e){}
   localStorage.removeItem('te_session');
   try{ if(es) es.close(); }catch(e){}
   es = null;
@@ -3640,6 +3664,8 @@ function updateChatPlaceholder(){
   if(!inp) return;
   if(activeConvo === 'todos') inp.placeholder = 'Mensagem para todos...';
   else { const u = allUsers.find(x => x.user === activeConvo); inp.placeholder = 'Mensagem para ' + (u ? u.name : activeConvo) + '...'; }
+  const cb = document.getElementById('chatCallBtn');
+  if(cb) cb.classList.toggle('hidden', activeConvo === 'todos');
 }
 
 // Audio Recording
@@ -3957,6 +3983,217 @@ function scheduleRefresh(){
   if(refreshTimer) return;
   refreshTimer = setTimeout(() => { refreshTimer = null; if(session){ loadAll(); loadChat(); } }, 400);
 }
+// --- CHAMADA DE VOZ (WebRTC 1:1, sinalização via SSE) ---
+let callPc = null, callStream = null, callPeer = null, callPeerName = '',
+    callState = 'idle', callTimerInt = null, callStartTs = 0, callTimeout = null,
+    pendingIce = [], ringNodes = null;
+const CALL_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+function callDisplayName(u){
+  const x = (allUsers || []).find(y => y.user === u);
+  return x ? x.name : u;
+}
+function callSignal(to, kind, extra){
+  return authFetch('/api/call/signal', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ to, kind }, extra || {}))
+  }).then(async r => { const j = await r.json().catch(() => ({})); if(!r.ok) throw new Error(j.error || 'Falha de sinal'); return j; });
+}
+function stopRing(){
+  try{
+    if(ringNodes){ ringNodes.osc.stop(); ringNodes.ctx.close(); }
+  }catch(e){}
+  ringNodes = null;
+}
+function startRing(){
+  stopRing();
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    const ctx = new AC();
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 440;
+    g.gain.value = 0.0001;
+    osc.connect(g); g.connect(ctx.destination); osc.start();
+    const t0 = ctx.currentTime;
+    for(let i = 0; i < 30; i++){
+      g.gain.setValueAtTime(0.0001, t0 + i * 2);
+      g.gain.linearRampToValueAtTime(0.12, t0 + i * 2 + 0.05);
+      g.gain.setValueAtTime(0.12, t0 + i * 2 + 0.9);
+      g.gain.linearRampToValueAtTime(0.0001, t0 + i * 2 + 1.0);
+    }
+    ringNodes = { ctx, osc };
+    setTimeout(stopRing, 30000);
+  }catch(e){}
+}
+function callStatus(t){ const el = document.getElementById('callBarStatus'); if(el) el.textContent = t; }
+function showCallBar(name, status){
+  document.getElementById('callBarAvatar').textContent = initials(name);
+  document.getElementById('callBarName').textContent = name;
+  callStatus(status);
+  document.getElementById('callMuteBtn').textContent = '🎙️';
+  document.getElementById('callBar').classList.remove('hidden');
+}
+function hideCallUI(){
+  document.getElementById('callBar').classList.add('hidden');
+  document.getElementById('callIncoming').classList.add('hidden');
+  stopRing();
+}
+function callTick(){
+  const s = Math.floor((Date.now() - callStartTs) / 1000);
+  const mm = String(Math.floor(s / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+  callStatus('Em ligação • ' + mm + ':' + ss);
+}
+function teardownCall(){
+  if(callTimeout){ clearTimeout(callTimeout); callTimeout = null; }
+  if(callTimerInt){ clearInterval(callTimerInt); callTimerInt = null; }
+  try{ if(callPc){ callPc.onicecandidate = null; callPc.ontrack = null; callPc.close(); } }catch(e){}
+  try{ if(callStream) callStream.getTracks().forEach(t => t.stop()); }catch(e){}
+  try{ const a = document.getElementById('callAudio'); a.srcObject = null; }catch(e){}
+  callPc = null; callStream = null; callPeer = null; callPeerName = '';
+  callState = 'idle'; pendingIce = [];
+  hideCallUI();
+}
+function makePc(){
+  const pc = new RTCPeerConnection({ iceServers: CALL_ICE_SERVERS });
+  pc.onicecandidate = (e) => {
+    if(e.candidate && callPeer) callSignal(callPeer, 'ice', { candidate: e.candidate }).catch(() => {});
+  };
+  pc.ontrack = (e) => {
+    try{
+      const a = document.getElementById('callAudio');
+      a.srcObject = e.streams[0];
+      a.play().catch(() => {});
+    }catch(err){}
+  };
+  return pc;
+}
+async function micStream(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('mic');
+  if(window.isSecureContext === false) throw new Error('https');
+  return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+}
+async function startCall(){
+  if(!session) return;
+  if(activeConvo === 'todos') return toast('⚠️ Abra a conversa com a pessoa para ligar');
+  if(activeConvo === session.user) return toast('⚠️ Não é possível ligar para você mesmo');
+  if(callState !== 'idle') return toast('⚠️ Você já está em uma ligação');
+  const target = activeConvo;
+  let stream;
+  try{ stream = await micStream(); }
+  catch(e){ return toast(e && e.message === 'https' ? '⚠️ Ligação exige HTTPS ou localhost' : '⚠️ Não foi possível acessar o microfone'); }
+  try{
+    callPeer = target; callPeerName = callDisplayName(target);
+    callStream = stream;
+    callPc = makePc();
+    stream.getTracks().forEach(t => callPc.addTrack(t, stream));
+    const offer = await callPc.createOffer();
+    await callPc.setLocalDescription(offer);
+    await callSignal(target, 'offer', { sdp: offer });
+    callState = 'calling';
+    showCallBar(callPeerName, 'Chamando...');
+    if(!chatOpen) toggleChat();
+    callTimeout = setTimeout(() => {
+      if(callState === 'calling'){ callSignal(target, 'end', {}).catch(() => {}); teardownCall(); toast('📵 ' + callPeerName + ' não atendeu'); }
+    }, 30000);
+  }catch(e){ teardownCall(); toast('⚠️ Falha ao iniciar ligação'); }
+}
+async function acceptCall(){
+  if(callState !== 'incoming' || !callPeer) return;
+  let stream;
+  try{ stream = await micStream(); }
+  catch(e){ rejectCall(); return toast('⚠️ Não foi possível acessar o microfone'); }
+  try{
+    document.getElementById('callIncoming').classList.add('hidden');
+    stopRing();
+    callStream = stream;
+    callPc = makePc();
+    stream.getTracks().forEach(t => callPc.addTrack(t, stream));
+    await callPc.setRemoteDescription(new RTCSessionDescription(callOfferSdp));
+    const answer = await callPc.createAnswer();
+    await callPc.setLocalDescription(answer);
+    await callSignal(callPeer, 'answer', { sdp: answer });
+    for(const c of pendingIce){ try{ await callPc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){} }
+    pendingIce = [];
+    callState = 'in-call';
+    callStartTs = Date.now();
+    showCallBar(callPeerName, 'Em ligação • 00:00');
+    if(!chatOpen) toggleChat();
+    callTimerInt = setInterval(callTick, 1000);
+    if(callTimeout){ clearTimeout(callTimeout); callTimeout = null; }
+  }catch(e){ teardownCall(); toast('⚠️ Falha ao atender'); }
+}
+function rejectCall(){
+  if(callPeer && (callState === 'incoming')) callSignal(callPeer, 'reject', {}).catch(() => {});
+  const name = callPeerName;
+  teardownCall();
+  if(name) toast('📵 Chamada recusada');
+}
+function endCall(silent){
+  const peer = callPeer, st = callState;
+  if(peer && (st === 'calling' || st === 'in-call')) callSignal(peer, 'end', {}).catch(() => {});
+  teardownCall();
+  if(!silent && (st === 'calling' || st === 'in-call')) toast('📵 Ligação encerrada');
+}
+function toggleCallMute(){
+  if(!callStream) return;
+  const t = callStream.getAudioTracks()[0];
+  if(!t) return;
+  t.enabled = !t.enabled;
+  document.getElementById('callMuteBtn').textContent = t.enabled ? '🎙️' : '🔇';
+}
+let callOfferSdp = null;
+function handleCallSignal(data){
+  if(!session || data.to !== session.user) return;
+  const from = data.from, sig = data.signal || {};
+  if(from === session.user) return;
+  if(sig.kind === 'offer'){
+    if(callState !== 'idle'){ callSignal(from, 'busy', {}).catch(() => {}); return; }
+    callPeer = from; callPeerName = data.fromName || callDisplayName(from);
+    callOfferSdp = sig.sdp; pendingIce = [];
+    callState = 'incoming';
+    document.getElementById('callInAvatar').textContent = initials(callPeerName);
+    document.getElementById('callInName').textContent = callPeerName;
+    document.getElementById('callIncoming').classList.remove('hidden');
+    startRing();
+    if(callTimeout) clearTimeout(callTimeout);
+    callTimeout = setTimeout(() => {
+      if(callState === 'incoming'){ teardownCall(); toast('📵 Chamada perdida de ' + callPeerName); }
+    }, 30000);
+    return;
+  }
+  if(from !== callPeer) return;
+  if(sig.kind === 'answer' && callState === 'calling'){
+    (async () => {
+      try{
+        await callPc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+        for(const c of pendingIce){ try{ await callPc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){} }
+        pendingIce = [];
+        callState = 'in-call';
+        callStartTs = Date.now();
+        callStatus('Em ligação • 00:00');
+        callTimerInt = setInterval(callTick, 1000);
+        if(callTimeout){ clearTimeout(callTimeout); callTimeout = null; }
+      }catch(e){ teardownCall(); toast('⚠️ Falha na ligação'); }
+    })();
+  } else if(sig.kind === 'ice' && sig.candidate && callPc){
+    (async () => {
+      try{
+        if(callPc.remoteDescription) await callPc.addIceCandidate(new RTCIceCandidate(sig.candidate));
+        else pendingIce.push(sig.candidate);
+      }catch(e){}
+    })();
+  } else if(sig.kind === 'reject'){
+    teardownCall(); toast('📵 ' + callPeerName + ' recusou a chamada');
+  } else if(sig.kind === 'busy'){
+    teardownCall(); toast('📵 ' + callPeerName + ' está em outra ligação');
+  } else if(sig.kind === 'end'){
+    const was = callState;
+    teardownCall();
+    if(was === 'in-call' || was === 'calling') toast('📵 Ligação encerrada por ' + (callPeerName || from));
+    else if(was === 'incoming') toast('📵 Chamada cancelada');
+  }
+}
+
 // SSE realtime
 let es = null;
 function connectSSE(){
@@ -3974,6 +4211,8 @@ function connectSSE(){
           handleTypingEvent(data);
         } else if (data.type === 'chat_read') {
           handleReadEvent(data);
+        } else if (data.type === 'call_signal') {
+          handleCallSignal(data);
         } else {
           if(session){ scheduleRefresh(); }
         }
