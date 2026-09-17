@@ -1020,21 +1020,33 @@ async function doLogin(){
     toast('Bem-vindo(a), ' + s.name + '!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
-function finishLogout(silent){
+async function finishLogout(silent){
+  // Encerra a sessão no servidor (aguarda para garantir a invalidação)
   try{
     const s = JSON.parse(localStorage.getItem('te_session') || 'null');
-    if(s && s.token) fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {});
+    if(s && s.token) await fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {});
   }catch(e){}
   session = null; role = null;
+  tickets = []; visaoHist = [];
   localStorage.removeItem('te_session');
   try{ if(es) es.close(); }catch(e){}
   es = null;
+  // Limpa dados sensíveis da tela (PC compartilhado: recepção/plantão)
+  ['filaList', 'tecAguard', 'tecAtend', 'tecFin', 'dashFeed', 'chatMsgs', 'visaoTimeline', 'visaoDetail'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = '';
+  });
+  const ci = document.getElementById('chatInput');
+  if(ci) ci.value = '';
+  try{ paintUser(); }catch(e){}
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('chatPanel').classList.add('chat-hidden');
   document.getElementById('logoutOverlay').classList.add('hidden');
   const shell = document.getElementById('appShell');
   if(shell) shell.classList.remove('logout-fade');
   chatOpen = false;
+  document.getElementById('loginPass').value = '';
+  setTimeout(() => { try{ document.getElementById('loginUser').focus(); }catch(e){} }, 60);
   if(!silent) toast('Sessão encerrada');
 }
 function logout(silent){
