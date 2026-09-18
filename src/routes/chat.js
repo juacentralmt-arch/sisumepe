@@ -1,13 +1,29 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, broadcastTo, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Chat
 router.get('/api/chat', auth(), ah(async (req, res) => {
   const me = req.auth.user;
-  const { beforeId, limit: reqLimit, q, to: convo, paginated } = req.query;
+  const { beforeId, limit: reqLimit, q, to: convo, paginated, since } = req.query;
   const maxLimit = Math.min(Math.max(parseInt(reqLimit, 10) || 50, 1), 100);
+
+  // Modo incremental: só mensagens mais novas que `since` (polling leve).
+  // O filtro de privacidade (próprias + 'todos' + DMs endereçadas a mim) é aplicado igual.
+  if (since && !q && !convo) {
+    const afterId = Number(since);
+    if (!isNaN(afterId) && afterId > 0) {
+      const recent = await store.chat.listSince(afterId, 500);
+      const mine = recent.filter(m => {
+        const to = String(m.to || 'todos').toLowerCase();
+        if (to === 'todos') return true;
+        return m.user === me || to === me;
+      });
+      return res.json(mine);
+    }
+  }
+
   let list = await store.chat.list();
 
   list = list.filter(m => {
@@ -55,13 +71,16 @@ router.get('/api/chat', auth(), ah(async (req, res) => {
 
 router.post('/api/chat/typing', auth(), (req, res) => {
   const { to, isTyping } = req.body || {};
-  broadcast({ type: 'chat_typing', from: req.auth.user, to: to || 'todos', isTyping: !!isTyping });
+  broadcastTo([to || 'todos'], { type: 'chat_typing', from: req.auth.user, to: to || 'todos', isTyping: !!isTyping });
   res.json({ ok: true });
 });
 
 router.post('/api/chat/read', auth(), (req, res) => {
   const { to, lastReadId } = req.body || {};
-  broadcast({ type: 'chat_read', from: req.auth.user, to: to || 'todos', lastReadId: Number(lastReadId) || 0 });
+  // destina-me e o outro lado da conversa (lidos precisam chegar nos dois)
+  const target = String(to || 'todos').toLowerCase();
+  if (target === 'todos') broadcast({ type: 'chat_read', from: req.auth.user, to: 'todos', lastReadId: Number(lastReadId) || 0 });
+  else broadcastTo([target, req.auth.user], { type: 'chat_read', from: req.auth.user, to: target, lastReadId: Number(lastReadId) || 0 });
   res.json({ ok: true });
 });
 
@@ -97,7 +116,8 @@ router.post('/api/call/signal', auth(), ah(async (req, res) => {
   const me = await store.users.byName(req.auth.user);
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const signal = { kind, sdp: sdp || null, candidate: candidate || null };
-  broadcast({ type: 'call_signal', id, from: req.auth.user, fromName: me ? me.name : req.auth.user, to: target, signal });
+  const evt = { type: 'call_signal', id, from: req.auth.user, fromName: me ? me.name : req.auth.user, to: target, signal };
+  broadcastTo([target, req.auth.user], evt);
   queueCallSignal(target, { id, from: req.auth.user, fromName: me ? me.name : req.auth.user, signal, at: Date.now() });
   res.json({ ok: true });
 }));
@@ -115,7 +135,8 @@ router.post('/api/chat', auth(), upload.array('arquivos', 5), ah(async (req, res
     user: u.user, name: u.name, role: u.role, to,
     text: cleanText, anexos: files, at: new Date().toISOString()
   });
-  broadcast({ type: 'chat_msg', msg });
+  if (to === 'todos') broadcast({ type: 'chat_msg', msg });
+  else broadcastTo([to, u.user], { type: 'chat_msg', msg }); // privado: só autor e destinatário
   broadcast({ type: 'update', at: Date.now() });
   res.status(201).json(msg);
 }));

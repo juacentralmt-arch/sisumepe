@@ -8,16 +8,28 @@ const { google } = require('googleapis');
 const ROOT = path.join(__dirname, '..', '..');
 const PORT = process.env.PORT || 3000;
 
-// Anti força-bruta no login: 10 tentativas / 5 min por IP
+// Anti força-bruta no login, em dois níveis:
+//  - por IP:    30 tentativas / 5 min (escritório inteiro atrás de um NAT não trava)
+//  - por IP+usuário: 10 tentativas / 5 min (um atacante focado em uma conta trava só nela)
 const loginHits = new Map();
+const LOGIN_WINDOW_MS = 5 * 60e3;
 function loginRateLimit(req, res, next) {
   const ip = req.ip || '?';
+  const user = String((req.body && req.body.user) || '').toLowerCase().trim();
   const now = Date.now();
-  const h = loginHits.get(ip) || { n: 0, reset: now + 5 * 60e3 };
-  if (now > h.reset) { h.n = 0; h.reset = now + 5 * 60e3; }
-  h.n++;
-  loginHits.set(ip, h);
-  if (h.n > 10) return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
+  const bucket = (key, max) => {
+    const h = loginHits.get(key) || { n: 0, reset: now + LOGIN_WINDOW_MS };
+    if (now > h.reset) { h.n = 0; h.reset = now + LOGIN_WINDOW_MS; }
+    h.n++;
+    loginHits.set(key, h);
+    return h.n > max;
+  };
+  if (bucket('ip:' + ip, 30)) return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
+  if (user && bucket('u:' + ip + '|' + user, 10)) return res.status(429).json({ error: 'Muitas tentativas para este usuário. Aguarde 5 minutos.' });
+  // limpeza ocasional de chaves velhas (sem timer dedicado)
+  if (loginHits.size > 5000) {
+    for (const [k, v] of loginHits) if (now > v.reset) loginHits.delete(k);
+  }
   next();
 }
 
@@ -48,11 +60,33 @@ const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e
   res.status(code).json({ error: code === 500 ? 'Erro interno. Tente de novo.' : (e.message || 'Erro') });
 });
 
-// SSE clients
+// SSE clients: cada conexão guarda quem está logado nela,
+// permitindo entregar eventos direcionados (chat privado, chamadas) só ao destinatário.
 let sseClients = [];
+function addSseClient(res, user) {
+  const client = { res, user: String(user || '').toLowerCase() };
+  sseClients.push(client);
+  return client;
+}
+function removeSseClient(client) {
+  const i = sseClients.indexOf(client);
+  if (i >= 0) sseClients.splice(i, 1);
+}
+function writeSse(client, payload) {
+  try { client.res.write(`data: ${payload}\n\n`); } catch {}
+}
+// Broadcast para todos (eventos públicos, ex. atualização de fila)
 function broadcast(event) {
   const payload = JSON.stringify(event || { type: 'update', at: Date.now() });
-  sseClients.forEach(res => { try { res.write(`data: ${payload}\n\n`); } catch {} });
+  sseClients.forEach(c => writeSse(c, payload));
+}
+// Evento direcionado: só chega ao(s) destinatário(s). Fallback 'todos' vai para todos.
+function broadcastTo(targets, event) {
+  const list = Array.isArray(targets) ? targets : [targets];
+  const norm = list.filter(Boolean).map(t => String(t).toLowerCase());
+  const everyone = !norm.length || norm.includes('todos');
+  const payload = JSON.stringify(event || { type: 'update', at: Date.now() });
+  sseClients.forEach(c => { if (everyone || norm.includes(c.user)) writeSse(c, payload); });
 }
 
 // Uploads em memória -> disco local (file) ou Supabase Storage (supabase)
@@ -153,6 +187,12 @@ function pdfPrefixForMotivo(motivo, fallback) {
   return fallback || 'anexos-unificados';
 }
 
+// Nome curto para exibição pública (painel TV): "João S." em vez do nome completo.
+function shortName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] || '-';
+  return parts[0] + ' ' + parts[parts.length - 1][0].toUpperCase() + '.';
+}
 function sortQueue(list) {
   return [...list].sort((a, b) => {
     if (!!a.prioridadeLegal !== !!b.prioridadeLegal) return a.prioridadeLegal ? -1 : 1;
@@ -163,8 +203,20 @@ function enrich(t, persons) {
   const p = (persons || []).find(x => String(x.id) === String(t.personId));
   return { ...t, person: p || null };
 }
+// Cache de persons com TTL curto: evita baixar a tabela inteira do Supabase
+// a cada request que enriquece tickets. Invalidado por qualquer mutação de cadastro.
+let personsCache = null, personsCacheAt = 0;
+const PERSONS_CACHE_TTL_MS = 10e3;
+function servePersonsCache() {
+  if (!personsCache || Date.now() - personsCacheAt > PERSONS_CACHE_TTL_MS) {
+    personsCache = store.persons.all().then(rows => { personsCacheAt = Date.now(); return rows; })
+      .catch(e => { personsCache = null; throw e; });
+  }
+  return personsCache;
+}
+function invalidatePersonsCache() { personsCache = null; }
 async function enrichAll(list) {
-  const persons = await store.persons.all();
+  const persons = await servePersonsCache();
   return list.map(t => enrich(t, persons));
 }
 function ticketOwnerOf(t) {
@@ -262,10 +314,10 @@ const pendingGoogleStates = new Map();
 
 module.exports = {
   ROOT, PORT, store,
-  ah, broadcast, sseClients,
+  ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
   loginRateLimit, issueToken, auth, isHash,
   upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
-  sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked,
+  sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
   pendingGoogleStates

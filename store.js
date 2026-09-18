@@ -50,7 +50,15 @@ function loadFile() {
     return mem;
   }
 }
-function saveFile() { try{ fs.writeFileSync(DB_FILE, JSON.stringify(mem, null, 2)); }catch(e){} }
+// Escrita atômica: grava em arquivo temporário e renomeia por cima do db.json.
+// Assim, um crash no meio da gravação nunca deixa o banco corrompido/truncado.
+function saveFile() {
+  try {
+    const tmp = DB_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(mem, null, 2));
+    fs.renameSync(tmp, DB_FILE);
+  } catch(e) {}
+}
 loadFile();
 // garante estrutura para fallback mesmo em modo supabase (quando tabela ainda não existe)
 if(!mem.agenda) mem.agenda = [];
@@ -223,6 +231,15 @@ const store = {
     async list() {
       if (MODE === 'file') return mem.chat;
       return must(await supa.from('chat').select('*').order('id').limit(2000), 'chat.list').map(appC);
+    },
+    // Mensagens com id > afterId (mais recentes), limitadas às `limit` últimas.
+    // Empurra o filtro ao Supabase (gt + order desc + limit) em vez de baixar tudo.
+    async listSince(afterId, limit) {
+      const after = Number(afterId) || 0;
+      const n = Math.min(Math.max(Number(limit) || 100, 1), 500);
+      if (MODE === 'file') return mem.chat.filter(m => Number(m.id) > after).slice(-n);
+      const r = must(await supa.from('chat').select('*').gt('id', after).order('id', { ascending: false }).limit(n), 'chat.listSince');
+      return r.map(appC).reverse();
     },
     async insert(m) {
       if (MODE === 'file') {
@@ -448,6 +465,27 @@ const store = {
         if (r.error) throw r.error;
       } catch (e) { warnSessions(e); }
       memSessions.delete(token);
+    },
+    // Invalida todas as sessões de um usuário (reset de senha, desativação, remoção).
+    // exceptToken preserva a sessão atual (ex.: usuário trocando a própria senha).
+    async delByUser(user, exceptToken) {
+      const id = String(user || '').toLowerCase().trim();
+      if (!id) return;
+      if (MODE === 'file') {
+        let ch = false;
+        for (const [tok, s] of Object.entries(mem.sessions)) {
+          if (s.user === id && tok !== exceptToken) { delete mem.sessions[tok]; ch = true; }
+        }
+        if (ch) saveFile();
+        return;
+      }
+      try {
+        let q = supa.from('sessions').delete().eq('user', id);
+        if (exceptToken) q = q.neq('token', exceptToken);
+        const r = await q;
+        if (r.error) throw r.error;
+      } catch (e) { warnSessions(e); }
+      for (const [tok, s] of memSessions) if (s.user === id && tok !== exceptToken) memSessions.delete(tok);
     },
     async cleanup() {
       const now = Date.now();

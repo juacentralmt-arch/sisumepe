@@ -41,6 +41,7 @@ router.patch('/api/users/me/password', auth(), ah(async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Senha atual incorreta' });
   if (!next || String(next).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
   await store.users.patch(u.user, { pass: await bcrypt.hash(String(next), 10) });
+  await store.sessions.delByUser(u.user, t); // mantém a sessão atual, mata as demais
   res.json({ ok: true });
 }));
 
@@ -66,6 +67,7 @@ router.delete('/api/users/:user', auth(['admin']), ah(async (req, res) => {
   if (u.role === 'admin' && all.filter(x => x.role === 'admin' && x.active !== false && x.user !== u.user).length < 1)
     return res.status(400).json({ error: 'Não é possível remover o último administrador' });
   await store.users.remove(target);
+  await store.sessions.delByUser(target); // usuário removido: desconecta
   broadcast();
   res.json({ ok: true });
 }));
@@ -76,6 +78,7 @@ router.patch('/api/users/:user/password', auth(['admin']), ah(async (req, res) =
   const { pass } = req.body || {};
   if (!pass || String(pass).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
   await store.users.patch(u.user, { pass: await bcrypt.hash(String(pass), 10) });
+  await store.sessions.delByUser(u.user); // senha trocada pelo admin: desconecta o usuário
   res.json({ ok: true });
 }));
 
@@ -95,6 +98,8 @@ router.patch('/api/users/:user', auth(['admin']), ah(async (req, res) => {
   if (['recepcao', 'tecnico', 'admin'].includes(role)) fields.role = role;
   if (active !== undefined) fields.active = active !== false;
   const upd = await store.users.patch(u.user, fields);
+  // Desativação ou mudança de perfil: derruba sessões (permissões antigas morrem junto)
+  if (fields.active === false || fields.role) await store.sessions.delByUser(u.user);
   broadcast();
   res.json({ user: upd.user, name: upd.name, role: upd.role, active: upd.active !== false });
 }));

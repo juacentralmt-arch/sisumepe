@@ -1,6 +1,7 @@
 node_modules/
 .env
 db.json
+db.json.tmp
 uploads/
 *.bak-*
 cloudflare-url.log
