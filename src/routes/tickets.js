@@ -1,6 +1,6 @@
 const express = require('express');
-const { TICKET_STATUS, TICKET_MODEL } = require('../lib/shared');
-const { store, ah, auth, broadcast, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, MOTIVOS_OK } = require('../lib/shared');
+const shared = require('../lib/shared');
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Tickets
@@ -8,8 +8,8 @@ router.get('/api/tickets', auth(), ah(async (req, res) => {
   const status = req.query.status;
   let list = await enrichAll(await store.tickets.all());
   if (status && status !== 'todos') list = list.filter(t => t.status === status);
-  const active = list.filter(t => t.status !== TICKET_STATUS.FINALIZADO);
-  const done = list.filter(t => t.status === TICKET_STATUS.FINALIZADO).sort((a, b) => new Date(b.finishedAt || b.createdAt) - new Date(a.finishedAt || a.createdAt));
+  const active = list.filter(t => t.status !== 'finalizado');
+  const done = list.filter(t => t.status === 'finalizado').sort((a, b) => new Date(b.finishedAt || b.createdAt) - new Date(a.finishedAt || a.createdAt));
   res.json([...sortQueue(active), ...done]);
 }));
 
@@ -17,9 +17,9 @@ router.get('/api/stats', auth(), ah(async (req, res) => {
   const all = await store.tickets.all();
   const persons = await store.persons.all();
   res.json({
-    aguardando: all.filter(t => t.status === TICKET_STATUS.AGUARDANDO).length,
-    em_atendimento: all.filter(t => t.status === TICKET_STATUS.EM_ATENDIMENTO).length,
-    finalizados: all.filter(t => t.status === TICKET_STATUS.FINALIZADO).length,
+    aguardando: all.filter(t => t.status === 'aguardando').length,
+    em_atendimento: all.filter(t => t.status === 'em_atendimento').length,
+    finalizados: all.filter(t => t.status === 'finalizado').length,
     totalPessoas: persons.length
   });
 }));
@@ -50,7 +50,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
     motivo, descricao: descricao || '',
     prioridadeLegal: String(prioridadeLegal) === 'true' || prioridadeLegal === true || prioridadeLegal === '1',
     modeloTornozeleira,
-    status: TICKET_STATUS.AGUARDANDO,
+    status: 'aguardando',
     anexos: files,
     tecnicoRecepcao: tecnicoRecepcao || '',
     tecnico: '', tecnicoUser: '', relatorio: '',
@@ -98,9 +98,9 @@ router.patch('/api/tickets/:id/start', auth(['tecnico']), ah(async (req, res) =>
   const blockStart = infinityBlocked(t, starter);
   if (blockStart) return res.status(403).json({ error: blockStart });
   if (starter && starter.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
-  if (t.status !== TICKET_STATUS.AGUARDANDO) return res.status(400).json({ error: 'Ticket já saiu da fila.' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Ticket já saiu da fila.' });
   const upd = await store.tickets.patch(t.id, {
-    status: TICKET_STATUS.EM_ATENDIMENTO,
+    status: 'em_atendimento',
     tecnico: starter.name + ' (' + starter.user + ')',
     tecnicoUser: starter.user,
     startedAt: new Date().toISOString()
@@ -133,7 +133,7 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
   const blockFin = infinityBlocked(t, finisher);
   if (blockFin) return res.status(403).json({ error: blockFin });
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
-  if (t.status !== TICKET_STATUS.EM_ATENDIMENTO) return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
   const finishPrefix = pdfPrefixForMotivo(t.motivo, 'fotos-servico');
   const consolidatedPos = await consolidateTicketFiles(req.files, finishPrefix);
   const mergedPosName = consolidatedPos.merged && consolidatedPos.files[0] ? consolidatedPos.files[0].originalname : null;
@@ -141,7 +141,7 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
     (mergedPosName && a.name === mergedPosName) ? { ...a, name: finishPrefix + '-' + t.code + '.pdf' } : a
   );
   const upd = await store.tickets.patch(t.id, {
-    status: TICKET_STATUS.FINALIZADO,
+    status: 'finalizado',
     relatorio: relatorio.trim(),
     tecnico: t.tecnico,
     ...(cl ? { checklist: { sinal: !!cl.sinal, bateria: !!cl.bateria, pulseira: !!cl.pulseira, orientacao: !!cl.orientacao } } : {}),
@@ -162,7 +162,7 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
 router.patch('/api/tickets/:id/call', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.AGUARDANDO) return res.status(400).json({ error: 'Ticket já saiu da fila' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Ticket já saiu da fila' });
   const caller = await store.users.byName(req.auth.user);
   const blockCall = infinityBlocked(t, caller);
   if (blockCall) return res.status(403).json({ error: blockCall });
@@ -176,13 +176,13 @@ router.patch('/api/tickets/:id/call', auth(['tecnico']), ah(async (req, res) => 
 router.patch('/api/tickets/:id/edit', auth(['recepcao', 'admin']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.AGUARDANDO) return res.status(400).json({ error: 'Só é possível corrigir tickets aguardando na fila' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível corrigir tickets aguardando na fila' });
   const editor = await store.users.byName(req.auth.user);
   const { motivo, modeloTornozeleira, descricao, prioridadeLegal } = req.body || {};
   const changes = [];
   const patch = {};
   if (motivo && MOTIVOS_OK.includes(motivo) && motivo !== t.motivo) { changes.push({ field: 'motivo', label: 'Motivo', from: t.motivo, to: motivo }); patch.motivo = motivo; }
-  if (modeloTornozeleira && [TICKET_MODEL.SPACECOM, TICKET_MODEL.INFINITY].includes(modeloTornozeleira) && modeloTornozeleira !== t.modeloTornozeleira) {
+  if (modeloTornozeleira && ['Spacecom', 'Infinity'].includes(modeloTornozeleira) && modeloTornozeleira !== t.modeloTornozeleira) {
     changes.push({ field: 'modeloTornozeleira', label: 'Modelo', from: t.modeloTornozeleira || '', to: modeloTornozeleira });
     patch.modeloTornozeleira = modeloTornozeleira;
     const person = await store.persons.byId(t.personId);
@@ -212,7 +212,7 @@ router.patch('/api/tickets/:id/edit', auth(['recepcao', 'admin']), ah(async (req
 router.patch('/api/tickets/:id/cancel', auth(['recepcao', 'admin']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.AGUARDANDO) return res.status(400).json({ error: 'Só é possível cancelar tickets aguardando na fila' });
+  if (t.status !== 'aguardando') return res.status(400).json({ error: 'Só é possível cancelar tickets aguardando na fila' });
   const editor = await store.users.byName(req.auth.user);
   const upd = await store.tickets.patch(t.id, { status: 'cancelado', cancelledAt: new Date().toISOString(), cancelledBy: editor.user });
   const person = await store.persons.byId(t.personId);
@@ -229,11 +229,11 @@ router.patch('/api/tickets/:id/cancel', auth(['recepcao', 'admin']), ah(async (r
 router.patch('/api/tickets/:id/reopen', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.FINALIZADO) return res.status(400).json({ error: 'Só é possível reabrir tickets finalizados' });
+  if (t.status !== 'finalizado') return res.status(400).json({ error: 'Só é possível reabrir tickets finalizados' });
   const by = req.auth.user;
   const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado pode reabrir este atendimento.' });
-  const upd = await store.tickets.patch(t.id, { status: TICKET_STATUS.EM_ATENDIMENTO, finishedAt: null, reopenedAt: new Date().toISOString() });
+  const upd = await store.tickets.patch(t.id, { status: 'em_atendimento', finishedAt: null, reopenedAt: new Date().toISOString() });
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
     action: 'reaberto', personId: t.personId, personName: person ? person.nome : '',
@@ -249,7 +249,7 @@ router.patch('/api/tickets/:id/reopen', auth(['tecnico']), ah(async (req, res) =
 router.patch('/api/tickets/:id/transfer', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.EM_ATENDIMENTO) return res.status(400).json({ error: 'Só é possível repassar tickets em atendimento.' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível repassar tickets em atendimento.' });
   const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
   const by = String(req.auth.user).toLowerCase().trim();
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode repassar este atendimento.' });
@@ -298,7 +298,7 @@ router.patch('/api/tickets/:id/transfer', auth(['tecnico']), ah(async (req, res)
 router.patch('/api/tickets/:id/return', auth(['tecnico']), ah(async (req, res) => {
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
-  if (t.status !== TICKET_STATUS.EM_ATENDIMENTO) return res.status(400).json({ error: 'Só é possível devolver tickets em atendimento.' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível devolver tickets em atendimento.' });
   const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
   const by = String(req.auth.user).toLowerCase().trim();
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode devolver este atendimento.' });
@@ -320,7 +320,7 @@ router.patch('/api/tickets/:id/return', auth(['tecnico']), ah(async (req, res) =
   } catch (e) {
     if (e && e.message && /returned/i.test(e.message)) {
       upd = await store.tickets.patch(t.id, {
-      status: TICKET_STATUS.AGUARDANDO,
+        status: 'aguardando',
         tecnico: '',
         tecnicoUser: '',
         startedAt: null,

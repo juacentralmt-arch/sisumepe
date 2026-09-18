@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, ROLES, MIN_PASSWORD_LEN } = require('../lib/shared');
+const shared = require('../lib/shared');
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Login / usuários
@@ -38,7 +39,7 @@ router.patch('/api/users/me/password', auth(), ah(async (req, res) => {
   if (isHash(u.pass)) ok = await bcrypt.compare(String(current || ''), u.pass);
   else ok = u.pass === String(current || '');
   if (!ok) return res.status(401).json({ error: 'Senha atual incorreta' });
-  if (!next || String(next).length < MIN_PASSWORD_LEN) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
+  if (!next || String(next).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
   await store.users.patch(u.user, { pass: await bcrypt.hash(String(next), 10) });
   res.json({ ok: true });
 }));
@@ -73,7 +74,7 @@ router.patch('/api/users/:user/password', auth(['admin']), ah(async (req, res) =
   const u = await store.users.byName(req.params.user);
   if (!u) return res.status(404).json({ error: 'Usuário não encontrado' });
   const { pass } = req.body || {};
-  if (!pass || String(pass).length < MIN_PASSWORD_LEN) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
+  if (!pass || String(pass).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
   await store.users.patch(u.user, { pass: await bcrypt.hash(String(pass), 10) });
   res.json({ ok: true });
 }));

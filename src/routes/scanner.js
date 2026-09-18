@@ -1,5 +1,6 @@
 const express = require('express');
-const { store, ah, auth, broadcast, upload, consolidateTicketFiles, pdfPrefixForMotivo, infinityBlocked } = require('../lib/shared');
+const shared = require('../lib/shared');
+const { store, ah, auth, broadcast, upload, consolidateTicketFiles, pdfPrefixForMotivo, infinityBlocked } = shared;
 const router = express.Router();
 
 // Scanner do técnico: une as páginas (imagens) em UM único PDF.
