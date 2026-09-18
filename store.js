@@ -14,12 +14,14 @@ const UPLOAD_DIR = path.join(ROOT, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 function seedUsers() {
-  return [
-    { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true },
-    { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: 'joanderson123', active: true },
-    { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: 'adailton123', active: true },
-    { user: 'admin', name: 'Administrador', role: 'admin', pass: 'admin123', active: true }
+  const bcrypt = require('bcryptjs');
+  const defs = [
+    { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: process.env.SEED_RECEPCAO || 'recepcao123' },
+    { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: process.env.SEED_JOANDERSON || 'joanderson123' },
+    { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: process.env.SEED_ADAILTON || 'adailton123' },
+    { user: 'admin', name: 'Administrador', role: 'admin', pass: process.env.SEED_ADMIN || 'admin123' },
   ];
+  return defs.map(u => ({ ...u, active: true, pass: bcrypt.hashSync(u.pass, 10) }));
 }
 
 // ----------------------------- FILE ---------------------------------
