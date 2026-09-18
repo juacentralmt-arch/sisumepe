@@ -1,6 +1,5 @@
 const express = require('express');
-const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, upload, mapFiles, MAX_ANEXOS_CHAT, MAX_TEXT_LEN } = require('../lib/shared');
 const router = express.Router();
 
 // Chat

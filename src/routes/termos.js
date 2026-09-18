@@ -1,7 +1,6 @@
 const express = require('express');
 const { gerarTermoPDF, gerarTermoRecolhimentoPDF } = require('../lib/termosPdf');
-const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast } = require('../lib/shared');
 const router = express.Router();
 
 // Termos - Listagem de Equipamentos

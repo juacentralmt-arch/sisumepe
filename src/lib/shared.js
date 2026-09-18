@@ -4,27 +4,26 @@ const crypto = require('crypto');
 const path = require('path');
 const store = require('../../store');
 const { google } = require('googleapis');
+const { TICKET_STATUS, TICKET_MODEL, MOTIVOS_OK, ROLES, USERS, PERSON_LABELS, MAX_FILE_SIZE, MAX_ANEXOS, SESSION_EXPIRY_MS, LOGIN_RATE_LIMIT, LOGIN_RATE_WINDOW_MS, FILES_TTL_HOURS_DEFAULT, CALL_TTL_MS, GOOGLE_STATE_EXPIRY_MS } = require('../constants');
 
 const ROOT = path.join(__dirname, '..', '..');
 const PORT = process.env.PORT || 3000;
 
-// Anti força-bruta no login: 10 tentativas / 5 min por IP
 const loginHits = new Map();
 function loginRateLimit(req, res, next) {
   const ip = req.ip || '?';
   const now = Date.now();
-  const h = loginHits.get(ip) || { n: 0, reset: now + 5 * 60e3 };
-  if (now > h.reset) { h.n = 0; h.reset = now + 5 * 60e3; }
+  const h = loginHits.get(ip) || { n: 0, reset: now + LOGIN_RATE_WINDOW_MS };
+  if (now > h.reset) { h.n = 0; h.reset = now + LOGIN_RATE_WINDOW_MS; }
   h.n++;
   loginHits.set(ip, h);
-  if (h.n > 10) return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
+  if (h.n > LOGIN_RATE_LIMIT) return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
   next();
 }
 
-// Sessões por token (12h, persistentes no banco). O servidor NUNCA confia no usuário vindo do app.
 async function issueToken(u) {
   const token = crypto.randomBytes(32).toString('hex');
-  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + 12 * 3600e3 });
+  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + SESSION_EXPIRY_MS });
   return token;
 }
 setInterval(() => { store.sessions.cleanup().catch(() => {}); }, 3600e3).unref();
@@ -48,25 +47,19 @@ const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e
   res.status(code).json({ error: code === 500 ? 'Erro interno. Tente de novo.' : (e.message || 'Erro') });
 });
 
-// SSE clients
 let sseClients = [];
 function broadcast(event) {
   const payload = JSON.stringify(event || { type: 'update', at: Date.now() });
   sseClients.forEach(res => { try { res.write(`data: ${payload}\n\n`); } catch {} });
 }
 
-// Uploads em memória -> disco local (file) ou Supabase Storage (supabase)
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 20 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE, files: MAX_ANEXOS } });
 async function mapFiles(files) {
   const out = [];
   for (const f of (files || [])) out.push(await store.saveFileUpload(f));
   return out;
 }
 
-// Toda foto/imagem anexada ao ticket é convertida em PDF e tudo o que for
-// conversível (imagens JPG/PNG, PDFs e textos) é unido em UM único arquivo.
-// Tipos não-conversíveis (áudio, Office etc.) são mantidos avulsos para não
-// perder nenhum dado.
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 function addFittedImagePage(pdf, img) {
   const W = 595.28, H = 841.89, M = 36;
@@ -92,10 +85,7 @@ function addTextPages(pdf, font, title, text) {
   page.drawText(String(title || 'texto').slice(0, 80), { x: M, y: H - M, size: 12, font, color: rgb(0.2, 0.2, 0.6) });
   let y = H - M - 24;
   for (const ln of lines) {
-    if (y < M + 10) {
-      page = pdf.addPage([W, H]);
-      y = H - M;
-    }
+    if (y < M + 10) { page = pdf.addPage([W, H]); y = H - M; }
     page.drawText(ln, { x: M, y, size, font, color: rgb(0, 0, 0) });
     y -= lh;
   }
@@ -125,26 +115,14 @@ async function consolidateTicketFiles(files, prefix) {
       } else if (mime.startsWith('text/') || ext === 'txt' || ext === 'csv') {
         addTextPages(pdf, font, f.originalname, f.buffer.toString('utf8').slice(0, 20000));
         mergedNames.push(f.originalname);
-      } else {
-        kept.push(f);
-      }
-    } catch {
-      kept.push(f);
-    }
+      } else { kept.push(f); }
+    } catch { kept.push(f); }
   }
   if (!mergedNames.length) return { files, merged: false };
   const bytes = await pdf.save();
   const buf = Buffer.from(bytes);
-  return {
-    files: [
-      { originalname: (prefix || 'anexos-unificados') + '-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length },
-      ...kept
-    ],
-    merged: true
-  };
+  return { files: [{ originalname: (prefix || 'anexos-unificados') + '-' + Date.now() + '.pdf', mimetype: 'application/pdf', buffer: buf, size: buf.length }, ...kept], merged: true };
 }
-// Nome do PDF unificado conforme o motivo do atendimento
-// (sem acentos para não quebrar URLs/storage).
 function pdfPrefixForMotivo(motivo, fallback) {
   const m = String(motivo || '').toLowerCase();
   if (m.includes('instala')) return 'pdfinstalacao';
@@ -163,27 +141,39 @@ function enrich(t, persons) {
   const p = (persons || []).find(x => String(x.id) === String(t.personId));
   return { ...t, person: p || null };
 }
+const _personCache = new Map();
+let _personCacheTimer = null;
 async function enrichAll(list) {
-  const persons = await store.persons.all();
-  return list.map(t => enrich(t, persons));
+  if (!_personCache.size || !_personCacheTimer) {
+    const persons = await store.persons.all();
+    _personCache.clear();
+    persons.forEach(p => _personCache.set(String(p.id), p));
+    _personCacheTimer = setTimeout(() => { _personCache.clear(); _personCacheTimer = null; }, 60000);
+  }
+  return list.map(t => ({ ...t, person: _personCache.get(String(t.personId)) || null }));
 }
 function ticketOwnerOf(t) {
   if (t.tecnicoUser) return String(t.tecnicoUser);
   const m = String(t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/);
   return m ? m[1] : '';
 }
-// Regra Infinity: só o Júlio (ou admin) assume tickets de tornozeleira Infinity
 function infinityBlocked(ticket, actor) {
-  if (!ticket || ticket.modeloTornozeleira !== 'Infinity') return null;
+  if (!ticket || ticket.modeloTornozeleira !== TICKET_MODEL.INFINITY) return null;
   const u = actor && actor.user ? actor.user : '';
   const role = actor && actor.role ? actor.role : '';
-  if (u === 'julio' || role === 'admin') return null;
+  if (u === USERS.JULIO || role === ROLES.ADMIN) return null;
   return 'Ticket de tornozeleira Infinity: somente o técnico Júlio Cesar pode assumir.';
 }
-const PERSON_LABELS = { nome: 'Nome', cpf: 'CPF', rg: 'RG', nomeMae: 'Nome da mãe', dataNascimento: 'Data de nascimento', modeloTornozeleira: 'Modelo da tornozeleira' };
-const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Outros'];
+function infinityBlock(roles) {
+  return (req, res, next) => {
+    const t = req.ticket || null;
+    if (!t) return next();
+    const block = infinityBlocked(t, req.auth);
+    if (block) return res.status(403).json({ error: block });
+    next();
+  };
+}
 
-// Google Agenda helpers
 function getGoogleConfig(){
   const cid = process.env.GOOGLE_CLIENT_ID;
   const csec = process.env.GOOGLE_CLIENT_SECRET;
@@ -207,29 +197,13 @@ async function getAuthedClientForUser(user){
   const cfg = getGoogleConfig();
   if(!cfg) return null;
   const o = new google.auth.OAuth2(cfg.cid, cfg.csec, cfg.redir);
-  o.setCredentials({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expiry_date: tokens.expiry_date ? Number(tokens.expiry_date) : null,
-    scope: tokens.scope,
-    token_type: tokens.token_type
-  });
+  o.setCredentials({ access_token: tokens.access_token, refresh_token: tokens.refresh_token, expiry_date: tokens.expiry_date ? Number(tokens.expiry_date) : null, scope: tokens.scope, token_type: tokens.token_type });
   o.on('tokens', async (t)=>{
-    try{
-      const upd = {
-        access_token: t.access_token || tokens.access_token,
-        refresh_token: t.refresh_token || tokens.refresh_token,
-        expiry_date: t.expiry_date || tokens.expiry_date,
-        scope: t.scope || tokens.scope,
-        token_type: t.token_type || tokens.token_type
-      };
-      await store.googleTokens.set(user, upd);
-    }catch(e){}
+    try{ const upd = { access_token: t.access_token || tokens.access_token, refresh_token: t.refresh_token || tokens.refresh_token, expiry_date: t.expiry_date || tokens.expiry_date, scope: t.scope || tokens.scope, token_type: t.token_type || tokens.token_type }; await store.googleTokens.set(user, upd); }catch(e){}
   });
   return o;
 }
 async function syncAgendaToGoogle(user, ev, opts){
-  // opts: { isDelete, isUpdate }
   const client = await getAuthedClientForUser(user);
   if(!client) return null;
   const cal = google.calendar({ version: 'v3', auth: client });
@@ -239,34 +213,22 @@ async function syncAgendaToGoogle(user, ev, opts){
       await cal.events.delete({ calendarId: 'primary', eventId: ev.googleEventId });
       return null;
     }
-    const body = {
-      summary: ev.title || 'Atendimento SISUMEPE',
-      description: (ev.description||'') + (ev.personId ? '\nAtendido ID: '+ev.personId : '') + (ev.ticketId ? '\nTicket: '+ev.ticketId : ''),
-      start: { dateTime: new Date(ev.start).toISOString() },
-      end: { dateTime: new Date(ev.end).toISOString() }
-    };
-    if(opts && opts.isUpdate && ev.googleEventId){
-      const r = await cal.events.update({ calendarId: 'primary', eventId: ev.googleEventId, requestBody: body });
-      return r.data.id;
-    } else {
-      const r = await cal.events.insert({ calendarId: 'primary', requestBody: body });
-      return r.data.id;
-    }
-  }catch(e){
-    console.warn('Google sync failed', e.message);
-    return null;
-  }
+    const body = { summary: ev.title || 'Atendimento SISUMEPE', description: (ev.description||'') + (ev.personId ? '\nAtendido ID: '+ev.personId : '') + (ev.ticketId ? '\nTicket: '+ev.ticketId : ''), start: { dateTime: new Date(ev.start).toISOString() }, end: { dateTime: new Date(ev.end).toISOString() } };
+    if(opts && opts.isUpdate && ev.googleEventId){ const r = await cal.events.update({ calendarId: 'primary', eventId: ev.googleEventId, requestBody: body }); return r.data.id; }
+    else { const r = await cal.events.insert({ calendarId: 'primary', requestBody: body }); return r.data.id; }
+  }catch(e){ console.warn('Google sync failed', e.message); return null; }
 }
 
 const pendingGoogleStates = new Map();
 
 module.exports = {
+  TICKET_STATUS, TICKET_MODEL, MOTIVOS_OK, ROLES, USERS, PERSON_LABELS,
+  GOOGLE_STATE_EXPIRY_MS,
   ROOT, PORT, store,
   ah, broadcast, sseClients,
   loginRateLimit, issueToken, auth, isHash,
   upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
-  sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked,
-  PERSON_LABELS, MOTIVOS_OK,
+  sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, infinityBlock,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
   pendingGoogleStates
 };
