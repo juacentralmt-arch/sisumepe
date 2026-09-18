@@ -1,6 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Tickets
@@ -72,6 +72,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
   if (modeloTornozeleira && person.modeloTornozeleira !== modeloTornozeleira) {
     const fromMod = person.modeloTornozeleira || '';
     await store.persons.patch(person.id, { modeloTornozeleira });
+    invalidatePersonsCache();
     await store.audit.insert({
       kind: 'cadastro', personId: person.id, personName: person.nome,
       byUser: ticket.createdBy, byName: ticket.createdByName,
@@ -189,6 +190,7 @@ router.patch('/api/tickets/:id/edit', auth(['recepcao', 'admin']), ah(async (req
     if (person && person.modeloTornozeleira !== modeloTornozeleira) {
       const fromMod = person.modeloTornozeleira || '';
       await store.persons.patch(person.id, { modeloTornozeleira });
+      invalidatePersonsCache();
       changes.push({ field: 'cadastro', label: 'Modelo no cadastro', from: fromMod, to: modeloTornozeleira });
     }
   }
@@ -288,6 +290,28 @@ router.patch('/api/tickets/:id/transfer', auth(['tecnico']), ah(async (req, res)
     action: 'transferido', personId: t.personId, personName: person ? person.nome : '',
     ticketId: t.id, ref: t.code, byUser: by, byName: actor ? actor.name : by, byRole: 'tecnico',
     summary: 'Repassado de ' + owner + ' para ' + target.user
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+// Admin: forçar devolução à fila (destrava ticket “preso” em atendimento)
+router.patch('/api/tickets/:id/force-return', auth(['admin']), ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível destravar tickets em atendimento.' });
+  const prevOwner = String(t.tecnico || t.tecnicoUser || '').trim() || '—'; // captura antes do patch (file mode muta o objeto)
+  const upd = await store.tickets.patch(t.id, {
+    status: 'aguardando',
+    tecnico: '', tecnicoUser: '', startedAt: null,
+    called: false, calledAt: null, calledBy: ''
+  });
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'destravado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: req.auth.user, byName: req.auth.name, byRole: 'admin',
+    summary: 'Admin devolveu à fila (estava com ' + prevOwner + ')'
   });
   broadcast();
   const persons = await store.persons.all();

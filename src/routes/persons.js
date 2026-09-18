@@ -1,6 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
 // Persons
@@ -34,6 +34,7 @@ router.post('/api/persons', auth(), ah(async (req, res) => {
     dataNascimento: dataNascimento || '', modeloTornozeleira,
     createdAt: new Date().toISOString()
   });
+  invalidatePersonsCache();
   broadcast();
   res.status(201).json(person);
 }));
@@ -64,6 +65,7 @@ router.patch('/api/persons/:id', auth(), ah(async (req, res) => {
     kind: 'cadastro', personId: p.id, personName: upd.nome,
     byUser: editor.user, byName: editor.name, byRole: editor.role, changes
   });
+  invalidatePersonsCache();
   broadcast();
   res.json({ person: upd, changes });
 }));

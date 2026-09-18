@@ -2502,7 +2502,18 @@ function atendBtn(t){
       <button onclick="openTransfer(${t.id})" class="btn btn-ghost py-2.5 text-xs">↗ Repassar</button>
       <button onclick="returnQueue(${t.id},'${esc(t.code)}')" class="btn py-2.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">↩ Devolver à fila</button>
     </div>`;
+  if (session && session.role === 'admin' && t.status === 'em_atendimento') {
+    return `<p class="mt-2 text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Vinculado a ${esc(t.tecnico || owner)}</p>
+      <button onclick="forceReturn(${t.id},'${esc(t.code)}')" class="btn py-2.5 text-xs bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 mt-2 w-full">🔓 Admin: devolver à fila</button>`;
+  }
   return `<p class="mt-2 text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Vinculado a ${esc(t.tecnico || owner)}</p>`;
+}
+async function forceReturn(id, code){
+  if(!confirm('Destravar o ticket ' + code + '? Ele volta para a fila de aguardando e qualquer técnico poderá assumir.')) return;
+  try{
+    await api('/api/tickets/' + id + '/force-return', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    toast('🔓 Ticket devolvido à fila pelo admin'); loadAll();
+  }catch(e){ toast('⚠️ ' + (e.message || 'Erro ao destravar')); }
 }
 let transferId = null;
 function openTransfer(id){
@@ -3995,6 +4006,27 @@ function notifyIncoming(m){
 async function loadChat(){
   if (!session) return;
   try{
+    // Polling incremental: com cache, busca só mensagens mais novas que a última vista.
+    // Sem cache (primeira carga, busca ativa, scroll histórico), baixa a janela completa.
+    if (!chatSearchQuery && !loadingOlderChat && chatMaxId > 0) {
+      const delta = await api('/api/chat?since=' + chatMaxId + '&user=' + encodeURIComponent(session.user));
+      const list = Array.isArray(delta) ? delta : [];
+      const prevMax = chatMaxId;
+      if (list.length) {
+        const maxId = list[list.length - 1].id;
+        if (maxId > prevMax) {
+          chatCache = chatCache.concat(list.filter(m => m.id > prevMax));
+          chatMaxId = maxId;
+          if (!oldestChatId) oldestChatId = chatCache[0].id;
+          const fresh = list.filter(m => m.id > prevMax && m.user !== session.user);
+          if (fresh.length && prevMax > 0) notifyIncoming(fresh[fresh.length - 1]);
+          renderChatMessages(true);
+          if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
+        }
+      }
+      updateNotifyBanner();
+      return;
+    }
     const msgs = await api('/api/chat?user=' + encodeURIComponent(session.user));
     const prevMax = chatMaxId;
     const newMax = msgs.length ? msgs[msgs.length - 1].id : 0;
