@@ -153,14 +153,32 @@ const store = {
       return must(await supa.from('persons').select('*').order('id'), 'persons.all').map(appP);
     },
     async search(q, limit) {
+      const n = Math.min(Math.max(Number(limit) || 50, 1), 50);
+      q = (q || '').trim();
+      if (MODE === 'supabase' && q) {
+        // Filtro no banco (paginado) em vez de baixar a tabela inteira.
+        // cpfn guarda só dígitos: busca numérica usa igualdade parcial via ilike.
+        try {
+          const digits = q.replace(/\D/g, '');
+          let query = supa.from('persons').select('*').order('id', { ascending: false }).limit(n);
+          if (digits && digits.length >= 3 && /^[\d.\-/ ]+$/.test(q)) {
+            query = query.ilike('cpf', `%${digits}%`);
+          } else {
+            query = query.or(`nome.ilike.%${q}%,cpf.ilike.%${q}%,rg.ilike.%${q}%`);
+          }
+          const r = await query;
+          if (!r.error) return r.data.map(appP);
+        } catch {}
+        // fallback para filtro em memória abaixo
+      }
       const list = await store.persons.all();
-      q = (q || '').toLowerCase().trim();
-      const out = !q ? [...list].reverse() : list.filter(p =>
-        (p.nome || '').toLowerCase().includes(q) ||
-        (p.cpf || '').toLowerCase().includes(q) ||
-        (p.rg || '').toLowerCase().includes(q)
+      const ql = q.toLowerCase();
+      const out = !ql ? [...list].reverse() : list.filter(p =>
+        (p.nome || '').toLowerCase().includes(ql) ||
+        (p.cpf || '').toLowerCase().includes(ql) ||
+        (p.rg || '').toLowerCase().includes(ql)
       ).reverse();
-      return limit ? out.slice(0, limit) : out;
+      return out.slice(0, n);
     },
     async byId(id) {
       if (MODE === 'file') return mem.persons.find(x => eqi(x.id, id)) || null;
@@ -671,8 +689,27 @@ const store = {
   // Arquivos: disco local (file) ou Supabase Storage (supabase)
   // Só tipos seguros (nada de .svg/.html que executam código no navegador)
   async saveFileUpload(file) {
-    const orig = String(file.originalname || 'arquivo');
-    const ext = (orig.split('.').pop() || '').toLowerCase();
+    const orig = String(file.originalname || 'arquivo').slice(0, 120);
+    const parts = orig.split('.');
+    const ext = (parts.pop() || '').toLowerCase();
+    // Bloqueia extensão dupla disfarçada (ex.: laudo.pdf.html, foto.jpg.svg)
+    const dangerous = ['html', 'htm', 'svg', 'js', 'exe', 'bat', 'cmd', 'sh', 'php'];
+    if (parts.length && dangerous.includes(ext)) {
+      const e = new Error('Tipo de arquivo não permitido: ' + orig);
+      e.status = 400;
+      throw e;
+    }
+    // Checagem de assinatura mágica dos tipos mais comuns (mime pode ser forjado)
+    const buf = file.buffer || Buffer.alloc(0);
+    const head = buf.slice(0, 8).toString('latin1');
+    const isJpg = buf[0] === 0xFF && buf[1] === 0xD8;
+    const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
+    const isGif = head.startsWith('GIF8');
+    const isPdf = head.startsWith('%PDF');
+    if (['jpg', 'jpeg'].includes(ext) && !isJpg) { const e = new Error('Arquivo JPG inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'png' && !isPng) { const e = new Error('Arquivo PNG inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'gif' && !isGif) { const e = new Error('Arquivo GIF inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'pdf' && !isPdf) { const e = new Error('Arquivo PDF inválido: ' + orig); e.status = 400; throw e; }
     const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'webm', 'mp3', 'ogg', 'm4a', 'mp4', 'wav', 'oga'];
     const okMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

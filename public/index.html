@@ -550,8 +550,10 @@
         </div>
         <div class="flex flex-wrap gap-1.5 bg-white border border-slate-200 rounded-xl p-1" id="psiSubNav">
           <button data-psi="pront" onclick="goPsi('pront')" class="btn text-xs px-3 py-1.5">📋 Prontuário</button>
+          <button data-psi="ficha" onclick="goPsi('ficha')" class="btn text-xs px-3 py-1.5">🗂 Ficha 360</button>
           <button data-psi="atend" onclick="goPsi('atend')" class="btn text-xs px-3 py-1.5">🗓️ Atendimentos</button>
           <button data-psi="grupos" onclick="goPsi('grupos')" class="btn text-xs px-3 py-1.5">👥 Grupos</button>
+          <button data-psi="psc" onclick="goPsi('psc')" class="btn text-xs px-3 py-1.5">🏗 PSC</button>
           <button data-psi="enc" onclick="goPsi('enc')" class="btn text-xs px-3 py-1.5">🔗 Encaminhamentos</button>
           <button data-psi="docs" onclick="goPsi('docs')" class="btn text-xs px-3 py-1.5">📄 Documentos</button>
           <button data-psi="painel" onclick="goPsi('painel')" class="btn text-xs px-3 py-1.5">📊 Painel</button>
@@ -579,6 +581,11 @@
               <div><label class="lbl">RISCO IDENTIFICADO</label><select id="psiT_risco" class="inp mt-1 mb-2.5"><option value="">—</option><option>baixo</option><option>médio</option><option>alto</option></select>
               <label class="lbl">OBSERVAÇÕES DA TRIAGEM</label><textarea id="psiT_obs" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
             </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div><label class="lbl">PROCESSO</label><input id="psiT_processo" placeholder="Nº do processo" class="inp mt-1 mb-2.5"></div>
+              <div><label class="lbl">VARA</label><input id="psiT_vara" placeholder="Ex: 2ª Vara Criminal" class="inp mt-1 mb-2.5"></div>
+            </div>
+            <div><label class="lbl">TAGS (observações estruturadas — permitem filtro e relatório)</label><div id="psiT_tags" class="flex flex-wrap gap-1.5 mt-1 mb-2.5"></div></div>
           </div>
           <h3 class="font-display font-bold text-sm mt-4 mb-3">🎯 Plano de acompanhamento</h3>
           <div class="grid grid-cols-2 gap-2.5">
@@ -586,6 +593,7 @@
             <div><label class="lbl">STATUS</label><select id="psiP_status" class="inp mt-1 mb-2.5"><option value="ativo">Em acompanhamento</option><option value="encerrado">Encerrado</option></select></div>
             <div><label class="lbl">TIPO DE MEDIDA</label><select id="psiP_medtipo" class="inp mt-1 mb-2.5"><option value="">—</option><option>PRD</option><option>SCP</option><option>ANPP</option><option>Cautelar / Tornozeleira</option><option>Protetiva (Maria da Penha)</option><option>PSC</option><option>Outra</option></select></div>
             <div class="grid grid-cols-2 gap-2.5"><div><label class="lbl">INÍCIO</label><input id="psiP_medini" type="date" class="inp mt-1 mb-2.5"></div><div><label class="lbl">TÉRMINO</label><input id="psiP_medfim" type="date" class="inp mt-1 mb-2.5"></div></div>
+            <div><label class="lbl">PRÓXIMO ENVIO (relatório à vara — gera lembrete 15 dias antes)</label><input id="psiP_proxenv" type="date" class="inp mt-1 mb-2.5"></div>
           </div>
           <div><label class="lbl">METAS / PROJETO DE VIDA</label><textarea id="psiP_metas" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
           <div id="psiP_grupos" class="text-xs text-slate-500 mb-2.5"></div>
@@ -607,6 +615,19 @@
           </div>
           <button onclick="savePsiEvolucao()" class="btn btn-primary py-2.5 px-5 text-xs">➕ Registrar evolução</button>
         </div>
+      </div>
+      <div id="psi-ficha" class="hidden">
+        <div class="card p-5 mb-4">
+          <h3 class="font-display font-bold text-sm mb-3">🗂 Ficha do monitorado — tudo em um só lugar</h3>
+          <input id="psiFBusca" oninput="psiBuscarPara('psiF')" placeholder="Buscar pessoa..." class="inp mb-2.5">
+          <div id="psiFRes" class="space-y-1.5 mb-2.5"></div><div id="psiFSel" class="text-sm mb-2.5"></div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="loadPsiFicha()" class="btn btn-primary text-xs px-4 py-2">📂 Abrir ficha</button>
+            <button onclick="psiJudicialPDF()" class="btn btn-ghost text-xs px-4 py-2">⚖️ Relatório judicial (PDF)</button>
+            <button onclick="psiOficioIrregularidade()" class="btn btn-ghost text-xs px-4 py-2">✉️ Ofício de irregularidade</button>
+          </div>
+        </div>
+        <div id="psiFichaBody"></div>
       </div>
       <div id="psi-atend" class="hidden grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
@@ -644,6 +665,34 @@
         </div>
         <div class="lg:col-span-2 card p-5">
           <div id="psiGrupoDet"><p class="text-xs text-slate-400 text-center py-8">Selecione um grupo ao lado. 👈</p></div>
+        </div>
+      </div>
+      <div id="psi-psc" class="hidden grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📍 Locais de PSC</h3>
+          <div id="psiLocalList" class="space-y-1.5 mb-4"></div>
+          <label class="lbl">NOME DO LOCAL *</label><input id="psiL_nome" placeholder="Ex: Escola Municipal..." class="inp mt-1 mb-2">
+          <label class="lbl">ENDEREÇO</label><input id="psiL_end" class="inp mt-1 mb-2">
+          <div class="grid grid-cols-2 gap-2"><div><label class="lbl">CONTATO</label><input id="psiL_contato" class="inp mt-1 mb-2"></div><div><label class="lbl">DIAS</label><input id="psiL_dias" placeholder="Seg–Sex 8h–12h" class="inp mt-1 mb-2"></div></div>
+          <button onclick="savePsiLocal()" class="btn btn-primary w-full py-2 text-xs">➕ Cadastrar local</button>
+        </div>
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🔗 Vínculos (monitorado × local)</h3>
+          <input id="psiSBusca" oninput="psiBuscarPara('psiS')" placeholder="Buscar pessoa..." class="inp mb-2">
+          <div id="psiSRes" class="space-y-1.5 mb-2"></div><div id="psiSSel" class="mb-2"></div>
+          <label class="lbl">LOCAL *</label><select id="psiV_local" class="inp mt-1 mb-2"></select>
+          <div class="grid grid-cols-2 gap-2"><div><label class="lbl">INÍCIO</label><input id="psiV_ini" type="date" class="inp mt-1 mb-2"></div><div><label class="lbl">PREVISÃO FIM</label><input id="psiV_fim" type="date" class="inp mt-1 mb-2"></div></div>
+          <div class="grid grid-cols-2 gap-2"><div><label class="lbl">CARGA TOTAL (h) *</label><input id="psiV_carga" type="number" min="1" class="inp mt-1 mb-2"></div><div><label class="lbl">STATUS</label><select id="psiV_status" class="inp mt-1 mb-2"><option value="ativo">Ativo</option><option value="concluido">Concluído</option><option value="interrompido">Interrompido</option></select></div></div>
+          <button onclick="savePsiVinculo()" class="btn btn-primary w-full py-2 text-xs">🔗 Vincular</button>
+          <div id="psiVincList" class="space-y-2 mt-4 max-h-[380px] overflow-y-auto"></div>
+        </div>
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">⏱ Horas cumpridas</h3>
+          <label class="lbl">VÍNCULO *</label><select id="psiH_vinc" class="inp mt-1 mb-2"></select>
+          <div class="grid grid-cols-2 gap-2"><div><label class="lbl">DATA *</label><input id="psiH_data" type="date" class="inp mt-1 mb-2"></div><div><label class="lbl">HORAS *</label><input id="psiH_horas" type="number" min="0.5" step="0.5" class="inp mt-1 mb-2"></div></div>
+          <label class="lbl">OBSERVAÇÃO</label><input id="psiH_obs" class="inp mt-1 mb-2">
+          <button onclick="savePsiHora()" class="btn btn-primary w-full py-2 text-xs">➕ Registrar horas</button>
+          <div id="psiHoraList" class="space-y-1.5 mt-4 max-h-[380px] overflow-y-auto"></div>
         </div>
       </div>
       <div id="psi-enc" class="hidden grid lg:grid-cols-3 gap-4 items-start">
@@ -685,9 +734,28 @@
       </div>
       <div id="psi-painel" class="hidden">
         <div id="psiDashCards" class="grid grid-cols-2 xl:grid-cols-3 gap-3 mb-4"></div>
-        <div class="card p-5">
+        <div class="card p-5 mb-4">
+          <h3 class="font-display font-bold text-sm mb-3">📈 Comparecimento — últimos 6 meses</h3>
+          <div id="psiSerie" class="flex items-end gap-2 h-28"></div>
+        </div>
+        <div class="card p-5 mb-4">
+          <h3 class="font-display font-bold text-sm mb-3">📄 Relatório mensal (PDF)</h3>
+          <div class="flex flex-wrap gap-2 items-center">
+            <input id="psiRelMes" type="month" class="inp !w-auto !py-2 text-xs">
+            <button onclick="psiRelatorioPDF()" class="btn btn-primary text-xs px-4 py-2">⬇ Baixar relatório</button>
+            <button onclick="psiExportCSV()" class="btn btn-ghost text-xs px-4 py-2">📊 Exportar CSV</button>
+            <label class="btn btn-ghost text-xs px-4 py-2 cursor-pointer">⬆ Importar atendimentos<input id="psiImportFile" type="file" accept=".csv,text/csv" class="hidden" onchange="psiImportCSV()"></label>
+          </div>
+          <p id="psiImpMsg" class="hidden text-xs font-semibold mt-2"></p>
+        </div>
+        <div class="card p-5 mb-4">
           <h3 class="font-display font-bold text-sm mb-3">⚠️ Alertas (faltas, prazos, pendências)</h3>
           <div id="psiAlertsList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        </div>
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-1">🗂️ Arquivados</h3>
+          <p class="text-xs text-slate-500 mb-3">Registros arquivados (exclusão lógica — nada é apagado). Somente o autor restaura.</p>
+          <div id="psiArqList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
         </div>
       </div>
     </section>
@@ -760,6 +828,18 @@
           <label class="btn btn-ghost text-xs px-4 py-2.5 cursor-pointer">↩ Restaurar backup<input id="restoreFile" type="file" accept=".json,application/json" class="hidden" onchange="restoreBackup()"></label>
         </div>
         <p id="bkMsg" class="hidden text-xs font-semibold mt-2"></p>
+      </div>
+      <div class="card p-5 mt-4" style="border-left:4px solid #f59e0b">
+        <h3 class="font-display font-bold text-sm mb-1">🚨 Acesso emergencial ao Psicossocial</h3>
+        <p class="text-xs text-slate-500 mb-3">Somente leitura, para continuidade do cuidado (ex.: saída do psicólogo). Exige motivo (mín. 10 caracteres) e <b>todo acesso é auditado</b>.</p>
+        <label class="lbl">MOTIVO DO ACESSO *</label>
+        <input id="emgMotivo" placeholder="Ex: Psicólogo desligado em 10/09 — inventário de acompanhamentos ativos" class="inp mt-1 mb-2.5 text-xs">
+        <div class="flex flex-wrap gap-2 items-center">
+          <button onclick="psiEmergencyPanel()" class="btn btn-dark text-xs px-4 py-2.5">👁️ Ver painel (leitura)</button>
+          <button onclick="psiEmergencyPDF()" class="btn btn-ghost text-xs px-4 py-2.5">⬇ Relatório do mês (PDF)</button>
+        </div>
+        <p id="emgMsg" class="hidden text-xs font-semibold mt-2"></p>
+        <div id="emgResult" class="mt-3 space-y-2"></div>
       </div>
     </section>
 
@@ -3746,10 +3826,20 @@ let psiDocTipo = 'declaracao';
 let psiDocEditId = null;
 let psiDocItens = [];
 const psiVal = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+const PSI_TAGS = ['Biometria pendente', 'Contato desatualizado', 'Localizar frequência', 'Aguardando retorno', 'Encaminhamento necessário', 'Medida vencendo', 'Falta reiterada', 'Alta prevista'];
+function renderPsiTags(sel){
+  const box = document.getElementById('psiT_tags');
+  if(!box) return;
+  sel = sel || [];
+  box.innerHTML = PSI_TAGS.map(t=>`<label class="text-[11px] font-bold border rounded-full px-2.5 py-1 cursor-pointer ${sel.includes(t)?'bg-emerald-600 text-white border-emerald-600':'bg-white border-slate-300 text-slate-600'}"><input type="checkbox" data-tag="${esc(t)}" ${sel.includes(t)?'checked':''} class="hidden" onchange="renderPsiTags(psiTagsSel())"> ${esc(t)}</label>`).join('');
+}
+function psiTagsSel(){
+  return [...document.querySelectorAll('#psiT_tags input[data-tag]:checked')].map(i=>i.dataset.tag);
+}
 const psiSet = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
 function goPsi(s){
   psiSub = s;
-  ['pront', 'atend', 'grupos', 'enc', 'docs', 'painel'].forEach(k=>{
+  ['pront', 'ficha', 'atend', 'grupos', 'psc', 'enc', 'docs', 'painel'].forEach(k=>{
     const el = document.getElementById('psi-' + k);
     if(el) el.classList.toggle('hidden', k !== s);
   });
@@ -3759,6 +3849,8 @@ function goPsi(s){
     b.style.background = on ? 'linear-gradient(135deg,#059669,#10b981)' : '';
   });
   if(s === 'atend') loadPsiAtend();
+  if(s === 'ficha' && psiFichaPerson) loadPsiFicha();
+  if(s === 'psc') loadPsiPsc();
   if(s === 'grupos') loadPsiGrupos();
   if(s === 'enc') loadPsiEnc();
   if(s === 'docs'){ renderPsiDocForm(); loadPsiDocsHist(); }
@@ -3770,6 +3862,7 @@ async function loadPsi(){
   const hoje = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
   ['psiA_data','psiE_data','psiEnc_data'].forEach(id=>{ const el=document.getElementById(id); if(el && !el.value) el.value = hoje; });
   loadPsiAlerts();
+  renderPsiTags([]);
   goPsi(psiSub);
 }
 async function loadPsiAlerts(){
@@ -3778,7 +3871,7 @@ async function loadPsiAlerts(){
   try{
     const list = await api('/api/psi/alerts');
     if(!list.length){ box.innerHTML = ''; return; }
-    const ico = { falta:'🔴', medida:'🟡', encaminhamento:'🔵', retorno:'🟠' };
+    const ico = { falta:'🔴', falta_critica:'⛔', medida:'🟡', encaminhamento:'🔵', enc_30:'🔵', retorno:'🟠', proximo_envio:'🟣', psc:'🏗' };
     box.innerHTML = `<div class="card p-3 border-l-4 !border-l-amber-400"><div class="flex items-center gap-2 mb-2"><b class="text-xs">⚠️ ${list.length} alerta(s)</b><button onclick="goPsi('painel')" class="ml-auto text-[11px] font-bold text-indigo-600">ver todos →</button></div><div class="space-y-1">${list.slice(0, 5).map(a=>`<button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="w-full text-left text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">${ico[a.tipo]||'⚠️'} ${esc(a.texto)}${a.personName?` — <b>${esc(a.personName)}</b>`:''}</button>`).join('')}</div></div>`;
   }catch(e){ box.innerHTML = ''; }
 }
@@ -3819,11 +3912,12 @@ psiPickCb.psiP = ()=>{ psiPerson = psiPick.psiP || null; psiCarregarProntuario()
 function psiDataBR(iso){ const m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso||''); }
 async function psiCarregarProntuario(){
   const info = document.getElementById('psiProntInfo');
-  const ids = ['psiT_queixa','psiT_historico','psiT_vinculos','psiT_saude','psiT_subst','psiT_risco','psiT_obs','psiP_period','psiP_status','psiP_medtipo','psiP_medini','psiP_medfim','psiP_metas'];
+  const ids = ['psiT_queixa','psiT_historico','psiT_vinculos','psiT_saude','psiT_subst','psiT_risco','psiT_obs','psiT_processo','psiT_vara','psiP_period','psiP_status','psiP_medtipo','psiP_medini','psiP_medfim','psiP_proxenv','psiP_metas'];
   if(!psiPerson){
     if(info) info.textContent = '';
     ids.forEach(id=>psiSet(id, ''));
     psiSet('psiP_status', 'ativo');
+    renderPsiTags([]);
     document.getElementById('psiP_grupos').innerHTML = '';
     document.getElementById('psiEvolList').innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Selecione uma pessoa para ver o prontuário. 🔎</p>';
     psiPront = null;
@@ -3843,6 +3937,8 @@ async function psiCarregarProntuario(){
     psiSet('psiP_period', dd.periodicidade); psiSet('psiP_status', dd.status || 'ativo');
     psiSet('psiP_medtipo', dd.medidaTipo); psiSet('psiP_medini', dd.medidaInicio); psiSet('psiP_medfim', dd.medidaFim);
     psiSet('psiP_metas', dd.metas);
+    psiSet('psiT_processo', dd.processo); psiSet('psiT_vara', dd.vara); psiSet('psiP_proxenv', dd.proximoEnvio);
+    renderPsiTags(dd.tags || []);
     const mine = grupos.filter(g=>((g.dados||{}).integrantes||[]).some(m=>String((m&&m.id)||m)===String(psiPerson.id)));
     document.getElementById('psiP_grupos').innerHTML = mine.length ? ('👥 Grupos: ' + mine.map(g=>`<b>${esc((g.dados||{}).nome||('#'+g.id))}</b>`).join(', ')) : '👥 Nenhum grupo';
     evol.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
@@ -3856,7 +3952,7 @@ async function savePsiProntuario(){
   const err = document.getElementById('psiProntErr');
   err.classList.add('hidden');
   if(!psiPerson){ err.textContent = '⚠️ Selecione a pessoa primeiro'; err.classList.remove('hidden'); return; }
-  const dados = { queixa: psiVal('psiT_queixa'), historico: psiVal('psiT_historico'), vinculos: psiVal('psiT_vinculos'), saude: psiVal('psiT_saude'), subst: psiVal('psiT_subst'), risco: psiVal('psiT_risco'), obs: psiVal('psiT_obs'), periodicidade: psiVal('psiP_period'), status: psiVal('psiP_status') || 'ativo', medidaTipo: psiVal('psiP_medtipo'), medidaInicio: document.getElementById('psiP_medini').value, medidaFim: document.getElementById('psiP_medfim').value, metas: psiVal('psiP_metas') };
+  const dados = { queixa: psiVal('psiT_queixa'), historico: psiVal('psiT_historico'), vinculos: psiVal('psiT_vinculos'), saude: psiVal('psiT_saude'), subst: psiVal('psiT_subst'), risco: psiVal('psiT_risco'), obs: psiVal('psiT_obs'), processo: psiVal('psiT_processo'), vara: psiVal('psiT_vara'), tags: psiTagsSel(), periodicidade: psiVal('psiP_period'), status: psiVal('psiP_status') || 'ativo', medidaTipo: psiVal('psiP_medtipo'), medidaInicio: document.getElementById('psiP_medini').value, medidaFim: document.getElementById('psiP_medfim').value, proximoEnvio: document.getElementById('psiP_proxenv').value, metas: psiVal('psiP_metas') };
   try{
     await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'prontuario', personId: psiPerson.id, personName: psiPerson.nome, dados }) });
     if(dados.medidaTipo && dados.medidaFim){
@@ -3881,8 +3977,78 @@ async function savePsiEvolucao(){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 async function psiDelEvolucao(id){
-  if(!confirm('Excluir esta evolução?')) return;
-  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗑️ Evolução excluída'); psiCarregarProntuario(); }catch(e){ toast('⚠️ ' + e.message); }
+  if(!confirm('Arquivar esta evolução? Ela sai da lista, mas pode ser restaurada no Painel → Arquivados.')) return;
+  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗂️ Evolução arquivada'); psiCarregarProntuario(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Ficha 360 do monitorado ----
+let psiFichaPerson = null;
+psiPickCb.psiF = ()=>{ psiFichaPerson = psiPick.psiF || null; if(psiFichaPerson) loadPsiFicha(); };
+async function loadPsiFicha(){
+  const box = document.getElementById('psiFichaBody');
+  const p = psiFichaPerson || psiPerson;
+  if(!p){ if(box) box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Busque e selecione a pessoa acima. 🔎</p>'; return; }
+  if(box) box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Carregando ficha...</p>';
+  try{
+    const f = await api('/api/psi/ficha/' + p.id);
+    const pr = f.prontuario ? (f.prontuario.dados || {}) : {};
+    const pend = [];
+    if(f.pendencias.faltasConsecutivas >= 2) pend.push(`🔴 ${f.pendencias.faltasConsecutivas} faltas consecutivas — <button onclick="psiOficioIrregularidade(${f.person.id},'${esc(f.person.nome).replace(/'/g,"\\'")}')" class="font-bold text-indigo-600">gerar ofício</button>`);
+    (f.pendencias.medidasVencendo || []).forEach(m=>pend.push(`🟡 Medida ${esc(m.tipo||'')} vence ${psiDataBR(m.fim)}`));
+    (f.pendencias.encPendentes || []).forEach(e=>pend.push(`🔵 Enc. → ${esc(e.destino||'?')} pendente desde ${psiDataBR(e.data)}`));
+    if(f.pendencias.proximoEnvio) pend.push(`🟠 Próximo envio: ${psiDataBR(f.pendencias.proximoEnvio)}`);
+    (f.pendencias.pscSemHoras || []).forEach(v=>pend.push(`🏗 PSC sem horas há 15+ dias (${esc(v.local||'local')})`));
+    const tlIco = { evolucao:'📝', atendimento:'🗓️', encaminhamento:'🔗', medida:'⚖️' };
+    box.innerHTML = `
+    <div class="card p-5 mb-4">
+      <div class="flex flex-wrap items-center gap-2"><h3 class="font-display font-bold">${esc(f.person.nome)}</h3>
+      <span class="text-[11px] text-slate-500">${esc(f.person.cpf||f.person.rg||'')}</span>
+      <span class="ml-auto text-[11px] font-extrabold px-2 py-0.5 rounded ${pr.status==='encerrado'?'bg-slate-200 text-slate-500':'bg-emerald-100 text-emerald-800'}">${esc(pr.status||'sem prontuário')}</span></div>
+      <div class="grid sm:grid-cols-3 gap-2 mt-3 text-xs">
+        <div><span class="text-slate-500">PROCESSO</span><br><b>${esc(pr.processo||'—')}</b></div>
+        <div><span class="text-slate-500">VARA</span><br><b>${esc(pr.vara||'—')}</b></div>
+        <div><span class="text-slate-500">MEDIDA</span><br><b>${esc(pr.medidaTipo||'—')} • ${esc(pr.periodicidade||'—')}</b></div>
+        <div><span class="text-slate-500">PERÍODO</span><br><b>${psiDataBR(pr.medidaInicio)} → ${psiDataBR(pr.medidaFim)}</b></div>
+        <div><span class="text-slate-500">PRÓXIMO ENVIO</span><br><b>${pr.proximoEnvio?psiDataBR(pr.proximoEnvio):'—'}</b></div>
+        <div><span class="text-slate-500">ATENDIMENTOS</span><br><b>${f.stats.totalAt} (${f.stats.presentes}✅ ${f.stats.faltas}❌) • ${f.stats.evolucoes} evoluções</b></div>
+      </div>
+      ${(f.tags||[]).length?`<div class="flex flex-wrap gap-1.5 mt-3">${f.tags.map(t=>`<span class="text-[10px] font-bold bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">🏷 ${esc(t)}</span>`).join('')}</div>`:''}
+    </div>
+    ${pend.length?`<div class="card p-4 mb-4" style="border-left:4px solid #f59e0b"><b class="text-xs">⚠️ Pendências (${pend.length})</b><div class="mt-1.5 space-y-1 text-xs">${pend.map(x=>`<div>${x}</div>`).join('')}</div></div>`:''}
+    <div class="grid lg:grid-cols-2 gap-4 items-start">
+      <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">🧭 Linha do tempo</h3><div class="space-y-2 max-h-[520px] overflow-y-auto">${(f.timeline||[]).map(t=>`<div class="border border-slate-200 rounded-xl p-2.5 bg-white text-xs"><b>${psiDataBR(t.data)}</b> ${tlIco[t.kind]||'•'} <b>${esc(t.titulo)}</b><br><span class="text-slate-500">${esc(t.resumo||'')}</span></div>`).join('') || '<p class="text-xs text-slate-400">Sem registros.</p>'}</div></div>
+      <div class="space-y-4">
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-2">👥 Grupos (${(f.grupos||[]).length})</h3>${(f.grupos||[]).map(g=>`<div class="text-xs border-b border-slate-100 py-1.5"><b>${esc(g.nome||'')}</b> <span class="text-slate-500">${esc(g.tipo||'')} • ${g.presencas}/${g.encontros} presenças • ${esc(g.status)}</span></div>`).join('') || '<p class="text-xs text-slate-400">Nenhum grupo.</p>'}</div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-2">🏗 PSC (${(f.vincs||[]).length} vínculo(s))</h3>${(f.vincs||[]).map(v=>`<div class="text-xs border-b border-slate-100 py-1.5"><b>${esc((v.dados||{}).localNome||'')}</b><br><span class="text-slate-500">${v.feitas}h de ${(v.dados||{}).cargaTotal||0}h • saldo ${v.saldo}h • ${esc((v.dados||{}).status||'ativo')}</span></div>`).join('') || '<p class="text-xs text-slate-400">Sem vínculos de PSC.</p>'}</div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-2">📄 Documentos (${(f.documentos||[]).length})</h3>${(f.documentos||[]).map(d=>`<div class="text-xs border-b border-slate-100 py-1.5 flex gap-2"><b class="text-indigo-600">#${d.id}</b><span class="flex-1">${esc(d.tipo)}${d.dataEnvio?' • '+psiDataBR(d.dataEnvio):''}</span><button onclick="downloadTermoPDF(${d.id})" class="font-bold text-indigo-600">PDF</button></div>`).join('') || '<p class="text-xs text-slate-400">Nenhum documento.</p>'}</div>
+      </div>
+    </div>`;
+  }catch(e){ if(box) box.innerHTML = '<p class="text-xs text-rose-500 text-center py-6">⚠️ ' + esc(e.message) + '</p>'; }
+}
+function psiJudicialPDF(){
+  const p = psiFichaPerson || psiPerson;
+  if(!p) return toast('⚠️ Selecione a pessoa');
+  window.open('/api/psi/judicial/' + p.id + '?token=' + encodeURIComponent((() => { try{ return (JSON.parse(localStorage.getItem('te_session')||'null')||{}).token || ''; }catch(e){ return ''; } })()), '_blank');
+}
+async function psiOficioIrregularidade(pid, nome){
+  const p = pid ? { id: pid, nome: nome || '' } : (psiFichaPerson || psiPerson);
+  if(!p) return toast('⚠️ Selecione a pessoa');
+  try{
+    const list = await api('/api/psi?kind=atendimento&personId=' + p.id);
+    const faltas = list.filter(a=>((a.dados||{}).status)==='falta').sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    if(!faltas.length) return toast('Sem faltas registradas para esta pessoa');
+    const datas = faltas.slice(0, 10).map(a=>psiDataBR(a.data)).join(', ');
+    const pr = await api('/api/psi?kind=prontuario&personId=' + p.id).catch(()=>[]);
+    const dd = ((pr[0]||{}).dados)||{};
+    setPsiDocTipo('oficioenc');
+    psiPick.psiD = { id: p.id, nome: p.nome };
+    paintPsiPick('psiD');
+    psiSet('docF_nome', p.nome); psiSet('docF_processo', dd.processo||''); psiSet('docF_vara', dd.vara||'');
+    psiSet('docF_destino', dd.vara || 'Vara — completar');
+    psiSet('docF_motivo', 'Faltas consecutivas sem justificativa');
+    psiSet('docF_texto', `Informamos que o(a) monitorado(a) ${p.nome} faltou aos atendimentos de ${datas} sem justificativa, descumprindo a periodicidade ${dd.periodicidade||'estabelecida'}. Solicitamos manifestação desse Juízo.`);
+    goPsi('docs');
+    toast('📄 Ofício pré-preenchido — confira e salve');
+  }catch(e){ toast('⚠️ ' + e.message); }
 }
 // ---- Atendimentos (frequência) ----
 const PSI_STATUS = { presente:['✅ Presente','bg-emerald-100 text-emerald-800'], falta:['❌ Falta','bg-rose-100 text-rose-800'], falta_justificada:['⚠️ Justificada','bg-amber-100 text-amber-800'] };
@@ -3908,8 +4074,76 @@ async function savePsiAtendimento(){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 async function psiDelAtend(id){
-  if(!confirm('Excluir este atendimento?')) return;
-  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗑️ Excluído'); loadPsiAtend(); }catch(e){ toast('⚠️ ' + e.message); }
+  if(!confirm('Arquivar este atendimento? Ele sai da lista, mas pode ser restaurado no Painel → Arquivados.')) return;
+  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗂️ Arquivado'); loadPsiAtend(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- PSC (Prestação de Serviços à Comunidade) ----
+let psiLocais = [], psiVincs = [];
+function psiTok(){ try{ return (JSON.parse(localStorage.getItem('te_session')||'null')||{}).token || ''; }catch(e){ return ''; } }
+async function loadPsiPsc(){
+  const d = document.getElementById('psiH_data');
+  if(d && !d.value) d.value = new Date().toISOString().slice(0, 10);
+  try{
+    const [loc, vin, hor] = await Promise.all([api('/api/psi?kind=psc_local'), api('/api/psi?kind=psc_vinculo'), api('/api/psi?kind=psc_hora')]);
+    psiLocais = loc.sort((a,b)=>(a.id||0)-(b.id||0));
+    psiVincs = vin.sort((a,b)=>(b.id||0)-(a.id||0));
+    document.getElementById('psiLocalList').innerHTML = psiLocais.map(l=>{ const dd=l.dados||{}; return `<div class="border border-slate-200 rounded-xl p-2.5 bg-white text-xs"><b>${esc(dd.nome||'')}</b><br><span class="text-slate-500">${esc(dd.endereco||'')}${dd.contato?' • '+esc(dd.contato):''}${dd.dias?' • '+esc(dd.dias):''}</span></div>`; }).join('') || '<p class="text-xs text-slate-400">Nenhum local.</p>';
+    document.getElementById('psiV_local').innerHTML = psiLocais.map(l=>`<option value="${l.id}">${esc((l.dados||{}).nome||('#'+l.id))}</option>`).join('') || '<option value="">— cadastre um local —</option>';
+    const horasPorVinc = {};
+    hor.forEach(h=>{ const k = String((h.dados||{}).vinculoId||''); (horasPorVinc[k] = horasPorVinc[k] || []).push(h); });
+    document.getElementById('psiVincList').innerHTML = psiVincs.slice(0, 60).map(v=>{
+      const dd = v.dados || {};
+      const hs = horasPorVinc[String(v.id)] || [];
+      const feitas = hs.reduce((s,h)=>s+(Number((h.dados||{}).horas)||0), 0);
+      const total = Number(dd.cargaTotal)||0, saldo = Math.max(total - feitas, 0);
+      const pct = total ? Math.min(100, Math.round(feitas/total*100)) : 0;
+      return `<div class="border border-slate-200 rounded-xl p-2.5 bg-white text-xs"><b>${esc(v.personName||'')}</b> → ${esc(dd.localNome||'')}<br>
+      <div class="h-1.5 bg-slate-100 rounded-full my-1.5"><div class="h-1.5 rounded-full" style="width:${pct}%;background:linear-gradient(90deg,#059669,#10b981)"></div></div>
+      <span class="text-slate-500">${feitas}h de ${total}h • saldo ${saldo}h • ${esc(dd.status||'ativo')}</span>
+      <div class="mt-1"><button onclick="psiCertificado(${v.id})" class="font-bold text-indigo-600">📜 Certificado (PDF)</button></div></div>`;
+    }).join('') || '<p class="text-xs text-slate-400">Nenhum vínculo.</p>';
+    document.getElementById('psiH_vinc').innerHTML = psiVincs.filter(v=>((v.dados||{}).status||'ativo')==='ativo').map(v=>`<option value="${v.id}">${esc(v.personName||('#'+v.id))} — ${esc((v.dados||{}).localNome||'')}</option>`).join('') || '<option value="">— sem vínculos ativos —</option>';
+    hor.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    document.getElementById('psiHoraList').innerHTML = hor.slice(0, 60).map(h=>{ const dd=h.dados||{}; return `<div class="border border-slate-200 rounded-xl p-2 bg-white text-xs"><b>${psiDataBR(h.data)}</b> • ${esc(h.personName||'')} • <b>${dd.horas||0}h</b>${dd.obs?`<br><span class="text-slate-500">${esc(dd.obs)}</span>`:''}</div>`; }).join('') || '<p class="text-xs text-slate-400">Sem horas registradas.</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiLocal(){
+  const nome = psiVal('psiL_nome');
+  if(!nome) return toast('⚠️ Informe o nome do local');
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'psc_local', dados:{ nome, endereco: psiVal('psiL_end'), contato: psiVal('psiL_contato'), dias: psiVal('psiL_dias') } }) });
+    ['psiL_nome','psiL_end','psiL_contato','psiL_dias'].forEach(id=>psiSet(id,''));
+    toast('✅ Local cadastrado'); loadPsiPsc();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiVinculo(){
+  const p = psiPick.psiS;
+  if(!p) return toast('⚠️ Busque e selecione a pessoa');
+  const locId = document.getElementById('psiV_local').value;
+  if(!locId) return toast('⚠️ Cadastre um local primeiro');
+  const loc = psiLocais.find(l=>String(l.id)===String(locId));
+  const carga = Number(psiVal('psiV_carga'));
+  if(!carga || carga <= 0) return toast('⚠️ Informe a carga horária total');
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'psc_vinculo', personId: p.id, personName: p.nome, dados:{ localId: locId, localNome: (loc.dados||{}).nome, localEndereco: (loc.dados||{}).endereco, inicio: document.getElementById('psiV_ini').value, previsaoFim: document.getElementById('psiV_fim').value, cargaTotal: carga, status: psiVal('psiV_status') || 'ativo' } }) });
+    delete psiPick.psiS; paintPsiPick('psiS');
+    toast('✅ Vínculo criado'); loadPsiPsc();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiHora(){
+  const vincId = document.getElementById('psiH_vinc').value;
+  if(!vincId) return toast('⚠️ Selecione o vínculo');
+  const horas = Number(psiVal('psiH_horas'));
+  if(!horas || horas <= 0) return toast('⚠️ Informe as horas');
+  const v = psiVincs.find(x=>String(x.id)===String(vincId));
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'psc_hora', personId: v ? v.personId : '', personName: v ? v.personName : '', dados:{ vinculoId: vincId, horas, obs: psiVal('psiH_obs') }, data: document.getElementById('psiH_data').value }) });
+    psiSet('psiH_obs','');
+    toast('✅ Horas registradas'); loadPsiPsc();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+function psiCertificado(id){
+  window.open('/api/psi/psc/certificado/' + id + '?token=' + encodeURIComponent(psiTok()), '_blank');
 }
 // ---- Grupos reflexivos ----
 async function loadPsiGrupos(){
@@ -3945,9 +4179,10 @@ async function openPsiGrupo(id, silent){
     const encs = (await api('/api/psi?kind=encontro&grupoId=' + id)).sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
     document.getElementById('psiGrupoDet').innerHTML = `
       <div class="flex items-center gap-2 mb-3"><h3 class="font-display font-bold text-sm">👥 ${esc(dd.nome||'')}</h3><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">${esc(dd.tipo||'')}</span><span class="text-[11px] text-slate-500">${esc(dd.dia||'')}</span>
-      <button onclick="psiToggleGrupo(${g.id},${dd.ativo===false})" class="ml-auto text-[11px] font-bold text-slate-500">${dd.ativo===false?'▶ Reativar':'⏸ Inativar'}</button></div>
+      <button onclick="psiGrupoRelatorio(${g.id})" class="ml-auto text-[11px] font-bold text-indigo-600">📄 Relatório</button>
+      <button onclick="psiToggleGrupo(${g.id},${dd.ativo===false})" class="text-[11px] font-bold text-slate-500">${dd.ativo===false?'▶ Reativar':'⏸ Inativar'}</button></div>
       <label class="lbl">INTEGRANTES (${ints.length})</label>
-      <div class="flex flex-wrap gap-1.5 my-2">${ints.map(m=>`<span class="text-[11px] font-bold bg-slate-100 border border-slate-200 rounded-full px-2.5 py-1">${esc(m.nome||('ID '+m.id))} <button onclick="psiDelIntegrante(${g.id},'${m.id}')" class="text-rose-500 font-bold">✕</button></span>`).join('') || '<span class="text-xs text-slate-400">Nenhum integrante.</span>'}</div>
+      <div class="flex flex-wrap gap-1.5 my-2">${ints.map(m=>{ const st=(m&&m.status)||'ativo'; const chip=st==='concluido'?'bg-emerald-100 border-emerald-300':st==='evadido'?'bg-rose-50 border-rose-300':'bg-slate-100 border-slate-200'; return `<span class="text-[11px] font-bold border rounded-full px-2.5 py-1 ${chip}">${esc(m.nome||('ID '+m.id))} <select onchange="psiIntegranteStatus(${g.id},'${m.id}',this.value)" class="!w-auto !inline !py-0 !px-1 !text-[10px] !border-0 bg-transparent font-bold"><option value="ativo"${st==='ativo'?' selected':''}>ativo</option><option value="concluido"${st==='concluido'?' selected':''}>concluído</option><option value="evadido"${st==='evadido'?' selected':''}>evadido</option></select> <button onclick="psiDelIntegrante(${g.id},'${m.id}')" class="text-rose-500 font-bold">✕</button></span>`; }).join('') || '<span class="text-xs text-slate-400">Nenhum integrante.</span>'}</div>
       <input id="psiGIBusca" oninput="psiBuscarPara('psiGI')" placeholder="Buscar pessoa para adicionar..." class="inp mb-2">
       <div id="psiGIRes" class="space-y-1.5 mb-2"></div><div id="psiGISel" class="mb-2"></div>
       <button onclick="psiAddIntegrante(${g.id})" class="btn btn-ghost text-xs px-3 py-2 mb-4">➕ Adicionar integrante</button>
@@ -3982,6 +4217,18 @@ async function psiAddIntegrante(gid){
     toast('✅ Integrante adicionado');
     openPsiGrupo(gid, true);
   }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiIntegranteStatus(gid, pid, status){
+  try{
+    const g = await api('/api/psi/' + gid);
+    const ints = (((g.dados||{}).integrantes) || []).map(m=>String((m&&m.id)||m)===String(pid) ? Object.assign({}, m, { status }) : m);
+    await api('/api/psi/' + gid, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados:{ integrantes: ints } }) });
+    toast('✅ Status atualizado');
+    openPsiGrupo(gid, true);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+function psiGrupoRelatorio(id){
+  window.open('/api/psi/grupo/' + id + '/relatorio?token=' + encodeURIComponent(psiTok()), '_blank');
 }
 async function psiDelIntegrante(gid, pid){
   try{
@@ -4221,8 +4468,62 @@ async function delPsiDoc(id){
   try{ await api('/api/termos/' + id, { method:'DELETE' }); toast('🗑️ Excluído'); loadPsiDocsHist(); }catch(e){ toast('⚠️ ' + e.message); }
 }
 // ---- Painel psicossocial ----
+function psiTokenQS(){
+  let tok = '';
+  try{ const s = JSON.parse(localStorage.getItem('te_session') || 'null'); if(s && s.token) tok = s.token; }catch(e){}
+  return tok ? '&token=' + encodeURIComponent(tok) : '';
+}
+function psiRelatorioPDF(){
+  const mes = (document.getElementById('psiRelMes') || {}).value || new Date().toISOString().slice(0, 7);
+  window.open('/api/psi/relatorio?mes=' + encodeURIComponent(mes) + psiTokenQS(), '_blank');
+}
+function psiExportCSV(){
+  const mes = (document.getElementById('psiRelMes') || {}).value || '';
+  window.open('/api/psi/export' + (mes ? '?mes=' + encodeURIComponent(mes) : '') + (mes ? '&' : '?') + 'token=' + encodeURIComponent(psiTok()), '_blank');
+}
+async function psiImportCSV(){
+  const inp = document.getElementById('psiImportFile');
+  const msg = document.getElementById('psiImpMsg');
+  if(!inp.files.length) return;
+  const fd = new FormData();
+  fd.append('arquivo', inp.files[0]);
+  msg.classList.add('hidden');
+  try{
+    const r = await authFetch('/api/psi/import', { method: 'POST', body: fd });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || 'Erro ao importar');
+    msg.textContent = `✅ ${j.importados} importado(s)` + (j.falhas && j.falhas.length ? ` • ${j.falhas.length} falha(s): ` + j.falhas.slice(0,3).map(f=>`linha ${f.linha} (${f.erro})`).join('; ') : '');
+    msg.className = 'text-xs font-semibold mt-2 text-emerald-700'; msg.classList.remove('hidden');
+    loadPsiPainel();
+  }catch(e){ msg.textContent = '⚠️ ' + e.message; msg.className = 'text-xs font-semibold mt-2 text-rose-600'; msg.classList.remove('hidden'); }
+  inp.value = '';
+}
+async function psiAgendarLembrete(dataISO, titulo){
+  if(!dataISO) return toast('⚠️ Alerta sem data');
+  try{
+    await api('/api/agenda', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: '[PSI] ' + String(titulo||'Lembrete').slice(0, 80), description: 'Lembrete gerado do painel psicossocial', start: dataISO + 'T09:00:00', end: dataISO + 'T09:30:00' }) });
+    toast('📅 Lembrete criado na agenda (' + psiDataBR(dataISO) + ')');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiRestore(id){
+  if(!confirm('Restaurar este registro do arquivo?')) return;
+  try{ await api('/api/psi/' + id + '/restore', { method:'PATCH' }); toast('✅ Restaurado'); loadPsiPainel(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function loadPsiArq(){
+  const box = document.getElementById('psiArqList');
+  if(!box) return;
+  try{
+    const list = await api('/api/psi?arquivados=1');
+    const arq = list.filter(x => x.dados && x.dados._arquivado === true).sort((a,b)=>(b.id||0)-(a.id||0)).slice(0, 100);
+    const kindIco = { prontuario:'📋', evolucao:'📝', atendimento:'🗓️', grupo:'👥', encontro:'🤝', encaminhamento:'🔗', medida:'⚖️' };
+    box.innerHTML = arq.length ? arq.map(r=>`<div class="border border-slate-200 rounded-xl p-3 bg-slate-50 text-xs"><b>${kindIco[r.kind]||'📄'} ${(r.kind||'').toUpperCase()}</b> — <b>${esc(r.personName||('ID '+(r.personId||'')))}</b> <span class="text-slate-500">${r.data?psiDataBR(r.data):''} • por ${esc(r.user||'')}</span><div class="mt-1.5"><button onclick="psiRestore(${r.id})" class="btn btn-ghost py-1.5 text-[11px]">↩ Restaurar</button></div></div>`).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhum registro arquivado.</p>';
+  }catch(e){ box.innerHTML = '<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar arquivados.</p>'; }
+}
 async function loadPsiPainel(){
   try{
+    const m = document.getElementById('psiRelMes');
+    if(m && !m.value) m.value = new Date().toISOString().slice(0, 7);
+    loadPsiArq();
     const [dash, alerts] = await Promise.all([api('/api/psi/dashboard'), api('/api/psi/alerts')]);
     const card = (v, l, c) => `<div class="card p-4 text-center"><p class="font-display font-extrabold text-2xl ${c}">${v}</p><p class="text-[11px] font-bold text-slate-500 mt-1">${l}</p></div>`;
     document.getElementById('psiDashCards').innerHTML =
@@ -4231,9 +4532,20 @@ async function loadPsiPainel(){
       card(dash.faltasMes, 'FALTAS NO MÊS', 'text-rose-700') +
       card(dash.gruposAtivos, 'GRUPOS ATIVOS', 'text-blue-700') +
       card(dash.encPendentes, 'ENC. PENDENTES', 'text-amber-700') +
-      card(dash.medidasVencendo, 'MEDIDAS VENCENDO 30D', 'text-orange-700');
-    const ico = { falta:'🔴 Falta', medida:'🟡 Medida', encaminhamento:'🔵 Encaminhamento', retorno:'🟠 Retorno' };
-    document.getElementById('psiAlertsList').innerHTML = alerts.length ? alerts.map(a=>`<button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-xl p-3 bg-white text-xs"><b>${ico[a.tipo]||'⚠️'}</b> — ${esc(a.texto)}${a.personName?`<br><b>${esc(a.personName)}</b>`:''}</button>`).join('') : '<p class="text-xs text-emerald-700 text-center py-6">✅ Nenhum alerta. Tudo em dia!</p>';
+      card(dash.medidasVencendo, 'MEDIDAS VENCENDO 30D', 'text-orange-700') +
+      card(dash.faltasCriticas || 0, 'FALTAS CRÍTICAS (2+)', 'text-red-700') +
+      card((dash.psc && dash.psc.horasMes) || 0, 'PSC HORAS NO MÊS', 'text-teal-700') +
+      card((dash.psc && dash.psc.vinculosAtivos) || 0, 'PSC VÍNCULOS ATIVOS', 'text-cyan-700');
+    const serie = dash.serie || [];
+    const maxV = Math.max(1, ...serie.map(s=>s.atendimentos || 0));
+    document.getElementById('psiSerie').innerHTML = serie.map(s=>{
+      const h = Math.round((s.atendimentos || 0) / maxV * 100);
+      const hf = s.atendimentos ? Math.round((s.faltas || 0) / s.atendimentos * 100) : 0;
+      return `<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-slate-100 rounded-t-lg relative" style="height:100%"><div class="absolute bottom-0 w-full rounded-t-lg" title="${s.atendimentos} atend. • ${s.faltas} faltas" style="height:${h}%;background:linear-gradient(180deg,#10b981,#059669)"></div></div><b class="text-[11px]">${s.atendimentos||0}</b><span class="text-[10px] text-slate-500">${s.mes.slice(5)}${hf?` • <span class="text-rose-600 font-bold">${hf}%F</span>`:''}</span></div>`;
+    }).join('');
+    const ico = { falta:'🔴 Falta', falta_critica:'⛔ Falta crítica', medida:'🟡 Medida', encaminhamento:'🔵 Encaminhamento', enc_30:'🔵 Enc. 30+d', retorno:'🟠 Retorno', proximo_envio:'🟣 Próximo envio', psc:'🏗 PSC' };
+    document.getElementById('psiAlertsList').innerHTML = alerts.length ? alerts.map(a=>`<div class="border border-slate-200 rounded-xl p-3 bg-white text-xs"><div class="flex items-center gap-2"><button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="flex-1 text-left"><b>${ico[a.tipo]||'⚠️'}</b> — ${esc(a.texto)}${a.personName?`<br><b>${esc(a.personName)}</b>`:''}</button></div>
+    <div class="flex gap-1.5 mt-2">${a.data?`<button onclick="psiAgendarLembrete('${esc(a.data)}','${esc((a.texto||'').replace(/'/g,"\\'")).slice(0,60)}')" class="btn btn-ghost flex-1 py-1.5 text-[11px]">📅 Agendar</button>`:''}${a.acao==='oficio'?`<button onclick="psiOficioIrregularidade('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✉️ Ofício</button>`:''}</div></div>`).join('') : '<p class="text-xs text-emerald-700 text-center py-6">✅ Nenhum alerta. Tudo em dia!</p>';
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 // Regra Infinity: só o Júlio (ou admin) assume
@@ -4665,6 +4977,37 @@ function chatAnexo(a, mine){
   return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}" class="mt-1.5 flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold break-all ${mine?'bg-white/20 text-white':'bg-slate-100 text-slate-700'}"><span class="text-sm flex-none">📄</span><span class="min-w-0 truncate">${esc(a.name)}</span><span class="flex-none opacity-70">${fmtSize(a.size)}</span></a>`;
 }
 let activeConvo = 'todos', allUsers = [];
+// --- Acesso emergencial ao Psicossocial (admin, somente leitura, auditado) ---
+function psiEmgQS(){
+  const motivo = (document.getElementById('emgMotivo') || {}).value || '';
+  if(motivo.trim().length < 10){ toast('⚠️ Informe o motivo (mín. 10 caracteres)'); return null; }
+  return 'emergencia=1&motivo=' + encodeURIComponent(motivo.trim());
+}
+async function psiEmergencyPanel(){
+  const qs = psiEmgQS(); if(!qs) return;
+  const msg = document.getElementById('emgMsg'), box = document.getElementById('emgResult');
+  msg.classList.add('hidden'); box.innerHTML = '<p class="text-xs text-slate-400">Carregando...</p>';
+  try{
+    const [dash, pronts] = await Promise.all([
+      api('/api/psi/dashboard?' + qs),
+      api('/api/psi?kind=prontuario&' + qs)
+    ]);
+    const ativos = pronts.filter(p=>((p.dados||{}).status||'ativo')==='ativo');
+    msg.textContent = '✅ Acesso registrado em auditoria. Somente leitura.';
+    msg.className = 'text-xs font-semibold mt-2 text-emerald-700'; msg.classList.remove('hidden');
+    box.innerHTML = `<div class="grid grid-cols-3 gap-2 text-center text-xs">
+      <div class="border rounded-xl p-2.5 bg-white"><b class="text-base">${dash.acompanhados}</b><br><span class="text-slate-500">em acompanhamento</span></div>
+      <div class="border rounded-xl p-2.5 bg-white"><b class="text-base">${dash.atendimentosMes}</b><br><span class="text-slate-500">atend. no mês</span></div>
+      <div class="border rounded-xl p-2.5 bg-white"><b class="text-base">${dash.encPendentes}</b><br><span class="text-slate-500">enc. pendentes</span></div>
+    </div>
+    <div class="border rounded-xl p-3 bg-white text-xs"><b>Prontuários ativos (${ativos.length})</b><div class="mt-1.5 space-y-1 max-h-[260px] overflow-y-auto">${ativos.slice(0,100).map(p=>`<div class="flex gap-2"><span class="text-slate-500">${p.data?psiDataBR(p.data):''}</span><b class="flex-1 truncate">${esc(p.personName||('ID '+p.personId))}</b><span class="text-slate-400">por ${esc(p.user||'')}</span></div>`).join('') || '<span class="text-slate-400">Nenhum.</span>'}</div></div>`;
+  }catch(e){ msg.textContent = '⚠️ ' + e.message; msg.className = 'text-xs font-semibold mt-2 text-rose-600'; msg.classList.remove('hidden'); box.innerHTML = ''; }
+}
+function psiEmergencyPDF(){
+  const qs = psiEmgQS(); if(!qs) return;
+  const mes = new Date().toISOString().slice(0, 7);
+  window.open('/api/psi/relatorio?mes=' + mes + '&' + qs + psiTokenQS(), '_blank');
+}
 async function loadUsers(){ try{ allUsers = await api('/api/users'); renderTabs(); updateChatPlaceholder(); }catch(e){} }
 function convoUnread(to){
   if(!session) return 0;

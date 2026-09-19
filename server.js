@@ -12,11 +12,14 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 // Cabeçalhos de segurança
+app.use(shared.requestId);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self)');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   // HSTS só faz sentido atrás de HTTPS (Render define FORCE_HTTPS=1)
   if (process.env.FORCE_HTTPS === '1')
     res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
@@ -31,15 +34,19 @@ if (process.env.FORCE_HTTPS === '1') {
   });
 }
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use('/api', shared.apiRateLimit);
 // Compressão gzip para respostas HTTP (o SSE fica de fora: buffer interferiria no stream)
 const { compression } = (() => { try { return { compression: require('compression') }; } catch { return { compression: null }; } })();
 if (compression) app.use((req, res, next) => {
   if (req.path === '/api/events') return next();
   compression({ filter: (rq, rs) => (rs.getHeader('Content-Type') || '').toString().startsWith('text/event-stream') ? false : require('compression').filter(rq, rs) })(req, res, next);
 });
-app.use(express.static(path.join(ROOT, 'public')));
-app.use('/uploads', express.static(path.join(ROOT, 'uploads')));
+app.use(express.static(path.join(ROOT, 'public'), { maxAge: '1h', etag: true }));
+app.use('/uploads', express.static(path.join(ROOT, 'uploads'), {
+  maxAge: '1h',
+  setHeaders: (res) => { res.setHeader('X-Content-Type-Options', 'nosniff'); }
+}));
 
 app.get('/api/health', (req, res) => res.json({
   ok: true, store: store.mode,
@@ -97,10 +104,12 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Rota de API não en
 
 app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
 
-// Erros de upload viram 400 JSON (nunca HTML)
+// Erros de upload e JSON inválido viram 400 JSON (nunca HTML)
 app.use((err, req, res, next) => {
   if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'))
     return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 20 por vez).' });
+  if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.too.large'))
+    return res.status(400).json({ error: 'Corpo da requisição inválido ou grande demais.' });
   next(err);
 });
 

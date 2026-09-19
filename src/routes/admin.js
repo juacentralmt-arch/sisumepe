@@ -6,12 +6,17 @@ const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, 
 const router = express.Router();
 
 // Auditoria / dashboard / backup
+// Cache curto do dashboard (15s): evita 2 full-scans de tickets por refresh.
+let dashCache = null, dashCacheAt = 0;
+const DASH_TTL_MS = 15e3;
 router.get('/api/audit', auth(['tecnico', 'admin']), ah(async (req, res) => {
   res.json(await store.audit.recent(req.query.limit));
 }));
 
 router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
-  const all = (await store.tickets.all()).filter(x => x.status !== 'cancelado');
+  if (dashCache && Date.now() - dashCacheAt < DASH_TTL_MS) return res.json(dashCache);
+  const allTickets = await store.tickets.all();
+  const all = allTickets.filter(x => x.status !== 'cancelado');
   const t = all;
   const today = new Date().toISOString().slice(0, 10);
   const byMotivo = {}, byModelo = {}, byTec = {}, byDay = {};
@@ -50,7 +55,7 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
   const mins = ms => Math.round(ms / 60000);
   const byMotivoFinalizados = {};
   Object.keys(byMotivoDetalhado).forEach(m => { byMotivoFinalizados[m] = byMotivoDetalhado[m].finalizados; });
-  res.json({
+  const payload = {
     total: t.length,
     aguardando: t.filter(x => x.status === 'aguardando').length,
     emAtendimento: t.filter(x => x.status === 'em_atendimento').length,
@@ -59,13 +64,15 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     esperaMediaMin: waitN ? mins(waitSum / waitN) : 0,
     atendimentoMedioMin: svcN ? mins(svcSum / svcN) : 0,
     esperaAlta: t.filter(x => x.status === 'aguardando' && (Date.now() - new Date(x.createdAt)) > 30 * 60000).length,
-    cancelados: (await store.tickets.all()).filter(x => x.status === 'cancelado').length,
+    cancelados: allTickets.filter(x => x.status === 'cancelado').length,
     prioridade: t.filter(x => x.prioridadeLegal && x.status !== 'finalizado').length,
     byMotivo, byModelo,
     byMotivoDetalhado, byMotivoFinalizados,
     byTec: Object.values(byTec).sort((a, b) => b.finalizados - a.finalizados),
     byDay
-  });
+  };
+  dashCache = payload; dashCacheAt = Date.now();
+  res.json(payload);
 }));
 
 router.get('/api/backup', auth(['admin']), ah(async (req, res) => {
