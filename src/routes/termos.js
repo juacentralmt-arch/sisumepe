@@ -10,7 +10,7 @@ router.get('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
   res.json(list);
 }));
 router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
-  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
+  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   const t = (tipo === 'recolhimento') ? 'recolhimento' : 'listagem';
   if(t === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
@@ -44,14 +44,21 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
     return res.status(201).json(termo);
   }
   // Listagem permite tudo em branco (destinatário e equipamentos opcionais)
+  // modelo: 'tzpr' (TZPR04+FONTE04+CINTA+TRAVA) ou 'upr' (UPR04+FONTE04, sem cinta/trava)
+  const modeloList = (modelo === 'upr') ? 'upr' : 'tzpr';
   const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
   // normaliza somente linhas preenchidas (até 30)
-  const norm = eqIn.map(r => ({
-    tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
-    fonte04: String((r && r.fonte04) || '').trim().slice(0, 30),
-    cinta: String((r && r.cinta) || '').trim().slice(0, 30),
-    trava: String((r && r.trava) || '').trim().slice(0, 30)
-  })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
+  const norm = modeloList === 'upr'
+    ? eqIn.map(r => ({
+        upr04: String((r && (r.upr04 ?? r.tzpr04)) || '').trim().slice(0, 30),
+        fonte04: String((r && r.fonte04) || '').trim().slice(0, 30)
+      })).filter(r => r.upr04 || r.fonte04)
+    : eqIn.map(r => ({
+        tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
+        fonte04: String((r && r.fonte04) || '').trim().slice(0, 30),
+        cinta: String((r && r.cinta) || '').trim().slice(0, 30),
+        trava: String((r && r.trava) || '').trim().slice(0, 30)
+      })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
   const termo = await store.termos.insert({
     user: req.auth.user, tipo: 'listagem',
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null,
@@ -59,7 +66,7 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
     equipamentos: norm,
     respEntrega: String(respEntrega||'').trim().slice(0,80),
     respRecebimento: String(respRecebimento||'').trim().slice(0,80),
-    dados: {}
+    dados: { modelo: modeloList }
   });
   broadcast();
   res.status(201).json(termo);
@@ -74,7 +81,7 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
-  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
+  const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   const patch={};
   if(dataEnvio !== undefined) patch.dataEnvio = dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null;
   if(t.tipo === 'recolhimento' && dados && typeof dados === 'object'){
@@ -100,7 +107,24 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
     patch.dados = nd;
   }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
-  if(equipamentos!=null){
+  if(t.tipo !== 'recolhimento' && (modelo === 'upr' || modelo === 'tzpr')){
+    patch.dados = Object.assign({}, t.dados||{}, { modelo });
+  }
+  if(equipamentos!=null && t.tipo !== 'recolhimento'){
+    const modeloEff = (modelo === 'upr' || modelo === 'tzpr') ? modelo : ((t.dados && t.dados.modelo === 'upr') ? 'upr' : 'tzpr');
+    const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
+    patch.equipamentos = modeloEff === 'upr'
+      ? eqIn.map(r => ({
+          upr04: String((r && (r.upr04 ?? r.tzpr04)) || '').trim().slice(0, 30),
+          fonte04: String((r && r.fonte04) || '').trim().slice(0, 30)
+        })).filter(r => r.upr04 || r.fonte04)
+      : eqIn.map(r => ({
+          tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
+          fonte04: String((r && r.fonte04) || '').trim().slice(0, 30),
+          cinta: String((r && r.cinta) || '').trim().slice(0, 30),
+          trava: String((r && r.trava) || '').trim().slice(0, 30)
+        })).filter(r => r.tzpr04 || r.fonte04 || r.cinta || r.trava);
+  } else if(equipamentos!=null){
     const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
     patch.equipamentos = eqIn.map(r => ({
       tzpr04: String((r && r.tzpr04) || '').trim().slice(0, 30),
@@ -133,7 +157,7 @@ router.get('/api/termos/:id/pdf', auth(['tecnico']), ah(async (req,res)=>{
   res.send(Buffer.from(pdf));
 }));
 router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
-  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados } = req.body||{};
+  const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   if(tipo === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
     const termo = {
@@ -155,9 +179,10 @@ router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
   const termo = {
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : '',
     destinatario: String(destinatario||'').trim() || '_________________________',
-    equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,30).map(r=>({ tzpr04: String((r&&r.tzpr04)||''), fonte04: String((r&&r.fonte04)||''), cinta: String((r&&r.cinta)||''), trava: String((r&&r.trava)||'') })) : [],
+    equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,30).map(r=>({ tzpr04: String((r&&r.tzpr04)||''), upr04: String((r&&(r.upr04 ?? r.tzpr04))||''), fonte04: String((r&&r.fonte04)||''), cinta: String((r&&r.cinta)||''), trava: String((r&&r.trava)||'') })) : [],
     respEntrega: String(respEntrega||'').trim(),
-    respRecebimento: String(respRecebimento||'').trim()
+    respRecebimento: String(respRecebimento||'').trim(),
+    dados: { modelo: (modelo === 'upr') ? 'upr' : 'tzpr' }
   };
   while(termo.equipamentos.length<5) termo.equipamentos.push({ tzpr04:'', fonte04:'', cinta:'', trava:'' });
   const pdf = await gerarTermoPDF(termo);
