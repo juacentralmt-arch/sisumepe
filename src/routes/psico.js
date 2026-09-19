@@ -3,8 +3,8 @@ const shared = require('../lib/shared');
 const { store, ah, auth, broadcast } = shared;
 const router = express.Router();
 
-// Módulo Psicossocial — sigilo: só perfil psico + admin
-const GATE = ['psico', 'admin'];
+// Módulo Psicossocial — sigilo total: só o perfil psico (o psicólogo)
+const GATE = ['psico'];
 const KINDS = ['prontuario', 'evolucao', 'atendimento', 'grupo', 'encontro', 'encaminhamento', 'medida'];
 const PERIOD_DAYS = { semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 };
 
@@ -84,7 +84,7 @@ router.get('/api/psi/:id', auth(GATE), ah(async (req, res) => {
 }));
 
 function canWrite(req, rec) {
-  return req.auth.role === 'admin' || rec.user === req.auth.user;
+  return rec.user === req.auth.user;
 }
 
 router.patch('/api/psi/:id', auth(GATE), ah(async (req, res) => {
