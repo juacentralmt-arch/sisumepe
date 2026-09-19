@@ -115,6 +115,12 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));
 
+// Auto-seed na nuvem: garante as contas padrão (psicologo, recepcao, admin...)
+// sem tocar em quem já existe. É o que recria o psicólogo se a linha sumir.
+store.users.ensureSeeded()
+  .then(r => { if (r && r.created && r.created.length) console.log('Seed: usuários criados no banco:', r.created.join(', ')); })
+  .catch(() => {});
+
 // Expiração de anexos de tickets fechados (padrão 24h, via FILES_TTL_HOURS)
 setTimeout(() => { store.cleanupExpiredFiles().catch(() => {}); }, 60e3).unref();
 setInterval(() => { store.cleanupExpiredFiles().catch(() => {}); }, 3600e3).unref();

@@ -342,6 +342,34 @@ const store = {
     async remove(user) {
       if (MODE === 'file') { mem.users = mem.users.filter(x => x.user !== user); saveFile(); return; }
       must(await supa.from('users').delete().eq('user', user), 'users.remove');
+    },
+    // Auto-seed no Supabase: cria os usuários padrão AUSENTES (recepcao, técnicos,
+    // psicologo, secretaria, admin). NUNCA altera quem já existe (não sobrescreve
+    // senha/perfil de ninguém). Roda uma vez a cada boot do servidor.
+    async ensureSeeded() {
+      if (MODE === 'file') return { created: [] }; // loadFile() já semeia
+      let existing = [];
+      try {
+        existing = must(await supa.from('users').select('user'), 'users.ensureSeeded.list').map(r => r.user);
+      } catch (e) {
+        console.warn('seed: tabela users inacessível — pulando auto-seed.', e.message);
+        return { created: [] };
+      }
+      const created = [];
+      for (const s of seedUsers()) {
+        if (existing.includes(s.user)) continue;
+        try {
+          const bcrypt = require('bcryptjs');
+          must(await supa.from('users').insert({
+            user: s.user, name: s.name, role: s.role,
+            pass: await bcrypt.hash(String(s.pass), 10), active: true
+          }), 'users.ensureSeeded.insert');
+          created.push(s.user);
+        } catch (e) {
+          console.warn('seed: não foi possível criar @' + s.user + ':', e.message);
+        }
+      }
+      return { created };
     }
   },
 
