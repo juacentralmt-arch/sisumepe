@@ -33,6 +33,33 @@ function loginRateLimit(req, res, next) {
   next();
 }
 
+// Rate-limit global leve para /api (sem nova dependência):
+// 300 req/min por IP. Rotas de stream/saúde ficam de fora.
+const apiHits = new Map();
+const API_WINDOW_MS = 60e3;
+const API_MAX = 300;
+function apiRateLimit(req, res, next) {
+  if (req.path === '/api/events' || req.path === '/api/health' || req.path === '/api/tv') return next();
+  const ip = req.ip || '?';
+  const now = Date.now();
+  const h = apiHits.get(ip) || { n: 0, reset: now + API_WINDOW_MS };
+  if (now > h.reset) { h.n = 0; h.reset = now + API_WINDOW_MS; }
+  h.n++;
+  apiHits.set(ip, h);
+  if (apiHits.size > 5000) {
+    for (const [k, v] of apiHits) if (now > v.reset) apiHits.delete(k);
+  }
+  if (h.n > API_MAX) return res.status(429).json({ error: 'Muitas requisições. Tente de novo em instantes.' });
+  next();
+}
+
+// Request-ID: rastreabilidade nos logs sem expor dados.
+function requestId(req, res, next) {
+  const id = crypto.randomBytes(8).toString('hex');
+  req.requestId = id;
+  res.setHeader('X-Request-Id', id);
+  next();
+}
 // Sessões por token (12h, persistentes no banco). O servidor NUNCA confia no usuário vindo do app.
 async function issueToken(u) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -55,15 +82,21 @@ function auth(roles) {
 const isHash = p => typeof p === 'string' && /^\$2[aby]\$/.test(p);
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
-  console.error(e);
+  console.error(`[${req.requestId || '-'}] ${req.method} ${req.path}`, e);
   const code = e.status || 500;
   res.status(code).json({ error: code === 500 ? 'Erro interno. Tente de novo.' : (e.message || 'Erro') });
 });
 
 // SSE clients: cada conexão guarda quem está logado nela,
 // permitindo entregar eventos direcionados (chat privado, chamadas) só ao destinatário.
+// Teto anti-vazamento: 500 conexões; a mais antiga cai para proteger RAM.
+const SSE_MAX_CLIENTS = 500;
 let sseClients = [];
 function addSseClient(res, user) {
+  if (sseClients.length >= SSE_MAX_CLIENTS) {
+    const oldest = sseClients.shift();
+    try { oldest.res.end(); } catch {}
+  }
   const client = { res, user: String(user || '').toLowerCase() };
   sseClients.push(client);
   return client;
@@ -315,7 +348,7 @@ const pendingGoogleStates = new Map();
 module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
-  loginRateLimit, issueToken, auth, isHash,
+  loginRateLimit, apiRateLimit, requestId, issueToken, auth, isHash,
   upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked,
   PERSON_LABELS, MOTIVOS_OK,

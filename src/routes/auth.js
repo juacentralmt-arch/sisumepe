@@ -41,7 +41,8 @@ router.patch('/api/users/me/password', auth(), ah(async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Senha atual incorreta' });
   if (!next || String(next).length < 4) return res.status(400).json({ error: 'Nova senha deve ter ao menos 4 caracteres' });
   await store.users.patch(u.user, { pass: await bcrypt.hash(String(next), 10) });
-  await store.sessions.delByUser(u.user, t); // mantém a sessão atual, mata as demais
+  const currentToken = req.headers['x-session'] || req.query.token;
+  await store.sessions.delByUser(u.user, currentToken); // mantém a sessão atual, mata as demais
   res.json({ ok: true });
 }));
 

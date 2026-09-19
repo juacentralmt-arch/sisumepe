@@ -38,4 +38,16 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 - Perfil **psico** (ex.: `psicologo`): aba Psicossocial com prontuário (triagem + evoluções SOAP),
   atendimentos/frequência, grupos reflexivos, encaminhamentos com contra-referência e documentos
   (declaração, relatório de frequência, relatório técnico, ofício de encaminhamento).
-  Prontuário e rotas `/api/psi` restritos ao perfil psico (nem técnico nem admin acessam). Requer `deploy/migration-psi.sql` no Supabase.
+  Prontuário e rotas `/api/psi` restritos ao perfil psico. Requer `deploy/migration-psi.sql` no Supabase.
+  Sigilo reforçado: criações/edições/arquivamentos geram trilha em `/api/audit` (`kind=psi`);
+  não há exclusão física (DELETE arquiva; restaura-se no Painel → Arquivados);
+  admin tem acesso emergencial **somente-leitura** via `?emergencia=1&motivo=...` (aba Usuários),
+  sempre auditado; relatório mensal em PDF em `/api/psi/relatorio?mes=AAAA-MM`.
+  Ficha 360 do monitorado em `/api/psi/ficha/:personId` (dados, processo/vara, tags,
+  linha do tempo, grupos, PSC, documentos, pendências); relatório judicial compilado (SOAP)
+  em `/api/psi/judicial/:personId`; PSC com locais, vínculos, horas, saldo e certificado
+  (`/api/psi/psc/certificado/:id`); relatório de frequência do grupo em
+  `/api/psi/grupo/:id/relatorio`; exportação CSV em `/api/psi/export` e importação de
+  atendimentos via CSV em `POST /api/psi/import` (cabeçalho `nome;cpf;data;tipo;status;local;obs`).
+  Alertas automáticos: faltas, faltas críticas (2+ consecutivas → ofício), medidas vencendo,
+  próximo envio (15d), encaminhamentos parados (15d/30d), retornos em atraso e PSC sem horas.
