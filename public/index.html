@@ -416,7 +416,7 @@
           <button onclick="saveTermo()" class="btn btn-primary text-xs px-4 py-2.5">💾 Salvar termo</button>
         </div>
       </div>
-      <div class="grid lg:grid-cols-3 gap-4 items-start">
+      <div id="termosGrid" class="grid lg:grid-cols-3 gap-4 items-start">
         <div id="termoFormListagem" class="lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📄 Listagem de Equipamentos <span id="termoEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
@@ -522,9 +522,12 @@
           <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
             <div class="flex items-center justify-between mb-2">
               <h3 class="font-display font-bold text-sm">👁️ Pré-visualização <span id="termoPreviewTitle" class="text-[10px] font-bold text-indigo-600"></span></h3>
-              <button onclick="document.getElementById('termoPreviewWrapSide').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕</button>
+              <div class="flex items-center gap-1">
+                <button id="termoPreviewExpandBtn" onclick="toggleTermoPreviewExpand()" title="Expandir pré-visualização" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 px-1.5">⛶</button>
+                <button onclick="closeTermoPreview()" class="text-xs font-bold text-slate-500 px-1">✕</button>
+              </div>
             </div>
-            <iframe id="termoPreviewFrameSide" class="w-full h-[560px] bg-white rounded-xl border border-slate-200"></iframe>
+            <iframe id="termoPreviewFrameSide" class="w-full h-[720px] bg-white rounded-xl border border-slate-200"></iframe>
           </div>
           <div class="card p-4">
             <h3 class="font-display font-bold text-sm mb-3">📚 Histórico de termos</h3>
@@ -3135,12 +3138,14 @@ function clearTermoForm(){
   document.getElementById('endPreviewStatus').textContent = '';
   clearTimeout(endPreviewTimer);
   document.getElementById('termoPreviewWrapSide').classList.add('hidden');
+  if(termoPreviewExpand) toggleTermoPreviewExpand();
 }
 let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
 let recEquips = [];
 function setTermoTipo(t){
   termoTipoAtivo = t;
+  try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); }catch(e){}
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
   [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoEndereco', 'endereco']].forEach(([id, k])=>{
     const b = document.getElementById(id);
@@ -3373,6 +3378,7 @@ function scheduleEnderecoPreview(now){
   endPreviewTimer = setTimeout(()=> previewEnderecoPDF(true), now ? 400 : 1500);
 }
 async function previewEnderecoPDF(silent){
+  if(termoTipoAtivo !== 'endereco') return;
   const err = document.getElementById('endErr');
   if(err) err.classList.add('hidden');
   const rec = getEnderecoFormData();
@@ -3387,19 +3393,58 @@ async function previewEnderecoPDF(silent){
     if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || 'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrameSide');
-    const wrap = document.getElementById('termoPreviewWrapSide');
-    const title = document.getElementById('termoPreviewTitle');
-    if(frame) frame.src = url;
-    if(title) title.textContent = '— Ofício Mudança de Endereço';
-    if(wrap) wrap.classList.remove('hidden');
+    const wrap = setTermoPreview(url, '— Ofício Mudança de Endereço');
     if(!silent && wrap) wrap.scrollIntoView({ behavior:'smooth', block:'center' });
     if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    setTimeout(()=> URL.revokeObjectURL(url), 60000);
   }catch(e){
     if(status) status.textContent = '';
     if(!silent && err){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
   }
+}
+let termoPreviewURL = null;
+function setTermoPreview(url, title){
+  const frame = document.getElementById('termoPreviewFrameSide');
+  const wrap = document.getElementById('termoPreviewWrapSide');
+  const titleEl = document.getElementById('termoPreviewTitle');
+  if(titleEl && title) titleEl.textContent = title;
+  if(wrap) wrap.classList.remove('hidden');
+  if(frame){
+    if(termoPreviewURL) URL.revokeObjectURL(termoPreviewURL);
+    termoPreviewURL = url;
+    frame.src = url;
+  }
+  return wrap;
+}
+let termoPreviewExpand = false;
+function toggleTermoPreviewExpand(){
+  termoPreviewExpand = !termoPreviewExpand;
+  const grid = document.getElementById('termosGrid');
+  const btn = document.getElementById('termoPreviewExpandBtn');
+  const frame = document.getElementById('termoPreviewFrameSide');
+  const forms = ['termoFormListagem', 'termoFormRecolhimento', 'termoFormEndereco'];
+  if(termoPreviewExpand){
+    forms.forEach(id=>{ const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
+    if(grid){ grid.classList.remove('lg:grid-cols-3'); grid.classList.add('lg:grid-cols-1'); }
+    if(frame) frame.style.height = '82vh';
+    if(btn){ btn.textContent = '🗗'; btn.title = 'Restaurar layout'; }
+    const wrap = document.getElementById('termoPreviewWrapSide');
+    if(wrap) wrap.scrollIntoView({ behavior:'smooth', block:'start' });
+  } else {
+    if(grid){ grid.classList.add('lg:grid-cols-3'); grid.classList.remove('lg:grid-cols-1'); }
+    if(frame) frame.style.height = '';
+    if(btn){ btn.textContent = '⛶'; btn.title = 'Expandir pré-visualização'; }
+    const forms = { listagem:'termoFormListagem', recolhimento:'termoFormRecolhimento', endereco:'termoFormEndereco' };
+    Object.keys(forms).forEach(k=>{
+      const el = document.getElementById(forms[k]);
+      if(!el) return;
+      el.classList.toggle('hidden', k !== termoTipoAtivo);
+      el.classList.toggle('lg:col-span-2', k === termoTipoAtivo);
+    });
+  }
+}
+function closeTermoPreview(){
+  document.getElementById('termoPreviewWrapSide').classList.add('hidden');
+  if(termoPreviewExpand) toggleTermoPreviewExpand();
 }
 let listPreviewTimer = null;
 function scheduleListagemPreview(now){
@@ -3410,6 +3455,7 @@ function scheduleListagemPreview(now){
   listPreviewTimer = setTimeout(()=> previewTermoListagemPDF(true), now ? 400 : 1500);
 }
 async function previewTermoListagemPDF(silent){
+  if(termoTipoAtivo !== 'listagem') return;
   const err = document.getElementById('termoErr');
   if(err) err.classList.add('hidden');
   const data = getTermoFormData();
@@ -3421,15 +3467,9 @@ async function previewTermoListagemPDF(silent){
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrameSide');
-    const wrap = document.getElementById('termoPreviewWrapSide');
-    const title = document.getElementById('termoPreviewTitle');
-    if(frame) frame.src = url;
-    if(title) title.textContent = '— Termo de Listagem';
-    if(wrap) wrap.classList.remove('hidden');
+    const wrap = setTermoPreview(url, '— Termo de Listagem');
     if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
     if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    setTimeout(()=>URL.revokeObjectURL(url), 60000);
   }catch(e){
     if(status) status.textContent = '';
     if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
@@ -3443,15 +3483,9 @@ async function previewTermoExistente(id){
     if(!res.ok) throw new Error('Erro ao gerar PDF');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrameSide');
-    const wrap = document.getElementById('termoPreviewWrapSide');
-    const title = document.getElementById('termoPreviewTitle');
-    if(!frame || !wrap) throw new Error('Pré-visualização indisponível nesta aba');
-    frame.src = url;
-    if(title) title.textContent = '— Termo #' + id + (tipoT === 'recolhimento' ? ' (Recolhimento)' : (tipoT === 'endereco' ? ' (Endereço)' : ' (Listagem)'));
-    wrap.classList.remove('hidden');
+    const wrap = setTermoPreview(url, '— Termo #' + id + (tipoT === 'recolhimento' ? ' (Recolhimento)' : (tipoT === 'endereco' ? ' (Endereço)' : ' (Listagem)')));
+    if(!wrap) throw new Error('Pré-visualização indisponível nesta aba');
     wrap.scrollIntoView({behavior:'smooth', block:'center'});
-    setTimeout(()=>URL.revokeObjectURL(url), 60000);
   }catch(e){ toast('⚠️ '+e.message); }
 }
 async function downloadTermoPDF(id){
@@ -3466,6 +3500,7 @@ async function downloadTermoPDF(id){
   }catch(e){ toast('⚠️ '+e.message); }
 }
 async function previewTermoRecPDF(silent){
+  if(termoTipoAtivo !== 'recolhimento') return;
   const err = document.getElementById('termoRecErr');
   if(err) err.classList.add('hidden');
   const rec = getRecFormData();
@@ -3480,15 +3515,9 @@ async function previewTermoRecPDF(silent){
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const frame = document.getElementById('termoPreviewFrameSide');
-    const wrap = document.getElementById('termoPreviewWrapSide');
-    const title = document.getElementById('termoPreviewTitle');
-    if(frame) frame.src = url;
-    if(title) title.textContent = '— Termo de Recolhimento';
-    if(wrap) wrap.classList.remove('hidden');
+    const wrap = setTermoPreview(url, '— Termo de Recolhimento');
     if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
     if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    setTimeout(()=>URL.revokeObjectURL(url), 60000);
   }catch(e){
     if(status) status.textContent = '';
     if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
