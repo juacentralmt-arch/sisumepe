@@ -18,6 +18,8 @@ function seedUsers() {
     { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true },
     { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: 'joanderson123', active: true },
     { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: 'adailton123', active: true },
+    { user: 'psicologo', name: 'Psicólogo', role: 'recepcao', pass: 'psicologo123', active: true },
+    { user: 'secretaria', name: 'Secretária', role: 'tecnico', pass: 'secretaria123', active: true },
     { user: 'admin', name: 'Administrador', role: 'admin', pass: 'admin123', active: true }
   ];
 }
@@ -37,6 +39,7 @@ function loadFile() {
     if (!Array.isArray(mem.audit)) mem.audit = [];
     if (!mem.seqAudit) mem.seqAudit = mem.audit.length + 1;
     if (!Array.isArray(mem.users) || !mem.users.length) mem.users = seedUsers();
+    else seedUsers().forEach(s => { if (!mem.users.some(u => u.user === s.user)) mem.users.push(Object.assign({}, s)); });
     mem.users.forEach(u => { if (u.active === undefined) u.active = true; });
     if (!mem.sessions || typeof mem.sessions !== 'object') mem.sessions = {};
     if (!Array.isArray(mem.agenda)) mem.agenda = [];
