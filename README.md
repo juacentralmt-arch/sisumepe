@@ -21,6 +21,10 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 3. Render: Web Service Node (`npm install` / `node server.js`) com as envs do `render.yaml`.
 4. Opcional: migre os dados via **Usuários → Baixar backup** (PC) → **Restaurar backup** (nuvem).
 
+> A cada boot na nuvem o servidor recria **automaticamente** as contas padrão
+> ausentes (`recepcao`, `joanderson`, `adailton`, `psicologo`, `secretaria`, `admin`
+> — senha inicial `<usuário>123`). Contas existentes **nunca** são alteradas.
+
 ## Segurança embutida
 
 - **Chat e chamadas privados**: mensagens diretas e sinalização WebRTC (SSE) chegam somente ao autor e ao destinatário — nunca a toda a equipe.
