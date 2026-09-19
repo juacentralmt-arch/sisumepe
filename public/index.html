@@ -1999,6 +1999,9 @@ function getCropNormPos(e){
   // inicializa após DOM pronto
   setTimeout(() => { const w = document.getElementById('scanWrap'); if(w) w.style.touchAction = 'none'; }, 500);
 })();
+// Estado global do leitor de documentos (OCR) — precisa existir antes dos listeners
+let docCropEnabled = false, docCropRect = null, docCropDrag = null, docCropOrig = null;
+let docWorker = null, docWorkerReady = false, docTesseractLoading = false, docTesseractReady = false, docImg = null;
 (function initDocCrop(){
   const wrap = document.getElementById('docWrap');
   if(!wrap) return;
