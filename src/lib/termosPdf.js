@@ -200,23 +200,34 @@ async function gerarTermoPDF(termo){
   } else {
     page.drawText(': _____________________________', { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
   }
-  // Tabela - coordenadas exatas
+  // Tabela - coordenadas exatas (modo TZPR); modo UPR usa 2 colunas (UPR04+FONTE04)
   const tableLeft = 110.42;
   const tableRight = 484.90;
-  const colBounds = [110.42, 220.76, 310.42, 370.42, 484.90];
-  const colCenters = [(110.42+220.76)/2, (220.76+310.42)/2, (310.42+370.42)/2, (370.42+484.90)/2];
-  const hdrCols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
-  const hdrBounds = [[110.42, 220.76], [220.76, 310.42], [310.42, 370.42], [370.42, 484.90]];
+  const storedEq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
+  const dadosT = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const modeloExp = termo.modelo || dadosT.modelo;
+  let isUPR = modeloExp === 'upr';
+  if(modeloExp !== 'upr' && modeloExp !== 'tzpr'){
+    // sem indicação explícita (termos antigos): infere pelas chaves das linhas
+    isUPR = storedEq.some(r => r && r.upr04 && !r.tzpr04 && !r.cinta && !r.trava);
+  }
+  const rowKeys = isUPR ? ['upr04', 'fonte04'] : ['tzpr04', 'fonte04', 'cinta', 'trava'];
+  const colBounds = isUPR
+    ? [tableLeft, (tableLeft + tableRight) / 2, tableRight]
+    : [110.42, 220.76, 310.42, 370.42, 484.90];
+  const colCenters = colBounds.slice(0, -1).map((x, i) => (x + colBounds[i + 1]) / 2);
+  const hdrCols = isUPR ? ['UPR04', 'FONTE04'] : ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
+  const hdrBounds = colBounds.slice(0, -1).map((x, i) => [x, colBounds[i + 1]]);
   // Dados: até 5 linhas usa o layout clássico exato; acima disso, tabela
   // fluida com paginação (mesma geometria de colunas/fontes)
-  const storedEq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
   const normEq = r => ({
     tzpr04: String((r && r.tzpr04) || '').trim().substring(0, 18),
+    upr04: String((r && (r.upr04 ?? r.tzpr04)) || '').trim().substring(0, 18),
     fonte04: String((r && r.fonte04) || '').trim().substring(0, 18),
     cinta: String((r && r.cinta) || '').trim().substring(0, 18),
     trava: String((r && r.trava) || '').trim().substring(0, 18)
   });
-  const isFilled = r => r.tzpr04 || r.fonte04 || r.cinta || r.trava;
+  const isFilled = r => rowKeys.some(k => r[k]);
   const filledEq = storedEq.map(normEq).filter(isFilled).slice(0, 30);
   const useFlow = filledEq.length > 5;
   const drawSigBlock = (p, lineY) => {
@@ -263,8 +274,8 @@ async function gerarTermoPDF(termo){
   const rowYs = [468.39, 448.39, 428.39, 408.39, 388.39];
   for(let r=0;r<5;r++){
     const row = classicEq[r] || {};
-    const vals = [row.tzpr04||'', row.fonte04||'', row.cinta||'', row.trava||''];
-    for(let c=0;c<4;c++){
+    const vals = rowKeys.map(k => row[k]||'');
+    for(let c=0;c<rowKeys.length;c++){
       const txt = String(vals[c]).trim().substring(0,18);
       if(txt){
         const tw = fontTimes.widthOfTextAtSize(txt, 9);
@@ -316,8 +327,8 @@ async function gerarTermoPDF(termo){
       drawFlowHeader(pg, top);
       top -= 18;
     }
-    const vals = [row.tzpr04, row.fonte04, row.cinta, row.trava];
-    for(let c=0;c<4;c++){
+    const vals = rowKeys.map(k => row[k]);
+    for(let c=0;c<rowKeys.length;c++){
       const txt = String(vals[c] || '').trim().substring(0, 24);
       if(txt){
         const tw = fontTimes.widthOfTextAtSize(txt, 9);

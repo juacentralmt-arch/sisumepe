@@ -435,11 +435,15 @@
           </div>
           <div class="flex items-center gap-2 mt-1 mb-2">
             <label class="lbl">EQUIPAMENTOS *</label>
+            <div class="flex gap-1 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
+              <button type="button" id="termoModeloTZPR" onclick="setTermoModelo('tzpr')" class="text-[11px] font-extrabold px-2.5 py-1 rounded-md">TZPR</button>
+              <button type="button" id="termoModeloUPR" onclick="setTermoModelo('upr')" class="text-[11px] font-extrabold px-2.5 py-1 rounded-md">UPR</button>
+            </div>
             <button type="button" onclick="addTermoEquipRow()" class="ml-auto btn btn-ghost text-xs px-3 py-1.5">＋ Adicionar linha</button>
           </div>
           <div class="overflow-x-auto mt-1 mb-2.5">
             <table class="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
-              <thead><tr class="bg-[#FFE4CC] text-[11px] font-extrabold"><th class="py-2 px-2 border border-slate-200">TZPR04</th><th class="py-2 px-2 border border-slate-200">FONTE04</th><th class="py-2 px-2 border border-slate-200">CINTA</th><th class="py-2 px-2 border border-slate-200">TRAVA</th><th class="py-2 px-1 border border-slate-200" style="width:34px"></th></tr></thead>
+              <thead id="termoEquipHead"></thead>
               <tbody id="termoEquipBody"></tbody>
             </table>
           </div>
@@ -2989,20 +2993,43 @@ function toggleTermoDestOutro(){
   if(isOutro) outro.focus();
 }
 const TERMO_MAX_ROWS = 30;
+let termoModelo = 'tzpr'; // 'tzpr' (TZPR04+FONTE04+CINTA+TRAVA) | 'upr' (UPR04+FONTE04)
+function termoModeloCols(){ return termoModelo === 'upr' ? ['upr04', 'fonte04'] : ['tzpr04', 'fonte04', 'cinta', 'trava']; }
+function termoColLabel(col){ return ({ tzpr04:'TZPR04', upr04:'UPR04', fonte04:'FONTE04', cinta:'CINTA', trava:'TRAVA' })[col] || String(col).toUpperCase(); }
+function paintTermoEquipHead(){
+  const head = document.getElementById('termoEquipHead');
+  if(head) head.innerHTML = `<tr class="bg-[#FFE4CC] text-[11px] font-extrabold">${termoModeloCols().map(c=>`<th class="py-2 px-2 border border-slate-200">${termoColLabel(c)}</th>`).join('')}<th class="py-2 px-1 border border-slate-200" style="width:34px"></th></tr>`;
+  const bT = document.getElementById('termoModeloTZPR'), bU = document.getElementById('termoModeloUPR');
+  const on = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-white', off = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-slate-500';
+  if(bT){ bT.className = termoModelo === 'tzpr' ? on : off; bT.style.background = termoModelo === 'tzpr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
+  if(bU){ bU.className = termoModelo === 'upr' ? on : off; bU.style.background = termoModelo === 'upr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
+}
+function setTermoModelo(m){
+  m = (m === 'upr') ? 'upr' : 'tzpr';
+  if(m === termoModelo){ paintTermoEquipHead(); return; }
+  const cur = getTermoEquipamentos().map(r=>{
+    const id = (r.upr04 || r.tzpr04 || '').trim();
+    return m === 'upr' ? { upr04: id, fonte04: r.fonte04 || '' } : { tzpr04: id, fonte04: r.fonte04 || '', cinta: r.cinta || '', trava: r.trava || '' };
+  });
+  termoModelo = m;
+  renderTermoEquipRows(cur);
+  scheduleListagemPreview();
+}
 function termoEquipRowHtml(i, v){
   v = v || {};
   const cell = (col) => `<td class="border border-slate-200 p-1"><input data-termo-col="${col}" data-termo-row="${i}" value="${esc(v[col] || '')}" oninput="scheduleListagemPreview()" class="w-full text-xs p-1.5 rounded border border-slate-200 focus:border-indigo-400 outline-none"></td>`;
-  return `<tr>${cell('tzpr04')}${cell('fonte04')}${cell('cinta')}${cell('trava')}<td class="border border-slate-200 p-1 text-center" style="width:34px"><button type="button" onclick="removeTermoEquipRow(${i})" title="Remover linha" class="text-rose-400 hover:text-rose-600 font-bold text-sm px-1">✕</button></td></tr>`;
+  return `<tr>${termoModeloCols().map(cell).join('')}<td class="border border-slate-200 p-1 text-center" style="width:34px"><button type="button" onclick="removeTermoEquipRow(${i})" title="Remover linha" class="text-rose-400 hover:text-rose-600 font-bold text-sm px-1">✕</button></td></tr>`;
 }
 function getTermoEquipamentos(){
   const out = [];
   document.querySelectorAll('#termoEquipBody tr').forEach(tr => {
     const g = (col) => ((tr.querySelector(`[data-termo-col="${col}"]`) || {}).value || '').trim();
-    out.push({ tzpr04: g('tzpr04'), fonte04: g('fonte04'), cinta: g('cinta'), trava: g('trava') });
+    out.push({ tzpr04: g('tzpr04'), upr04: g('upr04'), fonte04: g('fonte04'), cinta: g('cinta'), trava: g('trava') });
   });
   return out;
 }
 function renderTermoEquipRows(list){
+  paintTermoEquipHead();
   const rows = (list && list.length ? list.slice(0, TERMO_MAX_ROWS) : [{}, {}, {}, {}, {}]);
   while(rows.length < 5) rows.push({});
   document.getElementById('termoEquipBody').innerHTML = rows.map((r, i) => termoEquipRowHtml(i, r)).join('');
@@ -3026,7 +3053,7 @@ function getTermoFormData(){
   const respEntrega = document.getElementById('termoRespEntrega').value.trim();
   const respRec = document.getElementById('termoRespRec').value.trim();
   const equipamentos = getTermoEquipamentos();
-  return { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento: respRec };
+  return { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento: respRec, modelo: termoModelo };
 }
 function setTermoFormData(t){
   document.getElementById('termoData').value = t.dataEnvio ? String(t.dataEnvio).slice(0,10) : '';
@@ -3038,6 +3065,7 @@ function setTermoFormData(t){
   else { sel.value = val || ''; outro.value = ''; outro.classList.add('hidden'); }
   document.getElementById('termoRespEntrega').value = t.respEntrega || '';
   document.getElementById('termoRespRec').value = t.respRecebimento || '';
+  termoModelo = ((t.dados && t.dados.modelo === 'upr') || (!(t.dados && t.dados.modelo) && (t.equipamentos || []).some(r => r.upr04 && !r.tzpr04 && !r.cinta && !r.trava))) ? 'upr' : 'tzpr';
   renderTermoEquipRows(t.equipamentos && t.equipamentos.length ? t.equipamentos : [{}, {}, {}, {}, {}]);
   document.getElementById('termoEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
@@ -3161,10 +3189,11 @@ function renderTermos(){
   box.innerHTML = visiveis.map(t=>{
     const isRec = (t.tipo||'listagem') === 'recolhimento';
     const d = t.dataEnvio ? new Date(t.dataEnvio).toLocaleDateString('pt-BR') : '-';
-    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (t.equipamentos||[]).filter(r=>r.tzpr04||r.fonte04||r.cinta||r.trava).length;
+    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (t.equipamentos||[]).filter(r=>r.tzpr04||r.upr04||r.fonte04||r.cinta||r.trava).length;
+    const modList = !isRec ? ((t.dados&&t.dados.modelo === 'upr') ? 'UPR' : 'TZPR') : '';
     const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : esc(t.destinatario||'Sem destinatário');
     return `<div class="border border-slate-200 rounded-xl p-3 bg-white card-hover">
-      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${isRec?'bg-blue-100 text-blue-800':'bg-orange-100 text-orange-800'}">${isRec?'RECOLHIMENTO':'LISTAGEM'}</span><span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
+      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${isRec?'bg-blue-100 text-blue-800':'bg-orange-100 text-orange-800'}">${isRec?'RECOLHIMENTO':'LISTAGEM'}</span>${modList?`<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${modList==='UPR'?'bg-teal-100 text-teal-800':'bg-slate-200 text-slate-700'}">${modList}</span>`:''}<span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
       <p class="text-xs font-bold truncate mt-1">${sub}</p>
       <p class="text-[11px] text-slate-500 truncate">${isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-'))}</p>
       <div class="flex gap-1.5 mt-2">
