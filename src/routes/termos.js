@@ -1,17 +1,44 @@
 const express = require('express');
-const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF } = require('../lib/termosPdf');
+const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
+// Documentos psicossociais (prontuário/relatórios do perfil psico)
+const PSI_DOCS = ['declaracao', 'relfreq', 'reltec', 'oficioenc'];
+function normPsiDoc(src) {
+  const s = (src && typeof src === 'object') ? src : {};
+  const g = (k, n) => String(s[k] == null ? '' : s[k]).trim().slice(0, n);
+  const nd = {};
+  ['nome','cpf','processo','vara','medida','periodo','data','cidade','endereco','contato','destino','motivo','psicologo','crp'].forEach(k=>{ nd[k] = g(k, 300); });
+  ['resumo','parecer','plano','texto'].forEach(k=>{ nd[k] = g(k, 3000); });
+  ['dataInicio','dataFim','dataDoc'].forEach(k=>{ if(s[k]){ const dt = new Date(s[k]); if(!isNaN(dt)) nd[k] = dt.toISOString().slice(0,10); } });
+  if(Array.isArray(s.itens)) nd.itens = s.itens.slice(0, 200).map(r=>({ data: String((r&&r.data)||'').slice(0,10), local: String((r&&r.local)||'').slice(0,120), status: String((r&&r.status)||'').slice(0,30), obs: String((r&&r.obs)||'').slice(0,300) }));
+  return nd;
+}
+
 // Termos - Listagem de Equipamentos
-router.get('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
+router.get('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const list = await store.termos.allByUser(req.auth.user);
   res.json(list);
 }));
-router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
+router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
-  const t = (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : 'listagem');
+  const t = (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
+  if(PSI_DOCS.includes(t)){
+    const nd = normPsiDoc(dados);
+    if(!nd.nome) return res.status(400).json({ error: 'Informe o nome da pessoa' });
+    if(!nd.psicologo) nd.psicologo = req.auth.name || '';
+    const termo = await store.termos.insert({
+      user: req.auth.user, tipo: t,
+      dataEnvio: nd.dataDoc || nd.data || new Date().toISOString().slice(0,10),
+      destinatario: nd.vara || nd.destino || '', equipamentos: [],
+      respEntrega: '', respRecebimento: '',
+      dados: nd
+    });
+    broadcast();
+    return res.status(201).json(termo);
+  }
   if(t === 'endereco'){
     const src = (dados && typeof dados === 'object') ? dados : {};
     const g = (k, n) => String(src[k] == null ? '' : src[k]).trim().slice(0, n);
@@ -100,13 +127,13 @@ router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
   broadcast();
   res.status(201).json(termo);
 }));
-router.get('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
+router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
   res.json(t);
 }));
-router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
+router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
@@ -149,10 +176,17 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
     if(dados.vara != null) patch.destinatario = nd.vara;
     patch.dados = nd;
   }
-  if(t.tipo !== 'recolhimento' && t.tipo !== 'endereco' && (modelo === 'upr' || modelo === 'tzpr')){
+  if(t.tipo !== 'recolhimento' && t.tipo !== 'endereco' && !PSI_DOCS.includes(t.tipo) && (modelo === 'upr' || modelo === 'tzpr')){
     patch.dados = Object.assign({}, t.dados||{}, { modelo });
   }
-  if(equipamentos!=null && t.tipo !== 'recolhimento' && t.tipo !== 'endereco'){
+  if(PSI_DOCS.includes(t.tipo) && dados && typeof dados === 'object'){
+    const nd = normPsiDoc(Object.assign({}, t.dados||{}, dados));
+    if(!nd.nome) return res.status(400).json({ error: 'Informe o nome da pessoa' });
+    patch.dados = nd;
+    if(dados.dataDoc) patch.dataEnvio = nd.dataDoc || t.dataEnvio;
+    if(dados.vara != null || dados.destino != null) patch.destinatario = nd.vara || nd.destino || '';
+  }
+  if(equipamentos!=null && t.tipo !== 'recolhimento' && t.tipo !== 'endereco' && !PSI_DOCS.includes(t.tipo)){
     const modeloEff = (modelo === 'upr' || modelo === 'tzpr') ? modelo : ((t.dados && t.dados.modelo === 'upr') ? 'upr' : 'tzpr');
     const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
     patch.equipamentos = modeloEff === 'upr'
@@ -181,7 +215,7 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   broadcast();
   res.json(upd);
 }));
-router.delete('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
+router.delete('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
@@ -189,16 +223,26 @@ router.delete('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
   broadcast();
   res.json({ ok: true });
 }));
-router.get('/api/termos/:id/pdf', auth(['tecnico']), ah(async (req,res)=>{
+async function termoPDFFromRecord(t) {
+  if (!t) throw Object.assign(new Error('Termo não encontrado'), { status: 404 });
+  if (t.tipo === 'recolhimento') return gerarTermoRecolhimentoPDF(t);
+  if (t.tipo === 'endereco') return gerarTermoEnderecoPDF(t);
+  if (t.tipo === 'declaracao') return gerarDeclaracaoPDF(t);
+  if (t.tipo === 'relfreq') return gerarRelFrequenciaPDF(t);
+  if (t.tipo === 'reltec') return gerarRelTecnicoPDF(t);
+  if (t.tipo === 'oficioenc') return gerarOficioEncaminhamentoPDF(t);
+  return gerarTermoPDF(t);
+}
+router.get('/api/termos/:id/pdf', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
-  const pdf = (t.tipo === 'recolhimento') ? await gerarTermoRecolhimentoPDF(t) : (t.tipo === 'endereco' ? await gerarTermoEnderecoPDF(t) : await gerarTermoPDF(t));
+  const pdf = await termoPDFFromRecord(t);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
   res.send(Buffer.from(pdf));
 }));
-router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
+router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   if(tipo === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
@@ -233,6 +277,14 @@ router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
       }
     };
     const pdf = await gerarTermoEnderecoPDF(termo);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(Buffer.from(pdf));
+  }
+  if(PSI_DOCS.includes(tipo)){
+    const nd = normPsiDoc(dados);
+    if(!nd.psicologo) nd.psicologo = (req.auth && req.auth.name) || '';
+    const pdf = await termoPDFFromRecord({ tipo, dados: nd });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
     return res.send(Buffer.from(pdf));

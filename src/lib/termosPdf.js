@@ -674,4 +674,258 @@ async function gerarTermoEnderecoPDF(termo){
   return pdfBytes;
 }
 
-module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF };
+module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF,
+gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF };
+
+// =====================================================================
+// Documentos psicossociais (UMEPE Juazeiro do Norte)
+// =====================================================================
+async function psiDocStart() {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontOb = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  let brasao = null;
+  try {
+    const bp = path.join(ROOT, 'public', 'brasao-ceara.png');
+    if (fs.existsSync(bp)) brasao = await pdfDoc.embedPng(fs.readFileSync(bp));
+  } catch (e) {}
+  const PW = 595.32, PH = 841.92, M = 60;
+  const pg = pdfDoc.addPage([PW, PH]);
+  const F = { font, fontBold, fontOb, PW, PH, M, W: PW - 2 * M };
+  let yTop = PH - 40;
+  let txX = M;
+  if (brasao) {
+    const bh = 46, bw = bh * (brasao.width / brasao.height);
+    pg.drawImage(brasao, { x: M, y: yTop - bh, width: bw, height: bh });
+    txX = M + bw + 10;
+  }
+  pg.drawText('UMEPE – UNIDADE DE MONITORAMENTO ELETRÔNICO DE PESSOAS', { x: txX, y: yTop - 13, size: 10.5, font: fontBold, color: rgb(0, 0, 0) });
+  pg.drawText('Juazeiro do Norte – CE  •  Rua das Flores, s/n – Santa Teresa', { x: txX, y: yTop - 26, size: 8, font, color: rgb(0, 0, 0) });
+  pg.drawText('(88) 3511-5726  •  monitoramento.cariri@sap.ce.gov.br', { x: txX, y: yTop - 36, size: 8, font, color: rgb(0, 0, 0) });
+  const yRule = yTop - 48;
+  pg.drawLine({ start: { x: M, y: yRule }, end: { x: PW - M, y: yRule }, thickness: 1.1, color: rgb(0.16, 0.5, 0.27) });
+  return { pdfDoc, pg, F, brasao, y: yRule - 28 };
+}
+function psiTitle(pg, F, txt, y, sub) {
+  const w = F.fontBold.widthOfTextAtSize(txt, 13.5);
+  pg.drawText(txt, { x: (F.PW - w) / 2, y, size: 13.5, font: F.fontBold, color: rgb(0, 0, 0) });
+  pg.drawLine({ start: { x: (F.PW - w) / 2, y: y - 2 }, end: { x: (F.PW + w) / 2, y: y - 2 }, thickness: 0.8, color: rgb(0, 0, 0) });
+  y -= 20;
+  if (sub) {
+    const sw = F.fontOb.widthOfTextAtSize(sub, 9);
+    pg.drawText(sub, { x: (F.PW - sw) / 2, y, size: 9, font: F.fontOb, color: rgb(0.4, 0.4, 0.4) });
+    y -= 14;
+  }
+  return y - 8;
+}
+// Parágrafo simples justificado; retorna {pg, y} (troca de página quando preciso)
+function psiPara(st, segs, size, lh, indent, justify) {
+  let { pdfDoc, pg, F } = st;
+  let y = st.y;
+  indent = indent || 0;
+  const words = [];
+  segs.forEach(s => { String(s.t || '').split(/\s+/).filter(Boolean).forEach(w => words.push({ w, f: s.b ? F.fontBold : F.font, c: s.g ? rgb(0.45, 0.45, 0.45) : rgb(0, 0, 0) })); });
+  if (!words.length) return st;
+  const spW = F.font.widthOfTextAtSize(' ', size);
+  const lines = [];
+  let line = [], lw = 0, first = true;
+  const avail = () => F.W - (first ? indent : 0);
+  words.forEach(wd => {
+    const ww = wd.f.widthOfTextAtSize(wd.w, size);
+    if (line.length && lw + spW + ww > avail()) { lines.push(line); line = []; lw = 0; first = false; }
+    if (line.length) lw += spW;
+    line.push(wd); lw += ww;
+  });
+  if (line.length) lines.push(line);
+  const need = lines.length * lh + 60;
+  if (y - need < 60) { pg = pdfDoc.addPage([F.PW, F.PH]); y = F.PH - 60; }
+  lines.forEach((ln, li) => {
+    const isLast = li === lines.length - 1;
+    const ind = (li === 0) ? indent : 0;
+    let xx = F.M + ind, gap = spW;
+    if (justify && !isLast && ln.length > 1) {
+      let content = 0;
+      ln.forEach(wd => { content += wd.f.widthOfTextAtSize(wd.w, size); });
+      gap = (F.W - ind - content) / (ln.length - 1);
+    }
+    ln.forEach((wd, i) => {
+      if (i > 0) xx += gap;
+      pg.drawText(wd.w, { x: xx, y, size, font: wd.f, color: wd.c });
+      xx += wd.f.widthOfTextAtSize(wd.w, size);
+    });
+    y -= lh;
+  });
+  st.pg = pg; st.y = y;
+  return st;
+}
+function psiCampo(st, label, value, size, lh) {
+  return psiPara(st, [{ t: label + ' ', b: true }, { t: value || '—' }], size || 11, lh || 16, 0, false);
+}
+function psiDataExtenso(iso) {
+  if (!iso) return '';
+  const dt = new Date(iso + 'T12:00:00');
+  if (isNaN(dt)) return '';
+  return dt.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function psiDataBR(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso || '');
+}
+function psiAssinatura(st, nome, linha2) {
+  let { pdfDoc, pg, F } = st;
+  let y = st.y;
+  if (y < 170) { pg = pdfDoc.addPage([F.PW, F.PH]); y = F.PH - 90; }
+  y -= 46;
+  if (nome) {
+    const w = F.font.widthOfTextAtSize(nome, 10);
+    pg.drawText(nome, { x: (F.PW - w) / 2, y: y + 11, size: 10, font: F.font, color: rgb(0, 0, 0) });
+  }
+  pg.drawLine({ start: { x: F.M + 40, y }, end: { x: F.PW - F.M - 40, y }, thickness: 0.9, color: rgb(0, 0, 0) });
+  y -= 15;
+  const l2 = linha2 || 'Psicólogo(a) – UMEPE Juazeiro do Norte/CE';
+  const w2 = F.fontBold.widthOfTextAtSize(l2, 10);
+  pg.drawText(l2, { x: (F.PW - w2) / 2, y, size: 10, font: F.fontBold, color: rgb(0, 0, 0) });
+  st.pg = pg; st.y = y - 14;
+  return st;
+}
+function psiLocalData(st, cidade, iso) {
+  const txt = `${cidade || 'Juazeiro do Norte'}, ${psiDataExtenso(iso) || psiDataExtenso(new Date().toISOString().slice(0, 10))}.`;
+  return psiPara(st, [{ t: txt }], 11, 16, 0, false);
+}
+
+// 1. Declaração de comparecimento
+async function gerarDeclaracaoPDF(termo) {
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const st = await psiDocStart();
+  const { F } = st;
+  let pg = st.pg;
+  st.y = psiTitle(pg, F, 'DECLARAÇÃO DE COMPARECIMENTO', st.y);
+  st.pg = pg;
+  const foco = d.texto || 'atendimento psicossocial';
+  psiPara(st, [
+    { t: 'Declaramos, para os devidos fins, que ' },
+    { t: d.nome || '_________________________', b: !d.nome, g: !d.nome },
+    { t: ', portador(a) do CPF nº ' },
+    { t: d.cpf || '_______________', b: !d.cpf, g: !d.cpf },
+    { t: (d.processo ? `, processo nº ${d.processo},` : '') + ` compareceu a esta Unidade (UMEPE – Juazeiro do Norte/CE) no dia ${psiDataBR(d.data) || '__/__/____'}, no período ${d.periodo || '______'}, para ${foco}.` }
+  ], 12, 20, 40, true);
+  st.y -= 16;
+  psiPara(st, [{ t: 'Por ser verdade, firmamos a presente.' }], 12, 20, 0, false);
+  st.y -= 8;
+  psiLocalData(st, d.cidade, d.dataDoc || d.data);
+  psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
+  return st.pdfDoc.save();
+}
+
+// 2. Relatório de frequência
+async function gerarRelFrequenciaPDF(termo) {
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const st = await psiDocStart();
+  const { F } = st;
+  st.y = psiTitle(st.pg, F, 'RELATÓRIO DE FREQUÊNCIA', st.y, 'Acompanhamento psicossocial');
+  psiCampo(st, 'Nome:', d.nome, 11, 16);
+  psiCampo(st, 'CPF:', d.cpf, 11, 16);
+  psiCampo(st, 'Processo / Vara:', [d.processo, d.vara].filter(Boolean).join('  •  '), 11, 16);
+  psiCampo(st, 'Medida:', d.medida, 11, 16);
+  psiCampo(st, 'Período:', [psiDataBR(d.dataInicio), psiDataBR(d.dataFim)].filter(Boolean).join(' a '), 11, 16);
+  st.y -= 10;
+  const itens = Array.isArray(d.itens) ? d.itens : [];
+  const L = F.M, R = F.PW - F.M;
+  const cols = [[L, L + 92], [L + 92, R - 150], [R - 150, R - 42], [R - 42, R]];
+  const head = ['DATA', 'LOCAL', 'SITUAÇÃO', 'OBS'];
+  const drawHead = (pg, top) => {
+    pg.drawRectangle({ x: L, y: top - 18, width: R - L, height: 18, color: rgb(0.93, 0.94, 0.96), borderColor: rgb(0, 0, 0), borderWidth: 0.6 });
+    head.forEach((h, i) => {
+      const w = F.fontBold.widthOfTextAtSize(h, 9.5);
+      pg.drawText(h, { x: (cols[i][0] + cols[i][1]) / 2 - w / 2, y: top - 12.5, size: 9.5, font: F.fontBold, color: rgb(0, 0, 0) });
+    });
+    pg.drawLine({ start: { x: L, y: top }, end: { x: R, y: top }, thickness: 0.6, color: rgb(0, 0, 0) });
+  };
+  let pg = st.pg, top = st.y;
+  const newPage = () => { pg = st.pdfDoc.addPage([F.PW, F.PH]); top = F.PH - 60; drawHead(pg, top); top -= 18; };
+  drawHead(pg, top); top -= 18;
+  const RH = 17;
+  if (!itens.length) {
+    pg.drawRectangle({ x: L, y: top - RH, width: R - L, height: RH, borderColor: rgb(0, 0, 0), borderWidth: 0.6, color: rgb(1, 1, 1) });
+    const t = 'Sem registros no período.';
+    pg.drawText(t, { x: (F.PW - F.font.widthOfTextAtSize(t, 10)) / 2, y: top - 12, size: 10, font: F.fontOb, color: rgb(0.45, 0.45, 0.45) });
+    top -= RH;
+  }
+  let nP = 0, nF = 0, nJ = 0;
+  for (const r of itens) {
+    if (top - RH < 60) {
+      for (const x of [L, ...cols.map(c => c[1])]) pg.drawLine({ start: { x, y: top + 18 + (F.PH - 60 - (top + 18)) * 0 }, end: { x, y: top }, thickness: 0.6, color: rgb(0, 0, 0) });
+      newPage();
+    }
+    const s = String(r.status || '').toLowerCase();
+    if (s.includes('just')) nJ++; else if (s.includes('falta')) nF++; else nP++;
+    const vals = [psiDataBR(r.data) || '—', String(r.local || '—').slice(0, 34), String(r.status || '—').slice(0, 16), String(r.obs || '').slice(0, 22)];
+    vals.forEach((v, i) => {
+      pg.drawText(v, { x: cols[i][0] + 4, y: top - 12, size: 9, font: F.font, color: rgb(0, 0, 0) });
+    });
+    top -= RH;
+    pg.drawLine({ start: { x: L, y: top }, end: { x: R, y: top }, thickness: 0.6, color: rgb(0, 0, 0) });
+  }
+  for (const x of [L, ...cols.map(c => c[1])]) pg.drawLine({ start: { x, y: top + 18 + (st.y - top - 18) * 0 }, end: { x, y: top }, thickness: 0.6, color: rgb(0, 0, 0) });
+  st.pg = pg; st.y = top - 14;
+  psiPara(st, [{ t: `Total: ${itens.length} registro(s) — ${nP} presença(s), ${nF} falta(s), ${nJ} falta(s) justificada(s).`, b: true }], 11, 16, 0, false);
+  if (d.texto) { st.y -= 6; psiPara(st, [{ t: d.texto }], 11, 17, 0, true); }
+  st.y -= 6;
+  psiLocalData(st, d.cidade, d.dataDoc);
+  psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
+  return st.pdfDoc.save();
+}
+
+// 3. Relatório técnico psicológico
+async function gerarRelTecnicoPDF(termo) {
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const st = await psiDocStart();
+  st.y = psiTitle(st.pg, st.F, 'RELATÓRIO TÉCNICO PSICOLÓGICO', st.y, '— Documento sigiloso —');
+  const sec = (t) => { psiPara(st, [{ t, b: true }], 11.5, 18, 0, false); st.y -= 2; };
+  sec('1. IDENTIFICAÇÃO');
+  psiCampo(st, 'Nome:', d.nome, 11, 16);
+  psiCampo(st, 'CPF:', d.cpf, 11, 16);
+  psiCampo(st, 'Processo / Vara:', [d.processo, d.vara].filter(Boolean).join('  •  '), 11, 16);
+  psiCampo(st, 'Medida:', d.medida, 11, 16);
+  st.y -= 8;
+  sec('2. HISTÓRICO E ACOMPANHAMENTO');
+  psiPara(st, [{ t: d.resumo || '—' }], 11, 17, 0, true);
+  st.y -= 8;
+  sec('3. PARECER TÉCNICO');
+  psiPara(st, [{ t: d.parecer || '—' }], 11, 17, 0, true);
+  st.y -= 8;
+  sec('4. PLANO / RECOMENDAÇÕES');
+  psiPara(st, [{ t: d.plano || '—' }], 11, 17, 0, true);
+  st.y -= 8;
+  psiLocalData(st, d.cidade, d.dataDoc);
+  psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
+  return st.pdfDoc.save();
+}
+
+// 4. Ofício de encaminhamento à rede de apoio
+async function gerarOficioEncaminhamentoPDF(termo) {
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const st = await psiDocStart();
+  const { F } = st;
+  const anoDoc = (d.dataDoc || new Date().toISOString().slice(0, 10)).slice(0, 4);
+  psiPara(st, [{ t: `OFÍCIO UMEPE/JUAZEIRO Nº ${d.numero || '_______'}/${anoDoc}`, b: true }], 12, 18, 0, false);
+  st.y -= 4;
+  psiPara(st, [{ t: `Ao(À) ${d.destino || '_________________________'}`, b: true }], 11, 17, 0, false);
+  st.y -= 2;
+  psiPara(st, [{ t: `Assunto: Encaminhamento para acompanhamento – ${d.nome || '_________________________'}`, b: true }], 11, 17, 0, false);
+  st.y -= 12;
+  if (d.texto) {
+    String(d.texto).split('\n').forEach(p => { if (p.trim()) { psiPara(st, [{ t: p.trim() }], 11, 17, 30, true); st.y -= 6; } });
+  } else {
+    psiPara(st, [
+      { t: 'Encaminhamos ' },
+      { t: d.nome || '_________________________', b: !d.nome, g: !d.nome },
+      { t: `, CPF nº ${d.cpf || '_______________'}, para ${d.motivo || 'avaliação e acompanhamento'} junto a ${d.destino || 'esta instituição'}. Contato: ${d.contato || '(  ) _____-____'}. Endereço: ${d.endereco || '_________________________'}. Solicitamos, sempre que possível, a contra-referência (retorno sobre o atendimento efetivado) a esta Unidade.` }
+    ], 11, 17, 30, true);
+  }
+  st.y -= 8;
+  psiLocalData(st, d.cidade, d.dataDoc);
+  psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
+  return st.pdfDoc.save();
+}

@@ -35,3 +35,7 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 
 - Tickets de tornozeleira **Infinity**: só o técnico `julio` (ou `admin`) pode assumir.
   O usuário `julio` precisa existir e estar ativo (crie pelo painel admin).
+- Perfil **psico** (ex.: `psicologo`): aba Psicossocial com prontuário (triagem + evoluções SOAP),
+  atendimentos/frequência, grupos reflexivos, encaminhamentos com contra-referência e documentos
+  (declaração, relatório de frequência, relatório técnico, ofício de encaminhamento).
+  Prontuário e rotas `/api/psi` restritos a psico/admin. Requer `deploy/migration-psi.sql` no Supabase.
