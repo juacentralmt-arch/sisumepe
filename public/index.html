@@ -408,6 +408,7 @@
         <div class="flex gap-2 bg-white border border-slate-200 rounded-xl p-1">
           <button id="termoTipoListagem" onclick="setTermoTipo('listagem')" class="btn text-xs px-4 py-2">📋 Listagem</button>
           <button id="termoTipoRecolhimento" onclick="setTermoTipo('recolhimento')" class="btn text-xs px-4 py-2">📦 Recolhimento</button>
+          <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
         </div>
         <div class="flex gap-2">
           <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
@@ -484,6 +485,38 @@
           </div>
           <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="termoRecAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleRecPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="termoRecPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
           <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div id="termoFormEndereco" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🏠 Ofício de Mudança de Endereço <span id="termoEndEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <div class="grid grid-cols-3 gap-2.5">
+            <div><label class="lbl">Nº OFÍCIO</label><input id="endNumero" placeholder="Ex: 123" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">ANO</label><input id="endAno" placeholder="2026" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">CIDADE</label><input id="endCidade" placeholder="Fortaleza" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">DATA DO OFÍCIO</label><input id="endDataOficio" type="date" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()" onchange="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">VARA (destinatário)</label><input id="endVara" placeholder="Ex: Vara de Execução Penal" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">PROCESSO Nº</label><input id="endProcesso" placeholder="Nº do processo" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">DATA DA SOLICITAÇÃO</label><input id="endDataSolicitacao" type="date" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()" onchange="scheduleEnderecoPreview()"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="col-span-2"><label class="lbl">NOME DA PESSOA *</label><input id="endNome" placeholder="Nome completo" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">CPF</label><input id="endCpf" placeholder="000.000.000-00" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">NOME DA MÃE</label><input id="endMae" placeholder="Filiação" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+          </div>
+          <div><label class="lbl">NOVO ENDEREÇO COMPLETO</label><textarea id="endEndereco" rows="2" placeholder="Rua, número, bairro, cidade-UF, CEP..." class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></textarea></div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">NOVO CONTATO</label><input id="endContato" placeholder="(00)00000-0000" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+            <div><label class="lbl">MOTIVO ALEGADO</label><input id="endMotivo" placeholder="Motivação da mudança" class="inp mt-1 mb-2.5" oninput="scheduleEnderecoPreview()"></div>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
+            <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
+          </div>
+          <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="endAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleEnderecoPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="endPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
+          <p id="endErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <div class="space-y-4">
           <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
@@ -3094,6 +3127,13 @@ function clearTermoForm(){
   document.getElementById('termoRespRec').value = '';
   renderTermoEquipRows([{}, {}, {}, {}, {}]);
   document.getElementById('termoErr').classList.add('hidden');
+  document.getElementById('termoEndEditId').textContent = '';
+  ['endNumero','endAno','endVara','endProcesso','endNome','endCpf','endMae','endDataSolicitacao','endEndereco','endContato','endMotivo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(!document.getElementById('endCidade').value) document.getElementById('endCidade').value = 'Fortaleza';
+  if(!document.getElementById('endAno').value) document.getElementById('endAno').value = String(new Date().getFullYear());
+  document.getElementById('endErr').classList.add('hidden');
+  document.getElementById('endPreviewStatus').textContent = '';
+  clearTimeout(endPreviewTimer);
   document.getElementById('termoPreviewWrapSide').classList.add('hidden');
 }
 let termoTipoAtivo = 'listagem';
@@ -3101,17 +3141,23 @@ const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','
 let recEquips = [];
 function setTermoTipo(t){
   termoTipoAtivo = t;
-  const bL = document.getElementById('termoTipoListagem'), bR = document.getElementById('termoTipoRecolhimento');
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  if(bL){ bL.className = (t==='listagem' ? on : off) + (t==='listagem' ? '' : ' btn-ghost'); if(t==='listagem'){ bL.style.background='linear-gradient(135deg,#4f46e5,#7c3aed)'; } else { bL.style.background=''; } }
-  if(bR){ bR.className = (t==='recolhimento' ? on : off) + (t==='recolhimento' ? '' : ' btn-ghost'); if(t==='recolhimento'){ bR.style.background='linear-gradient(135deg,#4f46e5,#7c3aed)'; } else { bR.style.background=''; } }
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoEndereco', 'endereco']].forEach(([id, k])=>{
+    const b = document.getElementById(id);
+    if(!b) return;
+    b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
+    b.style.background = t === k ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : '';
+  });
   document.getElementById('termoFormListagem').classList.toggle('hidden', t!=='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('hidden', t!=='recolhimento');
+  document.getElementById('termoFormEndereco').classList.toggle('hidden', t!=='endereco');
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
+  document.getElementById('termoFormEndereco').classList.toggle('lg:col-span-2', t==='endereco');
   renderTermos();
   if(t === 'listagem') scheduleListagemPreview(true);
-  else scheduleRecPreview(true);
+  else if(t === 'recolhimento') scheduleRecPreview(true);
+  else scheduleEnderecoPreview(true);
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -3176,8 +3222,15 @@ async function loadTermos(){
       document.getElementById('termoRecDataHora').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
     }
     if(!document.getElementById('termoRecTecnico').value && session) document.getElementById('termoRecTecnico').value = session.name;
+    if(!document.getElementById('endCidade').value) document.getElementById('endCidade').value = 'Fortaleza';
+    if(!document.getElementById('endAno').value) document.getElementById('endAno').value = String(new Date().getFullYear());
+    if(!document.getElementById('endDataOficio').value){
+      const d = new Date(); const p = n=>String(n).padStart(2,'0');
+      document.getElementById('endDataOficio').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+    }
     if(termoTipoAtivo === 'listagem') scheduleListagemPreview(true);
-    else scheduleRecPreview(true);
+    else if(termoTipoAtivo === 'recolhimento') scheduleRecPreview(true);
+    else scheduleEnderecoPreview(true);
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function renderTermos(){
@@ -3187,15 +3240,21 @@ function renderTermos(){
   const visiveis = termosCache.filter(t=> (t.tipo||'listagem') === termoTipoAtivo);
   if(!visiveis.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum termo deste tipo.<br>Preencha ao lado e salve! 📄</p>'; return; }
   box.innerHTML = visiveis.map(t=>{
-    const isRec = (t.tipo||'listagem') === 'recolhimento';
+    const tipoT = t.tipo || 'listagem';
+    const isRec = tipoT === 'recolhimento';
+    const isEnd = tipoT === 'endereco';
     const d = t.dataEnvio ? new Date(t.dataEnvio).toLocaleDateString('pt-BR') : '-';
-    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (t.equipamentos||[]).filter(r=>r.tzpr04||r.upr04||r.fonte04||r.cinta||r.trava).length;
-    const modList = !isRec ? ((t.dados&&t.dados.modelo === 'upr') ? 'UPR' : 'TZPR') : '';
-    const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : esc(t.destinatario||'Sem destinatário');
+    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (isEnd ? 0 : (t.equipamentos||[]).filter(r=>r.tzpr04||r.upr04||r.fonte04||r.cinta||r.trava).length);
+    const modList = (!isRec && !isEnd) ? ((t.dados&&t.dados.modelo === 'upr') ? 'UPR' : 'TZPR') : '';
+    const chip = isRec ? 'RECOLHIMENTO' : (isEnd ? 'ENDEREÇO' : 'LISTAGEM');
+    const chipCls = isRec ? 'bg-blue-100 text-blue-800' : (isEnd ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800');
+    const chipQtd = isEnd ? ('Nº ' + esc(((t.dados&&t.dados.numero)||'___') + '/' + ((t.dados&&t.dados.ano)||'____'))) : (qtd + ' itens');
+    const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : (isEnd ? esc((t.dados&&t.dados.nome)||'Sem nome') : esc(t.destinatario||'Sem destinatário'));
+    const sub2 = isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : (isEnd ? ('Proc.: '+esc((t.dados&&t.dados.processo)||'-')+' • '+esc((t.dados&&t.dados.vara)||t.destinatario||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-')));
     return `<div class="border border-slate-200 rounded-xl p-3 bg-white card-hover">
-      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${isRec?'bg-blue-100 text-blue-800':'bg-orange-100 text-orange-800'}">${isRec?'RECOLHIMENTO':'LISTAGEM'}</span>${modList?`<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${modList==='UPR'?'bg-teal-100 text-teal-800':'bg-slate-200 text-slate-700'}">${modList}</span>`:''}<span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${qtd} itens</span></div>
+      <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${chipCls}">${chip}</span>${modList?`<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${modList==='UPR'?'bg-teal-100 text-teal-800':'bg-slate-200 text-slate-700'}">${modList}</span>`:''}<span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${chipQtd}</span></div>
       <p class="text-xs font-bold truncate mt-1">${sub}</p>
-      <p class="text-[11px] text-slate-500 truncate">${isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-'))}</p>
+      <p class="text-[11px] text-slate-500 truncate">${sub2}</p>
       <div class="flex gap-1.5 mt-2">
         <button onclick="previewTermoExistente(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">👁️ Ver PDF</button>
         <button onclick="editTermo(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✏️ Editar</button>
@@ -3207,6 +3266,7 @@ function renderTermos(){
 }
 async function saveTermo(){
   if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
+  if(termoTipoAtivo === 'endereco') return saveTermoEndereco();
   const err = document.getElementById('termoErr');
   err.classList.add('hidden');
   const data = getTermoFormData();
@@ -3255,7 +3315,91 @@ async function saveTermoRec(){
 }
 async function previewTermoPDF(){
   if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF(false);
+  if(termoTipoAtivo === 'endereco') return previewEnderecoPDF(false);
   return previewTermoListagemPDF(false);
+}
+function getEnderecoFormData(){
+  const v = (id) => (document.getElementById(id) ? document.getElementById(id).value.trim() : '');
+  return {
+    numero: v('endNumero'), ano: v('endAno'), cidade: v('endCidade'),
+    dataOficio: document.getElementById('endDataOficio').value,
+    vara: v('endVara'), processo: v('endProcesso'), nome: v('endNome'),
+    cpf: v('endCpf'), mae: v('endMae'),
+    dataSolicitacao: document.getElementById('endDataSolicitacao').value,
+    endereco: v('endEndereco'), contato: v('endContato'), motivo: v('endMotivo')
+  };
+}
+function setEnderecoFormData(t){
+  const d = (t && t.dados) || {};
+  const s = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
+  s('endNumero', d.numero); s('endAno', d.ano); s('endCidade', d.cidade);
+  s('endDataOficio', d.dataOficio ? String(d.dataOficio).slice(0, 10) : '');
+  s('endVara', d.vara); s('endProcesso', d.processo); s('endNome', d.nome);
+  s('endCpf', d.cpf); s('endMae', d.mae);
+  s('endDataSolicitacao', d.dataSolicitacao ? String(d.dataSolicitacao).slice(0, 10) : '');
+  s('endEndereco', d.endereco); s('endContato', d.contato); s('endMotivo', d.motivo);
+  document.getElementById('termoEndEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
+  editingTermoId = t.id || null;
+}
+async function saveTermoEndereco(){
+  const err = document.getElementById('endErr');
+  err.classList.add('hidden');
+  const rec = getEnderecoFormData();
+  if(!rec.nome){ err.textContent = '⚠️ Informe o nome da pessoa'; err.classList.remove('hidden'); return; }
+  const body = { tipo: 'endereco', dados: rec };
+  try{
+    let res;
+    if(editingTermoId){
+      res = await api('/api/termos/' + editingTermoId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Ofício atualizado');
+    } else {
+      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Ofício salvo');
+    }
+    await loadTermos();
+    const id = res.id || editingTermoId;
+    if(id) downloadTermoPDF(id);
+    clearTermoForm();
+    editingTermoId = null;
+    document.getElementById('termoEndEditId').textContent = '';
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+let endPreviewTimer = null;
+function scheduleEnderecoPreview(now){
+  const tgl = document.getElementById('endAutoPreview');
+  if(tgl && !tgl.checked) return;
+  if(termoTipoAtivo !== 'endereco') return;
+  clearTimeout(endPreviewTimer);
+  endPreviewTimer = setTimeout(()=> previewEnderecoPDF(true), now ? 400 : 1500);
+}
+async function previewEnderecoPDF(silent){
+  const err = document.getElementById('endErr');
+  if(err) err.classList.add('hidden');
+  const rec = getEnderecoFormData();
+  if(!rec.nome){
+    if(!silent && err){ err.textContent = '⚠️ Informe o nome da pessoa para visualizar'; err.classList.remove('hidden'); }
+    return;
+  }
+  const status = document.getElementById('endPreviewStatus');
+  try{
+    if(status) status.textContent = silent ? '⏳ atualizando...' : '';
+    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo:'endereco', dados: rec }) });
+    if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || 'Erro ao gerar PDF'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const frame = document.getElementById('termoPreviewFrameSide');
+    const wrap = document.getElementById('termoPreviewWrapSide');
+    const title = document.getElementById('termoPreviewTitle');
+    if(frame) frame.src = url;
+    if(title) title.textContent = '— Ofício Mudança de Endereço';
+    if(wrap) wrap.classList.remove('hidden');
+    if(!silent && wrap) wrap.scrollIntoView({ behavior:'smooth', block:'center' });
+    if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    setTimeout(()=> URL.revokeObjectURL(url), 60000);
+  }catch(e){
+    if(status) status.textContent = '';
+    if(!silent && err){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+  }
 }
 let listPreviewTimer = null;
 function scheduleListagemPreview(now){
@@ -3294,7 +3438,7 @@ async function previewTermoListagemPDF(silent){
 async function previewTermoExistente(id){
   try{
     const t = termosCache.find(x=>x.id===id);
-    const isRec = t && (t.tipo||'listagem') === 'recolhimento';
+    const tipoT = t ? (t.tipo || 'listagem') : 'listagem';
     const res = await authFetch('/api/termos/'+id+'/pdf');
     if(!res.ok) throw new Error('Erro ao gerar PDF');
     const blob = await res.blob();
@@ -3304,7 +3448,7 @@ async function previewTermoExistente(id){
     const title = document.getElementById('termoPreviewTitle');
     if(!frame || !wrap) throw new Error('Pré-visualização indisponível nesta aba');
     frame.src = url;
-    if(title) title.textContent = '— Termo #' + id + (isRec ? ' (Recolhimento)' : ' (Listagem)');
+    if(title) title.textContent = '— Termo #' + id + (tipoT === 'recolhimento' ? ' (Recolhimento)' : (tipoT === 'endereco' ? ' (Endereço)' : ' (Listagem)'));
     wrap.classList.remove('hidden');
     wrap.scrollIntoView({behavior:'smooth', block:'center'});
     setTimeout(()=>URL.revokeObjectURL(url), 60000);
@@ -3377,6 +3521,13 @@ async function editTermo(id){
     document.getElementById('termoRecEditId').textContent = '(editando #' + t.id + ')';
     editingTermoId = t.id;
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  if((t.tipo||'listagem') === 'endereco'){
+    setTermoTipo('endereco');
+    setEnderecoFormData(t);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('endNome').scrollIntoView({behavior:'smooth', block:'center'});
     return;
   }
   setTermoTipo('listagem');
