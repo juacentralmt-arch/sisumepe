@@ -1,5 +1,5 @@
 const express = require('express');
-const { gerarTermoPDF, gerarTermoRecolhimentoPDF } = require('../lib/termosPdf');
+const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF } = require('../lib/termosPdf');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
@@ -11,7 +11,36 @@ router.get('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
 }));
 router.post('/api/termos', auth(['tecnico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
-  const t = (tipo === 'recolhimento') ? 'recolhimento' : 'listagem';
+  const t = (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : 'listagem');
+  if(t === 'endereco'){
+    const src = (dados && typeof dados === 'object') ? dados : {};
+    const g = (k, n) => String(src[k] == null ? '' : src[k]).trim().slice(0, n);
+    const nd = {
+      numero: g('numero', 20),
+      ano: g('ano', 4) || String(new Date().getFullYear()),
+      cidade: g('cidade', 60) || 'Fortaleza',
+      dataOficio: src.dataOficio ? new Date(src.dataOficio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+      vara: g('vara', 120),
+      processo: g('processo', 60),
+      nome: g('nome', 120),
+      cpf: g('cpf', 20),
+      mae: g('mae', 120),
+      dataSolicitacao: src.dataSolicitacao ? new Date(src.dataSolicitacao).toISOString().slice(0,10) : '',
+      endereco: g('endereco', 500),
+      contato: g('contato', 30),
+      motivo: g('motivo', 1000)
+    };
+    if(!nd.nome) return res.status(400).json({ error: 'Informe o nome da pessoa' });
+    const termo = await store.termos.insert({
+      user: req.auth.user, tipo: 'endereco',
+      dataEnvio: nd.dataOficio,
+      destinatario: nd.vara, equipamentos: [],
+      respEntrega: '', respRecebimento: '',
+      dados: nd
+    });
+    broadcast();
+    return res.status(201).json(termo);
+  }
   if(t === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
     const eq = Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : [];
@@ -107,10 +136,23 @@ router.patch('/api/termos/:id', auth(['tecnico']), ah(async (req,res)=>{
     patch.dados = nd;
   }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
-  if(t.tipo !== 'recolhimento' && (modelo === 'upr' || modelo === 'tzpr')){
+  if(t.tipo === 'endereco' && dados && typeof dados === 'object'){
+    const nd = Object.assign({}, t.dados||{});
+    const g = (k, n) => String(dados[k] == null ? '' : dados[k]).trim().slice(0, n);
+    ['numero','ano','cidade','vara','processo','nome','cpf','mae','endereco','contato','motivo'].forEach(k=>{
+      const n = { numero:20, ano:4, cidade:60, vara:120, processo:60, nome:120, cpf:20, mae:120, endereco:500, contato:30, motivo:1000 }[k];
+      if(dados[k] != null) nd[k] = g(k, n);
+    });
+    if(dados.dataOficio) nd.dataOficio = new Date(dados.dataOficio).toISOString().slice(0,10);
+    if(dados.dataSolicitacao !== undefined) nd.dataSolicitacao = dados.dataSolicitacao ? new Date(dados.dataSolicitacao).toISOString().slice(0,10) : '';
+    if(dados.dataOficio) patch.dataEnvio = nd.dataOficio;
+    if(dados.vara != null) patch.destinatario = nd.vara;
+    patch.dados = nd;
+  }
+  if(t.tipo !== 'recolhimento' && t.tipo !== 'endereco' && (modelo === 'upr' || modelo === 'tzpr')){
     patch.dados = Object.assign({}, t.dados||{}, { modelo });
   }
-  if(equipamentos!=null && t.tipo !== 'recolhimento'){
+  if(equipamentos!=null && t.tipo !== 'recolhimento' && t.tipo !== 'endereco'){
     const modeloEff = (modelo === 'upr' || modelo === 'tzpr') ? modelo : ((t.dados && t.dados.modelo === 'upr') ? 'upr' : 'tzpr');
     const eqIn = Array.isArray(equipamentos) ? equipamentos.slice(0, 30) : [];
     patch.equipamentos = modeloEff === 'upr'
@@ -151,7 +193,7 @@ router.get('/api/termos/:id/pdf', auth(['tecnico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
-  const pdf = (t.tipo === 'recolhimento') ? await gerarTermoRecolhimentoPDF(t) : await gerarTermoPDF(t);
+  const pdf = (t.tipo === 'recolhimento') ? await gerarTermoRecolhimentoPDF(t) : (t.tipo === 'endereco' ? await gerarTermoEnderecoPDF(t) : await gerarTermoPDF(t));
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
   res.send(Buffer.from(pdf));
@@ -172,6 +214,25 @@ router.post('/api/termos/pdf-preview', auth(['tecnico']), ah(async (req,res)=>{
       }
     };
     const pdf = await gerarTermoRecolhimentoPDF(termo);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(Buffer.from(pdf));
+  }
+  if(tipo === 'endereco'){
+    const d = (dados && typeof dados === 'object') ? dados : {};
+    const g = (k) => String(d[k] == null ? '' : d[k]).trim();
+    const termo = {
+      tipo: 'endereco',
+      dados: {
+        numero: g('numero'), ano: g('ano') || String(new Date().getFullYear()),
+        cidade: g('cidade') || 'Fortaleza',
+        dataOficio: d.dataOficio ? new Date(d.dataOficio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+        vara: g('vara'), processo: g('processo'), nome: g('nome'), cpf: g('cpf'), mae: g('mae'),
+        dataSolicitacao: d.dataSolicitacao ? new Date(d.dataSolicitacao).toISOString().slice(0,10) : '',
+        endereco: g('endereco'), contato: g('contato'), motivo: g('motivo')
+      }
+    };
+    const pdf = await gerarTermoEnderecoPDF(termo);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
     return res.send(Buffer.from(pdf));

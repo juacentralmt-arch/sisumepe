@@ -510,4 +510,148 @@ async function gerarTermoRecolhimentoPDF(termo){
   return pdfBytes;
 }
 
-module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF };
+// PDF Ofício de Mudança de Endereço (COMEP/SAP) - documento corrido 1 página
+async function gerarTermoEnderecoPDF(termo){
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const PW = 595.32, PH = 841.92, M = 72;
+  const W = PW - 2 * M;
+  let logoPng = null;
+  try{
+    const logoPath = path.join(ROOT, 'public', 'logo-governo-ce.png');
+    if(fs.existsSync(logoPath)) logoPng = await pdfDoc.embedPng(fs.readFileSync(logoPath));
+  }catch(e){}
+  const S = (v, fb) => String((v == null || v === '') ? (fb == null ? '' : fb) : v);
+  const dataOficio = d.dataOficio ? new Date(d.dataOficio + 'T12:00:00') : new Date();
+  const dataExtenso = isNaN(dataOficio) ? '' : dataOficio.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const dataSolic = (()=>{ const s = String(d.dataSolicitacao || ''); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : s; })();
+  const cidade = S(d.cidade, 'Fortaleza');
+  const ano = S(d.ano, String(new Date().getFullYear()));
+  const numero = S(d.numero, '_______');
+  let pg = pdfDoc.addPage([PW, PH]);
+  let y = PH - 40;
+  // Cabeçalho: esquerda Polícia Penal (texto) / direita logo Governo CE
+  pg.drawText('POLÍCIA PENAL', { x: M, y, size: 14, font: fontBold, color: rgb(0, 0, 0) });
+  pg.drawText('Coordenadoria de Monitoração', { x: M, y: y - 13, size: 8, font: fontBold, color: rgb(0, 0, 0) });
+  pg.drawText('Eletrônica de Pessoas - COMEP', { x: M, y: y - 23, size: 8, font: fontBold, color: rgb(0, 0, 0) });
+  if(logoPng){
+    const lh = 52, lw = lh * (logoPng.width / logoPng.height);
+    pg.drawImage(logoPng, { x: PW - M - lw, y: y - 6 - lh + 16, width: lw, height: lh });
+  } else {
+    const ce = 'CEARÁ';
+    pg.drawText(ce, { x: PW - M - fontBold.widthOfTextAtSize(ce, 20), y, size: 20, font: fontBold, color: rgb(0.18, 0.28, 0.36) });
+    pg.drawText('GOVERNO DO ESTADO', { x: PW - M - fontBold.widthOfTextAtSize('GOVERNO DO ESTADO', 7.5), y: y - 13, size: 7.5, font: fontBold, color: rgb(0, 0, 0) });
+  }
+  y -= 34;
+  pg.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 1.2, color: rgb(0.12, 0.42, 0.22) });
+  // Parágrafo com quebra automática (segmentos com estilos) — retorna y após o bloco
+  const drawPara = (segs, size, lh, indent) => {
+    indent = indent || 0;
+    const words = [];
+    segs.forEach(s => { String(s.t || '').split(/\s+/).filter(Boolean).forEach(w => words.push({ w, f: s.f || font })); });
+    const spW = font.widthOfTextAtSize(' ', size);
+    let yy = y, line = [], lw = 0;
+    const isFirst = () => yy === y;
+    const flush = () => {
+      if(!line.length) return;
+      let xx = M + (isFirst() ? indent : 0);
+      line.forEach((wd, i) => {
+        if(i > 0) xx += spW;
+        pg.drawText(wd.w, { x: xx, y: yy, size, font: wd.f, color: rgb(0, 0, 0) });
+        xx += wd.f.widthOfTextAtSize(wd.w, size);
+      });
+      yy -= lh;
+    };
+    words.forEach(wd => {
+      const ww = wd.f.widthOfTextAtSize(wd.w, size);
+      const avail = W - (isFirst() ? indent : 0);
+      if(line.length && lw + spW + ww > avail){ flush(); line = []; lw = 0; }
+      if(line.length) lw += spW;
+      line.push(wd); lw += ww;
+    });
+    flush();
+    y = yy;
+  };
+  // estima altura (nº de linhas) para quebra de página preventiva
+  const estLines = (segs, size, indent) => {
+    let tot = 0;
+    segs.forEach(s => { String(s.t || '').split(/\s+/).filter(Boolean).forEach(w => { tot += (s.f || font).widthOfTextAtSize(w, size) + font.widthOfTextAtSize(' ', size); }); });
+    return Math.max(1, Math.ceil(tot / (W - (indent || 0))));
+  };
+  const ensure = (need) => { if(y - need < 120){ pg = pdfDoc.addPage([PW, PH]); y = PH - 48; } };
+  y -= 26;
+  // Linha do ofício + local/data (mesma linha; data à direita)
+  const ofTxt = `OFÍCIO COMEP/SAP Nº ${numero}/${ano} - WP`;
+  const dtTxt = dataExtenso ? `${cidade}, ${dataExtenso}` : cidade;
+  pg.drawText(ofTxt, { x: M, y, size: 11, font: fontBold, color: rgb(0, 0, 0) });
+  const dtW = font.widthOfTextAtSize(dtTxt, 11);
+  if(fontBold.widthOfTextAtSize(ofTxt, 11) + dtW + 20 > W){
+    y -= 15;
+    pg.drawText(dtTxt, { x: PW - M - dtW, y, size: 11, font: font, color: rgb(0, 0, 0) });
+  } else {
+    pg.drawText(dtTxt, { x: PW - M - dtW, y, size: 11, font: font, color: rgb(0, 0, 0) });
+  }
+  y -= 24;
+  const vara = S(d.vara, 'VARA');
+  const processo = S(d.processo, '________');
+  const nome = S(d.nome, '_________________________');
+  const cpf = S(d.cpf, '___.___.___-__');
+  const mae = S(d.mae, '_________________________');
+  const endereco = S(d.endereco, '_________________________');
+  const contato = S(d.contato, '(__)_____-____');
+  const motivo = S(d.motivo, '_________________________');
+  drawPara([{ t: 'A SUA EXCELÊNCIA JUIZ(A) DE DIREITO', f: fontBold }], 11, 15);
+  y -= 4;
+  drawPara([{ t: vara }], 11, 15);
+  y -= 4;
+  drawPara([{ t: 'PROCESSO Nº ', f: fontBold }, { t: processo, f: fontBold }], 11, 15);
+  y -= 4;
+  drawPara([{ t: 'Assunto: MUDANÇA DE ENDEREÇO', f: fontBold }], 11, 15);
+  y -= 16;
+  drawPara([{ t: 'Meritíssimo(a) Juiz(a),' }], 11, 15, 36);
+  y -= 6;
+  const corpo = [
+    { t: 'Com os cumprimentos de estilo, a Coordenadoria de Monitoração Eletrônica de Pessoas – COMEP informar que ' },
+    { t: nome, f: fontBold },
+    { t: `, portador do CPF Nº ${cpf}, filho(a) de ` },
+    { t: mae, f: fontBold },
+    { t: `, efetuou solicitação de alteração de endereço em ${dataSolic || '__/__/____'}, passando a residir a ` },
+    { t: endereco, f: fontBold },
+    { t: ', como também alterou o contato para o número ' },
+    { t: contato, f: fontBold },
+    { t: '. É pertinente ressaltar que a motivação alegada foi: ' },
+    { t: motivo, f: fontBold },
+    { t: '.' }
+  ];
+  ensure(estLines(corpo, 11, 36) * 15 + 60);
+  drawPara(corpo, 11, 15, 36);
+  y -= 10;
+  const fecho = [{ t: 'Sem mais para o momento, valho-me para apresentar protestos de elevada estima e real apreço.' }];
+  ensure(estLines(fecho, 11, 36) * 15 + 150);
+  drawPara(fecho, 11, 15, 36);
+  y -= 22;
+  drawPara([{ t: 'Respeitosamente,' }], 11, 15);
+  y -= 52;
+  ensure(120);
+  const sig1 = 'KAYROL GARCES COSTA';
+  pg.drawText(sig1, { x: (PW - fontBold.widthOfTextAtSize(sig1, 11)) / 2, y, size: 11, font: fontBold, color: rgb(0, 0, 0) });
+  y -= 14;
+  const sig2 = 'Coordenador de Monitoração Eletrônica de Pessoas';
+  pg.drawText(sig2, { x: (PW - font.widthOfTextAtSize(sig2, 11)) / 2, y, size: 11, font: font, color: rgb(0, 0, 0) });
+  // Rodapé institucional ancorado na base da última página
+  if(y < 170){ pg = pdfDoc.addPage([PW, PH]); }
+  const foot = (txt, yy, fb, sz) => {
+    const f = fb ? fontBold : font;
+    pg.drawText(txt, { x: M, y: yy, size: sz || 9, font: f, color: rgb(0, 0, 0) });
+  };
+  foot('Coordenadoria de Monitoração Eletrônica - COMEP', 78, true);
+  foot('Rua Tenente Benévolo, 1055 – Meireles, CEP: 60.160-040 - Fortaleza–CE', 67, false);
+  foot('Contatos: (85) 98139-5024 - (85) 99191-8937', 56, false);
+  foot('Email: comep@sap.ce.gov.br', 45, false);
+  const pdfBytes = await pdfDoc.save();
+  return pdfBytes;
+}
+
+module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF };
