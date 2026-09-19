@@ -259,9 +259,13 @@ async function gerarTermoPDF(termo){
   };
   if(!useFlow){
   // 5 linhas clássicas, y central 468.39,448.39,428.39,408.39,388.39
+  // Usa a lista filtrada (sem vazios) para não perder linhas extras
+  // quando há vazios intercalados (ex.: prévia com linhas em branco).
+  const classicEq = filledEq.slice();
+  while(classicEq.length<5) classicEq.push({ tzpr04:'', fonte04:'', cinta:'', trava:'' });
   const rowYs = [468.39, 448.39, 428.39, 408.39, 388.39];
   for(let r=0;r<5;r++){
-    const row = storedEq[r] ? normEq(storedEq[r]) : {};
+    const row = classicEq[r] || {};
     const vals = [row.tzpr04||'', row.fonte04||'', row.cinta||'', row.trava||''];
     for(let c=0;c<4;c++){
       const txt = String(vals[c]).trim().substring(0,18);
