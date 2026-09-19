@@ -1333,7 +1333,7 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
     else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'agenda'].includes(t);
-    else if(r === 'tecnico') show = t !== 'usuarios';
+    else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico';
     else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos' && t !== 'psico';
     b.classList.toggle('hidden', !show);
   });
@@ -1367,7 +1367,7 @@ function canSee(t){
   if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin'].includes(t);
   if(session.role==='psico') return ['fila','checkin','psico','agenda'].includes(t);
-  return t!=='usuarios';
+  return t!=='usuarios' && t!=='psico';
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }

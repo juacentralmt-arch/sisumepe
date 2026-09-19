@@ -26,6 +26,7 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   const t = (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
   if(PSI_DOCS.includes(t)){
+    if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
     const nd = normPsiDoc(dados);
     if(!nd.nome) return res.status(400).json({ error: 'Informe o nome da pessoa' });
     if(!nd.psicologo) nd.psicologo = req.auth.name || '';
@@ -180,6 +181,7 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
     patch.dados = Object.assign({}, t.dados||{}, { modelo });
   }
   if(PSI_DOCS.includes(t.tipo) && dados && typeof dados === 'object'){
+    if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
     const nd = normPsiDoc(Object.assign({}, t.dados||{}, dados));
     if(!nd.nome) return res.status(400).json({ error: 'Informe o nome da pessoa' });
     patch.dados = nd;
@@ -282,6 +284,7 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
     return res.send(Buffer.from(pdf));
   }
   if(PSI_DOCS.includes(tipo)){
+    if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
     const nd = normPsiDoc(dados);
     if(!nd.psicologo) nd.psicologo = (req.auth && req.auth.name) || '';
     const pdf = await termoPDFFromRecord({ tipo, dados: nd });

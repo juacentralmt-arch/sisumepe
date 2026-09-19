@@ -38,4 +38,4 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 - Perfil **psico** (ex.: `psicologo`): aba Psicossocial com prontuário (triagem + evoluções SOAP),
   atendimentos/frequência, grupos reflexivos, encaminhamentos com contra-referência e documentos
   (declaração, relatório de frequência, relatório técnico, ofício de encaminhamento).
-  Prontuário e rotas `/api/psi` restritos a psico/admin. Requer `deploy/migration-psi.sql` no Supabase.
+  Prontuário e rotas `/api/psi` restritos ao perfil psico (nem técnico nem admin acessam). Requer `deploy/migration-psi.sql` no Supabase.
