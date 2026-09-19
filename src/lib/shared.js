@@ -233,7 +233,7 @@ function infinityBlocked(ticket, actor) {
   return 'Ticket de tornozeleira Infinity: somente o técnico Júlio Cesar pode assumir.';
 }
 const PERSON_LABELS = { nome: 'Nome', cpf: 'CPF', rg: 'RG', nomeMae: 'Nome da mãe', dataNascimento: 'Data de nascimento', modeloTornozeleira: 'Modelo da tornozeleira' };
-const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Outros'];
+const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Atendimento Psicológico', 'Outros'];
 
 // Google Agenda helpers
 function getGoogleConfig(){

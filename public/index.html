@@ -106,6 +106,9 @@
     <button data-tab="checkin" onclick="go('checkin')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
       Check-in / Novo ticket</button>
+    <button data-tab="psico" onclick="go('psico')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+      Psicossocial</button>
     <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z"/></svg>
       Painel Técnico</button>
@@ -156,6 +159,7 @@
     <div id="mobileNav" class="lg:hidden px-4 pb-3 flex gap-2 overflow-x-auto">
       <button data-tab="fila" onclick="go('fila')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Fila</button>
       <button data-tab="checkin" onclick="go('checkin')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">➕ Check-in</button>
+      <button data-tab="psico" onclick="go('psico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🧠 Psico</button>
       <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
       <button data-tab="agenda" onclick="go('agenda')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📅 Agenda</button>
       <button data-tab="termos" onclick="go('termos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 Termos</button>
@@ -274,6 +278,7 @@
             <option>Instalação de Tornozeleira</option>
             <option>Retirada de Tornozeleira</option>
             <option>Manutenção</option>
+            <option>Atendimento Psicológico</option>
             <option>Outros</option>
           </select>
           <label class="lbl">DESCRIÇÃO</label>
@@ -535,6 +540,155 @@
           </div>
         </div>
       </div>
+    <!-- PSICOSSOCIAL (sigilo: perfil psico) -->
+    <section id="tab-psico" class="hidden fade">
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
+        <div>
+          <h2 class="font-display font-bold text-xl">Psicossocial 🧠</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Prontuário, grupos, encaminhamentos e documentos — acesso restrito</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5 bg-white border border-slate-200 rounded-xl p-1" id="psiSubNav">
+          <button data-psi="pront" onclick="goPsi('pront')" class="btn text-xs px-3 py-1.5">📋 Prontuário</button>
+          <button data-psi="atend" onclick="goPsi('atend')" class="btn text-xs px-3 py-1.5">🗓️ Atendimentos</button>
+          <button data-psi="grupos" onclick="goPsi('grupos')" class="btn text-xs px-3 py-1.5">👥 Grupos</button>
+          <button data-psi="enc" onclick="goPsi('enc')" class="btn text-xs px-3 py-1.5">🔗 Encaminhamentos</button>
+          <button data-psi="docs" onclick="goPsi('docs')" class="btn text-xs px-3 py-1.5">📄 Documentos</button>
+          <button data-psi="painel" onclick="goPsi('painel')" class="btn text-xs px-3 py-1.5">📊 Painel</button>
+        </div>
+      </div>
+      <div id="psiAlerts" class="mb-4 space-y-2"></div>
+      <div id="psi-pront" class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🔎 Pessoa acompanhada</h3>
+          <input id="psiPBusca" oninput="psiBuscarPara('psiP')" placeholder="Nome, CPF ou RG (2+ letras)..." class="inp mb-2.5">
+          <div id="psiPRes" class="space-y-1.5 mb-2.5"></div>
+          <div id="psiPSel" class="text-sm"></div>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Triagem e plano <span id="psiProntInfo" class="text-[11px] font-normal text-slate-400"></span></h3>
+          <div class="grid grid-cols-1 gap-2.5">
+            <div><label class="lbl">QUEIXA / DEMANDA INICIAL</label><textarea id="psiT_queixa" rows="2" class="inp mt-1 mb-2.5" placeholder="Motivo do encaminhamento à psicologia..."></textarea></div>
+            <div><label class="lbl">HISTÓRICO DE VIDA</label><textarea id="psiT_historico" rows="2" class="inp mt-1 mb-2.5" placeholder="História, vulnerabilidades..."></textarea></div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div><label class="lbl">VÍNCULOS FAMILIARES</label><textarea id="psiT_vinculos" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+              <div><label class="lbl">SAÚDE MENTAL</label><textarea id="psiT_saude" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div><label class="lbl">USO DE SUBSTÂNCIAS</label><textarea id="psiT_subst" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+              <div><label class="lbl">RISCO IDENTIFICADO</label><select id="psiT_risco" class="inp mt-1 mb-2.5"><option value="">—</option><option>baixo</option><option>médio</option><option>alto</option></select>
+              <label class="lbl">OBSERVAÇÕES DA TRIAGEM</label><textarea id="psiT_obs" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+            </div>
+          </div>
+          <h3 class="font-display font-bold text-sm mt-4 mb-3">🎯 Plano de acompanhamento</h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">PERIODICIDADE</label><select id="psiP_period" class="inp mt-1 mb-2.5"><option value="">—</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
+            <div><label class="lbl">STATUS</label><select id="psiP_status" class="inp mt-1 mb-2.5"><option value="ativo">Em acompanhamento</option><option value="encerrado">Encerrado</option></select></div>
+            <div><label class="lbl">TIPO DE MEDIDA</label><select id="psiP_medtipo" class="inp mt-1 mb-2.5"><option value="">—</option><option>PRD</option><option>SCP</option><option>ANPP</option><option>Cautelar / Tornozeleira</option><option>Protetiva (Maria da Penha)</option><option>PSC</option><option>Outra</option></select></div>
+            <div class="grid grid-cols-2 gap-2.5"><div><label class="lbl">INÍCIO</label><input id="psiP_medini" type="date" class="inp mt-1 mb-2.5"></div><div><label class="lbl">TÉRMINO</label><input id="psiP_medfim" type="date" class="inp mt-1 mb-2.5"></div></div>
+          </div>
+          <div><label class="lbl">METAS / PROJETO DE VIDA</label><textarea id="psiP_metas" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+          <div id="psiP_grupos" class="text-xs text-slate-500 mb-2.5"></div>
+          <button onclick="savePsiProntuario()" class="btn btn-primary w-full py-2.5 text-xs">💾 Salvar prontuário e plano</button>
+          <p id="psiProntErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div class="lg:col-span-3 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📝 Evoluções (SOAP)</h3>
+          <div id="psiEvolList" class="space-y-2 mb-4 max-h-[380px] overflow-y-auto"></div>
+          <div class="grid grid-cols-3 gap-2.5">
+            <div><label class="lbl">DATA</label><input id="psiE_data" type="date" class="inp mt-1 mb-2.5"></div>
+            <div class="col-span-2"><label class="lbl">TIPO</label><select id="psiE_tipo" class="inp mt-1 mb-2.5"><option>individual</option><option>grupo</option><option>crise</option><option>familiar</option><option>telefônico</option></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">S – SUBJETIVO</label><textarea id="psiE_s" rows="2" class="inp mt-1 mb-2.5" placeholder="Relato da pessoa..."></textarea></div>
+            <div><label class="lbl">O – OBJETIVO</label><textarea id="psiE_o" rows="2" class="inp mt-1 mb-2.5" placeholder="Observado na sessão..."></textarea></div>
+            <div><label class="lbl">A – AVALIAÇÃO</label><textarea id="psiE_a" rows="2" class="inp mt-1 mb-2.5" placeholder="Análise técnica..."></textarea></div>
+            <div><label class="lbl">P – PLANO</label><textarea id="psiE_p" rows="2" class="inp mt-1 mb-2.5" placeholder="Conduta / próximos passos..."></textarea></div>
+          </div>
+          <button onclick="savePsiEvolucao()" class="btn btn-primary py-2.5 px-5 text-xs">➕ Registrar evolução</button>
+        </div>
+      </div>
+      <div id="psi-atend" class="hidden grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🗓️ Registrar atendimento</h3>
+          <input id="psiABusca" oninput="psiBuscarPara('psiA')" placeholder="Buscar pessoa..." class="inp mb-2.5">
+          <div id="psiARes" class="space-y-1.5 mb-2.5"></div>
+          <div id="psiASel" class="text-sm mb-2.5"></div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">DATA *</label><input id="psiA_data" type="date" class="inp mt-1 mb-2.5"></div>
+            <div><label class="lbl">TIPO</label><select id="psiA_tipo" class="inp mt-1 mb-2.5"><option>individual</option><option>grupo</option><option>crise</option><option>familiar</option><option>telefônico</option></select></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">SITUAÇÃO *</label><select id="psiA_status" class="inp mt-1 mb-2.5"><option value="presente">✅ Presente</option><option value="falta">❌ Falta</option><option value="falta_justificada">⚠️ Falta justificada</option></select></div>
+            <div><label class="lbl">LOCAL</label><input id="psiA_local" placeholder="UMEPE / grupo..." class="inp mt-1 mb-2.5"></div>
+          </div>
+          <div><label class="lbl">OBSERVAÇÃO</label><textarea id="psiA_obs" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+          <button onclick="savePsiAtendimento()" class="btn btn-primary w-full py-2.5 text-xs">💾 Salvar atendimento</button>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Últimos atendimentos</h3>
+          <div id="psiAtendList" class="space-y-2 max-h-[560px] overflow-y-auto"></div>
+        </div>
+      </div>
+      <div id="psi-grupos" class="hidden grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-3"><h3 class="font-display font-bold text-sm">👥 Grupos reflexivos</h3><span class="text-[10px] text-slate-400">toque para abrir</span></div>
+          <div id="psiGrupoList" class="space-y-2 mb-4"></div>
+          <h3 class="font-display font-bold text-sm mb-3">➕ Novo grupo</h3>
+          <div><label class="lbl">NOME *</label><input id="psiG_nome" placeholder="Ex: HAVD – Turma 3" class="inp mt-1 mb-2.5"></div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">TIPO</label><select id="psiG_tipo" class="inp mt-1 mb-2.5"><option>HAVD</option><option>CR</option><option>ME Drogas</option><option>Outro</option></select></div>
+            <div><label class="lbl">DIA / HORÁRIO</label><input id="psiG_dia" placeholder="Qua 14h" class="inp mt-1 mb-2.5"></div>
+          </div>
+          <button onclick="savePsiGrupo()" class="btn btn-primary w-full py-2.5 text-xs">Criar grupo</button>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <div id="psiGrupoDet"><p class="text-xs text-slate-400 text-center py-8">Selecione um grupo ao lado. 👈</p></div>
+        </div>
+      </div>
+      <div id="psi-enc" class="hidden grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🔗 Novo encaminhamento</h3>
+          <input id="psiEBusca" oninput="psiBuscarPara('psiE')" placeholder="Buscar pessoa..." class="inp mb-2.5">
+          <div id="psiERes" class="space-y-1.5 mb-2.5"></div>
+          <div id="psiESel" class="text-sm mb-2.5"></div>
+          <div><label class="lbl">DESTINO *</label><select id="psiEnc_dest" class="inp mt-1 mb-2.5"><option>CRAS</option><option>CREAS</option><option>CAPS</option><option>UBS</option><option>Escola</option><option>Curso profissionalizante</option><option>Emprego e renda</option><option>Outro</option></select></div>
+          <div><label class="lbl">MOTIVO *</label><textarea id="psiEnc_motivo" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+          <div><label class="lbl">DATA</label><input id="psiEnc_data" type="date" class="inp mt-1 mb-2.5"></div>
+          <button onclick="savePsiEncaminhamento()" class="btn btn-primary w-full py-2.5 text-xs">💾 Salvar encaminhamento</button>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Encaminhamentos (com contra-referência)</h3>
+          <div id="psiEncList" class="space-y-2 max-h-[560px] overflow-y-auto"></div>
+        </div>
+      </div>
+      <div id="psi-docs" class="hidden grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📄 Gerar documento</h3>
+          <div class="grid grid-cols-2 gap-1.5 mb-3" id="psiDocTipos">
+            <button data-doc="declaracao" onclick="setPsiDocTipo('declaracao')" class="btn text-xs px-2 py-2">📝 Declaração</button>
+            <button data-doc="relfreq" onclick="setPsiDocTipo('relfreq')" class="btn text-xs px-2 py-2">📊 Frequência</button>
+            <button data-doc="reltec" onclick="setPsiDocTipo('reltec')" class="btn text-xs px-2 py-2">📑 Rel. técnico</button>
+            <button data-doc="oficioenc" onclick="setPsiDocTipo('oficioenc')" class="btn text-xs px-2 py-2">✉️ Ofício enc.</button>
+          </div>
+          <div id="psiDocForm"></div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="previewPsiDoc()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Prévia</button>
+            <button onclick="savePsiDoc()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar</button>
+          </div>
+          <p id="psiDocErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📚 Documentos emitidos</h3>
+          <div id="psiDocsHist" class="space-y-2 max-h-[560px] overflow-y-auto"></div>
+        </div>
+      </div>
+      <div id="psi-painel" class="hidden">
+        <div id="psiDashCards" class="grid grid-cols-2 xl:grid-cols-3 gap-3 mb-4"></div>
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">⚠️ Alertas (faltas, prazos, pendências)</h3>
+          <div id="psiAlertsList" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        </div>
+      </div>
     </section>
 
     <!-- DASHBOARD -->
@@ -585,6 +739,7 @@
           <select id="uRole" class="inp mt-1 mb-2.5">
             <option value="recepcao">Recepção</option>
             <option value="tecnico">Técnico</option>
+            <option value="psico">Psicólogo(a)</option>
             <option value="admin">Admin</option>
           </select>
           <label class="lbl">SENHA</label>
@@ -753,6 +908,7 @@
     <select id="ueRole" class="inp mt-1 mb-2.5">
       <option value="recepcao">Recepção</option>
       <option value="tecnico">Técnico</option>
+      <option value="psico">Psicólogo(a)</option>
       <option value="admin">Admin</option>
     </select>
     <label class="flex items-center gap-2.5 py-1.5 text-sm font-semibold cursor-pointer"><input id="ueActive" type="checkbox" class="w-5 h-5 accent-emerald-600"> Usuário ativo (pode entrar)</label>
@@ -1167,7 +1323,7 @@ function logout(silent){
 }
 function paintUser(){
   const chip = document.getElementById('userChip');
-  const dot = session && session.role === 'recepcao' ? '🧾' : session && session.role === 'admin' ? '👑' : '🔧';
+  const dot = session && session.role === 'recepcao' ? '🧾' : session && session.role === 'admin' ? '👑' : session && session.role === 'psico' ? '🧠' : '🔧';
   chip.innerHTML = session ? `<span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">${dot}</span> ${esc(session.name)} <span class="font-normal text-slate-400">(${esc(session.user)})</span>` : '—';
   // Permissões por perfil
   const r = session ? session.role : null;
@@ -1175,15 +1331,19 @@ function paintUser(){
     const t = b.dataset.tab;
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
+    else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'agenda'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios';
-    else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos';
+    else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos' && t !== 'psico';
     b.classList.toggle('hidden', !show);
   });
   applyNavOrder();
+  const cnb = document.getElementById('callNextBtn');
+  if(cnb) cnb.classList.toggle('hidden', !(session && session.role === 'tecnico'));
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
   admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios'],
+  psico: ['fila', 'checkin', 'psico', 'agenda'],
   tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
 };
@@ -1203,13 +1363,14 @@ function enterApp(){
 }
 function canSee(t){
   if(!session) return false;
-  if(session.role==='admin') return t!=='tecnico' && t!=='termos';
+  if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin'].includes(t);
+  if(session.role==='psico') return ['fila','checkin','psico','agenda'].includes(t);
   return t!=='usuarios';
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
@@ -1217,6 +1378,7 @@ function go(tab){
   if(tab==='dash') loadDash();
   if(tab==='agenda') loadAgenda();
   if(tab==='termos') loadTermos();
+  if(tab==='psico') loadPsi();
   if(tab==='usuarios') loadUsersAdmin();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2534,6 +2696,7 @@ async function restoreBackup(){
 
 // TECNICO — repasse e devolução à fila
 function atendBtn(t){
+  if(session && session.role==='psico') return `<p class="mt-2 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-2.5 text-center">🧠 Acompanhamento no módulo Psicossocial</p>`;
   const owner = ticketOwner(t);
   if(t.modeloTornozeleira === 'Infinity' && session && session.user !== 'julio' && session.role !== 'admin') return lockInfinity();
   const mine = session && owner && owner.toLowerCase() === String(session.user).toLowerCase();
@@ -3568,6 +3731,507 @@ async function deleteTermo(id){
   if(!confirm('Excluir o termo #' + id + '?')) return;
   try{ await api('/api/termos/'+id, { method:'DELETE' }); toast('🗑️ Termo excluído'); loadTermos(); }catch(e){ toast('⚠️ '+e.message); }
 }
+// ================= PSICOSSOCIAL (sigilo: perfil psico) =================
+let psiSub = 'pront';
+let psiPick = {};
+let psiPickCb = {};
+let psiPerson = null;
+let psiPront = null;
+let psiGrupoSel = null;
+let psiDocTipo = 'declaracao';
+let psiDocEditId = null;
+let psiDocItens = [];
+const psiVal = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+const psiSet = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+function goPsi(s){
+  psiSub = s;
+  ['pront', 'atend', 'grupos', 'enc', 'docs', 'painel'].forEach(k=>{
+    const el = document.getElementById('psi-' + k);
+    if(el) el.classList.toggle('hidden', k !== s);
+  });
+  document.querySelectorAll('#psiSubNav button').forEach(b=>{
+    const on = b.dataset.psi === s;
+    b.className = 'btn text-xs px-3 py-1.5' + (on ? ' text-white' : ' btn-ghost');
+    b.style.background = on ? 'linear-gradient(135deg,#059669,#10b981)' : '';
+  });
+  if(s === 'atend') loadPsiAtend();
+  if(s === 'grupos') loadPsiGrupos();
+  if(s === 'enc') loadPsiEnc();
+  if(s === 'docs'){ renderPsiDocForm(); loadPsiDocsHist(); }
+  if(s === 'painel') loadPsiPainel();
+  if(s === 'pront' && psiPerson) psiCarregarProntuario();
+}
+async function loadPsi(){
+  const d = new Date(); const p = n=>String(n).padStart(2,'0');
+  const hoje = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  ['psiA_data','psiE_data','psiEnc_data'].forEach(id=>{ const el=document.getElementById(id); if(el && !el.value) el.value = hoje; });
+  loadPsiAlerts();
+  goPsi(psiSub);
+}
+async function loadPsiAlerts(){
+  const box = document.getElementById('psiAlerts');
+  if(!box) return;
+  try{
+    const list = await api('/api/psi/alerts');
+    if(!list.length){ box.innerHTML = ''; return; }
+    const ico = { falta:'🔴', medida:'🟡', encaminhamento:'🔵', retorno:'🟠' };
+    box.innerHTML = `<div class="card p-3 border-l-4 !border-l-amber-400"><div class="flex items-center gap-2 mb-2"><b class="text-xs">⚠️ ${list.length} alerta(s)</b><button onclick="goPsi('painel')" class="ml-auto text-[11px] font-bold text-indigo-600">ver todos →</button></div><div class="space-y-1">${list.slice(0, 5).map(a=>`<button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="w-full text-left text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">${ico[a.tipo]||'⚠️'} ${esc(a.texto)}${a.personName?` — <b>${esc(a.personName)}</b>`:''}</button>`).join('')}</div></div>`;
+  }catch(e){ box.innerHTML = ''; }
+}
+function psiAlertGo(pid, nome){
+  if(pid){ psiPick.psiP = { id: pid, nome: nome || ('ID ' + pid) }; paintPsiPick('psiP'); psiPerson = psiPick.psiP; psiCarregarProntuario(); goPsi('pront'); }
+  else goPsi('painel');
+}
+// Busca de pessoas reutilizável (prefixo define os ids)
+async function psiBuscarPara(p){
+  const inp = document.getElementById(p + 'Busca');
+  const box = document.getElementById(p + 'Res');
+  if(!inp || !box) return;
+  const q = inp.value.trim();
+  if(q.length < 2){ box.innerHTML = ''; return; }
+  box.innerHTML = '<p class="text-xs text-slate-400">Buscando...</p>';
+  try{
+    const list = await api('/api/persons?q=' + encodeURIComponent(q) + '&limit=8');
+    if(!list.length){ box.innerHTML = '<p class="text-xs text-slate-400">Nada encontrado.</p>'; return; }
+    box.innerHTML = list.map(x=>`<button onclick="psiEscolher('${p}',${x.id},'${esc(x.nome||'').replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-emerald-50"><b>${esc(x.nome)}</b><br><span class="text-slate-500">${esc(x.cpf||x.rg||'')}</span></button>`).join('');
+  }catch(e){ box.innerHTML = '<p class="text-xs text-rose-500">Erro na busca.</p>'; }
+}
+function psiEscolher(p, id, nome){
+  psiPick[p] = { id, nome };
+  paintPsiPick(p);
+  const inp = document.getElementById(p + 'Busca'); if(inp) inp.value = '';
+  const box = document.getElementById(p + 'Res'); if(box) box.innerHTML = '';
+  if(psiPickCb[p]) psiPickCb[p]();
+}
+function paintPsiPick(p){
+  const el = document.getElementById(p + 'Sel');
+  if(!el) return;
+  const v = psiPick[p];
+  el.innerHTML = v ? `<div class="rounded-xl p-2.5 text-xs border border-emerald-300 bg-emerald-50 text-emerald-900">✅ <b>${esc(v.nome)}</b> <span class="text-slate-500">(ID ${v.id})</span> <button onclick="psiLimparPick('${p}')" class="ml-1 font-bold text-slate-500">trocar</button></div>` : '';
+}
+function psiLimparPick(p){ delete psiPick[p]; paintPsiPick(p); if(psiPickCb[p]) psiPickCb[p](); }
+// ---- Prontuário ----
+psiPickCb.psiP = ()=>{ psiPerson = psiPick.psiP || null; psiCarregarProntuario(); };
+function psiDataBR(iso){ const m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso||''); }
+async function psiCarregarProntuario(){
+  const info = document.getElementById('psiProntInfo');
+  const ids = ['psiT_queixa','psiT_historico','psiT_vinculos','psiT_saude','psiT_subst','psiT_risco','psiT_obs','psiP_period','psiP_status','psiP_medtipo','psiP_medini','psiP_medfim','psiP_metas'];
+  if(!psiPerson){
+    if(info) info.textContent = '';
+    ids.forEach(id=>psiSet(id, ''));
+    psiSet('psiP_status', 'ativo');
+    document.getElementById('psiP_grupos').innerHTML = '';
+    document.getElementById('psiEvolList').innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Selecione uma pessoa para ver o prontuário. 🔎</p>';
+    psiPront = null;
+    return;
+  }
+  if(info) info.textContent = '— ' + psiPerson.nome;
+  try{
+    const [prontArr, evol, grupos] = await Promise.all([
+      api('/api/psi?kind=prontuario&personId=' + psiPerson.id),
+      api('/api/psi?kind=evolucao&personId=' + psiPerson.id),
+      api('/api/psi?kind=grupo')
+    ]);
+    psiPront = prontArr[0] || null;
+    const dd = (psiPront && psiPront.dados) || {};
+    psiSet('psiT_queixa', dd.queixa); psiSet('psiT_historico', dd.historico); psiSet('psiT_vinculos', dd.vinculos);
+    psiSet('psiT_saude', dd.saude); psiSet('psiT_subst', dd.subst); psiSet('psiT_risco', dd.risco); psiSet('psiT_obs', dd.obs);
+    psiSet('psiP_period', dd.periodicidade); psiSet('psiP_status', dd.status || 'ativo');
+    psiSet('psiP_medtipo', dd.medidaTipo); psiSet('psiP_medini', dd.medidaInicio); psiSet('psiP_medfim', dd.medidaFim);
+    psiSet('psiP_metas', dd.metas);
+    const mine = grupos.filter(g=>((g.dados||{}).integrantes||[]).some(m=>String((m&&m.id)||m)===String(psiPerson.id)));
+    document.getElementById('psiP_grupos').innerHTML = mine.length ? ('👥 Grupos: ' + mine.map(g=>`<b>${esc((g.dados||{}).nome||('#'+g.id))}</b>`).join(', ')) : '👥 Nenhum grupo';
+    evol.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    document.getElementById('psiEvolList').innerHTML = evol.length ? evol.map(e=>{
+      const ed = e.dados || {};
+      return `<div class="border border-slate-200 rounded-xl p-3 bg-white"><div class="flex items-center gap-2 text-[11px] text-slate-500"><b class="text-slate-700">${psiDataBR(e.data)}</b><span class="font-bold bg-slate-100 px-1.5 py-0.5 rounded">${esc(ed.tipo||'')}</span><span class="ml-auto">por ${esc(e.user||'')}</span><button onclick="psiDelEvolucao(${e.id})" class="font-bold text-rose-400 hover:text-rose-600">✕</button></div>${['s','o','a','p'].map(k=>ed[k]?`<p class="text-xs mt-1"><b class="text-emerald-700">${k.toUpperCase()}:</b> ${esc(ed[k])}</p>`:'').join('')}</div>`;
+    }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Sem evoluções registradas.</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiProntuario(){
+  const err = document.getElementById('psiProntErr');
+  err.classList.add('hidden');
+  if(!psiPerson){ err.textContent = '⚠️ Selecione a pessoa primeiro'; err.classList.remove('hidden'); return; }
+  const dados = { queixa: psiVal('psiT_queixa'), historico: psiVal('psiT_historico'), vinculos: psiVal('psiT_vinculos'), saude: psiVal('psiT_saude'), subst: psiVal('psiT_subst'), risco: psiVal('psiT_risco'), obs: psiVal('psiT_obs'), periodicidade: psiVal('psiP_period'), status: psiVal('psiP_status') || 'ativo', medidaTipo: psiVal('psiP_medtipo'), medidaInicio: document.getElementById('psiP_medini').value, medidaFim: document.getElementById('psiP_medfim').value, metas: psiVal('psiP_metas') };
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'prontuario', personId: psiPerson.id, personName: psiPerson.nome, dados }) });
+    if(dados.medidaTipo && dados.medidaFim){
+      const meds = await api('/api/psi?kind=medida&personId=' + psiPerson.id);
+      if(!meds.some(m=>((m.dados||{}).tipo===dados.medidaTipo && (m.dados||{}).fim===dados.medidaFim))){
+        await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'medida', personId: psiPerson.id, personName: psiPerson.nome, dados:{ tipo: dados.medidaTipo, inicio: dados.medidaInicio, fim: dados.medidaFim, status:'ativa' } }) });
+      }
+    }
+    toast('✅ Prontuário salvo');
+    psiCarregarProntuario();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function savePsiEvolucao(){
+  if(!psiPerson) return toast('⚠️ Selecione a pessoa primeiro');
+  const dados = { tipo: psiVal('psiE_tipo') || 'individual', s: psiVal('psiE_s'), o: psiVal('psiE_o'), a: psiVal('psiE_a'), p: psiVal('psiE_p') };
+  if(!dados.s && !dados.o && !dados.a && !dados.p) return toast('⚠️ Preencha ao menos um campo do SOAP');
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'evolucao', personId: psiPerson.id, personName: psiPerson.nome, data: document.getElementById('psiE_data').value, dados }) });
+    ['psiE_s','psiE_o','psiE_a','psiE_p'].forEach(id=>psiSet(id, ''));
+    toast('✅ Evolução registrada');
+    psiCarregarProntuario();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiDelEvolucao(id){
+  if(!confirm('Excluir esta evolução?')) return;
+  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗑️ Evolução excluída'); psiCarregarProntuario(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Atendimentos (frequência) ----
+const PSI_STATUS = { presente:['✅ Presente','bg-emerald-100 text-emerald-800'], falta:['❌ Falta','bg-rose-100 text-rose-800'], falta_justificada:['⚠️ Justificada','bg-amber-100 text-amber-800'] };
+async function loadPsiAtend(){
+  try{
+    const list = await api('/api/psi?kind=atendimento');
+    list.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    document.getElementById('psiAtendList').innerHTML = list.slice(0, 80).map(a=>{
+      const dd = a.dados || {};
+      const st = PSI_STATUS[dd.status] || PSI_STATUS.presente;
+      return `<div class="border border-slate-200 rounded-xl p-3 bg-white"><div class="flex items-center gap-2 text-[11px]"><b class="text-slate-700">${psiDataBR(a.data)}</b><b class="text-xs">${esc(a.personName||'')}</b><span class="ml-auto text-[10px] font-extrabold px-1.5 py-0.5 rounded ${st[1]}">${st[0]}</span><button onclick="psiDelAtend(${a.id})" class="font-bold text-rose-400 hover:text-rose-600">✕</button></div><p class="text-[11px] text-slate-500 mt-0.5">${esc(dd.tipo||'')} • ${esc(dd.local||'UMEPE')}${dd.obs?` — ${esc(dd.obs)}`:''}</p></div>`;
+    }).join('') || '<p class="text-xs text-slate-400 text-center py-6">Nenhum atendimento registrado.</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiAtendimento(){
+  const p = psiPick.psiA || psiPerson;
+  if(!p) return toast('⚠️ Selecione a pessoa (busca acima ou aba Prontuário)');
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'atendimento', personId: p.id, personName: p.nome, data: document.getElementById('psiA_data').value, dados:{ tipo: psiVal('psiA_tipo') || 'individual', status: psiVal('psiA_status') || 'presente', local: psiVal('psiA_local') || 'UMEPE', obs: psiVal('psiA_obs') } }) });
+    psiSet('psiA_obs', '');
+    toast('✅ Atendimento registrado');
+    loadPsiAtend();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiDelAtend(id){
+  if(!confirm('Excluir este atendimento?')) return;
+  try{ await api('/api/psi/' + id, { method:'DELETE' }); toast('🗑️ Excluído'); loadPsiAtend(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Grupos reflexivos ----
+async function loadPsiGrupos(){
+  try{
+    const list = await api('/api/psi?kind=grupo');
+    list.sort((a,b)=>(b.id||0)-(a.id||0));
+    document.getElementById('psiGrupoList').innerHTML = list.map(g=>{
+      const dd = g.dados || {};
+      const n = ((dd.integrantes||[]).length);
+      const on = String(g.id) === String(psiGrupoSel);
+      return `<button onclick="openPsiGrupo(${g.id})" class="w-full text-left border rounded-xl p-3 text-xs ${on?'border-emerald-400 bg-emerald-50':'border-slate-200 bg-white'}"><b>${esc(dd.nome||('#'+g.id))}</b> <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${dd.ativo===false?'bg-slate-200 text-slate-500':'bg-emerald-100 text-emerald-800'}">${esc(dd.tipo||'')}</span><br><span class="text-slate-500">${esc(dd.dia||'')} • ${n} integrante(s)${dd.ativo===false?' • inativo':''}</span></button>`;
+    }).join('') || '<p class="text-xs text-slate-400 text-center py-4">Nenhum grupo criado.</p>';
+    if(psiGrupoSel) openPsiGrupo(psiGrupoSel, true);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiGrupo(){
+  const nome = psiVal('psiG_nome');
+  if(!nome) return toast('⚠️ Informe o nome do grupo');
+  try{
+    const g = await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'grupo', dados:{ nome, tipo: psiVal('psiG_tipo') || 'HAVD', dia: psiVal('psiG_dia'), ativo: true, integrantes: [] } }) });
+    psiSet('psiG_nome', ''); psiSet('psiG_dia', '');
+    toast('✅ Grupo criado');
+    psiGrupoSel = g.id;
+    loadPsiGrupos();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function openPsiGrupo(id, silent){
+  psiGrupoSel = id;
+  try{
+    const g = await api('/api/psi/' + id);
+    const dd = g.dados || {};
+    const ints = dd.integrantes || [];
+    const encs = (await api('/api/psi?kind=encontro&grupoId=' + id)).sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    document.getElementById('psiGrupoDet').innerHTML = `
+      <div class="flex items-center gap-2 mb-3"><h3 class="font-display font-bold text-sm">👥 ${esc(dd.nome||'')}</h3><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">${esc(dd.tipo||'')}</span><span class="text-[11px] text-slate-500">${esc(dd.dia||'')}</span>
+      <button onclick="psiToggleGrupo(${g.id},${dd.ativo===false})" class="ml-auto text-[11px] font-bold text-slate-500">${dd.ativo===false?'▶ Reativar':'⏸ Inativar'}</button></div>
+      <label class="lbl">INTEGRANTES (${ints.length})</label>
+      <div class="flex flex-wrap gap-1.5 my-2">${ints.map(m=>`<span class="text-[11px] font-bold bg-slate-100 border border-slate-200 rounded-full px-2.5 py-1">${esc(m.nome||('ID '+m.id))} <button onclick="psiDelIntegrante(${g.id},'${m.id}')" class="text-rose-500 font-bold">✕</button></span>`).join('') || '<span class="text-xs text-slate-400">Nenhum integrante.</span>'}</div>
+      <input id="psiGIBusca" oninput="psiBuscarPara('psiGI')" placeholder="Buscar pessoa para adicionar..." class="inp mb-2">
+      <div id="psiGIRes" class="space-y-1.5 mb-2"></div><div id="psiGISel" class="mb-2"></div>
+      <button onclick="psiAddIntegrante(${g.id})" class="btn btn-ghost text-xs px-3 py-2 mb-4">➕ Adicionar integrante</button>
+      <label class="lbl">NOVO ENCONTRO</label>
+      <div class="grid grid-cols-3 gap-2.5 mt-1">
+        <div><label class="lbl">DATA</label><input id="psiEnc_data" type="date" class="inp mt-1 mb-2.5"></div>
+        <div class="col-span-2"><label class="lbl">TEMA</label><input id="psiEnc_tema" placeholder="Tema do encontro" class="inp mt-1 mb-2.5"></div>
+      </div>
+      <label class="lbl">PRESENTES</label>
+      <div class="grid grid-cols-2 gap-1.5 my-2 max-h-[140px] overflow-y-auto">${ints.map(m=>`<label class="flex items-center gap-2 text-xs border border-slate-200 rounded-lg px-2 py-1.5 cursor-pointer"><input type="checkbox" data-enc-pres="${m.id}" data-enc-nome="${esc(m.nome||'').replace(/"/g,'&quot;')}" class="w-4 h-4 accent-emerald-600"> ${esc(m.nome||('ID '+m.id))}</label>`).join('') || '<span class="text-xs text-slate-400">Adicione integrantes.</span>'}</div>
+      <div><label class="lbl">OBSERVAÇÃO DO ENCONTRO</label><textarea id="psiEnc_obs" rows="2" class="inp mt-1 mb-2.5"></textarea></div>
+      <button onclick="savePsiEncontro(${g.id})" class="btn btn-primary text-xs px-4 py-2 mb-4">💾 Salvar encontro</button>
+      <label class="lbl">HISTÓRICO DE ENCONTROS</label>
+      <div class="space-y-2 mt-2 max-h-[260px] overflow-y-auto">${encs.map(e=>{ const ed=e.dados||{}; return `<div class="border border-slate-200 rounded-xl p-2.5 bg-white text-xs"><b>${psiDataBR(e.data)}</b> — ${esc(ed.tema||'Sem tema')} <span class="ml-1 text-[10px] font-bold bg-slate-100 px-1.5 py-0.5 rounded">${(ed.presentes||[]).length}/${ints.length} presentes</span><br><span class="text-slate-500">${(ed.presentes||[]).map(p=>esc(p.nome||p.id)).join(', ')||'—'}</span>${ed.obs?`<br><span class="text-slate-600">${esc(ed.obs)}</span>`:''}</div>`; }).join('') || '<p class="text-xs text-slate-400">Sem encontros.</p>'}</div>`;
+    if(!silent) loadPsiGrupos();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiAddIntegrante(gid){
+  const p = psiPick.psiGI;
+  if(!p) return toast('⚠️ Busque e selecione a pessoa');
+  try{
+    const g = await api('/api/psi/' + gid);
+    const ints = ((g.dados||{}).integrantes) || [];
+    if(ints.some(m=>String((m&&m.id)||m)===String(p.id))) return toast('Já é integrante');
+    ints.push({ id: p.id, nome: p.nome });
+    await api('/api/psi/' + gid, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados:{ integrantes: ints } }) });
+    delete psiPick.psiGI; paintPsiPick('psiGI');
+    try{
+      const pr = await api('/api/psi?kind=prontuario&personId=' + p.id);
+      if(!pr.length) await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'prontuario', personId: p.id, personName: p.nome, dados:{ status:'ativo' } }) });
+    }catch(e){}
+    toast('✅ Integrante adicionado');
+    openPsiGrupo(gid, true);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiDelIntegrante(gid, pid){
+  try{
+    const g = await api('/api/psi/' + gid);
+    const ints = (((g.dados||{}).integrantes) || []).filter(m=>String((m&&m.id)||m)!==String(pid));
+    await api('/api/psi/' + gid, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados:{ integrantes: ints } }) });
+    openPsiGrupo(gid, true);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiToggleGrupo(gid, toActive){
+  try{
+    await api('/api/psi/' + gid, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados:{ ativo: !!toActive } }) });
+    loadPsiGrupos();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiEncontro(gid){
+  const presentes = [...document.querySelectorAll('[data-enc-pres]:checked')].map(c=>({ id: c.getAttribute('data-enc-pres'), nome: c.getAttribute('data-enc-nome') || '' }));
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'encontro', grupoId: gid, data: document.getElementById('psiEnc_data').value, dados:{ tema: psiVal('psiEnc_tema'), presentes, obs: psiVal('psiEnc_obs') } }) });
+    // cada presente vira atendimento de grupo (frequência)
+    for(const p of presentes){
+      try{ await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'atendimento', personId: p.id, personName: p.nome, data: document.getElementById('psiEnc_data').value, dados:{ tipo:'grupo', status:'presente', local:'Grupo', obs: psiVal('psiEnc_tema') } }) }); }catch(e){}
+    }
+    toast('✅ Encontro registrado');
+    openPsiGrupo(gid, true);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Encaminhamentos (com contra-referência) ----
+const PSI_ENC_STATUS = { pendente:['⏳ Pendente','bg-amber-100 text-amber-800'], efetivado:['✅ Efetivado','bg-emerald-100 text-emerald-800'], nao_efetivado:['🚫 Não efetivado','bg-slate-200 text-slate-600'] };
+async function loadPsiEnc(){
+  try{
+    const list = await api('/api/psi?kind=encaminhamento');
+    list.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+    document.getElementById('psiEncList').innerHTML = list.slice(0, 80).map(e=>{
+      const dd = e.dados || {};
+      const st = PSI_ENC_STATUS[dd.status] || PSI_ENC_STATUS.pendente;
+      return `<div class="border border-slate-200 rounded-xl p-3 bg-white"><div class="flex items-center gap-2 text-[11px]"><b class="text-slate-700">${psiDataBR(e.data)}</b><b class="text-xs">${esc(e.personName||'')}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">${esc(dd.destino||'')}</span><span class="ml-auto text-[10px] font-extrabold px-1.5 py-0.5 rounded ${st[1]}">${st[0]}</span></div>
+      <p class="text-xs mt-1">${esc(dd.motivo||'')}</p>
+      ${dd.contraref?`<p class="text-[11px] mt-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">↩️ Contra-referência: ${esc(dd.contraref)}</p>`:''}
+      <div class="grid grid-cols-3 gap-1.5 mt-2"><select id="encSt_${e.id}" class="inp !py-1.5 text-xs"><option value="pendente">Pendente</option><option value="efetivado">Efetivado</option><option value="nao_efetivado">Não efetivado</option></select><input id="encCr_${e.id}" value="${esc(dd.contraref||'')}" placeholder="Contra-referência..." class="inp !py-1.5 text-xs col-span-2"></div>
+      <div class="flex gap-1.5 mt-1.5"><button onclick="savePsiEncStatus(${e.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">💾 Salvar situação</button><button onclick="psiEncOficio(${e.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✉️ Ofício</button></div></div>`;
+    }).join('') || '<p class="text-xs text-slate-400 text-center py-6">Nenhum encaminhamento.</p>';
+    list.slice(0, 80).forEach(e=>{ const s = document.getElementById('encSt_' + e.id); if(s) s.value = (e.dados||{}).status || 'pendente'; });
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiEncaminhamento(){
+  const p = psiPick.psiE || psiPerson;
+  if(!p) return toast('⚠️ Selecione a pessoa');
+  if(!psiVal('psiEnc_motivo')) return toast('⚠️ Informe o motivo');
+  try{
+    await api('/api/psi', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'encaminhamento', personId: p.id, personName: p.nome, data: document.getElementById('psiEnc_data').value, dados:{ destino: psiVal('psiEnc_dest') || 'CRAS', motivo: psiVal('psiEnc_motivo'), status:'pendente', contraref:'' } }) });
+    psiSet('psiEnc_motivo', '');
+    toast('✅ Encaminhamento registrado');
+    loadPsiEnc();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function savePsiEncStatus(id){
+  try{
+    await api('/api/psi/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados:{ status: document.getElementById('encSt_' + id).value, contraref: document.getElementById('encCr_' + id).value.trim() } }) });
+    toast('✅ Situação atualizada');
+    loadPsiEnc();
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function psiEncOficio(id){
+  try{
+    const e = await api('/api/psi/' + id);
+    const dd = e.dados || {};
+    setPsiDocTipo('oficioenc');
+    let person = null;
+    try{ const r = await api('/api/persons?q=' + encodeURIComponent(e.personName||'')); person = (r||[])[0] || null; }catch(err){}
+    psiPick.psiD = { id: e.personId, nome: e.personName };
+    paintPsiPick('psiD');
+    psiSet('docF_nome', e.personName); psiSet('docF_destino', dd.destino); psiSet('docF_motivo', dd.motivo);
+    if(person){ psiSet('docF_cpf', person.cpf); psiSet('docF_endereco', person.endereco || ''); }
+    goPsi('docs');
+    toast('📄 Dados levados ao ofício — confira e salve');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Documentos psicossociais ----
+const PSI_DOC_META = {
+  declaracao:{ nome:'Declaração de comparecimento' },
+  relfreq:{ nome:'Relatório de frequência' },
+  reltec:{ nome:'Relatório técnico' },
+  oficioenc:{ nome:'Ofício de encaminhamento' }
+};
+function setPsiDocTipo(t){
+  psiDocTipo = t;
+  psiDocEditId = null;
+  document.querySelectorAll('#psiDocTipos button').forEach(b=>{
+    const on = b.dataset.doc === t;
+    b.className = 'btn text-xs px-2 py-2' + (on ? ' text-white' : ' btn-ghost');
+    b.style.background = on ? 'linear-gradient(135deg,#059669,#10b981)' : '';
+  });
+  renderPsiDocForm();
+}
+function psiDocField(id, label, extra){
+  return `<div><label class="lbl">${label}</label><input id="docF_${id}" ${extra||''} class="inp mt-1 mb-2.5 text-xs"></div>`;
+}
+function psiDocArea(id, label, rows){
+  return `<div class="col-span-2"><label class="lbl">${label}</label><textarea id="docF_${id}" rows="${rows||2}" class="inp mt-1 mb-2.5 text-xs"></textarea></div>`;
+}
+function renderPsiDocForm(){
+  const box = document.getElementById('psiDocForm');
+  if(!box) return;
+  const comum = `
+    <input id="psiDBusca" oninput="psiBuscarPara('psiD')" placeholder="Buscar pessoa p/ preencher..." class="inp mb-2 text-xs">
+    <div id="psiDRes" class="space-y-1.5 mb-2"></div><div id="psiDSel" class="mb-2"></div>
+    <div class="grid grid-cols-2 gap-2.5">
+      ${psiDocField('nome','NOME *')}
+      ${psiDocField('cpf','CPF')}
+      ${psiDocField('processo','PROCESSO')}
+      ${psiDocField('vara','VARA')}
+      ${psiDocField('medida','MEDIDA')}
+      ${psiDocField('cidade','CIDADE')}
+      ${psiDocField('dataDoc','DATA DO DOCUMENTO','type="date"')}
+      ${psiDocField('periodo','PERÍODO (declaração)')}
+    </div>`;
+  const ident = `
+    <div class="grid grid-cols-2 gap-2.5">
+      ${psiDocField('psicologo','PSICÓLOGO(A)')}
+      ${psiDocField('crp','CRP')}
+    </div>`;
+  let extra = '';
+  if(psiDocTipo === 'declaracao') extra = `<div class="grid grid-cols-2 gap-2.5">${psiDocField('data','DATA DO COMPARECIMENTO','type="date"')}${psiDocField('finalidade','FINALIDADE','placeholder="atendimento psicossocial"')}</div>${psiDocArea('texto','TEXTO COMPLEMENTAR (opcional)',2)}`;
+  if(psiDocTipo === 'relfreq') extra = `<div class="grid grid-cols-2 gap-2.5">${psiDocField('dataInicio','INÍCIO DO PERÍODO','type="date"')}${psiDocField('dataFim','FIM DO PERÍODO','type="date"')}</div>
+    <div class="border border-dashed border-slate-300 rounded-xl p-2.5 mb-2.5"><label class="lbl">ITENS DE FREQUÊNCIA</label>
+    <div class="flex gap-1.5 mt-1"><button onclick="psiPuxarAtendimentos()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">⬇ Puxar atendimentos</button></div>
+    <div id="psiDocItens" class="space-y-1.5 mt-2"></div>
+    <div class="grid grid-cols-4 gap-1.5 mt-2"><input id="psiItem_data" type="date" class="inp !py-1.5 text-xs"><input id="psiItem_local" placeholder="Local" class="inp !py-1.5 text-xs"><select id="psiItem_status" class="inp !py-1.5 text-xs"><option value="presente">Presente</option><option value="falta">Falta</option><option value="falta_justificada">Justificada</option></select><button onclick="psiDocAddItem()" class="btn btn-ghost py-1.5 text-xs">＋</button></div></div>
+    ${psiDocArea('texto','OBSERVAÇÕES GERAIS',2)}`;
+  if(psiDocTipo === 'reltec') extra = `${psiDocArea('resumo','HISTÓRICO E ACOMPANHAMENTO',3)}${psiDocArea('parecer','PARECER TÉCNICO',3)}${psiDocArea('plano','PLANO / RECOMENDAÇÕES',3)}`;
+  if(psiDocTipo === 'oficioenc') extra = `<div class="grid grid-cols-2 gap-2.5">${psiDocField('numero','Nº OFÍCIO')}${psiDocField('destino','DESTINO *')}${psiDocField('motivo','MOTIVO')}${psiDocField('contato','CONTATO')}<div class="col-span-2">${psiDocField('endereco','ENDEREÇO')}</div></div>${psiDocArea('texto','TEXTO LIVRE (substitui o padrão)',3)}`;
+  box.innerHTML = comum + extra + ident;
+  if(!psiVal('docF_psicologo') && session) psiSet('docF_psicologo', session.name);
+  if(!psiVal('docF_cidade')) psiSet('docF_cidade', 'Juazeiro do Norte');
+  renderPsiDocItens();
+}
+function getPsiDocData(){
+  const g = (id)=>psiVal('docF_' + id);
+  const d = { nome: g('nome'), cpf: g('cpf'), processo: g('processo'), vara: g('vara'), medida: g('medida'), cidade: g('cidade'), dataDoc: document.getElementById('docF_dataDoc').value, periodo: g('periodo'), psicologo: g('psicologo'), crp: g('crp'), texto: g('texto'), resumo: g('resumo'), parecer: g('parecer'), plano: g('plano'), numero: g('numero'), destino: g('destino'), motivo: g('motivo'), contato: g('contato'), endereco: g('endereco'), data: document.getElementById('docF_data') ? document.getElementById('docF_data').value : '', finalidade: g('finalidade'), dataInicio: document.getElementById('docF_dataInicio') ? document.getElementById('docF_dataInicio').value : '', dataFim: document.getElementById('docF_dataFim') ? document.getElementById('docF_dataFim').value : '' };
+  if(psiDocTipo === 'relfreq') d.itens = psiDocItens;
+  if(psiDocTipo === 'declaracao' && d.finalidade) d.texto = d.finalidade;
+  return d;
+}
+function renderPsiDocItens(){
+  const box = document.getElementById('psiDocItens');
+  if(!box) return;
+  box.innerHTML = psiDocItens.map((r,i)=>`<div class="flex items-center gap-1.5 text-[11px] border border-slate-200 rounded-lg px-2 py-1.5"><b>${psiDataBR(r.data)}</b><span class="flex-1 truncate">${esc(r.local||'')} • ${esc(r.status||'')}</span><button onclick="psiDocDelItem(${i})" class="text-rose-500 font-bold">✕</button></div>`).join('') || '<p class="text-[11px] text-slate-400">Nenhum item. Puxe os atendimentos ou adicione.</p>';
+}
+function psiDocAddItem(){
+  psiDocItens.push({ data: document.getElementById('psiItem_data').value, local: psiVal('psiItem_local') || 'UMEPE', status: document.getElementById('psiItem_status').value || 'presente', obs: '' });
+  renderPsiDocItens();
+}
+function psiDocDelItem(i){ psiDocItens.splice(i,1); renderPsiDocItens(); }
+async function psiPuxarAtendimentos(){
+  const p = psiPick.psiD || psiPerson;
+  const ini = psiVal('docF_dataInicio'), fim = psiVal('docF_dataFim');
+  try{
+    let list = await api('/api/psi?kind=atendimento');
+    if(p) list = list.filter(a=>String(a.personId)===String(p.id));
+    if(ini) list = list.filter(a=>(a.data||'')>=ini);
+    if(fim) list = list.filter(a=>(a.data||'')<=fim);
+    list.sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
+    psiDocItens = list.map(a=>({ data: a.data, local: (a.dados||{}).local || 'UMEPE', status: (a.dados||{}).status || 'presente', obs: (a.dados||{}).obs || '' }));
+    if(p){ psiSet('docF_nome', p.nome); }
+    renderPsiDocItens();
+    toast(`⬇ ${psiDocItens.length} atendimento(s) puxados`);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function previewPsiDoc(){
+  const err = document.getElementById('psiDocErr');
+  err.classList.add('hidden');
+  const dados = getPsiDocData();
+  if(!dados.nome){ err.textContent = '⚠️ Informe o nome'; err.classList.remove('hidden'); return; }
+  try{
+    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo: psiDocTipo, dados }) });
+    if(!res.ok){ const j = await res.json().catch(()=>({})); throw new Error(j.error || 'Erro ao gerar PDF'); }
+    const blob = await res.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+async function savePsiDoc(){
+  const err = document.getElementById('psiDocErr');
+  err.classList.add('hidden');
+  const dados = getPsiDocData();
+  if(!dados.nome){ err.textContent = '⚠️ Informe o nome'; err.classList.remove('hidden'); return; }
+  try{
+    let res;
+    if(psiDocEditId){
+      res = await api('/api/termos/' + psiDocEditId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ dados }) });
+      toast('✅ Documento atualizado');
+    } else {
+      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo: psiDocTipo, dados }) });
+      toast('✅ Documento salvo');
+    }
+    const id = res.id || psiDocEditId;
+    if(id) downloadTermoPDF(id);
+    psiDocEditId = null;
+    loadPsiDocsHist();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+const PSI_DOC_CHIP = { declaracao:['DECLARAÇÃO','bg-emerald-100 text-emerald-800'], relfreq:['FREQUÊNCIA','bg-blue-100 text-blue-800'], reltec:['REL. TÉCNICO','bg-violet-100 text-violet-800'], oficioenc:['OFÍCIO ENC.','bg-amber-100 text-amber-800'] };
+async function loadPsiDocsHist(){
+  try{
+    const all = await api('/api/termos');
+    const list = all.filter(t=>PSI_DOC_META[t.tipo]).sort((a,b)=>(b.id||0)-(a.id||0)).slice(0, 60);
+    document.getElementById('psiDocsHist').innerHTML = list.map(t=>{
+      const chip = PSI_DOC_CHIP[t.tipo] || [t.tipo, 'bg-slate-100 text-slate-700'];
+      const dd = t.dados || {};
+      return `<div class="border border-slate-200 rounded-xl p-3 bg-white"><div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${chip[1]}">${chip[0]}</span><span class="text-[11px] text-slate-500">${t.dataEnvio?psiDataBR(t.dataEnvio):''}</span></div>
+      <p class="text-xs font-bold truncate mt-1">${esc(dd.nome||'')}</p>
+      <div class="flex gap-1.5 mt-2"><button onclick="previewTermoExistente(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">👁️ Ver</button><button onclick="editPsiDoc(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✏️ Editar</button><button onclick="downloadTermoPDF(${t.id})" class="btn btn-primary flex-1 py-1.5 text-[11px]">⬇ PDF</button></div>
+      <button onclick="delPsiDoc(${t.id})" class="w-full mt-1.5 text-[11px] font-bold text-rose-600 hover:text-rose-800">🗑️ Excluir</button></div>`;
+    }).join('') || '<p class="text-xs text-slate-400 text-center py-6">Nenhum documento emitido.</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function editPsiDoc(id){
+  try{
+    const t = await api('/api/termos/' + id);
+    if(!PSI_DOC_META[t.tipo]) return toast('⚠️ Tipo não editável aqui');
+    setPsiDocTipo(t.tipo);
+    psiDocEditId = id;
+    const dd = t.dados || {};
+    Object.keys(dd).forEach(k=>{
+      if(k === 'itens'){ psiDocItens = Array.isArray(dd.itens) ? dd.itens.slice() : []; renderPsiDocItens(); return; }
+      const map = { finalidade:'texto' };
+      const el = document.getElementById('docF_' + (map[k] || k));
+      if(el && typeof dd[k] === 'string') el.value = dd[k];
+    });
+    if(dd.nome) psiPick.psiD = { id: '', nome: dd.nome };
+    goPsi('docs');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function delPsiDoc(id){
+  if(!confirm('Excluir o documento #' + id + '?')) return;
+  try{ await api('/api/termos/' + id, { method:'DELETE' }); toast('🗑️ Excluído'); loadPsiDocsHist(); }catch(e){ toast('⚠️ ' + e.message); }
+}
+// ---- Painel psicossocial ----
+async function loadPsiPainel(){
+  try{
+    const [dash, alerts] = await Promise.all([api('/api/psi/dashboard'), api('/api/psi/alerts')]);
+    const card = (v, l, c) => `<div class="card p-4 text-center"><p class="font-display font-extrabold text-2xl ${c}">${v}</p><p class="text-[11px] font-bold text-slate-500 mt-1">${l}</p></div>`;
+    document.getElementById('psiDashCards').innerHTML =
+      card(dash.acompanhados, 'EM ACOMPANHAMENTO', 'text-emerald-700') +
+      card(dash.atendimentosMes, 'ATENDIMENTOS NO MÊS', 'text-indigo-700') +
+      card(dash.faltasMes, 'FALTAS NO MÊS', 'text-rose-700') +
+      card(dash.gruposAtivos, 'GRUPOS ATIVOS', 'text-blue-700') +
+      card(dash.encPendentes, 'ENC. PENDENTES', 'text-amber-700') +
+      card(dash.medidasVencendo, 'MEDIDAS VENCENDO 30D', 'text-orange-700');
+    const ico = { falta:'🔴 Falta', medida:'🟡 Medida', encaminhamento:'🔵 Encaminhamento', retorno:'🟠 Retorno' };
+    document.getElementById('psiAlertsList').innerHTML = alerts.length ? alerts.map(a=>`<button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-xl p-3 bg-white text-xs"><b>${ico[a.tipo]||'⚠️'}</b> — ${esc(a.texto)}${a.personName?`<br><b>${esc(a.personName)}</b>`:''}</button>`).join('') : '<p class="text-xs text-emerald-700 text-center py-6">✅ Nenhum alerta. Tudo em dia!</p>';
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
 // Regra Infinity: só o Júlio (ou admin) assume
 function podeAssumir(t){
   if(!t || t.modeloTornozeleira !== 'Infinity') return true;
@@ -3578,6 +4242,7 @@ function lockInfinity(){
   return `<p class="mt-2 text-[11px] font-bold text-fuchsia-800 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Infinity • exclusivo Júlio Cesar</p>`;
 }
 function startBtn(t){
+  if(session && session.role==='psico') return `<p class="mt-2 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-2.5 text-center">🧠 Acompanhamento no módulo Psicossocial</p>`;
   if(!podeAssumir(t)) return lockInfinity();
   return `<button onclick="startTicket(${t.id})" class="btn btn-primary mt-3 w-full py-2.5 text-xs">▶ Iniciar atendimento</button>`;
 }
@@ -3902,7 +4567,7 @@ async function saveAccount(){
 async function loadUsersAdmin(){
   try{
     const list = await api('/api/users');
-    const badge = r => r === 'admin' ? '<span class="text-[10px] font-extrabold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">ADMIN</span>' : r === 'tecnico' ? '<span class="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">TÉCNICO</span>' : '<span class="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">RECEPÇÃO</span>';
+    const badge = r => r === 'admin' ? '<span class="text-[10px] font-extrabold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">ADMIN</span>' : r === 'tecnico' ? '<span class="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">TÉCNICO</span>' : r === 'psico' ? '<span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">PSICO</span>' : '<span class="text-[10px] font-extrabold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">RECEPÇÃO</span>';
     document.getElementById('usersList').innerHTML = list.map(u => `<div class="border ${u.active === false ? 'border-slate-200 bg-slate-50 opacity-70' : 'border-slate-200'} rounded-xl p-3 flex items-center gap-3 text-sm"><span class="avatar w-9 h-9 text-xs">${initials(u.name)}</span><div class="flex-1 min-w-0"><b class="block truncate">${esc(u.name)}</b><span class="text-xs text-slate-500">@${esc(u.user)}</span></div><div class="flex flex-col gap-1 items-end">${badge(u.role)}${u.active === false ? '<span class="text-[10px] font-extrabold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">INATIVO</span>' : ''}</div><div class="flex flex-col gap-1"><button onclick="openUserEdit('${esc(u.user)}')" class="btn btn-ghost text-xs px-2.5 py-1.5">Editar</button><button onclick="resetUserPass('${esc(u.user)}')" title="Redefinir senha" class="btn btn-ghost text-xs px-2.5 py-1.5">Senha</button>${u.user !== session.user ? `<button onclick="toggleUserActive('${esc(u.user)}', ${u.active === false ? 'true' : 'false'})" class="btn text-xs px-2.5 py-1.5 ${u.active === false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${u.active === false ? 'Ativar' : 'Desativar'}</button><button onclick="deleteUser('${esc(u.user)}')" title="Remover" class="btn text-xs px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200">Remover</button>` : ''}</div></div>`).join('');
   }catch(e){ toast('⚠️ ' + e.message); }
 }
@@ -4015,7 +4680,7 @@ function renderTabs(){
     const on = activeConvo === val, un = convoUnread(val);
     return `<button onclick="setConvo('${val}')" class="relative flex-none text-[11px] font-extrabold px-3 py-1.5 rounded-full transition ${on ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}" ${on ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>${label}${un ? '<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 border-2 border-white"></span>' : ''}</button>`;
   };
-  box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : 'TEC ') + esc(u.name))).join('');
+  box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : u.role === 'psico' ? 'PSI ' : 'TEC ') + esc(u.name))).join('');
 }
 function setConvo(to){
   activeConvo = to; oldestChatId = null; hasMoreChat = true; renderTabs(); updateChatPlaceholder(); loadChat();

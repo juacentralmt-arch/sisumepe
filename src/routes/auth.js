@@ -50,7 +50,7 @@ router.post('/api/users', auth(['admin']), ah(async (req, res) => {
   const { user, name, role, pass } = req.body || {};
   const id = String(user || '').toLowerCase().trim().replace(/\s+/g, '');
   if (!id || !name || !pass) return res.status(400).json({ error: 'Usuário, nome e senha são obrigatórios' });
-  if (!['recepcao', 'tecnico', 'admin'].includes(role)) return res.status(400).json({ error: 'Perfil inválido' });
+  if (!['recepcao', 'tecnico', 'psico', 'admin'].includes(role)) return res.status(400).json({ error: 'Perfil inválido' });
   if (await store.users.byName(id)) return res.status(409).json({ error: 'Usuário já existe' });
   await store.users.insert({ user: id, name: String(name).trim(), role, pass: await bcrypt.hash(String(pass), 10), active: true });
   broadcast();
@@ -95,7 +95,7 @@ router.patch('/api/users/:user', auth(['admin']), ah(async (req, res) => {
     return res.status(400).json({ error: 'Você não pode desativar seu próprio usuário' });
   const fields = {};
   if (name && String(name).trim()) fields.name = String(name).trim();
-  if (['recepcao', 'tecnico', 'admin'].includes(role)) fields.role = role;
+  if (['recepcao', 'tecnico', 'psico', 'admin'].includes(role)) fields.role = role;
   if (active !== undefined) fields.active = active !== false;
   const upd = await store.users.patch(u.user, fields);
   // Desativação ou mudança de perfil: derruba sessões (permissões antigas morrem junto)

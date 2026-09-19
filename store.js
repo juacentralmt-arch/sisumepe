@@ -18,7 +18,7 @@ function seedUsers() {
     { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true },
     { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: 'joanderson123', active: true },
     { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: 'adailton123', active: true },
-    { user: 'psicologo', name: 'Psicólogo', role: 'recepcao', pass: 'psicologo123', active: true },
+    { user: 'psicologo', name: 'Psicólogo', role: 'psico', pass: 'psicologo123', active: true },
     { user: 'secretaria', name: 'Secretária', role: 'tecnico', pass: 'secretaria123', active: true },
     { user: 'admin', name: 'Administrador', role: 'admin', pass: 'admin123', active: true }
   ];
@@ -69,6 +69,8 @@ if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.ma
 if(!mem.googleTokens) mem.googleTokens = {};
 if(!mem.termos) mem.termos = [];
 if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+if(!Array.isArray(mem.psi)) mem.psi = [];
+if(!mem.seqPsi) mem.seqPsi = mem.psi.length ? Math.max(...mem.psi.map(x=>x.id))+1 : 1;
 
 // ---------------------------- SUPABASE -------------------------------
 let supa = null;
@@ -106,6 +108,10 @@ const AG = {
 };
 const TM = {
   id: 'id', user: 'user', tipo: 'tipo', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
+};
+// Psicossocial: kind = prontuario|evolucao|atendimento|grupo|encontro|encaminhamento|medida
+const PSI = {
+  id: 'id', user: 'user', kind: 'kind', personId: 'personid', personName: 'personname', grupoId: 'grupoid', data: 'data', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 function toApp(row, map) {
   if (!row) return null;
@@ -440,6 +446,63 @@ const store = {
     }
   },
 
+  // Psicossocial (sigilo: rotas restritas a psico/admin)
+  psi: {
+    async all(){
+      if(MODE==='file') return mem.psi;
+      try{ return must(await supa.from('psi_records').select('*').order('id', {ascending:false}).limit(2000), 'psi.all').map(r=>toApp(r, PSI)); }catch(e){ console.warn('psi.all fallback', e.message); return mem.psi; }
+    },
+    async byPerson(personId){
+      const all = await store.psi.all();
+      return all.filter(x=>String(x.personId)===String(personId)).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+    },
+    async byKind(kind){
+      const all = await store.psi.all();
+      return all.filter(x=>x.kind===kind);
+    },
+    async byId(id){
+      if(MODE==='file') return mem.psi.find(x=>eqi(x.id,id))||null;
+      try{ const r=must(await supa.from('psi_records').select('*').eq('id', Number(id)).limit(1),'psi.byId'); return r.length?toApp(r[0],PSI):null; }catch(e){ console.warn('psi.byId fallback', e.message); return mem.psi.find(x=>eqi(x.id,id))||null; }
+    },
+    async prontuario(personId){
+      const all = await store.psi.all();
+      return all.find(x=>x.kind==='prontuario' && String(x.personId)===String(personId))||null;
+    },
+    async insert(p){
+      const row = { ...p, createdAt: p.createdAt||new Date().toISOString(), updatedAt: new Date().toISOString() };
+      if(MODE==='file'){
+        row.id = mem.seqPsi++;
+        mem.psi.push(row); saveFile(); return row;
+      }
+      try{
+        const r=must(await supa.from('psi_records').insert(toRow(row, PSI)).select().single(),'psi.insert');
+        return toApp(r, PSI);
+      }catch(e){
+        console.warn('psi.insert fallback', e.message);
+        row.id = mem.seqPsi++;
+        mem.psi.push(row); return row;
+      }
+    },
+    async patch(id, fields){
+      if(MODE==='file'){
+        const e=mem.psi.find(x=>eqi(x.id,id)); if(!e) return null;
+        Object.assign(e, fields, { updatedAt: new Date().toISOString() }); saveFile(); return e;
+      }
+      try{
+        const r=must(await supa.from('psi_records').update(toRow({...fields, updatedAt: new Date().toISOString()}, PSI)).eq('id', Number(id)).select(),'psi.patch');
+        return r.length?toApp(r[0],PSI):null;
+      }catch(e){
+        console.warn('psi.patch fallback', e.message);
+        const ee=mem.psi.find(x=>eqi(x.id,id)); if(!ee) return null;
+        Object.assign(ee, fields, { updatedAt: new Date().toISOString() }); return ee;
+      }
+    },
+    async remove(id){
+      if(MODE==='file'){ mem.psi=mem.psi.filter(x=>!eqi(x.id,id)); saveFile(); return; }
+      try{ must(await supa.from('psi_records').delete().eq('id', Number(id)),'psi.remove'); }catch(e){ console.warn('psi.remove fallback', e.message); mem.psi=mem.psi.filter(x=>!eqi(x.id,id)); }
+    }
+  },
+
   // Sessões persistentes (sobrevivem a restart do servidor)
   sessions: {
     async insert(token, row) {
@@ -507,15 +570,15 @@ const store = {
   },
 
   async backup() {
-    const [persons, tickets, chat, audit, users, agenda, termos] = await Promise.all([
+    const [persons, tickets, chat, audit, users, agenda, termos, psi] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
-      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[])
+      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[]), store.psi.all().catch(()=>[])
     ]);
     const mx = a => a.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
     return {
-      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500), termos: termos.slice(-500),
+      persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500), termos: termos.slice(-500), psi: psi.slice(-2000),
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
-      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1
+      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1
     };
   },
 
@@ -530,8 +593,10 @@ const store = {
       const keepAgenda = (mem && mem.agenda) || [];
       const keepTokens = (mem && mem.googleTokens) || {};
       const keepTermos = (mem && mem.termos) || [];
+      const keepPsi = (mem && mem.psi) || [];
       const keepSeqAgenda = (mem && mem.seqAgenda) || 1;
       const keepSeqTermo = (mem && mem.seqTermo) || 1;
+      const keepSeqPsi = (mem && mem.seqPsi) || 1;
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat.slice(-200) : [],
@@ -540,8 +605,9 @@ const store = {
         agenda: Array.isArray(dump.agenda) ? dump.agenda.slice(-500) : keepAgenda,
         googleTokens: keepTokens,
         termos: Array.isArray(dump.termos) ? dump.termos.slice(-500) : keepTermos,
+        psi: Array.isArray(dump.psi) ? dump.psi.slice(-2000) : keepPsi,
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
-        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo
+        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi
       };
       saveFile();
       return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length };
@@ -569,6 +635,14 @@ const store = {
         }
       }catch(e){}
     }
+    if (Array.isArray(dump.psi) && dump.psi.length) {
+      try{
+        const allP = must(await supa.from('psi_records').select('id').limit(10000), 'restore.psi.list');
+        for (let i = 0; i < allP.length; i += 200) {
+          must(await supa.from('psi_records').delete().in('id', allP.slice(i, i + 200).map(x => x.id)), 'restore.psi.del');
+        }
+      }catch(e){}
+    }
     const cur = await supa.from('users').select('user');
     if (!cur.error && cur.data.length) must(await supa.from('users').delete().neq('user', '__impossivel__'), 'restore.usersdel');
     const chunk = async (table, rows, map) => {
@@ -586,6 +660,9 @@ const store = {
     }
     if (Array.isArray(dump.termos) && dump.termos.length) {
       try{ await chunk('termos', dump.termos.slice(-500), TM); }catch(e){}
+    }
+    if (Array.isArray(dump.psi) && dump.psi.length) {
+      try{ await chunk('psi_records', dump.psi.slice(-2000), PSI); }catch(e){}
     }
     try{ must(await supa.rpc('reset_sequences'), 'restore.seq'); }catch(e){}
     return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length };

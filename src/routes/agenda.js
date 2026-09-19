@@ -4,7 +4,7 @@ const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, 
 const router = express.Router();
 
 // Agenda do técnico
-router.get('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.get('/api/agenda', auth(['tecnico','psico','admin']), ah(async (req,res)=>{
   const list = await store.agenda.allByUser(req.auth.user);
   // admin vê a própria agenda; se quiser ver todas, use ?all=1
   if(req.auth.role==='admin' && req.query.all==='1'){
@@ -13,7 +13,7 @@ router.get('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
   }
   res.json(list);
 }));
-router.post('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.post('/api/agenda', auth(['tecnico','psico','admin']), ah(async (req,res)=>{
   const { title, description, start, end, personId, ticketId } = req.body||{};
   if(!title || !String(title).trim()) return res.status(400).json({ error: 'Título é obrigatório' });
   if(!start || !end) return res.status(400).json({ error: 'Início e fim são obrigatórios' });
@@ -27,7 +27,7 @@ router.post('/api/agenda', auth(['tecnico','admin']), ah(async (req,res)=>{
   broadcast();
   res.status(201).json(ev);
 }));
-router.patch('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.patch('/api/agenda/:id', auth(['tecnico','psico','admin']), ah(async (req,res)=>{
   const ev = await store.agenda.byId(req.params.id);
   if(!ev) return res.status(404).json({ error: 'Evento não encontrado' });
   if(ev.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
@@ -45,7 +45,7 @@ router.patch('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
   broadcast();
   res.json(upd);
 }));
-router.delete('/api/agenda/:id', auth(['tecnico','admin']), ah(async (req,res)=>{
+router.delete('/api/agenda/:id', auth(['tecnico','psico','admin']), ah(async (req,res)=>{
   const ev = await store.agenda.byId(req.params.id);
   if(!ev) return res.status(404).json({ error: 'Evento não encontrado' });
   if(ev.user !== req.auth.user && req.auth.role!=='admin') return res.status(403).json({ error: 'Sem permissão' });
