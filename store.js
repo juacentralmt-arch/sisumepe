@@ -13,6 +13,10 @@ const DB_FILE = path.join(ROOT, 'db.json');
 const UPLOAD_DIR = path.join(ROOT, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+function normalizeUser(u) {
+  return String(u || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
+}
+
 function seedUsers() {
   return [
     { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true },
@@ -39,7 +43,19 @@ function loadFile() {
     if (!Array.isArray(mem.audit)) mem.audit = [];
     if (!mem.seqAudit) mem.seqAudit = mem.audit.length + 1;
     if (!Array.isArray(mem.users) || !mem.users.length) mem.users = seedUsers();
-    else seedUsers().forEach(s => { if (!mem.users.some(u => u.user === s.user)) mem.users.push(Object.assign({}, s)); });
+    else seedUsers().forEach(s => { if (!mem.users.some(u => normalizeUser(u.user) === normalizeUser(s.user))) mem.users.push(Object.assign({}, s)); });
+    // Migração: normaliza usuários com acento (ex: psicólogo -> psicologo) e remove duplicatas
+    const seen = new Set();
+    const deduped = [];
+    for (const u of mem.users) {
+      const norm = normalizeUser(u.user);
+      // corrige nome de usuário acentuado para canônico sem acento
+      if (norm !== u.user) u.user = norm;
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      deduped.push(u);
+    }
+    mem.users = deduped;
     mem.users.forEach(u => { if (u.active === undefined) u.active = true; });
     if (!mem.sessions || typeof mem.sessions !== 'object') mem.sessions = {};
     if (!Array.isArray(mem.agenda)) mem.agenda = [];
@@ -320,28 +336,45 @@ const store = {
       return must(await supa.from('users').select('*').order('user'), 'users.all');
     },
     async byName(u) {
-      const id = String(u || '').toLowerCase().trim();
-      if (MODE === 'file') return mem.users.find(x => x.user === id) || null;
-      const r = must(await supa.from('users').select('*').eq('user', id).limit(1), 'users.byName');
-      return r.length ? r[0] : null;
+      const id = normalizeUser(u);
+      if (MODE === 'file') return mem.users.find(x => normalizeUser(x.user) === id) || null;
+      // Supabase: tenta exato primeiro, depois busca normalizada (acentos)
+      let r = must(await supa.from('users').select('*').eq('user', id).limit(1), 'users.byName');
+      if (r.length) return r[0];
+      // fallback: busca todos e compara normalizado (cobre psicólogo vs psicologo)
+      const all = must(await supa.from('users').select('*'), 'users.byName.all');
+      return all.find(x => normalizeUser(x.user) === id) || null;
     },
     async insert(u) {
       if (MODE === 'file') { mem.users.push(u); saveFile(); return u; }
       return must(await supa.from('users').insert(u).select().single(), 'users.insert');
     },
     async patch(user, fields) {
+      const norm = normalizeUser(user);
       if (MODE === 'file') {
-        const u = mem.users.find(x => x.user === user);
+        const u = mem.users.find(x => normalizeUser(x.user) === norm);
         if (!u) return null;
         Object.assign(u, fields); saveFile();
         return u;
       }
-      const r = must(await supa.from('users').update(fields).eq('user', user).select(), 'users.patch');
+      // Supabase: tenta canônico, senão busca registro real para patch exato
+      let r = must(await supa.from('users').update(fields).eq('user', norm).select(), 'users.patch');
+      if (r.length) return r[0];
+      const all = must(await supa.from('users').select('*'), 'users.patch.all');
+      const found = all.find(x => normalizeUser(x.user) === norm);
+      if (!found) return null;
+      r = must(await supa.from('users').update(fields).eq('user', found.user).select(), 'users.patch2');
       return r.length ? r[0] : null;
     },
     async remove(user) {
-      if (MODE === 'file') { mem.users = mem.users.filter(x => x.user !== user); saveFile(); return; }
-      must(await supa.from('users').delete().eq('user', user), 'users.remove');
+      const norm = normalizeUser(user);
+      if (MODE === 'file') { mem.users = mem.users.filter(x => normalizeUser(x.user) !== norm); saveFile(); return; }
+      let res = await supa.from('users').delete().eq('user', norm);
+      if (!res.error) return;
+      // fallback acentuado
+      const all = must(await supa.from('users').select('user'), 'users.remove.all');
+      const found = all.find(x => normalizeUser(x.user) === norm);
+      if (found) must(await supa.from('users').delete().eq('user', found.user), 'users.remove2');
     },
     // Auto-seed no Supabase: cria os usuários padrão AUSENTES (recepcao, técnicos,
     // psicologo, secretaria, admin). NUNCA altera quem já existe (não sobrescreve
@@ -356,8 +389,9 @@ const store = {
         return { created: [] };
       }
       const created = [];
+      const existingNorm = existing.map(u => normalizeUser(u));
       for (const s of seedUsers()) {
-        if (existing.includes(s.user)) continue;
+        if (existingNorm.includes(normalizeUser(s.user))) continue;
         try {
           const bcrypt = require('bcryptjs');
           must(await supa.from('users').insert({
@@ -422,7 +456,7 @@ const store = {
 
   googleTokens: {
     async get(user){
-      const id=String(user||'').toLowerCase().trim();
+      const id=normalizeUser(user);
       if(MODE==='file') return mem.googleTokens[id]||null;
       try{
         const r=must(await supa.from('google_tokens').select('*').eq('user', id).limit(1),'googleTokens.get');
@@ -430,7 +464,7 @@ const store = {
       }catch(e){ console.warn('googleTokens.get fallback (tabela não existe?)', e.message); return null; }
     },
     async set(user, tokens){
-      const id=String(user||'').toLowerCase().trim();
+      const id=normalizeUser(user);
       const row={ user:id, access_token: tokens.access_token||tokens.accessToken||'', refresh_token: tokens.refresh_token||tokens.refreshToken||'', expiry_date: tokens.expiry_date||tokens.expiryDate||null, scope: tokens.scope||'', token_type: tokens.token_type||tokens.tokenType||'Bearer' };
       if(MODE==='file'){ mem.googleTokens[id]=row; saveFile(); return row; }
       try{
@@ -439,7 +473,7 @@ const store = {
       }catch(e){ console.warn('googleTokens.set fallback', e.message); mem.googleTokens[id]=row; return row; }
     },
     async del(user){
-      const id=String(user||'').toLowerCase().trim();
+      const id=normalizeUser(user);
       if(MODE==='file'){ delete mem.googleTokens[id]; saveFile(); return; }
       try{ must(await supa.from('google_tokens').delete().eq('user', id),'googleTokens.del'); }catch(e){ console.warn('googleTokens.del fallback', e.message); delete mem.googleTokens[id]; }
     }
@@ -581,12 +615,12 @@ const store = {
     // Invalida todas as sessões de um usuário (reset de senha, desativação, remoção).
     // exceptToken preserva a sessão atual (ex.: usuário trocando a própria senha).
     async delByUser(user, exceptToken) {
-      const id = String(user || '').toLowerCase().trim();
+      const id = normalizeUser(user);
       if (!id) return;
       if (MODE === 'file') {
         let ch = false;
         for (const [tok, s] of Object.entries(mem.sessions)) {
-          if (s.user === id && tok !== exceptToken) { delete mem.sessions[tok]; ch = true; }
+          if (normalizeUser(s.user) === id && tok !== exceptToken) { delete mem.sessions[tok]; ch = true; }
         }
         if (ch) saveFile();
         return;
@@ -596,8 +630,17 @@ const store = {
         if (exceptToken) q = q.neq('token', exceptToken);
         const r = await q;
         if (r.error) throw r.error;
+        // também remove variantes acentuadas
+        const allSess = await supa.from('sessions').select('user,token');
+        if (!allSess.error) {
+          for (const row of allSess.data || []) {
+            if (normalizeUser(row.user) === id && row.token !== exceptToken) {
+              await supa.from('sessions').delete().eq('token', row.token);
+            }
+          }
+        }
       } catch (e) { warnSessions(e); }
-      for (const [tok, s] of memSessions) if (s.user === id && tok !== exceptToken) memSessions.delete(tok);
+      for (const [tok, s] of memSessions) if (normalizeUser(s.user) === id && tok !== exceptToken) memSessions.delete(tok);
     },
     async cleanup() {
       const now = Date.now();
