@@ -205,26 +205,8 @@ async function gerarTermoPDF(termo){
   const tableRight = 484.90;
   const colBounds = [110.42, 220.76, 310.42, 370.42, 484.90];
   const colCenters = [(110.42+220.76)/2, (220.76+310.42)/2, (310.42+370.42)/2, (370.42+484.90)/2];
-  // Header y=490.39, row tops 496.39,478.39,458.39,438.39,418.39,398.39, bottom 378.39
-  // Header background
-  page.drawRectangle({ x: tableLeft, y: 478.39, width: tableRight-tableLeft, height: 18, color: rgb(0.996, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.6 });
   const hdrCols = ['TZPR04', 'FONTE04', 'CINTA', 'TRAVA'];
   const hdrBounds = [[110.42, 220.76], [220.76, 310.42], [310.42, 370.42], [370.42, 484.90]];
-  hdrCols.forEach((h, i) => {
-    const hw = fontTimesBold.widthOfTextAtSize(h, 11);
-    const hx = (hdrBounds[i][0] + hdrBounds[i][1]) / 2 - hw / 2;
-    page.drawText(h, { x: hx, y: 484.5, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
-  });
-  // Grid vertical
-  for(let i=0;i<colBounds.length;i++){
-    const x = colBounds[i];
-    page.drawLine({ start: {x, y: 496.39}, end: {x, y: 378.39}, thickness: 0.6, color: rgb(0,0,0) });
-  }
-  // Grid horizontal
-  const hLines = [496.39, 478.39, 458.39, 438.39, 418.39, 398.39, 378.39];
-  for(const y of hLines){
-    page.drawLine({ start: {x: tableLeft, y}, end: {x: tableRight, y}, thickness: 0.6, color: rgb(0,0,0) });
-  }
   // Dados: até 5 linhas usa o layout clássico exato; acima disso, tabela
   // fluida com paginação (mesma geometria de colunas/fontes)
   const storedEq = Array.isArray(termo.equipamentos) ? termo.equipamentos : [];
@@ -258,6 +240,21 @@ async function gerarTermoPDF(termo){
     p.drawText(')', { x: 354.79, y: lineY - 99.86, size: 12, font: fontTimes, color: rgb(0,0,0) });
   };
   if(!useFlow){
+  // Grade clássica exata (só neste modo): header y=490.39,
+  // row tops 496.39,478.39,458.39,438.39,418.39,398.39, bottom 378.39
+  page.drawRectangle({ x: tableLeft, y: 478.39, width: tableRight-tableLeft, height: 18, color: rgb(0.996, 0.89, 0.78), borderColor: rgb(0,0,0), borderWidth: 0.6 });
+  hdrCols.forEach((h, i) => {
+    const hw = fontTimesBold.widthOfTextAtSize(h, 11);
+    const hx = (hdrBounds[i][0] + hdrBounds[i][1]) / 2 - hw / 2;
+    page.drawText(h, { x: hx, y: 484.5, size: 11, font: fontTimesBold, color: rgb(0,0,0) });
+  });
+  for(let i=0;i<colBounds.length;i++){
+    const x = colBounds[i];
+    page.drawLine({ start: {x, y: 496.39}, end: {x, y: 378.39}, thickness: 0.6, color: rgb(0,0,0) });
+  }
+  for(const y of [496.39, 478.39, 458.39, 438.39, 418.39, 398.39, 378.39]){
+    page.drawLine({ start: {x: tableLeft, y}, end: {x: tableRight, y}, thickness: 0.6, color: rgb(0,0,0) });
+  }
   // 5 linhas clássicas, y central 468.39,448.39,428.39,408.39,388.39
   // Usa a lista filtrada (sem vazios) para não perder linhas extras
   // quando há vazios intercalados (ex.: prévia com linhas em branco).
@@ -331,8 +328,10 @@ async function gerarTermoPDF(termo){
     pg.drawLine({ start: {x: tableLeft, y: top}, end: {x: tableRight, y: top}, thickness: 0.6, color: rgb(0,0,0) });
   }
   drawVerticals(pg, segTop, top);
+  // Assinaturas na mesma página quando há espaço (bloco ocupa ~115pt
+  // abaixo de sigY); só abre página nova se realmente não couber.
   let sigY = top - 48;
-  if(sigY < 260){ pg = pdfDoc.addPage([595.32, 841.92]); sigY = 730; }
+  if(sigY < 150){ pg = pdfDoc.addPage([595.32, 841.92]); sigY = 730; }
   drawSigBlock(pg, sigY);
   }
   const pdfBytes = await pdfDoc.save();
