@@ -1,6 +1,7 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { parseAtivacoes, scoreParse } = require('../lib/ativacoesParser');
+const { parseAtivacoes, scoreParse, crossValidate, mergeWithLlm } = require('../lib/ativacoesParser');
+const { llmParse, getLlmConfig } = require('../lib/ativacoesLlm');
 const { gerarAtivacaoPDF } = require('../lib/ativacoesPdf');
 const router = express.Router();
 
@@ -60,19 +61,66 @@ router.post('/api/ativacoes/auto-preencher', shared.auth(['tecnico','psico','adm
   if(!text || text.trim().length < 20){
     return res.status(400).json({ error: 'PDF sem texto extraível. Se for imagem escaneada, use o botão \"Tentar OCR (PDF escaneado)\" abaixo ou digite manualmente.', extractedLength: (text||'').length, isScanned: true });
   }
-  const dados = parseAtivacoes(text);
+  // 1) Regex (rápido, determinístico)
+  let dados = parseAtivacoes(text);
+  // 2) LLM semântico (se configurado, preenche lacunas e resolve ambiguidades)
+  let llmInfo = null;
+  const useLlm = req.query.llm !== '0' && req.body?.useLlm !== false;
+  if(useLlm){
+    try{
+      const r = await llmParse(text);
+      if(r && r.data && !r.skipped){
+        dados = mergeWithLlm(dados, r.data);
+        llmInfo = { provider: r.provider, model: r.model, contrib: dados._llmContrib||0 };
+      } else if(r.skipped){
+        llmInfo = { skipped:true, reason: r.reason };
+      }
+    }catch(e){
+      llmInfo = { error: e.message };
+      console.warn('LLM parse falhou, segue regex', e.message);
+    }
+  }
   const score = scoreParse(dados);
-  res.json({ ok:true, dados, score, textoExtraido: text.slice(0,8000), paginas: text.split('\n').length });
+  const warnings = crossValidate(text, dados);
+  const llmCfg = getLlmConfig();
+  res.json({ ok:true, dados, score, warnings, llm: llmInfo, llmConfigured: !!llmCfg, textoExtraido: text.slice(0,8000), paginas: text.split('\n').length });
 }));
 
-// POST /api/ativacoes/parse-text  (texto OCR ou colado)
+// POST /api/ativacoes/parse-text  (texto OCR ou colado) - com LLM + validação
 router.post('/api/ativacoes/parse-text', shared.auth(['tecnico','psico','admin']), shared.ah(async (req,res)=>{
   const texto = String((req.body && (req.body.texto || req.body.text)) || '').trim();
   if(!texto || texto.length < 10) return res.status(400).json({ error: 'Envie o texto extraído (mín. 10 caracteres)' });
-  const dados = parseAtivacoes(texto);
+  let dados = parseAtivacoes(texto);
+  let llmInfo=null;
+  const useLlm = req.query.llm !== '0' && req.body?.useLlm !== false;
+  if(useLlm){
+    try{
+      const r = await llmParse(texto);
+      if(r && r.data && !r.skipped){ dados = mergeWithLlm(dados, r.data); llmInfo={ provider:r.provider, model:r.model, contrib: dados._llmContrib||0 }; }
+      else if(r.skipped) llmInfo={ skipped:true, reason:r.reason };
+    }catch(e){ llmInfo={ error:e.message }; }
+  }
   const score = scoreParse(dados);
-  res.json({ ok:true, dados, score, textoExtraido: texto.slice(0,8000) });
+  const warnings = crossValidate(texto, dados);
+  res.json({ ok:true, dados, score, warnings, llm: llmInfo, llmConfigured: !!getLlmConfig(), textoExtraido: texto.slice(0,8000) });
 }));
+
+// POST /api/ativacoes/llm-parse  (força LLM)
+router.post('/api/ativacoes/llm-parse', shared.auth(['tecnico','psico','admin']), shared.ah(async (req,res)=>{
+  const texto = String((req.body && (req.body.texto || req.body.text)) || '').trim();
+  if(!texto) return res.status(400).json({ error: 'Envie texto' });
+  const r = await llmParse(texto);
+  if(r.skipped) return res.status(400).json({ error: r.reason, llmConfigured:false });
+  const merged = mergeWithLlm(parseAtivacoes(texto), r.data);
+  const warnings = crossValidate(texto, merged);
+  res.json({ ok:true, dados: merged, llm: { provider:r.provider, model:r.model }, warnings, score: scoreParse(merged) });
+}));
+
+// GET /api/ativacoes/llm-status
+router.get('/api/ativacoes/llm-status', shared.auth(['tecnico','psico','admin']), (req,res)=>{
+  const cfg = getLlmConfig();
+  res.json({ configured: !!cfg, provider: cfg?.provider||null, model: cfg?.model||null });
+});
 
 // Opcional: preview PDF de ativação sem salvar
 router.post('/api/ativacoes/pdf-preview', shared.auth(['tecnico','psico','admin']), shared.ah(async (req,res)=>{

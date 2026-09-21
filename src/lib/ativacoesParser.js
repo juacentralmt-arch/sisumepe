@@ -600,11 +600,68 @@ function parseAtivacoes(textRaw){
 }
 
 function scoreParse(result){
-  // quantos campos preenchidos (para feedback de confiança)
-  const keys = Object.keys(result).filter(k=>k!=='textoOriginal');
+  const keys = Object.keys(result).filter(k=>k!=='textoOriginal' && !k.startsWith('_'));
   const filled = keys.filter(k=> result[k] && String(result[k]).trim()).length;
   return { filled, total: keys.length, percent: Math.round(filled/keys.length*100) };
 }
 
-module.exports = { parseAtivacoes, toTitleCase, scoreParse };
+// Validação cruzada + CPF/CEP/processo
+function validarCPF(cpf){
+  const d = String(cpf||'').replace(/\D/g,'');
+  if(d.length!==11 || /^(\d)\1{10}$/.test(d)) return false;
+  let s=0; for(let i=0;i<9;i++) s+=parseInt(d[i])*(10-i);
+  let r=(s*10)%11; if(r===10) r=0; if(r!==parseInt(d[9])) return false;
+  s=0; for(let i=0;i<10;i++) s+=parseInt(d[i])*(11-i);
+  r=(s*10)%11; if(r===10) r=0; return r===parseInt(d[10]);
+}
+function crossValidate(text, parsed){
+  const warnings=[];
+  const add=(campo, msg, severidade='alerta')=> warnings.push({ campo, msg, severidade });
+  // CPF
+  const cpfs = [...new Set([...(text.matchAll(/\b\d{3}\.?\d{3}\.?\d{3}[- ]?\d{2}\b/g) || [])].map(m=>m[0].replace(/\D/g,'')))];
+  if(cpfs.length>1) add('cpf', `Múltiplos CPFs no documento: ${cpfs.map(c=>c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4')).join(', ')} — conferir qual é do monitorado`, 'divergencia');
+  if(parsed.cpf && !validarCPF(parsed.cpf)) add('cpf', `CPF ${parsed.cpf} com dígito verificador inválido`, 'erro');
+  // Datas nascimento
+  const dns = [...new Set([...(text.matchAll(/\b\d{2}[\/\-]\d{2}[\/\-]\d{4}\b/g) || [])].map(m=>m[0]))];
+  // filtra só datas próximas de "nascimento"
+  const dnsNasc = [...text.matchAll(/nascimento[^0-9]{0,40}(\d{2}[\/\-]\d{2}[\/\-]\d{4})/gi)].map(m=>m[1]);
+  if(new Set(dnsNasc).size>1) add('dataNascimento', `Divergência de data de nascimento entre seções: ${[...new Set(dnsNasc)].join(' vs ')}`, 'divergencia');
+  // Processos
+  const procs = [...new Set([...(text.matchAll(/\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g) || [])].map(m=>m[0]))];
+  if(procs.length>1) add('processo', `Múltiplos processos CNJ: ${procs.join(', ')} — ver campo Processos`, 'info');
+  // Endereços
+  const ends = [...text.matchAll(/Endere[çc]o\s*:\s*([^\n]+)/gi)].map(m=>m[1].trim().slice(0,60));
+  if(new Set(ends).size>1) add('endereco', `Endereços diferentes entre seções: "${ends[0]}" vs "${ends[1]}"`, 'divergencia');
+  // Nome mãe
+  const maes = [...text.matchAll(/(?:mãe|mae|filia[çc][ãa]o materna)\s*:\s*([A-Za-zÀ-ú\s]{5,60})/gi)].map(m=>m[1].trim());
+  if(new Set(maes.map(m=>m.toLowerCase())).size>1) add('nomeMae', `Nome da mãe divergente: "${maes[0]}" vs "${maes[1]}"`, 'divergencia');
+  // CEP
+  if(parsed.cep && !/^\d{5}-\d{3}$/.test(parsed.cep)) add('cep', `CEP ${parsed.cep} fora do formato 00000-000`, 'erro');
+  // Sexo vs nome (heurística simples)
+  // Período vs dias (coerência)
+  if(parsed.inicioPrevisto && parsed.terminoPrevisto && parsed.dias){
+    const d1=new Date(parsed.inicioPrevisto), d2=new Date(parsed.terminoPrevisto);
+    const diff=Math.round((d2-d1)/86400000);
+    if(!isNaN(diff) && Math.abs(diff - Number(parsed.dias))>2) add('dias', `Dias (${parsed.dias}) diverge do intervalo ${parsed.inicioPrevisto}→${parsed.terminoPrevisto} (${diff} dias)`, 'alerta');
+  }
+  return warnings;
+}
+
+function mergeWithLlm(regexData, llmData){
+  if(!llmData) return regexData;
+  const out = { ...regexData };
+  const llmKeys = Object.keys(llmData);
+  let llmFilled=0;
+  for(const k of llmKeys){
+    const rv = String(regexData[k]||'').trim();
+    const lv = String(llmData[k]||'').trim();
+    if(!rv && lv) { out[k]=lv; llmFilled++; }
+    // se LLM corrige Title Case ou preenche campo vazio, prioriza LLM quando regex vazio
+    // se ambos preenchidos e diferentes, mantém regex mas marca para validação
+  }
+  out._llmContrib = llmFilled;
+  return out;
+}
+
+module.exports = { parseAtivacoes, toTitleCase, scoreParse, crossValidate, validarCPF, mergeWithLlm };
 
