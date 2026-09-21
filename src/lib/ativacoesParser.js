@@ -77,10 +77,13 @@ function extractProcessos(text){
 }
 
 function extractNome(text){
-  // Tenta vários rótulos
   const labels = [
+    /Nome\s*da\s*Pessoa[:\s]*([A-Za-zÀ-ú\s]+)/i,
     /Nome\s*do\s*monitorado[:\s]*([A-Za-zÀ-ú\s]+)/i,
     /Nome\s*completo[:\s]*([A-Za-zÀ-ú\s]+)/i,
+    /FLAGRANT(?:EADO)?[:\s]*([A-Za-zÀ-ú\s]+)/i,
+    /^NOME[:\s]*([A-Za-zÀ-ú\s]+)/im,
+    /^Nome[:\s]*([A-Za-zÀ-ú\s]+);/im,
     /Réu[:\s]*([A-Za-zÀ-ú\s]+)/i,
     /Acusado[:\s]*([A-Za-zÀ-ú\s]+)/i,
     /Apenado[:\s]*([A-Za-zÀ-ú\s]+)/i,
@@ -109,28 +112,61 @@ function extractVulgo(text){
 }
 
 function extractMae(text){
-  const m = text.match(/(?:Nome\s*da\s*m[ãa]e|Mãe|Mae|Filia[çc][ãa]o\s*materna)[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  // MÃE: SANDRA COSTA FELIPE
+  let m = text.match(/MÃE\s*:\s*([A-Za-zÀ-ú\s]+)/i);
+  if(m){
+    let v=m[1].split('\n')[0].split(/PAI|Idade|Estado|Sexo|Data|CPF|RG/i)[0].trim();
+    if(v.length>=4 && v.length<80) return titleCaseField(v);
+  }
+  m = text.match(/(?:Nome\s*da\s*m[ãa]e|Mãe|Mae|Filia[çc][ãa]o\s*materna)[:\s]*([A-Za-zÀ-ú\s]+)/i);
   if(m){
     let v = m[1].split('\n')[0].split(/Pai|Sexo|Data|CPF|RG|Processo|Nome/i)[0].trim();
     if(v.length >= 4 && v.length < 80) return titleCaseField(v);
   }
-  // padrão "filho de X e Y"
+  // Filiação: JOSÉ EUDES DOS SANTOS e SANDRA COSTA FELIPE  → mãe é segunda parte
+  let mf = text.match(/Filia[çc][ãa]o\s*:\s*([^\n]+)/i);
+  if(mf){
+    let v=mf[1];
+    // remove "(mãe)/(pai)" marcadores
+    let parts=v.split(/\s+e\s+/i);
+    if(parts.length>=2){
+      // segunda parte é mãe quando tem "SANDRA ... (mãe)"
+      let mae = parts[1].replace(/\(mãe\)|\(pai\)/gi,'').trim();
+      mae=mae.split(/e NÃO|e Nao/i)[0].trim();
+      if(mae.length>=4) return titleCaseField(mae.split(/,|;/)[0].trim());
+    }
+    // se só um nome e contém SANDRA, é mãe
+    if(/SANDRA/i.test(v)) return titleCaseField(v.split(/\s+e\s+/i)[0].trim());
+  }
   const m2 = text.match(/filho\s*de\s+([A-Za-zÀ-ú\s]+)\s+e\s+([A-Za-zÀ-ú\s]+)/i);
   if(m2) return titleCaseField(m2[1]);
   return '';
 }
 
 function extractPai(text){
-  const m = text.match(/(?:Nome\s*do\s*pai|Pai|Filia[çc][ãa]o\s*paterna)[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  let m = text.match(/PAI\s*:\s*([A-Za-zÀ-ú\s]+)/i);
+  if(m){
+    let v=m[1].split('\n')[0].split(/\n|MÃE|Idade|Estado/i)[0].trim();
+    if(v.length>=4 && v.length<80) return titleCaseField(v);
+  }
+  m = text.match(/(?:Nome\s*do\s*pai|Pai|Filia[çc][ãa]o\s*paterna)[:\s]*([A-Za-zÀ-ú\s]+)/i);
   if(m){
     let v = m[1].split('\n')[0].split(/Sexo|Data|CPF|RG|Mãe|Mae|Processo/i)[0].trim();
-    if(v.length >= 4 && v.length < 80) return titleCaseField(v);
+    if(v.length >= 4 && v.length < 80 && !/SANDRA/i.test(v)) return titleCaseField(v);
+  }
+  let mf = text.match(/Filia[çc][ãa]o\s*:\s*([^\n]+)/i);
+  if(mf){
+    let v=mf[1].split(/\s+e\s+/i)[0].replace(/\(mãe\)|\(pai\)/gi,'').trim();
+    if(v.length>=4 && !/SANDRA/i.test(v)) return titleCaseField(v.split(/,|;/)[0].trim());
   }
   const m2 = text.match(/filho\s*de\s+[A-Za-zÀ-ú\s]+\s+e\s+([A-Za-zÀ-ú\s]+)/i);
   if(m2){
     const v = m2[1].split(/,|\n|Sexo|Data/i)[0].trim();
     if(v.length >= 4 && v.length < 80) return titleCaseField(v);
   }
+  // Filho (a) de Jose Eudes dos Santos e Sandra Costa Felipe
+  let mf2=text.match(/filho\s*\(a\)\s*de\s+([A-Za-zÀ-ú\s]+)\s+e\s+([A-Za-zÀ-ú\s]+)/i);
+  if(mf2) return titleCaseField(mf2[1].trim());
   return '';
 }
 
@@ -191,11 +227,12 @@ function extractPerfil(text){
   ];
   const lower = text.toLowerCase();
   for(const p of perfis){
-    const key = p.toLowerCase().split(' ')[0];
-    // busca exata ou parcial
     if(lower.includes(p.toLowerCase())) return p;
+    // plural
+    if(lower.includes(p.toLowerCase().replace('medida','medidas'))) return p;
   }
-  // tenta extrair linha "Perfil: X"
+  if(lower.includes('medidas protetivas')) return 'Medida Protetiva';
+  if(lower.includes('tornozelamento') || lower.includes('monitoração eletrônica')) return 'Prisão Domiciliar';
   const m = text.match(/Perfil[:\s]*([A-Za-zÀ-ú\s\-\/]+)/i);
   if(m){
     let v = m[1].split('\n')[0].split(/Artigos|Vara|Periculosidade/i)[0].trim();
@@ -218,7 +255,8 @@ function extractArtigos(text){
 
 function extractPericulosidade(text){
   const levels = ['Baixa','Média','Media','Alta','Altíssima','Altissima','Alta Repercussão'];
-  const m = text.match(/Periculosidade[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  let m = text.match(/Periculosidade[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  if(!m) m = text.match(/N[íi]vel\s*de\s*Seg\.?\s*[:\s]*([A-Za-zÀ-ú\s]+)/i);
   if(m){
     let v = clean(m[1].split('\n')[0].split(/Vara|Isen/i)[0]);
     for(const l of levels){
@@ -226,7 +264,6 @@ function extractPericulosidade(text){
     }
     if(v.length < 30) return titleCaseField(v);
   }
-  // busca solta
   for(const l of levels){
     if(text.toLowerCase().includes(l.toLowerCase())) return l.replace('Media','Média').replace('Altissima','Altíssima');
   }
@@ -239,9 +276,17 @@ function extractVara(text){
     let v = m[1].split(/Isen|Origem|Tipo|Data da prisão/i)[0].trim();
     if(v.length >= 3 && v.length < 120) return titleCaseField(v);
   }
+  let m0 = text.match(/Órgão\s*Judicial\s*:\s*([^\n]+)/i);
+  if(m0){
+    let v=m0[1].split(/\n|Classe|Última|Valor|Assuntos/i)[0].trim();
+    if(v.length>=5) return titleCaseField(v.slice(0,120));
+  }
   // padrão "Xª Vara ..."
   const m2 = text.match(/([0-9]+[ªa]?\s*Vara[^\n]*)/i);
   if(m2) return titleCaseField(m2[1].trim().slice(0,120));
+  // Juizado da Violência Doméstica
+  let mj=text.match(/Juizado\s*da\s*Viol[êe]ncia[^\n]+/i);
+  if(mj) return titleCaseField(mj[0].trim().slice(0,120));
   return '';
 }
 
@@ -329,18 +374,25 @@ function extractDescricaoDeficiencia(text){
 
 function extractEtnia(text){
   const etnias = ['Branca','Preta','Parda','Amarela','Indígena','Indigena'];
-  const m = text.match(/Etnia[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  let m = text.match(/Etnia[:\s]*([A-Za-zÀ-ú\s]+)/i);
   if(m){
     let v = clean(m[1].split('\n')[0].split(/Grau|Naturalidade/i)[0]).trim();
     for(const e of etnias) if(v.toLowerCase().includes(e.toLowerCase())) return e.replace('Indigena','Indígena');
     if(v.length < 20) return titleCaseField(v);
   }
+  m = text.match(/Ra[çc]a(?:\s*\/\s*Cor)?[:\s]*([A-Za-zÀ-ú\s]+)/i);
+  if(m){
+    let v=clean(m[1].split('\n')[0].split(/Possui|Nível|Grau/i)[0]).trim();
+    for(const e of etnias) if(v.toLowerCase().includes(e.toLowerCase())) return e.replace('Indigena','Indígena');
+    if(v.length<20) return titleCaseField(v);
+  }
   for(const e of etnias) if(text.toLowerCase().includes(('etnia:'+e).toLowerCase())) return e;
+  for(const e of etnias) if(text.toLowerCase().includes(('raça:'+e).toLowerCase())) return e.replace('Indigena','Indígena');
   return '';
 }
 
 function extractEscolaridade(text){
-  const m = text.match(/(?:Grau\s*de\s*Escolaridade|Escolaridade)[:\s]*([^\n]+)/i);
+  const m = text.match(/(?:Grau\s*de\s*Escolaridade|Escolaridade|N[íi]vel\s*de\s*Escolaridade)[:\s]*([^\n]+)/i);
   if(m){
     let v = clean(m[1].split('\n')[0].split(/Naturalidade|Nacionalidade/i)[0]).trim();
     if(v.length < 80) return titleCaseField(v);
@@ -395,7 +447,8 @@ function extractConjuge(text){
 }
 
 function extractContatos(text){
-  const tels = [...text.matchAll(/(?:\(?\d{2}\)?\s*9?\s*\d{4}[- ]?\d{4})/g)].map(m=>m[0].replace(/\s+/g,' ').trim());
+  // telefones: (88) 9940-93049, (88) 99962-2174, (85) 98113-5748 etc. Suporta 4-4,4-5,5-4
+  const tels = [...text.matchAll(/(?:\(?\d{2}\)?\s*\d{4,5}[- ]?\d{4})/g)].map(m=>m[0].replace(/\s+/g,' ').trim()).filter(t=> !/^2016\d+/.test(t.replace(/\D/g,'')) );
   if(tels.length) return tels.slice(0,3).join(', ');
   const m = text.match(/Contatos?\s*priorit[áa]rios?[:\s]*([^\n]+)/i);
   if(m) return clean(m[1].split('\n')[0].slice(0,60));
@@ -403,14 +456,19 @@ function extractContatos(text){
 }
 
 function extractEndereco(text){
+  let m2 = text.match(/LOGRADOURO\s*:?\s*([^\n]+)/i);
+  if(m2){
+    let v=clean(m2[1].split(/\n|COMPLEMENTO|BAIRRO|CIDADE|CEP/i)[0].trim());
+    if(v && !/^null$/i.test(v) && v.length>=4) return titleCaseField(v).slice(0,300);
+  }
   const m = text.match(/Endere[çc]o[:\s]*([^\n]+)/i);
   if(m){
     let v = clean(m[1].split(/Resid[êe]ncia|Bairro|Complemento|Ponto/i)[0].trim());
     if(v.length >= 6) return titleCaseField(v).slice(0,300);
   }
   // Rua, Av
-  const m2 = text.match(/((?:Rua|Av\.?|Avenida|Travessa|R\.)\s+[^\n,]{5,80})/i);
-  if(m2) return titleCaseField(m2[1].trim().slice(0,300));
+  const m3 = text.match(/((?:Rua|Av\.?|Avenida|Travessa|R\.)\s+[^\n,]{5,80})/i);
+  if(m3) return titleCaseField(m3[1].trim().slice(0,300));
   return '';
 }
 
@@ -439,8 +497,11 @@ function extractBairro(text){
 }
 
 function extractCEP(text){
-  const m = text.match(/CEP[:\s]*([0-9]{5}[- ]?[0-9]{3})/i);
-  if(m) return m[1].replace(' ','-');
+  const m = text.match(/CEP\s*:?\s*([0-9]{5})[- ]?([0-9]{3})/i);
+  if(m) return `${m[1]}-${m[2] || m[1].slice(5)}`.replace('--','-').slice(0,9);
+  // fallback 8 dígitos sem separador: 63000000 → 63000-000
+  const m0 = text.match(/CEP\s*:?\s*([0-9]{8})\b/i);
+  if(m0) return `${m0[1].slice(0,5)}-${m0[1].slice(5)}`;
   const m2 = text.match(/\b([0-9]{5}-[0-9]{3})\b/);
   if(m2) return m2[1];
   return '';
