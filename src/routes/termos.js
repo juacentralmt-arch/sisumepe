@@ -1,5 +1,6 @@
 const express = require('express');
 const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
+const { gerarAtivacaoPDF } = require('../lib/ativacoesPdf');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
@@ -22,9 +23,64 @@ router.get('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const list = await store.termos.allByUser(req.auth.user);
   res.json(list);
 }));
+
+// Normalização para Ativações (formulário completo de monitorado)
+function normAtivacao(src){
+  const s = (src && typeof src === 'object') ? src : {};
+  const g = (k,n) => String(s[k]==null?'':s[k]).trim().slice(0,n);
+  const nd = {};
+  // strings curtas
+  [
+    ['nomeMonitorado',120], ['vulgo',80], ['nomeMae',120], ['nomePai',120], ['sexo',20],
+    ['rg',30], ['orgaoExpedidor',20], ['cpf',20], ['processo',60], ['processos',600],
+    ['perfil',120], ['artigos',500], ['lei',120], ['militar',120], ['codigoPenal',300],
+    ['periculosidade',30], ['vara',120], ['isencao',60], ['origem',80], ['tipoCumprimento',80],
+    ['dias',10], ['periodoReanalisar',80], ['tamanhoCinta',20], ['orcrim',10],
+    ['deficiencia',20], ['tipoDeficiencia',80], ['descricaoDeficiencia',300],
+    ['etnia',20], ['grauEscolaridade',60], ['naturalidade',60], ['nacionalidade',40],
+    ['religiao',40], ['estadoCivil',30], ['nomeConjuge',120], ['contatosPrioritarios',120],
+    ['endereco',500], ['residenciaComplemento',200], ['residenciaPontoReferencia',200],
+    ['bairro',80], ['cep',10], ['estado',30], ['cidade',60]
+  ].forEach(([k,n])=>{ nd[k]=g(k,n); });
+  // alias nome -> nomeMonitorado compat
+  if(!nd.nomeMonitorado && s.nome) nd.nomeMonitorado = g('nome',120);
+  // datas
+  ['dataNascimento','dataPrisao','inicioPrevisto','terminoPrevisto'].forEach(k=>{
+    if(s[k]){
+      const dt=new Date(s[k]);
+      if(!isNaN(dt)) nd[k]=dt.toISOString().slice(0,10);
+      else if(String(s[k]).match(/^\d{4}-\d{2}-\d{2}$/)) nd[k]=String(s[k]).slice(0,10);
+    }
+  });
+  // calcula término se tiver dias e início mas sem término
+  if(nd.inicioPrevisto && nd.dias && !nd.terminoPrevisto){
+    const d=new Date(nd.inicioPrevisto);
+    if(!isNaN(d)){ d.setDate(d.getDate()+Number(nd.dias)); nd.terminoPrevisto=d.toISOString().slice(0,10); }
+  }
+  return nd;
+}
 router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
-  const t = (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
+  const t = (tipo === 'ativacao') ? 'ativacao' : (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
+  if(t === 'ativacao'){
+    const nd = normAtivacao(dados);
+    if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o Nome do monitorado' });
+    if(!nd.nomeMae) return res.status(400).json({ error: 'Informe o Nome da mãe' });
+    if(!nd.processo) return res.status(400).json({ error: 'Informe o Processo' });
+    if(!nd.vara) return res.status(400).json({ error: 'Informe a Vara' });
+    if(!nd.sexo) return res.status(400).json({ error: 'Informe o Sexo' });
+    if(!nd.dataNascimento) return res.status(400).json({ error: 'Informe a Data de nascimento' });
+    if(!nd.religiao) return res.status(400).json({ error: 'Informe a Religião' });
+    const termo = await store.termos.insert({
+      user: req.auth.user, tipo: 'ativacao',
+      dataEnvio: new Date().toISOString().slice(0,10),
+      destinatario: nd.vara, equipamentos: [],
+      respEntrega: '', respRecebimento: '',
+      dados: nd
+    });
+    broadcast();
+    return res.status(201).json(termo);
+  }
   if(PSI_DOCS.includes(t)){
     if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
     const nd = normPsiDoc(dados);
@@ -163,6 +219,15 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
     if(d.tecnicoMat!=null) nd.tecnicoMat = String(d.tecnicoMat).trim().slice(0,30);
     patch.dados = nd;
   }
+  if(t.tipo === 'ativacao' && dados && typeof dados === 'object'){
+    const nd = normAtivacao(Object.assign({}, t.dados||{}, dados));
+    if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o Nome do monitorado' });
+    if(!nd.nomeMae) return res.status(400).json({ error: 'Informe o Nome da mãe' });
+    if(!nd.processo) return res.status(400).json({ error: 'Informe o Processo' });
+    if(!nd.vara) return res.status(400).json({ error: 'Informe a Vara' });
+    patch.dados = nd;
+    patch.destinatario = nd.vara || t.destinatario;
+  }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
   if(t.tipo === 'endereco' && dados && typeof dados === 'object'){
     const nd = Object.assign({}, t.dados||{});
@@ -227,6 +292,7 @@ router.delete('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=
 }));
 async function termoPDFFromRecord(t) {
   if (!t) throw Object.assign(new Error('Termo não encontrado'), { status: 404 });
+  if (t.tipo === 'ativacao') return gerarAtivacaoPDF(t);
   if (t.tipo === 'recolhimento') return gerarTermoRecolhimentoPDF(t);
   if (t.tipo === 'endereco') return gerarTermoEnderecoPDF(t);
   if (t.tipo === 'declaracao') return gerarDeclaracaoPDF(t);
@@ -279,6 +345,13 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
       }
     };
     const pdf = await gerarTermoEnderecoPDF(termo);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(Buffer.from(pdf));
+  }
+  if(tipo === 'ativacao'){
+    const nd = normAtivacao(dados);
+    const pdf = await gerarAtivacaoPDF({ dados: nd });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
     return res.send(Buffer.from(pdf));
