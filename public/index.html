@@ -542,9 +542,11 @@
           </div>
           <div id="ativResult" class="hidden mt-3 rounded-xl border p-3 text-xs"></div>
           <div class="flex gap-2 mt-3">
-            <button onclick="ativAnalisar()" id="ativBtnAnalisar" class="btn btn-primary flex-1 py-2.5 text-xs">🔍 Analisar e preencher formulário</button>
-            <button onclick="ativLimparUpload()" class="btn btn-ghost px-4 py-2.5 text-xs">↺ Limpar PDF</button>
+            <button onclick="ativAnalisar()" id="ativBtnAnalisar" class="btn btn-primary flex-1 py-2.5 text-xs">🔍 Analisar e preencher</button>
+            <button onclick="ativInterpretarIA()" id="ativBtnIA" class="btn btn-ghost flex-1 py-2.5 text-xs" title="Usa IA para resolver ambiguidades (custodiado=monitorado etc.)">🧠 Interpretar com IA</button>
+            <button onclick="ativLimparUpload()" class="btn btn-ghost px-3 py-2.5 text-xs">↺</button>
           </div>
+          <p id="ativLlmStatus" class="hidden text-[11px] text-center mt-1"></p>
           <p class="text-[11px] text-slate-400 mt-2 text-center">Dica: após analisar, revise os campos abaixo — o sistema destaca em <b class="text-emerald-600">verde</b> o que foi encontrado e em <b class="text-amber-600">amarelo</b> o que precisa de revisão.</p>
           <div class="my-4 h-px bg-slate-200"></div>
           <h4 class="font-display font-bold text-xs mb-2 text-slate-700">📋 Formulário — Análise a documentação enviada e preencha</h4>
@@ -3561,7 +3563,7 @@ function setTermoTipo(t){
   if(t === 'listagem') scheduleListagemPreview(true);
   else if(t === 'recolhimento') scheduleRecPreview(true);
   else if(t === 'endereco') scheduleEnderecoPreview(true);
-  else if(t==='ativacao') scheduleAtivPreview(true);
+  else if(t==='ativacao'){ scheduleAtivPreview(true); try{ checkAtivLlmStatus(); }catch(e){} }
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -4075,15 +4077,19 @@ async function ativTentarOcr(){
     const r=await authFetch('/api/ativacoes/parse-text', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ texto: fullText }) });
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||'Erro ao interpretar OCR');
-    fillAtivacaoFromDados(j.dados);
+    fillAtivacaoFromDados(j.dados); ativLastTexto = j.textoExtraido || (typeof fullText !== 'undefined' ? fullText : '') || ativLastTexto;
     const sc=j.score||{filled:0,total:0,percent:0};
     if(bar) bar.style.width='100%';
+    const warnsOcr = Array.isArray(j.warnings) ? j.warnings : [];
+    const warnsHtmlOcr = warnsOcr.length ? `<div class="mt-1.5 space-y-1">${warnsOcr.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
+    const llmHtmlOcr = j.llm && !j.llm.skipped ? `<div class="text-[11px] opacity-70">🧠 IA ${esc(j.llm.provider||'')}/${esc(j.llm.model||'')} +${j.llm.contrib||0}</div>` : '';
     resBox.className='mt-3 rounded-xl border p-3 text-xs '+(sc.percent>=40?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-amber-50 border-amber-200 text-amber-800');
-    resBox.innerHTML=`<b>📷 OCR ${sc.filled}/${sc.total} campos (${sc.percent}%)</b> — texto escaneado lido. Revise em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">OCR pode errar letras/números — confira CPF/processo.</span><details class="mt-1"><summary class="cursor-pointer text-[11px] underline">Ver texto lido</summary><pre class="max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded p-2 text-[10px] whitespace-pre-wrap mt-1">${esc(fullText.slice(0,3000))}</pre></details>`;
+    resBox.innerHTML=`<b>📷 OCR ${sc.filled}/${sc.total} campos (${sc.percent}%)</b> — texto escaneado lido. Revise em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">OCR pode errar letras/números — confira CPF/processo.</span>${llmHtmlOcr}${warnsHtmlOcr}<details class="mt-1"><summary class="cursor-pointer text-[11px] underline">Ver texto lido</summary><pre class="max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded p-2 text-[10px] whitespace-pre-wrap mt-1">${esc(fullText.slice(0,3000))}</pre></details>`;
     resBox.classList.remove('hidden');
-    if(txt) txt.textContent='✅ OCR concluído!';
+    if(txt) txt.textContent='✅ OCR concluído!' + (j.llm&&j.llm.contrib?` (+${j.llm.contrib} IA)`:'');
     toast(sc.percent>=40 ? '✅ OCR: '+sc.filled+' campos' : '⚠️ OCR parcial — revise');
     highlightAtivacaoFields(j.dados);
+    if(warnsOcr.length) warnsOcr.forEach(w=>{ const map={cpf:'ativCpf', dataNascimento:'ativNasc', processo:'ativProcesso', endereco:'ativEndereco', nomeMae:'ativMae', cep:'ativCep', dias:'ativDias'}; const id=map[w.campo]; if(id){ const el=document.getElementById(id); if(el) el.classList.add('!border-amber-400','!bg-amber-50'); } });
     scheduleAtivPreview(true);
     setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 2200);
   }catch(e){
@@ -4093,6 +4099,90 @@ async function ativTentarOcr(){
     resBox.innerHTML='⚠️ OCR falhou: '+esc(e.message)+'<br><span class="text-[11px]">Tente um PDF com texto selecionável ou digite manualmente. Dica: use o app CamScanner/Office Lens para gerar PDF pesquisável.</span>';
     resBox.classList.remove('hidden');
     toast('⚠️ OCR: '+e.message);
+  }
+}
+let ativLastTexto='';
+async function ativInterpretarIA(){
+  const prog=document.getElementById('ativProgress');
+  const txt=document.getElementById('ativProgressTxt');
+  const bar=document.getElementById('ativProgressBar');
+  const resBox=document.getElementById('ativResult');
+  // usa último texto extraído, senão tenta pegar do resultado anterior ou avisa
+  let texto = ativLastTexto;
+  if(!texto){
+    // tenta reconstruir a partir do texto extraído visível no resBox ou do PDF
+    const f=ativLastFile || (document.getElementById('ativPdfFile') && document.getElementById('ativPdfFile').files[0]);
+    if(!f) return toast('⚠️ Primeiro analise um PDF ou faça OCR');
+    // se não tem texto, tenta re-extrair rápido via auto-preencher com flag LLM
+    return ativAnalisarComIA();
+  }
+  prog.classList.remove('hidden'); resBox.classList.add('hidden');
+  if(txt) txt.textContent='Interpretando com IA...';
+  if(bar) bar.style.width='55%';
+  try{
+    const r=await authFetch('/api/ativacoes/llm-parse', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ texto }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||'IA não configurada. Defina OPENAI_API_KEY no Render.');
+    fillAtivacaoFromDados(j.dados); ativLastTexto = j.textoExtraido || (typeof fullText !== "undefined" ? fullText : "") || ativLastTexto;
+    const sc=j.score||{filled:0,total:0,percent:0};
+    if(bar) bar.style.width='100%';
+    const warns = Array.isArray(j.warnings) ? j.warnings : [];
+    const warnsHtml = warns.length ? `<div class="mt-1.5 space-y-1">${warns.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
+    resBox.className='mt-3 rounded-xl border p-3 text-xs bg-violet-50 border-violet-200 text-violet-800';
+    resBox.innerHTML=`<b>🧠 IA ${esc(j.llm.provider)}/${esc(j.llm.model)}: ${sc.filled}/${sc.total} campos (${sc.percent}%)</b> — interpretação semântica (custodiado=monitorado etc.)<br><span class="text-[11px] opacity-70">Campos preenchidos pela IA em verde, revise.</span>${warnsHtml}`;
+    resBox.classList.remove('hidden');
+    if(txt) txt.textContent='✅ IA concluída!';
+    toast(`🧠 IA: ${sc.filled} campos`);
+    highlightAtivacaoFields(j.dados);
+    scheduleAtivPreview(true);
+    setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 1800);
+  }catch(e){
+    if(txt) txt.textContent='Erro IA: '+e.message;
+    if(bar) bar.style.width='100%';
+    resBox.className='mt-3 rounded-xl border p-3 text-xs bg-rose-50 border-rose-200 text-rose-700';
+    resBox.innerHTML='⚠️ IA falhou: '+esc(e.message)+'<br><span class="text-[11px]">Verifique OPENAI_API_KEY/ANTHROPIC_API_KEY/GOOGLE_API_KEY no Render → Environment.</span>';
+    resBox.classList.remove('hidden');
+    toast('⚠️ IA: '+e.message);
+  }
+}
+async function ativAnalisarComIA(){
+  // helper: reenvia último PDF com flag LLM
+  const f=ativLastFile;
+  if(!f) return toast('⚠️ Sem PDF');
+  const prog=document.getElementById('ativProgress');
+  const txt=document.getElementById('ativProgressTxt');
+  const bar=document.getElementById('ativProgressBar');
+  const resBox=document.getElementById('ativResult');
+  prog.classList.remove('hidden'); resBox.classList.add('hidden');
+  if(txt) txt.textContent='Enviando para IA...';
+  if(bar) bar.style.width='45%';
+  try{
+    const fd=new FormData(); fd.append('arquivo', f);
+    const res=await authFetch('/api/ativacoes/auto-preencher?llm=1', { method:'POST', body: fd });
+    const j=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(j.error||'Erro');
+    ativLastTexto=j.textoExtraido||'';
+    fillAtivacaoFromDados(j.dados); ativLastTexto = j.textoExtraido || (typeof fullText !== "undefined" ? fullText : "") || ativLastTexto;
+    const sc=j.score||{filled:0,total:0,percent:0};
+    if(bar) bar.style.width='100%';
+    const warns = Array.isArray(j.warnings) ? j.warnings : [];
+    const warnsHtml = warns.length ? `<div class="mt-1.5 space-y-1">${warns.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
+    const llmHtml = j.llm && !j.llm.skipped ? `<div class="text-[11px] opacity-70">🧠 IA ${esc(j.llm.provider)}/${esc(j.llm.model)} +${j.llm.contrib||0}</div>` : (j.llmConfigured===false?`<div class="text-[11px] opacity-60">IA não configurada</div>`:'');
+    resBox.className='mt-3 rounded-xl border p-3 text-xs '+(sc.percent>=60?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-amber-50 border-amber-200 text-amber-800');
+    resBox.innerHTML=`<b>${sc.percent>=60?'✅':'⚠️'} ${sc.filled}/${sc.total} (${sc.percent}%)</b> ${llmHtml}${warnsHtml}`;
+    resBox.classList.remove('hidden');
+    if(txt) txt.textContent='✅ IA + regex concluído!';
+    toast('✅ IA: '+sc.filled+' campos');
+    highlightAtivacaoFields(j.dados);
+    scheduleAtivPreview(true);
+    setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 1800);
+  }catch(e){
+    if(txt) txt.textContent='Erro: '+e.message;
+    if(bar) bar.style.width='100%';
+    resBox.className='mt-3 rounded-xl border p-3 text-xs bg-rose-50 border-rose-200 text-rose-700';
+    resBox.textContent='⚠️ '+e.message;
+    resBox.classList.remove('hidden');
+    toast('⚠️ '+e.message);
   }
 }
 async function ativAnalisar(){
@@ -4120,15 +4210,23 @@ async function ativAnalisar(){
     }
     if(bar) bar.style.width='85%';
     if(txt) txt.textContent='Preenchendo formulário...';
-    fillAtivacaoFromDados(j.dados);
+    fillAtivacaoFromDados(j.dados); ativLastTexto = j.textoExtraido || (typeof fullText !== "undefined" ? fullText : "") || ativLastTexto;
     const sc=j.score||{filled:0,total:0,percent:0};
     if(bar) bar.style.width='100%';
     resBox.className='mt-3 rounded-xl border p-3 text-xs '+(sc.percent>=60?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-amber-50 border-amber-200 text-amber-800');
-    resBox.innerHTML = `<b>${sc.percent>=60?'✅':'⚠️'} ${sc.filled}/${sc.total} campos preenchidos (${sc.percent}%)</b> — revise os campos destacados em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">Campos vazios precisam ser preenchidos manualmente.</span>`;
+    const warns = Array.isArray(j.warnings) ? j.warnings : [];
+    const warnsHtml = warns.length ? `<div class="mt-1.5 space-y-1">${warns.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
+    const llmHtml = j.llm && !j.llm.skipped ? `<div class="text-[11px] opacity-70">🧠 IA ${esc(j.llm.provider||'')}/${esc(j.llm.model||'')} contribuiu com ${j.llm.contrib||0} campo(s)</div>` : (j.llmConfigured===false ? `<div class="text-[11px] opacity-60">IA não configurada (defina OPENAI_API_KEY para interpretação semântica)</div>` : '');
+    const iaBtn = j.llmConfigured ? '' : '';
+    // botão IA sempre disponível se houver texto
+    const iaAction = `<div class="mt-2 flex gap-2"><button onclick="ativInterpretarIA()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">🧠 Re-interpretar com IA</button><button onclick="ativTentarOcr()" class="btn btn-ghost flex-1 py-1.5 text-[11px]">📷 OCR se for escaneado</button></div>`;
+    resBox.innerHTML = `<b>${sc.percent>=60?'✅':'⚠️'} ${sc.filled}/${sc.total} campos preenchidos (${sc.percent}%)</b> — revise os campos destacados em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">Campos vazios precisam ser preenchidos manualmente.</span>${llmHtml}${warnsHtml}${iaAction}`;
     resBox.classList.remove('hidden');
-    if(txt) txt.textContent='✅ Análise concluída!';
-    toast(sc.percent>=60 ? '✅ Auto preencher: '+sc.filled+' campos detectados!' : '⚠️ Preenchimento parcial ('+sc.percent+'%) — revise');
+    if(txt) txt.textContent='✅ Análise concluída!' + (j.llm && j.llm.contrib ? ` (+${j.llm.contrib} IA)` : '');
+    toast(sc.percent>=60 ? '✅ Auto preencher: '+sc.filled+' campos'+(j.llm&&j.llm.contrib?` (+${j.llm.contrib} IA)`:'')+'!' : '⚠️ Preenchimento parcial ('+sc.percent+'%) — revise');
     highlightAtivacaoFields(j.dados);
+    // destaca campos com divergência
+    if(warns.length) warns.forEach(w=>{ const map={cpf:'ativCpf', dataNascimento:'ativNasc', processo:'ativProcesso', endereco:'ativEndereco', nomeMae:'ativMae', cep:'ativCep', dias:'ativDias'}; const id=map[w.campo]; if(id){ const el=document.getElementById(id); if(el) el.classList.add('!border-amber-400','!bg-amber-50'); } });
     scheduleAtivPreview(true);
     setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 1800);
   }catch(e){
@@ -4285,6 +4383,21 @@ function scheduleAtivPreview(now){
   if(termoTipoAtivo!=='ativacao') return;
   clearTimeout(ativPreviewTimer);
   ativPreviewTimer=setTimeout(()=>previewAtivacaoPDF(true), now?400:1500);
+}
+async function checkAtivLlmStatus(){
+  const el=document.getElementById('ativLlmStatus');
+  if(!el) return;
+  try{
+    const r=await api('/api/ativacoes/llm-status');
+    if(r.configured){
+      el.textContent=`🧠 IA ativa: ${r.provider}/${r.model} — interpretação semântica + validação cruzada`;
+      el.className='text-[11px] text-center mt-1 text-emerald-600 font-semibold';
+    } else {
+      el.textContent='IA não configurada — usando regex + validação cruzada. Defina OPENAI_API_KEY no Render para ativar LLM.';
+      el.className='text-[11px] text-center mt-1 text-slate-400';
+    }
+    el.classList.remove('hidden');
+  }catch(e){ /* silencioso */ }
 }
 async function previewAtivacaoPDF(silent){
   if(termoTipoAtivo!=='ativacao') return;
