@@ -126,6 +126,30 @@ store.users.ensureSeeded()
 setTimeout(() => { store.cleanupExpiredFiles().catch(() => {}); }, 60e3).unref();
 setInterval(() => { store.cleanupExpiredFiles().catch(() => {}); }, 3600e3).unref();
 
+// Bot anti-oscilação Render Free (opcional, sem custo)
+// Mantém o serviço acordado com self-ping a cada 4 min enquanto estiver no ar.
+// O wake-up real depende de ping EXTERNO (GitHub Actions .github/workflows/keep-alive.yml a cada 5 min),
+// pois self-ping não acorda um serviço já dormindo. Ativa com KEEP_ALIVE_URL ou RENDER_EXTERNAL_URL.
+const KEEP_ALIVE_URL = (process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/,'');
+const KEEP_ALIVE_INTERVAL = Number(process.env.KEEP_ALIVE_INTERVAL_MS) || 4*60*1000;
+if(KEEP_ALIVE_URL && /^https?:\/\//.test(KEEP_ALIVE_URL)){
+  const keepAliveTick = async () => {
+    try{
+      const ctrl = new AbortController();
+      const to = setTimeout(()=> ctrl.abort(), 10000);
+      const r = await fetch(KEEP_ALIVE_URL + '/api/health', { signal: ctrl.signal });
+      clearTimeout(to);
+      if(r.ok) console.log(`keep-alive self-ping OK ${r.status}`);
+    }catch(e){
+      // silencioso: rede pode estar instável no boot
+    }
+  };
+  // espera o boot completar antes do primeiro ping
+  setTimeout(keepAliveTick, 60*1000).unref();
+  setInterval(keepAliveTick, KEEP_ALIVE_INTERVAL).unref();
+  console.log(`keep-alive interno ativo: ${KEEP_ALIVE_URL}/api/health a cada ${Math.round(KEEP_ALIVE_INTERVAL/60000)}min`);
+}
+
 // Encerramento limpo (Render envia SIGTERM ao redeploys): para de aceitar
 // conexões, responde o que está em voo e sai — sem cortar requests ativos.
 let shuttingDown = false;

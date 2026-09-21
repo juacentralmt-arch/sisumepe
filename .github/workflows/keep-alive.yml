@@ -1,0 +1,35 @@
+name: keep-alive
+
+# Ping externo a cada 5 min para evitar cold start do Render Free (15min sleep)
+# Funciona mesmo quando o serviço está dormindo (self-ping interno não acorda).
+# Grátis, sem cartão. Edite KEEP_ALIVE_URL nos Secrets se mudar de domínio.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # a cada 5 min (UTC) - GitHub pode atrasar alguns min
+  workflow_dispatch:        # permite "Run workflow" manual no Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /api/health
+        env:
+          KEEP_ALIVE_URL: ${{ secrets.KEEP_ALIVE_URL || 'https://sisumepe.onrender.com' }}
+        run: |
+          URL="${KEEP_ALIVE_URL%/}/api/health"
+          echo "Ping $URL"
+          # 3 tentativas com backoff
+          for i in 1 2 3; do
+            CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" --max-time 20 -H "User-Agent: sisumepe-keepalive/github-actions" "$URL" || echo "000")
+            cat /tmp/out.json; echo
+            echo "HTTP $CODE (tentativa $i)"
+            if [ "$CODE" = "200" ]; then
+              echo "OK"
+              exit 0
+            fi
+            sleep $((i*10))
+          done
+          echo "::warning::Keep-alive falhou após 3 tentativas (Render pode estar acordando, cold start ~30s é normal)"
+          exit 0  # não falha o workflow para não gerar e-mail
