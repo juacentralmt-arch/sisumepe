@@ -4141,13 +4141,13 @@ async function ativAnalisar(){
   }catch(e){
     const isScanned = e.isScanned || /sem texto|escanead/i.test(e.message||'');
     if(isScanned){
-      if(txt) txt.textContent='PDF escaneado detectado';
+      if(txt) txt.textContent='PDF escaneado — iniciando OCR automático...';
       if(bar) bar.style.width='100%';
       resBox.className='mt-3 rounded-xl border p-3 text-xs bg-amber-50 border-amber-300 text-amber-900';
-      resBox.innerHTML=`⚠️ <b>PDF sem texto selecionável</b> — parece ser imagem escaneada.<br><span class="text-[11px]">O sistema tentou ler o texto embutido e não encontrou nada. Use o OCR abaixo (lento, mas lê imagem) ou digite manualmente.</span><div class="mt-2 flex gap-2"><button onclick="ativTentarOcr()" class="btn btn-dark flex-1 py-2 text-xs">📷 Tentar OCR (PDF escaneado)</button><button onclick="document.getElementById('ativNome').focus()" class="btn btn-ghost flex-1 py-2 text-xs">✍️ Preencher manual</button></div><p class="text-[11px] opacity-70 mt-1">Dica: PDFs gerados por \"Imprimir → Salvar como PDF\" funcionam direto. Fotos do celular precisam de OCR.</p>`;
+      resBox.innerHTML=`⚠️ <b>PDF sem texto selecionável</b> — imagem escaneada. Iniciando OCR automático (15-30s, 100% local, sem envio externo)...<br><span class="text-[11px]">Aguarde, o sistema está lendo a imagem.</span><div class="mt-2 flex gap-2"><button onclick="ativTentarOcr()" class="btn btn-dark flex-1 py-2 text-xs">📷 Tentar OCR agora</button><button onclick="document.getElementById('ativNome').focus()" class="btn btn-ghost flex-1 py-2 text-xs">✍️ Manual</button></div>`;
       resBox.classList.remove('hidden');
-      toast('⚠️ PDF escaneado — tente OCR');
-      setTimeout(()=>{ prog.classList.add('hidden'); }, 1800);
+      toast('⚠️ PDF escaneado — OCR automático em 1s');
+      setTimeout(()=>{ try{ ativTentarOcr(); }catch(e){} }, 900);
       return;
     }
     if(txt) txt.textContent='Erro: '+e.message;
