@@ -1107,24 +1107,43 @@
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
   <span id="chatBadge" class="hidden absolute -top-1.5 -right-1.5 bg-rose-600 text-[11px] font-extrabold min-w-[1.25rem] h-5 px-1 rounded-full items-center justify-center">0</span>
 </button>
-<div id="chatPanel" class="chat-hidden fixed bottom-24 right-5 z-40 w-80 max-w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
-  <div class="px-4 py-3.5 flex items-center gap-2 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
-    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-    <span class="font-display font-bold text-sm">Chat da equipe</span>
-    <button onclick="toggleChatSearch()" title="Buscar mensagem" class="ml-auto text-slate-300 hover:text-white text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition">🔍</button>
-    <button id="chatCallBtn" onclick="startCall()" title="Ligar (chamada de voz)" class="hidden text-slate-300 hover:text-white text-base px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 transition">📞</button>
-    <button onclick="toggleChat()" class="text-slate-300 hover:text-white text-xl leading-none ml-1">×</button>
+<div id="chatPanel" class="chat-hidden fixed bottom-24 right-5 z-40 w-[380px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden max-h-[min(78vh,560px)]">
+  <div class="px-4 py-3 flex items-center gap-2.5 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
+    <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center text-sm">💬</span>
+    <div class="min-w-0 flex-1">
+      <p class="font-display font-bold text-sm leading-none">Chat da equipe</p>
+      <p id="chatActiveLabel" class="text-[11px] text-violet-200 truncate">Selecione com quem conversar</p>
+    </div>
+    <button onclick="toggleChatSearch()" title="Buscar nas mensagens" class="text-violet-200 hover:text-white text-xs w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center">🔍</button>
+    <button id="chatCallBtn" onclick="startCall()" title="Ligar" class="hidden text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition items-center justify-center">📞</button>
+    <button onclick="toggleChat()" class="text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center text-lg leading-none">×</button>
   </div>
-  <div id="chatSearchBox" class="hidden px-2.5 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
-    <input id="chatSearchInput" oninput="onChatSearchInput()" placeholder="Buscar mensagens..." class="inp !py-1 !text-xs !bg-white">
-    <button onclick="clearChatSearch()" class="text-xs text-slate-400 hover:text-slate-600 font-bold px-1">✕</button>
+  <div id="chatSearchBox" class="hidden px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+    <input id="chatSearchInput" oninput="onChatSearchInput()" placeholder="Buscar nas mensagens..." class="inp !py-1.5 !text-xs !bg-white flex-1">
+    <button onclick="clearChatSearch()" class="text-xs text-slate-400 hover:text-slate-600 font-bold px-2">✕</button>
   </div>
-  <div id="chatTabs" class="flex gap-1.5 px-2.5 py-2 border-b border-slate-100 bg-white overflow-x-auto"></div>
+  <!-- Seletor de conversa - novo visual -->
+  <div class="px-3 py-2 border-b border-slate-100 bg-white">
+    <div class="relative">
+      <input id="chatUserSearch" oninput="filterChatUsers()" placeholder="🔎 Buscar pessoa para conversar..." class="inp !py-2 !text-xs !pl-8 !pr-3 w-full bg-slate-50 border-slate-200 focus:bg-white">
+      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs">🔍</span>
+    </div>
+    <div id="chatUserList" class="mt-2 grid grid-cols-1 gap-1 max-h-32 overflow-y-auto pr-1"></div>
+    <div id="chatTabs" class="hidden"></div>
+  </div>
   <div id="notifyBanner" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
     <span class="text-[11px] font-bold text-amber-800">🔔 Ative as notificações para receber mensagens no computador e celular</span>
     <button onclick="requestNotifyPermission()" class="ml-auto btn btn-primary text-[11px] px-2.5 py-1.5 flex-none">Ativar</button>
   </div>
-  <div id="chatMsgs" onscroll="onChatScroll()" class="h-72 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
+  <div id="chatHeader" class="hidden px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
+    <span id="chatHeaderAvatar" class="avatar w-8 h-8 text-xs flex-none">?</span>
+    <div class="min-w-0 flex-1">
+      <p id="chatHeaderName" class="text-xs font-bold text-indigo-900 truncate">—</p>
+      <p id="chatHeaderSub" class="text-[11px] text-indigo-600 truncate">—</p>
+    </div>
+    <button onclick="clearChatConvo()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded-full bg-white border border-indigo-200">Trocar</button>
+  </div>
+  <div id="chatMsgs" onscroll="onChatScroll()" class="flex-1 min-h-[220px] max-h-[320px] overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
   <div id="chatTyping" class="hidden px-3 py-1 bg-indigo-50 border-t border-indigo-100 text-[11px] text-indigo-700 font-medium italic animate-pulse flex items-center gap-1.5">
     <span>💬</span><span id="chatTypingText">digitando...</span>
   </div>
@@ -5715,16 +5734,83 @@ function convoUnread(to){
     return m.user === to && t === session.user;
   }).length;
 }
+let chatUserFilter = '';
+function filterChatUsers(){
+  const inp = document.getElementById('chatUserSearch');
+  chatUserFilter = inp ? inp.value.toLowerCase().trim() : '';
+  renderTabs();
+}
+function clearChatConvo(){
+  const inp = document.getElementById('chatUserSearch');
+  if(inp) inp.value = '';
+  chatUserFilter = '';
+  document.getElementById('chatUserList')?.classList.remove('hidden');
+  document.getElementById('chatHeader')?.classList.add('hidden');
+  renderTabs();
+}
+function roleBadge(role){
+  const m = { recepcao:['REC','bg-amber-100 text-amber-700'], tecnico:['TEC','bg-blue-100 text-blue-700'], psico:['PSI','bg-emerald-100 text-emerald-700'], admin:['ADM','bg-violet-100 text-violet-700'] };
+  const v = m[role] || ['','bg-slate-100 text-slate-600'];
+  return `<span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${v[1]}">${v[0]}</span>`;
+}
 function renderTabs(){
   if(!session) return;
   const box = document.getElementById('chatTabs');
-  if(!box) return;
-  const others = allUsers.filter(u => u.user !== session.user);
-  const tab = (val, label) => {
-    const on = activeConvo === val, un = convoUnread(val);
-    return `<button onclick="setConvo('${val}')" class="relative flex-none text-[11px] font-extrabold px-3 py-1.5 rounded-full transition ${on ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}" ${on ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>${label}${un ? '<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 border-2 border-white"></span>' : ''}</button>`;
+  const list = document.getElementById('chatUserList');
+  const q = chatUserFilter;
+  // mantém compat: preenche chatTabs escondido para testes antigos
+  if(box){
+    const others = allUsers.filter(u => u.user !== session.user);
+    const tab = (val, label) => {
+      const on = activeConvo === val, un = convoUnread(val);
+      return `<button onclick="setConvo('${val}')" class="relative flex-none text-[11px] font-extrabold px-3 py-1.5 rounded-full transition ${on ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}" ${on ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>${label}${un ? '<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-rose-500 border-2 border-white"></span>' : ''}</button>`;
+    };
+    box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : u.role === 'psico' ? 'PSI ' : 'TEC ') + esc(u.name))).join('');
+  }
+  if(!list) return;
+  // lista visual com avatar e busca
+  const othersAll = allUsers.filter(u => u.user !== session.user);
+  const all = [{ user:'todos', name:'Grupo - Todos', role:'grupo' }, ...othersAll];
+  const filtered = q ? all.filter(u => (u.name+' '+u.user+' '+(u.role||'')).toLowerCase().includes(q)) : all;
+  const isActive = (val) => activeConvo === val;
+  const row = (u) => {
+    const isGroup = u.user === 'todos';
+    const on = isActive(u.user);
+    const un = convoUnread(u.user);
+    const ini = isGroup ? '👥' : initials(u.name);
+    const bg = on ? 'background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:transparent' : 'background:#fff;border-color:#e2e8f0';
+    const sub = isGroup ? `${allUsers.length} membros • clique para grupo` : `${u.role||''} • @${u.user}${un?` • ${un} nova(s)`:''}`;
+    return `<button onclick="setConvo('${u.user}')" class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl border text-left transition ${on?'shadow-md':''} hover:bg-slate-50" style="${bg}">
+      <span class="avatar w-9 h-9 text-xs flex-none ${isGroup?'!bg-white/20 !text-white':''}" style="${isGroup&&on?'background:rgba(255,255,255,.2)':''}">${esc(ini)}</span>
+      <span class="min-w-0 flex-1">
+        <span class="flex items-center gap-1.5"><span class="text-xs font-bold truncate ${on?'text-white':'text-slate-800'}">${esc(isGroup?'Grupo':u.name)}</span>${!isGroup?roleBadge(u.role):''}${un?'<span class="ml-auto w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center flex-none">'+un+'</span>':''}</span>
+        <span class="text-[11px] truncate block ${on?'text-violet-100':'text-slate-500'}">${esc(sub)}</span>
+      </span>
+      ${on?'<span class="text-white text-xs flex-none">✓</span>':''}
+    </button>`;
   };
-  box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : u.role === 'psico' ? 'PSI ' : 'TEC ') + esc(u.name))).join('');
+  list.innerHTML = filtered.length ? filtered.map(row).join('') : `<p class="text-xs text-slate-400 text-center py-2">Nenhum usuário encontrado</p>`;
+  // header ativo
+  const active = all.find(a=>a.user===activeConvo);
+  const lab = document.getElementById('chatActiveLabel');
+  if(lab) lab.textContent = active ? (active.user==='todos' ? 'Grupo • todos' : `${active.name} • @${active.user}`) : 'Selecione com quem conversar';
+  const hdr = document.getElementById('chatHeader');
+  const hdrAvail = active && active.user !== 'todos';
+  if(hdr){
+    if(active){
+      hdr.classList.remove('hidden');
+      const av=document.getElementById('chatHeaderAvatar');
+      const nm=document.getElementById('chatHeaderName');
+      const sub=document.getElementById('chatHeaderSub');
+      if(av) av.textContent = active.user==='todos' ? '👥' : initials(active.name);
+      if(nm) nm.textContent = active.user==='todos' ? 'Grupo' : active.name;
+      if(sub) sub.textContent = active.user==='todos' ? 'Mensagens para toda a equipe' : `${active.role||''} • @${active.user}`;
+    } else hdr.classList.add('hidden');
+  }
+  // se filtro ativo, mantém lista visível
+  if(q && filtered.length===1 && filtered[0].user!==activeConvo){
+    // não auto-seleciona, só facilita
+  }
 }
 function setConvo(to){
   activeConvo = to; oldestChatId = null; hasMoreChat = true; renderTabs(); updateChatPlaceholder(); loadChat();
