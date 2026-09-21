@@ -1,5 +1,5 @@
 const express = require('express');
-const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
+const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoRecolhimentoEquipamentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
 const { gerarAtivacaoPDF } = require('../lib/ativacoesPdf');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
@@ -15,6 +15,30 @@ function normPsiDoc(src) {
   ['resumo','parecer','plano','texto'].forEach(k=>{ nd[k] = g(k, 3000); });
   ['dataInicio','dataFim','dataDoc'].forEach(k=>{ if(s[k]){ const dt = new Date(s[k]); if(!isNaN(dt)) nd[k] = dt.toISOString().slice(0,10); } });
   if(Array.isArray(s.itens)) nd.itens = s.itens.slice(0, 200).map(r=>({ data: String((r&&r.data)||'').slice(0,10), local: String((r&&r.local)||'').slice(0,120), status: String((r&&r.status)||'').slice(0,30), obs: String((r&&r.obs)||'').slice(0,300) }));
+  return nd;
+}
+
+// Normalização do Termo de Recolhimento de Equipamento (UNEPE Juazeiro)
+function normRecEquip(src){
+  const s = (src && typeof src === 'object') ? src : {};
+  const g = (k,n) => String(s[k]==null?'':s[k]).trim().slice(0,n);
+  const nd = {};
+  ['nomeMonitorado','numeroTermo','idMonitorado','perfil','estabelecimento','cpfRg','descricao','horaFim'].forEach(k=>{ nd[k]=g(k, k==='descricao'?1000:120); });
+  ['monitoradoDesde','desativadoDesde'].forEach(k=>{
+    if(s[k]){ const dt=new Date(s[k]); if(!isNaN(dt)) nd[k]=dt.toISOString().slice(0,10); }
+  });
+  ['dataHora'].forEach(k=>{ if(s[k]){ const dt=new Date(s[k]); if(!isNaN(dt)) nd[k]=dt.toISOString(); } });
+  const CHECK_KEYS = ['ladoExterno','cinta','travas','fonte','fonteCE01','ladoInterno','abaDireita','abaEsquerda'];
+  if(Array.isArray(s.equipamentos)){
+    nd.equipamentos = s.equipamentos.slice(0,10).map(r=>{
+      const checks = {};
+      CHECK_KEYS.forEach(k=>{
+        const v = r && r.checks ? r.checks[k] : null;
+        checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+      });
+      return { numero: String((r&&r.numero)||'').trim().slice(0,30), danificado: !!(r&&r.danificado), checks };
+    }).filter(r=>r.numero);
+  }
   return nd;
 }
 
@@ -61,7 +85,21 @@ function normAtivacao(src){
 }
 router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
-  const t = (tipo === 'ativacao') ? 'ativacao' : (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
+  const t = (tipo === 'ativacao') ? 'ativacao' : (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'recEquip') ? 'recEquip' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
+  if(t === 'recEquip'){
+    const nd = normRecEquip(dados);
+    if(!nd.equipamentos || !nd.equipamentos.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
+    if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o nome do monitorado' });
+    const termo = await store.termos.insert({
+      user: req.auth.user, tipo: 'recEquip',
+      dataEnvio: nd.dataHora ? nd.dataHora.slice(0,10) : new Date().toISOString().slice(0,10),
+      destinatario: nd.estabelecimento || '', equipamentos: [],
+      respEntrega: '', respRecebimento: '',
+      dados: nd
+    });
+    broadcast();
+    return res.status(201).json(termo);
+  }
   if(t === 'ativacao'){
     const nd = normAtivacao(dados);
     if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o Nome do monitorado' });
@@ -197,6 +235,13 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
   const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   const patch={};
   if(dataEnvio !== undefined) patch.dataEnvio = dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null;
+  if(t.tipo === 'recEquip' && dados && typeof dados === 'object'){
+    const nd = normRecEquip(Object.assign({}, t.dados||{}, dados));
+    if(!nd.equipamentos || !nd.equipamentos.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
+    patch.dados = nd;
+    if(nd.dataHora) patch.dataEnvio = nd.dataHora.slice(0,10);
+    if(nd.estabelecimento != null) patch.destinatario = nd.estabelecimento;
+  }
   if(t.tipo === 'recolhimento' && dados && typeof dados === 'object'){
     const d = dados;
     const nd = Object.assign({}, t.dados||{});
@@ -294,6 +339,7 @@ async function termoPDFFromRecord(t) {
   if (!t) throw Object.assign(new Error('Termo não encontrado'), { status: 404 });
   if (t.tipo === 'ativacao') return gerarAtivacaoPDF(t);
   if (t.tipo === 'recolhimento') return gerarTermoRecolhimentoPDF(t);
+  if (t.tipo === 'recEquip') return gerarTermoRecolhimentoEquipamentoPDF(t);
   if (t.tipo === 'endereco') return gerarTermoEnderecoPDF(t);
   if (t.tipo === 'declaracao') return gerarDeclaracaoPDF(t);
   if (t.tipo === 'relfreq') return gerarRelFrequenciaPDF(t);
@@ -312,6 +358,13 @@ router.get('/api/termos/:id/pdf', auth(['tecnico', 'psico']), ah(async (req,res)
 }));
 router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
+  if(tipo === 'recEquip'){
+    const nd = normRecEquip(dados);
+    const pdf = await gerarTermoRecolhimentoEquipamentoPDF({ dados: nd });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(Buffer.from(pdf));
+  }
   if(tipo === 'recolhimento'){
     const d = (dados && typeof dados === 'object') ? dados : {};
     const termo = {

@@ -509,6 +509,312 @@ async function gerarTermoRecolhimentoPDF(termo){
   const pdfBytes = await pdfDoc.save();
   return pdfBytes;
 }
+// PDF Termo de Recolhimento de Equipamento (UNEPE Juazeiro do Norte)
+// Reproduz o layout do documento Word "TERMO DE RECOLHIMENTO DE EQUIPAMENTO 2025":
+// caixas de cantos arredondados, faixas de título cinza (#C3C3C3 borda #A5A5A5 e #A0A0A0),
+// caixas brancas com checkbox, logos e rodapé idênticos ao modelo.
+async function gerarTermoRecolhimentoEquipamentoPDF(termo){
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const eqs = Array.isArray(d.equipamentos) ? d.equipamentos : [];
+  const eq0 = eqs[0] || {};
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const PW = 595.32, PH = 841.92;
+  const BLACK = rgb(0,0,0);
+  const GRAY_FILL = rgb(0xC3/255, 0xC3/255, 0xC3/255);
+  const GRAY_LINE = rgb(0xA5/255, 0xA5/255, 0xA5/255);
+  const TITLE_FILL = rgb(0xA0/255, 0xA0/255, 0xA0/255);
+  let logoBadge = null, logoSpace = null;
+  try{
+    const p = path.join(ROOT, 'public', 'logo-policia-penal-badge.png');
+    if(fs.existsSync(p)) logoBadge = await pdfDoc.embedPng(fs.readFileSync(p));
+  }catch(e){}
+  try{
+    const p = path.join(ROOT, 'public', 'logo-spacecomm.png');
+    if(fs.existsSync(p)) logoSpace = await pdfDoc.embedPng(fs.readFileSync(p));
+  }catch(e){}
+  const v = (x) => (x == null ? '' : String(x)).trim();
+  const dataHoraTxt = (()=>{
+    if(d.dataHora){
+      const dt = new Date(d.dataHora);
+      if(!isNaN(dt)){
+        const p = n => String(n).padStart(2,'0');
+        const ini = p(dt.getHours()) + ':' + p(dt.getMinutes());
+        const fim = v(d.horaFim) || '____:____';
+        return dt.toLocaleDateString('pt-BR') + '  De ' + ini + 'h às ' + fim + 'h';
+      }
+    }
+    return '____/____/____  De ____:____h às ____:____h';
+  })();
+  const pg = pdfDoc.addPage([PW, PH]);
+  const X = 16;                       // borda esquerda do formulário (como no modelo)
+  const FR = PW - X;                  // borda direita
+  const yTop = PH - 14;
+  // ---------- Cabeçalho: logos + título ----------
+  if(logoBadge){
+    const h = 58, w = h * (logoBadge.width / logoBadge.height);
+    pg.drawImage(logoBadge, { x: X + 2, y: yTop - h, width: w, height: h });
+  }
+  if(logoSpace){
+    const w = 205, h = w * (logoSpace.height / logoSpace.width);
+    pg.drawImage(logoSpace, { x: FR - w, y: yTop - h - 2, width: w, height: h });
+  }
+  const title = 'TERMO DE RECOLHIMENTO';
+  pg.drawText(title, { x: (PW - fontBold.widthOfTextAtSize(title, 14))/2, y: yTop - 82, size: 14, font: fontBold, color: BLACK });
+  // ---------- helpers ----------
+  function rr(x, y, w, h, txt, o){
+    o = o || {};
+    pg.drawRectangle({ x, y, width: w, height: h, color: o.fill || rgb(1,1,1), borderColor: o.line || BLACK, borderWidth: o.lw == null ? 1 : o.lw });
+    if(txt){
+      const f = o.bold === false ? font : fontBold;
+      const size = o.size || 8.5;
+      const maxW = w - 7;
+      const words = String(txt).split(' ');
+      const lines = []; let ln = '';
+      words.forEach(wd=>{
+        const t2 = ln ? ln + ' ' + wd : wd;
+        if(f.widthOfTextAtSize(t2, size) <= maxW || !ln) ln = t2;
+        else { lines.push(ln); ln = wd; }
+      });
+      if(ln) lines.push(ln);
+      const lh = size * 1.15;
+      let ty = y + h/2 + (lines.length * lh)/2 - lh + size * 0.34;
+      lines.forEach(l=>{
+        pg.drawText(l, { x: o.align === 'left' ? x + 3.5 : x + (w - f.widthOfTextAtSize(l, size))/2, y: ty, size, font: f, color: BLACK });
+        ty -= lh;
+      });
+    }
+  }
+  function ckbx(cx, cy, s, marked){
+    pg.drawRectangle({ x: cx, y: cy, width: s, height: s, borderColor: BLACK, borderWidth: 0.9, color: rgb(1,1,1) });
+    if(marked){
+      pg.drawLine({ start: { x: cx+1.1, y: cy+s-1.4 }, end: { x: cx+s-1.3, y: cy+1.1 }, thickness: 1.05, color: BLACK });
+      pg.drawLine({ start: { x: cx+1.1, y: cy+1.1 }, end: { x: cx+s-1.3, y: cy+s-1.4 }, thickness: 1.05, color: BLACK });
+    }
+  }
+  const B = 8.6; // tamanho do quadrado do checkbox
+  function snBox(x, y, w, h, label, marked){
+    rr(x, y, w, h, '', {});
+    const size = 8.5;
+    const lw = fontBold.widthOfTextAtSize(label, size);
+    const total = lw + 2.6 + B;
+    const tx = x + (w - total)/2, ty = y + h/2 - size*0.34;
+    pg.drawText(label, { x: tx, y: ty, size, font: fontBold, color: BLACK });
+    ckbx(tx + lw + 2.6, y + h/2 - B/2, B, marked);
+  }
+  function chkBox(x, y, w, h, marked){
+    rr(x, y, w, h, '', {});
+    ckbx(x + w/2 - B/2, y + h/2 - B/2, B, marked);
+  }
+  // dados preenchidos
+  const nomeMon = v(d.nomeMonitorado);
+  const ck = (k) => { const val = eq0.checks ? eq0.checks[k] : null; return val === true || val === 'sim'; };
+  // ---------- Faixas cinza superiores (#A0A0A0): MONITORADO(A) + Data/Hora ----------
+  const bandH = 25, bandY = yTop - 108;
+  const leftW = 356, gap = 8, rightW = FR - (X + leftW + gap);
+  rr(X, bandY, leftW, bandH, '', { fill: TITLE_FILL, lw: 1 });
+  {
+    const size = 10;
+    const label = 'MONITORADO(A): ';
+    const nomeTxt = nomeMon || '_____________________________________';
+    const full = label + nomeTxt;
+    const wAll = fontBold.widthOfTextAtSize(full, size);
+    const startX = X + (leftW - Math.min(wAll, leftW - 8))/2;
+    if(wAll <= leftW - 8){
+      pg.drawText(full, { x: startX, y: bandY + bandH/2 - size*0.34, size, font: fontBold, color: BLACK });
+    } else {
+      let nm = nomeTxt;
+      while(nm.length > 4 && fontBold.widthOfTextAtSize(label + nm, size) > leftW - 8) nm = nm.slice(0, -1);
+      pg.drawText(label + nm, { x: startX, y: bandY + bandH/2 - size*0.34, size, font: fontBold, color: BLACK });
+    }
+  }
+  rr(X + leftW + gap, bandY, rightW, bandH, '', { fill: TITLE_FILL, lw: 1 });
+  {
+    const size = 10;
+    const t = 'Data/Hora: ' + dataHoraTxt;
+    pg.drawText(t, { x: X + leftW + gap + 5, y: bandY + bandH/2 - size*0.34, size, font: fontBold, color: BLACK });
+  }
+  // ---------- Linha 2: Nº do equipamento + Nº do termo ----------
+  const numY = bandY - bandH - 4;
+  const numH = 24;
+  const nums = eqs.map(e=>v(e.numero)).filter(Boolean);
+  const numTxt = 'Nº: ' + (nums.length ? nums.slice(0,3).join(', ') : '______________');
+  const halfW = (FR - X - 8)/2;
+  rr(X, numY, halfW, numH, '', { lw: 1 });
+  {
+    const size = 9;
+    pg.drawText(numTxt, { x: X + (halfW - fontBold.widthOfTextAtSize(numTxt, size))/2, y: numY + numH/2 - size*0.34, size, font: fontBold, color: BLACK });
+  }
+  const num2Txt = 'Nº: ' + (v(d.numeroTermo) || '______________');
+  rr(X + halfW + 8, numY, halfW, numH, '', { lw: 1 });
+  {
+    const size = 9;
+    pg.drawText(num2Txt, { x: X + halfW + 8 + (halfW - fontBold.widthOfTextAtSize(num2Txt, size))/2, y: numY + numH/2 - size*0.34, size, font: fontBold, color: BLACK });
+  }
+  // ---------- Caixas de identificação (Id. monitorado / Perfil / Estabelecimento) ----------
+  const idRows = [
+    ['Id. monitorado:', v(d.idMonitorado)],
+    ['Perfil:', v(d.perfil)],
+    ['Estabelecimento:', v(d.estabelecimento)]
+  ];
+  const idH = 21, idGap = 2.5, idY0 = numY + numH + 4;
+  idRows.forEach(([k, val], i)=>{
+    const yy = idY0 - (i+1)*(idH + idGap) + idGap;
+    rr(X + halfW + 8, yy, halfW, idH, '', { fill: TITLE_FILL, lw: 1 });
+    const size = 7.8;
+    pg.drawText(k, { x: X + halfW + 12, y: yy + idH/2 - size*0.34, size, font: fontBold, color: BLACK });
+    const kx = X + halfW + 12 + fontBold.widthOfTextAtSize(k, size) + 3;
+    pg.drawText(String(val || '').slice(0, 30), { x: kx, y: yy + idH/2 - size*0.34, size, font: fontBold, color: BLACK });
+  });
+  // ---------- 1) INSPEÇÃO NO DISPOSITIVO ----------
+  let y = idY0 - 3*(idH + idGap) - 6;
+  const secH = 21;
+  const secW1 = 336;
+  rr(X, y - secH, secW1, secH, '1)  INSPEÇÃO NO DISPOSITIVO', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9, align: 'left' });
+  const secW2 = FR - X - secW1 - 4;
+  rr(X + secW1 + 4, y - secH, secW2, secH, 'SISTEMA DE MONITORAÇÃO ELETRÔNICA', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9 });
+  y -= secH;
+  // linha: ANTES DA RETIRADA | Nº equipamento ☐
+  const rowA = y - 2.5;
+  rr(X, rowA - 21, 268, 21, ' ANTES DA RETIRADA', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9, align: 'left' });
+  {
+    const bw = 118, bh = 21;
+    rr(X + 272, rowA - bh, bw, bh, v(eq0.numero) || 'SAC24 - CE02', { size: 8.5 });
+    chkBox(X + 272 + bw + 4, rowA - bh, 56, bh, false);
+  }
+  y = rowA - 21;
+  // linha: TZPR (LADO EXTERNO) + SIM/NÃO | Nº equipamento 2 ☐
+  const rowB = y - 2.5;
+  const lblW = 190, snW = 55;
+  rr(X, rowB - 20, lblW, 20, 'TZPR (LADO EXTERNO)', { size: 8.5 });
+  snBox(X + lblW + 4, rowB - 20, snW, 20, 'SIM', ck('ladoExterno'));
+  snBox(X + lblW + 4 + snW + 4, rowB - 20, snW, 20, 'NÃO', !ck('ladoExterno'));
+  const eq1 = eqs[1] || {};
+  rr(X + 272, rowB - 20, 118, 20, v(eq1.numero) || 'SAC24 - CE01', { size: 8.5 });
+  chkBox(X + 272 + 118 + 4, rowB - 20, 56, 20, false);
+  y = rowB - 20;
+  // linha: CINTA DE FIXAÇÃO + SIM/NÃO | ESTADO DE APRESENTAÇÃO DO EQUIPAMENTO
+  const rowC = y - 2.5;
+  rr(X, rowC - 20, lblW, 20, 'CINTA DE FIXAÇÃO', { size: 8.5 });
+  snBox(X + lblW + 4, rowC - 20, snW, 20, 'SIM', ck('cinta'));
+  snBox(X + lblW + 4 + snW + 4, rowC - 20, snW, 20, 'NÃO', !ck('cinta'));
+  rr(X + 272, rowC - 20, secW2 + 4, 20, 'ESTADO DE APRESENTAÇÃO DO EQUIPAMENTO', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9 });
+  y = rowC - 20;
+  // linha: TRAVAS + SIM/NÃO | DESLIGADO ☐ LIGADO ☐ SEM EQUIP. ☐
+  const rowD = y - 2.5;
+  rr(X, rowD - 20, lblW, 20, 'TRAVAS', { size: 8.5 });
+  snBox(X + lblW + 4, rowD - 20, snW, 20, 'SIM', ck('travas'));
+  snBox(X + lblW + 4 + snW + 4, rowD - 20, snW, 20, 'NÃO', !ck('travas'));
+  {
+    const bw = (FR - X - 272 - 8)/3;
+    [['DESLIGADO', false], ['LIGADO', false], ['SEM EQUIP.', false]].forEach(([t, m], i)=>{
+      const bx = X + 272 + i*(bw + 4);
+      rr(bx, rowD - 20, bw, 20, t, { size: 7.5 });
+      ckbx(bx + bw - B - 3.5, rowD - 20 + 10 - B/2, B, m);
+    });
+  }
+  y = rowD - 20;
+  // linha: FONTE ) + SIM/NÃO | SIM ☐ NÃO ☐ (fonte)
+  const rowE = y - 2.5;
+  rr(X, rowE - 20, lblW, 20, 'FONTE )', { size: 8.5 });
+  snBox(X + lblW + 4, rowE - 20, snW, 20, 'SIM', ck('fonte'));
+  snBox(X + lblW + 4 + snW + 4, rowE - 20, snW, 20, 'NÃO', !ck('fonte'));
+  {
+    const bw = (FR - X - 272 - 8)/3;
+    rr(X + 272, rowE - 20, bw, 20, 'SIM', { size: 8.5 });
+    ckbx(X + 272 + bw - B - 3.5, rowE - 20 + 10 - B/2, B, ck('fonteCE01'));
+    rr(X + 272 + bw + 4, rowE - 20, bw, 20, 'NÃO', { size: 8.5 });
+    ckbx(X + 272 + bw + 4 + bw - B - 3.5, rowE - 20 + 10 - B/2, B, !ck('fonteCE01'));
+  }
+  y = rowE - 20;
+  // ---------- DEPOIS DA RETIRADA ----------
+  const rowF = y - 3;
+  rr(X, rowF - 21, FR - X, 21, ' DEPOIS DA RETIRADA', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9, align: 'left' });
+  y = rowF - 21;
+  // ---------- 2) INSPECIONADO O EQUIPAMENTO | DANIFICADO ----------
+  const rowG = y - 2.5;
+  const gW = (FR - X - 4)/2;
+  rr(X, rowG - 20, gW, 20, '2)  INSPECIONADO O EQUIPAMENTO', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9, align: 'left' });
+  rr(X + gW + 4, rowG - 20, gW, 20, 'DANIFICADO', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9 });
+  // linhas: TZPR (LADO INTERNO) / ABA DIREITA / ABA ESQUERDA com SIM/NÃO largos
+  const lbl2W = 280, sn2W = 120;
+  const eqCheck = (label, key, rowY)=>{
+    rr(X, rowY - 20, lbl2W, 20, label, { size: 8.5 });
+    snBox(X + lbl2W + 4, rowY - 20, sn2W, 20, 'SIM', ck(key));
+    snBox(X + lbl2W + 4 + sn2W + 4, rowY - 20, sn2W, 20, 'NÃO', !ck(key));
+  };
+  eqCheck('TZPR (LADO INTERNO)', 'ladoInterno', rowG - 24);
+  eqCheck('ABA DIREITA', 'abaDireita', rowG - 46);
+  eqCheck('ABA ESQUERDA', 'abaEsquerda', rowG - 68);
+  y = rowG - 92;
+  // ---------- 2) DESCRIÇÃO DA DESATIVAÇÃO ----------
+  const rowH = y - 3;
+  rr(X, rowH - 21, FR - X, 21, '2)  DESCRIÇÃO DA DESATIVAÇÃO', { fill: GRAY_FILL, line: GRAY_LINE, lw: 0.5, size: 9, align: 'left' });
+  y = rowH - 21;
+  // linha de datas
+  const dtsY = y - 13;
+  const d1 = d.monitoradoDesde ? (()=>{ const dd = new Date(d.monitoradoDesde); return isNaN(dd) ? String(d.monitoradoDesde) : dd.toLocaleDateString('pt-BR'); })() : '____/____/_____';
+  const d2 = d.desativadoDesde ? (()=>{ const dd = new Date(d.desativadoDesde); return isNaN(dd) ? String(d.desativadoDesde) : dd.toLocaleDateString('pt-BR'); })() : '____/____/_____';
+  pg.drawText('Monitorado desde: ', { x: X + 6, y: dtsY, size: 9, font: fontBold, color: BLACK });
+  let tx = X + 6 + fontBold.widthOfTextAtSize('Monitorado desde: ', 9);
+  pg.drawText(d1, { x: tx, y: dtsY, size: 9, font, color: BLACK });
+  tx += font.widthOfTextAtSize(d1, 9) + 12;
+  pg.drawText('//', { x: tx, y: dtsY, size: 9, font, color: BLACK });
+  tx += font.widthOfTextAtSize('//', 9) + 12;
+  pg.drawText('Desativado desde: ', { x: tx, y: dtsY, size: 9, font: fontBold, color: BLACK });
+  tx += fontBold.widthOfTextAtSize('Desativado desde: ', 9);
+  pg.drawText(d2, { x: tx, y: dtsY, size: 9, font, color: BLACK });
+  y = dtsY - 4;
+  // caixa de descrição + caixinha de carimbo à direita
+  const descH = 84;
+  rr(X, y - descH, FR - X, descH, '', {});
+  {
+    const txt = v(d.descricao);
+    const size = 9, maxW = FR - X - 90;
+    const words = txt.split(' ').filter(Boolean);
+    const lines = []; let ln = '';
+    words.forEach(wd=>{
+      const t2 = ln ? ln + ' ' + wd : wd;
+      if(font.widthOfTextAtSize(t2, size) <= maxW || !ln) ln = t2;
+      else { lines.push(ln); ln = wd; }
+    });
+    if(ln) lines.push(ln);
+    lines.slice(0, 7).forEach((l, i)=>{
+      pg.drawText(l, { x: X + 5, y: y - 12 - i * 10.5, size, font, color: BLACK });
+    });
+  }
+  y -= descH;
+  // linha CPF/RG + assinatura do monitorado
+  const cpfY = y - 18;
+  const cpfTxt = 'CPF/RG ' + (v(d.cpfRg) || '________________');
+  pg.drawText(cpfTxt, { x: X + 340, y: cpfY, size: 9, font, color: BLACK });
+  const assY = cpfY - 16;
+  pg.drawText('ASSINATURA___________________________________________________', { x: X + 6, y: assY, size: 9, font, color: BLACK });
+  // ---------- Assinaturas policial / técnico ----------
+  const sy = assY - 38;
+  const midX = PW/2;
+  pg.drawLine({ start: { x: X + 10, y: sy }, end: { x: midX - 24, y: sy }, thickness: 0.8, color: BLACK });
+  pg.drawLine({ start: { x: midX + 24, y: sy }, end: { x: FR - 10, y: sy }, thickness: 0.8, color: BLACK });
+  const polName = [v(d.policialNome), v(d.policialMat) ? 'Mat ' + v(d.policialMat) : ''].filter(Boolean).join(' / ');
+  const tecName = [v(d.tecnicoNome), v(d.tecnicoMat) ? 'Mat ' + v(d.tecnicoMat) : ''].filter(Boolean).join(' / ');
+  if(polName) pg.drawText(polName, { x: X + 10 + ((midX - 34 - (X + 10)) - font.widthOfTextAtSize(polName, 8))/2, y: sy + 5, size: 8, font, color: BLACK });
+  if(tecName) pg.drawText(tecName, { x: midX + 24 + ((FR - 10 - (midX + 24)) - font.widthOfTextAtSize(tecName, 8))/2, y: sy + 5, size: 8, font, color: BLACK });
+  const polL = 'Policial penal Mat.';
+  const tecL = 'Técnico responsável';
+  pg.drawText(polL, { x: X + 10 + ((midX - 34 - (X + 10)) - fontBold.widthOfTextAtSize(polL, 8))/2, y: sy - 11, size: 8, font: fontBold, color: BLACK });
+  pg.drawText(tecL, { x: midX + 24 + ((FR - 10 - (midX + 24)) - fontBold.widthOfTextAtSize(tecL, 8))/2, y: sy - 11, size: 8, font: fontBold, color: BLACK });
+  // ---------- Rodapé (igual ao modelo) ----------
+  const foot = 'Coordenadoria de Monitoração Eletrônica de Pessoas – COMEP';
+  const foot2 = 'Rua Tenente Benévolo, 1055 – Meireles';
+  const foot3 = 'CEP: 60.160-041 – Fortaleza – Ceará – Fone: (85) 98222-0029';
+  const fy = Math.max(38, sy - 32);
+  pg.drawText(foot, { x: (PW - fontBold.widthOfTextAtSize(foot, 8))/2, y: fy, size: 8, font: fontBold, color: BLACK });
+  pg.drawText(foot2, { x: (PW - font.widthOfTextAtSize(foot2, 8))/2, y: fy - 10.5, size: 8, font, color: BLACK });
+  pg.drawText(foot3, { x: (PW - font.widthOfTextAtSize(foot3, 8))/2, y: fy - 21, size: 8, font, color: BLACK });
+  const pdfBytes = await pdfDoc.save();
+  return pdfBytes;
+}
 
 // PDF Ofício de Mudança de Endereço (COMEP/SAP) - documento corrido 1 página
 async function gerarTermoEnderecoPDF(termo){
@@ -674,7 +980,7 @@ async function gerarTermoEnderecoPDF(termo){
   return pdfBytes;
 }
 
-module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF,
+module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoRecolhimentoEquipamentoPDF,
 gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF };
 
 // =====================================================================
