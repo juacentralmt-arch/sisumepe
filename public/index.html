@@ -4009,10 +4009,97 @@ function ativLimparUpload(){
   const prog=document.getElementById('ativProgress'); if(prog) prog.classList.add('hidden');
   const res=document.getElementById('ativResult'); if(res){ res.classList.add('hidden'); res.innerHTML=''; }
 }
+let ativLastFile=null;
+let ativPdfJsReady=false, ativPdfJsLoading=false;
+function ensurePdfJsAtiv(){
+  return new Promise((res,rej)=>{
+    if(ativPdfJsReady && typeof pdfjsLib !== 'undefined') return res();
+    if(ativPdfJsLoading){
+      const iv=setInterval(()=>{ if(ativPdfJsReady) { clearInterval(iv); res(); } }, 250);
+      setTimeout(()=>{ clearInterval(iv); rej(new Error('timeout pdfjs')); }, 20000);
+      return;
+    }
+    ativPdfJsLoading=true;
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{
+      try{
+        if(typeof pdfjsLib !== 'undefined'){
+          pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          ativPdfJsReady=true; ativPdfJsLoading=false; res();
+        } else { ativPdfJsLoading=false; rej(new Error('pdfjs falhou')); }
+      }catch(e){ ativPdfJsLoading=false; rej(e); }
+    };
+    s.onerror=()=>{ ativPdfJsLoading=false; rej(new Error('Falha ao carregar PDF.js')); };
+    document.head.appendChild(s);
+  });
+}
+async function ativTentarOcr(){
+  const f=ativLastFile || (document.getElementById('ativPdfFile') && document.getElementById('ativPdfFile').files[0]);
+  if(!f) return toast('⚠️ Selecione o PDF novamente');
+  const prog=document.getElementById('ativProgress');
+  const txt=document.getElementById('ativProgressTxt');
+  const bar=document.getElementById('ativProgressBar');
+  const resBox=document.getElementById('ativResult');
+  prog.classList.remove('hidden'); resBox.classList.add('hidden');
+  if(bar) bar.style.width='10%';
+  try{
+    if(txt) txt.textContent='Carregando OCR...';
+    await ensureTesseract();
+    const worker=await getDocWorker(m=>{
+      if(m.status==='recognizing text' && m.progress!=null){
+        if(bar) bar.style.width=Math.round(15 + m.progress*70)+'%';
+        if(txt) txt.textContent=`Lendo página... ${Math.round(m.progress*100)}%`;
+      }
+    });
+    if(txt) txt.textContent='Carregando PDF para OCR...';
+    await ensurePdfJsAtiv();
+    if(bar) bar.style.width='20%';
+    const buf=await f.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    let fullText='';
+    for(let i=1;i<=pdf.numPages;i++){
+      if(txt) txt.textContent=`OCR página ${i}/${pdf.numPages}...`;
+      if(bar) bar.style.width=Math.round(20 + (i-1)/pdf.numPages*50)+'%';
+      const page=await pdf.getPage(i);
+      const viewport=page.getViewport({ scale: 1.8 });
+      const canvas=document.createElement('canvas');
+      canvas.width=viewport.width; canvas.height=viewport.height;
+      const ctx=canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const { data:{ text } } = await worker.recognize(canvas);
+      fullText+='\n'+text;
+    }
+    if(txt) txt.textContent='Interpretando dados...';
+    if(bar) bar.style.width='85%';
+    const r=await authFetch('/api/ativacoes/parse-text', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ texto: fullText }) });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||'Erro ao interpretar OCR');
+    fillAtivacaoFromDados(j.dados);
+    const sc=j.score||{filled:0,total:0,percent:0};
+    if(bar) bar.style.width='100%';
+    resBox.className='mt-3 rounded-xl border p-3 text-xs '+(sc.percent>=40?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-amber-50 border-amber-200 text-amber-800');
+    resBox.innerHTML=`<b>📷 OCR ${sc.filled}/${sc.total} campos (${sc.percent}%)</b> — texto escaneado lido. Revise em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">OCR pode errar letras/números — confira CPF/processo.</span><details class="mt-1"><summary class="cursor-pointer text-[11px] underline">Ver texto lido</summary><pre class="max-h-28 overflow-y-auto bg-slate-900 text-slate-100 rounded p-2 text-[10px] whitespace-pre-wrap mt-1">${esc(fullText.slice(0,3000))}</pre></details>`;
+    resBox.classList.remove('hidden');
+    if(txt) txt.textContent='✅ OCR concluído!';
+    toast(sc.percent>=40 ? '✅ OCR: '+sc.filled+' campos' : '⚠️ OCR parcial — revise');
+    highlightAtivacaoFields(j.dados);
+    scheduleAtivPreview(true);
+    setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 2200);
+  }catch(e){
+    if(txt) txt.textContent='Erro OCR: '+e.message;
+    if(bar) bar.style.width='100%';
+    resBox.className='mt-3 rounded-xl border p-3 text-xs bg-rose-50 border-rose-200 text-rose-700';
+    resBox.innerHTML='⚠️ OCR falhou: '+esc(e.message)+'<br><span class="text-[11px]">Tente um PDF com texto selecionável ou digite manualmente. Dica: use o app CamScanner/Office Lens para gerar PDF pesquisável.</span>';
+    resBox.classList.remove('hidden');
+    toast('⚠️ OCR: '+e.message);
+  }
+}
 async function ativAnalisar(){
   const inp=document.getElementById('ativPdfFile');
   const f=inp && inp.files && inp.files[0];
   if(!f) return toast('⚠️ Selecione um PDF primeiro');
+  ativLastFile=f;
   const prog=document.getElementById('ativProgress');
   const txt=document.getElementById('ativProgressTxt');
   const bar=document.getElementById('ativProgressBar');
@@ -4024,10 +4111,15 @@ async function ativAnalisar(){
     const fd=new FormData(); fd.append('arquivo', f);
     const res= await authFetch('/api/ativacoes/auto-preencher', { method:'POST', body: fd });
     const j= await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(j.error||'Erro ao analisar');
+    if(!res.ok){
+      const isScanned = j.isScanned || /sem texto|escanead/i.test(j.error||'');
+      if(isScanned){
+        throw Object.assign(new Error(j.error||'PDF escaneado'), { isScanned:true, j });
+      }
+      throw new Error(j.error||'Erro ao analisar');
+    }
     if(bar) bar.style.width='85%';
     if(txt) txt.textContent='Preenchendo formulário...';
-    // preenche
     fillAtivacaoFromDados(j.dados);
     const sc=j.score||{filled:0,total:0,percent:0};
     if(bar) bar.style.width='100%';
@@ -4040,6 +4132,17 @@ async function ativAnalisar(){
     scheduleAtivPreview(true);
     setTimeout(()=>{ prog.classList.add('hidden'); if(bar) bar.style.width='35%'; }, 1800);
   }catch(e){
+    const isScanned = e.isScanned || /sem texto|escanead/i.test(e.message||'');
+    if(isScanned){
+      if(txt) txt.textContent='PDF escaneado detectado';
+      if(bar) bar.style.width='100%';
+      resBox.className='mt-3 rounded-xl border p-3 text-xs bg-amber-50 border-amber-300 text-amber-900';
+      resBox.innerHTML=`⚠️ <b>PDF sem texto selecionável</b> — parece ser imagem escaneada.<br><span class="text-[11px]">O sistema tentou ler o texto embutido e não encontrou nada. Use o OCR abaixo (lento, mas lê imagem) ou digite manualmente.</span><div class="mt-2 flex gap-2"><button onclick="ativTentarOcr()" class="btn btn-dark flex-1 py-2 text-xs">📷 Tentar OCR (PDF escaneado)</button><button onclick="document.getElementById('ativNome').focus()" class="btn btn-ghost flex-1 py-2 text-xs">✍️ Preencher manual</button></div><p class="text-[11px] opacity-70 mt-1">Dica: PDFs gerados por \"Imprimir → Salvar como PDF\" funcionam direto. Fotos do celular precisam de OCR.</p>`;
+      resBox.classList.remove('hidden');
+      toast('⚠️ PDF escaneado — tente OCR');
+      setTimeout(()=>{ prog.classList.add('hidden'); }, 1800);
+      return;
+    }
     if(txt) txt.textContent='Erro: '+e.message;
     if(bar) bar.style.width='100%';
     resBox.className='mt-3 rounded-xl border p-3 text-xs bg-rose-50 border-rose-200 text-rose-700';

@@ -58,11 +58,20 @@ router.post('/api/ativacoes/auto-preencher', shared.auth(['tecnico','psico','adm
     }
   }
   if(!text || text.trim().length < 20){
-    return res.status(400).json({ error: 'PDF sem texto extraível. Se for imagem escaneada, use um PDF com texto ou digite manualmente.', extractedLength: (text||'').length });
+    return res.status(400).json({ error: 'PDF sem texto extraível. Se for imagem escaneada, use o botão \"Tentar OCR (PDF escaneado)\" abaixo ou digite manualmente.', extractedLength: (text||'').length, isScanned: true });
   }
   const dados = parseAtivacoes(text);
   const score = scoreParse(dados);
   res.json({ ok:true, dados, score, textoExtraido: text.slice(0,8000), paginas: text.split('\n').length });
+}));
+
+// POST /api/ativacoes/parse-text  (texto OCR ou colado)
+router.post('/api/ativacoes/parse-text', shared.auth(['tecnico','psico','admin']), shared.ah(async (req,res)=>{
+  const texto = String((req.body && (req.body.texto || req.body.text)) || '').trim();
+  if(!texto || texto.length < 10) return res.status(400).json({ error: 'Envie o texto extraído (mín. 10 caracteres)' });
+  const dados = parseAtivacoes(texto);
+  const score = scoreParse(dados);
+  res.json({ ok:true, dados, score, textoExtraido: texto.slice(0,8000) });
 }));
 
 // Opcional: preview PDF de ativação sem salvar
