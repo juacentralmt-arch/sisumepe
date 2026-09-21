@@ -4129,11 +4129,10 @@ async function ativAnalisar(){
     resBox.className='mt-3 rounded-xl border p-3 text-xs '+(sc.percent>=60?'bg-emerald-50 border-emerald-200 text-emerald-800':'bg-amber-50 border-amber-200 text-amber-800');
     const warns = Array.isArray(j.warnings) ? j.warnings : [];
     const warnsHtml = warns.length ? `<div class="mt-1.5 space-y-1">${warns.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
-    const warnsHtml = warns.length ? `<div class="mt-1.5 space-y-1">${warns.map(w=>`<div class="flex gap-1.5 text-[11px] ${w.severidade==='erro'?'text-rose-700':w.severidade==='divergencia'?'text-amber-700':'text-slate-600'}">${w.severidade==='erro'?'⛔':w.severidade==='divergencia'?'⚠️':'ℹ️'} <b>${esc(w.campo)}:</b> ${esc(w.msg)}</div>`).join('')}</div>` : '';
     resBox.innerHTML = `<b>${sc.percent>=60?'✅':'⚠️'} ${sc.filled}/${sc.total} campos preenchidos (${sc.percent}%)</b> — revise os campos destacados em amarelo. ${j.dados && j.dados.nomeMonitorado ? 'Monitorado: <b>'+esc(j.dados.nomeMonitorado)+'</b>' : ''}<br><span class="text-[11px] opacity-70">Campos vazios precisam ser preenchidos manualmente.</span>${warnsHtml}`;
     resBox.classList.remove('hidden');
-    if(txt) txt.textContent='✅ Análise concluída!' + (j.llm && j.llm.contrib ? ` (+${j.llm.contrib} IA)` : '');
-    toast(sc.percent>=60 ? '✅ Auto preencher: '+sc.filled+' campos'+(j.llm&&j.llm.contrib?` (+${j.llm.contrib} IA)`:'')+'!' : '⚠️ Preenchimento parcial ('+sc.percent+'%) — revise');
+    if(txt) txt.textContent='✅ Análise concluída!';
+    toast(sc.percent>=60 ? '✅ Auto preencher: '+sc.filled+' campos!' : '⚠️ Preenchimento parcial ('+sc.percent+'%) — revise');
     highlightAtivacaoFields(j.dados);
     // destaca campos com divergência
     if(warns.length) warns.forEach(w=>{ const map={cpf:'ativCpf', dataNascimento:'ativNasc', processo:'ativProcesso', endereco:'ativEndereco', nomeMae:'ativMae', cep:'ativCep', dias:'ativDias'}; const id=map[w.campo]; if(id){ const el=document.getElementById(id); if(el) el.classList.add('!border-amber-400','!bg-amber-50'); } });
