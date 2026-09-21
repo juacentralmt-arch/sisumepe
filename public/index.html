@@ -413,6 +413,7 @@
         <div class="flex gap-2 bg-white border border-slate-200 rounded-xl p-1 flex-wrap">
           <button id="termoTipoListagem" onclick="setTermoTipo('listagem')" class="btn text-xs px-4 py-2">📋 Listagem</button>
           <button id="termoTipoRecolhimento" onclick="setTermoTipo('recolhimento')" class="btn text-xs px-4 py-2">📦 Recolhimento</button>
+          <button id="termoTipoRecEquip" onclick="setTermoTipo('recEquip')" class="btn text-xs px-4 py-2">🧰 Recolhimento Equipamento</button>
           <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
         </div>
@@ -491,6 +492,49 @@
           </div>
           <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="termoRecAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleRecPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="termoRecPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
           <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <div id="termoFormRecEquip" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">🧰 Termo de Recolhimento Equipamento <span id="termoRecEqEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">MONITORADO(A) *</label><input id="reqNome" placeholder="Nome completo" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">DATA / HORA *</label><input id="reqDataHora" type="datetime-local" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()" onchange="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">HORA FINAL (De __ às __)</label><input id="reqHoraFim" placeholder="Ex: 13:10" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">Nº DO TERMO</label><input id="reqNumeroTermo" placeholder="Ex: 4212022981" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">ID. MONITORADO</label><input id="reqIdMonitorado" placeholder="Ex: M10544" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">PERFIL</label><select id="reqPerfil" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()">
+              <option value="">Selecione</option>
+              <option>Recolhimento Integral Aos Finais De Semana E Feriados</option>
+              <option>Recolhimento Noturno E Integral Aos Finais De Semana E Feriados</option>
+              <option>Recolhimento Noturno Ou Diurno</option>
+              <option>Prisão Domiciliar</option>
+              <option>Medida Protetiva</option>
+            </select></div>
+            <div><label class="lbl">ESTABELECIMENTO</label><input id="reqEstabelecimento" placeholder="Ex: Cariri - Núcleo Cariri" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">CPF/RG (assinatura)</label><input id="reqCpfRg" placeholder="CPF ou RG do monitorado" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">MONITORADO DESDE</label><input id="reqMonDesde" type="date" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">DESATIVADO DESDE</label><input id="reqDesatDesde" type="date" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()"></div>
+          </div>
+          <div class="flex items-center justify-between mt-1 mb-2">
+            <label class="lbl">EQUIPAMENTOS * (SIM/NÃO em cada item)</label>
+            <button onclick="addRecEqEquip()" class="btn btn-ghost text-xs px-3 py-1.5">+ Adicionar equipamento</button>
+          </div>
+          <div id="termoRecEqEquips" class="space-y-2.5 mb-2.5"></div>
+          <label class="lbl">DESCRIÇÃO DA DESATIVAÇÃO</label>
+          <textarea id="reqDescricao" rows="3" placeholder="Descreva a inspeção e o estado dos equipamentos devolvidos..." class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></textarea>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">POLICIAL PENAL (nome)</label><input id="reqPolicial" placeholder="Nome do policial" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">MAT. POLICIAL</label><input id="reqPolicialMat" placeholder="Matrícula" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">TÉCNICO RESPONSÁVEL</label><input id="reqTecnico" placeholder="Nome do técnico" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">MAT. TÉCNICO</label><input id="reqTecnicoMat" placeholder="Matrícula (opcional)" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
+            <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
+          </div>
+          <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="reqAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleRecEqPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="reqPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
+          <p id="reqErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <div id="termoFormEndereco" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">🏠 Ofício de Mudança de Endereço <span id="termoEndEditId" class="text-xs font-bold text-indigo-600"></span></h3>
@@ -3495,7 +3539,16 @@ function clearTermoForm(){
   editingTermoId = null;
   document.getElementById('termoEditId').textContent = '';
   document.getElementById('termoRecEditId').textContent = '';
+  const reqEqEdit = document.getElementById('termoRecEqEditId'); if(reqEqEdit) reqEqEdit.textContent = '';
   recEquips = []; renderRecEquips();
+  recEqEquips = []; renderRecEqEquips();
+  ['reqNome','reqHoraFim','reqNumeroTermo','reqIdMonitorado','reqEstabelecimento','reqCpfRg','reqMonDesde','reqDesatDesde','reqDescricao','reqPolicial','reqPolicialMat','reqTecnicoMat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['reqPerfil'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(session) { const el=document.getElementById('reqTecnico'); if(el) el.value = session.name; }
+  { const el=document.getElementById('reqDataHora'); if(el){ const d = new Date(); const p = n=>String(n).padStart(2,'0'); el.value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; } }
+  { const el=document.getElementById('reqErr'); if(el) el.classList.add('hidden'); }
+  { const el=document.getElementById('reqPreviewStatus'); if(el) el.textContent=''; }
+  clearTimeout(recEqPreviewTimer);
   document.getElementById('termoRecItens').value = '';
   document.getElementById('termoRecDescricao').value = '';
   document.getElementById('termoRecDescCurta').value = '';
@@ -3539,11 +3592,141 @@ let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
 let recEquips = [];
 let ativPreviewTimer=null;
+const REC_EQ_CHECKS = [['ladoExterno','LADO EXTERNO (TZPR)'],['cinta','CINTA DE FIXAÇÃO'],['travas','TRAVAS'],['fonte','FONTE )'],['fonteCE01','FONTE (SIM/NÃO final)'],['ladoInterno','LADO INTERNO (TZPR)'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
+let recEqEquips = [];
+let recEqPreviewTimer = null;
+function addRecEqEquip(data){ recEqEquips.push(Object.assign({ numero: '', danificado: false, checks: {} }, data||{})); renderRecEqEquips(); }
+function removeRecEqEquip(i){ recEqEquips.splice(i,1); renderRecEqEquips(); }
+function setRecEqCheck(i, k, v){
+  if(!recEqEquips[i].checks) recEqEquips[i].checks = {};
+  const cur = recEqEquips[i].checks[k];
+  const nv = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+  recEqEquips[i].checks[k] = (cur === nv) ? null : nv;
+  renderRecEqEquips();
+}
+function setRecEqDanificado(i, v){ recEqEquips[i].danificado = !!v; renderRecEqEquips(); }
+function renderRecEqEquips(){
+  const box = document.getElementById('termoRecEqEquips');
+  if(!box) return;
+  if(!recEqEquips.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-3 border border-dashed border-slate-300 rounded-xl">Nenhum equipamento. Toque em + Adicionar.</p>'; return; }
+  scheduleRecEqPreview();
+  box.innerHTML = recEqEquips.map((eq,i)=>{
+    const rows = REC_EQ_CHECKS.map(([k,label])=>{
+      const st = (eq.checks && eq.checks[k] === true) ? 'sim' : (eq.checks && eq.checks[k] === false) ? 'nao' : '';
+      const bS = st==='sim' ? 'background:#059669;color:#fff;border-color:#059669' : '';
+      const bN = st==='nao' ? 'background:#dc2626;color:#fff;border-color:#dc2626' : '';
+      return `<div class="flex items-center gap-1.5 py-1 border-b border-slate-100 last:border-0">
+        <span class="text-[11px] font-bold text-slate-600 flex-1">${label}</span>
+        <button onclick="setRecEqCheck(${i},'${k}','sim')" style="${bS}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">SIM</button>
+        <button onclick="setRecEqCheck(${i},'${k}','nao')" style="${bN}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">NÃO</button>
+      </div>`;
+    }).join('');
+    return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
+      <div class="flex gap-2 items-center mb-1.5">
+        <input value="${esc(eq.numero||'')}" oninput="recEqEquips[${i}].numero=this.value;scheduleRecEqPreview()" placeholder="N° do equipamento (ex: SAC24-CE01) *" class="inp !py-1.5 text-xs flex-1 font-bold">
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 whitespace-nowrap cursor-pointer"><input type="checkbox" ${eq.danificado?'checked':''} onchange="setRecEqDanificado(${i},this.checked)" class="w-4 h-4 accent-amber-600"> DANIFICADO</label>
+        <button onclick="removeRecEqEquip(${i})" class="text-rose-600 font-bold text-sm px-1">✕</button>
+      </div>
+      <div class="bg-slate-50 rounded-lg px-2">${rows}</div>
+    </div>`;
+  }).join('');
+}
+function getRecEqFormData(){
+  const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  return {
+    nomeMonitorado: gv('reqNome'),
+    dataHora: document.getElementById('reqDataHora').value ? new Date(document.getElementById('reqDataHora').value).toISOString() : new Date().toISOString(),
+    horaFim: gv('reqHoraFim'),
+    numeroTermo: gv('reqNumeroTermo'),
+    idMonitorado: gv('reqIdMonitorado'),
+    perfil: gv('reqPerfil'),
+    estabelecimento: gv('reqEstabelecimento'),
+    cpfRg: gv('reqCpfRg'),
+    monitoradoDesde: gv('reqMonDesde'),
+    desativadoDesde: gv('reqDesatDesde'),
+    equipamentos: recEqEquips.map(e=>({ numero: (e.numero||'').trim(), danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) })),
+    descricao: gv('reqDescricao'),
+    policialNome: gv('reqPolicial'),
+    policialMat: gv('reqPolicialMat'),
+    tecnicoNome: gv('reqTecnico') || (session ? session.name : ''),
+    tecnicoMat: gv('reqTecnicoMat')
+  };
+}
+function setRecEqFormData(t){
+  const d = (t && t.dados) || {};
+  const s = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
+  s('reqNome', d.nomeMonitorado); s('reqHoraFim', d.horaFim); s('reqNumeroTermo', d.numeroTermo);
+  s('reqIdMonitorado', d.idMonitorado); s('reqPerfil', d.perfil); s('reqEstabelecimento', d.estabelecimento);
+  s('reqCpfRg', d.cpfRg); s('reqMonDesde', d.monitoradoDesde ? String(d.monitoradoDesde).slice(0,10) : '');
+  s('reqDesatDesde', d.desativadoDesde ? String(d.desativadoDesde).slice(0,10) : '');
+  if(d.dataHora){ const dd = new Date(d.dataHora); const p = n=>String(n).padStart(2,'0'); document.getElementById('reqDataHora').value = `${dd.getFullYear()}-${p(dd.getMonth()+1)}-${p(dd.getDate())}T${p(dd.getHours())}:${p(dd.getMinutes())}`; }
+  s('reqDescricao', d.descricao); s('reqPolicial', d.policialNome); s('reqPolicialMat', d.policialMat);
+  s('reqTecnico', d.tecnicoNome); s('reqTecnicoMat', d.tecnicoMat);
+  recEqEquips = (d.equipamentos||[]).map(e=>({ numero: e.numero||'', danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) }));
+  renderRecEqEquips();
+  document.getElementById('termoRecEqEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
+  editingTermoId = t.id || null;
+}
+async function previewRecEqPDF(silent){
+  if(termoTipoAtivo !== 'recEquip') return;
+  const err = document.getElementById('reqErr');
+  if(err) err.classList.add('hidden');
+  const rec = getRecEqFormData();
+  if(!rec.equipamentos.some(e=>e.numero)){
+    if(!silent && err){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
+    return;
+  }
+  const status = document.getElementById('reqPreviewStatus');
+  try{
+    if(status) status.textContent = silent ? '⏳ atualizando...' : '';
+    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo:'recEquip', dados: rec }) });
+    if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const wrap = setTermoPreview(url, '— Termo de Recolhimento Equipamento');
+    if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
+    if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }catch(e){
+    if(status) status.textContent = '';
+    if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+  }
+}
+function scheduleRecEqPreview(now){
+  const tgl = document.getElementById('reqAutoPreview');
+  if(tgl && !tgl.checked) return;
+  if(termoTipoAtivo !== 'recEquip') return;
+  clearTimeout(recEqPreviewTimer);
+  recEqPreviewTimer = setTimeout(()=> previewRecEqPDF(true), now ? 400 : 1500);
+}
+async function saveTermoRecEquip(){
+  const err = document.getElementById('reqErr');
+  err.classList.add('hidden');
+  const rec = getRecEqFormData();
+  if(!rec.equipamentos.some(e=>e.numero)){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); return; }
+  if(!rec.nomeMonitorado){ err.textContent='⚠️ Informe o nome do monitorado'; err.classList.remove('hidden'); return; }
+  const body = { tipo: 'recEquip', dados: rec };
+  try{
+    let res;
+    if(editingTermoId){
+      res = await api('/api/termos/'+editingTermoId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Termo atualizado');
+    } else {
+      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      toast('✅ Termo salvo');
+    }
+    await loadTermos();
+    const id = res.id || editingTermoId;
+    if(id) downloadTermoPDF(id);
+    clearTermoForm();
+    editingTermoId = null;
+    document.getElementById('termoRecEqEditId').textContent='';
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
 function setTermoTipo(t){
   termoTipoAtivo = t;
   try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer);}catch(e){}
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao']].forEach(([id, k])=>{
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao']].forEach(([id, k])=>{
     const b = document.getElementById(id);
     if(!b) return;
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
@@ -3551,15 +3734,18 @@ function setTermoTipo(t){
   });
   document.getElementById('termoFormListagem').classList.toggle('hidden', t!=='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('hidden', t!=='recolhimento');
+  const recEqEl = document.getElementById('termoFormRecEquip'); if(recEqEl) recEqEl.classList.toggle('hidden', t!=='recEquip');
   document.getElementById('termoFormEndereco').classList.toggle('hidden', t!=='endereco');
   const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl) ativEl.classList.toggle('hidden', t!=='ativacao');
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
+  if(recEqEl) recEqEl.classList.toggle('lg:col-span-2', t==='recEquip');
   document.getElementById('termoFormEndereco').classList.toggle('lg:col-span-2', t==='endereco');
   if(ativEl) ativEl.classList.toggle('lg:col-span-2', t==='ativacao');
   renderTermos();
   if(t === 'listagem') scheduleListagemPreview(true);
   else if(t === 'recolhimento') scheduleRecPreview(true);
+  else if(t === 'recEquip') scheduleRecEqPreview(true);
   else if(t === 'endereco') scheduleEnderecoPreview(true);
   else if(t==='ativacao') scheduleAtivPreview(true);
 }
@@ -3634,6 +3820,7 @@ async function loadTermos(){
     }
     if(termoTipoAtivo === 'listagem') scheduleListagemPreview(true);
     else if(termoTipoAtivo === 'recolhimento') scheduleRecPreview(true);
+    else if(termoTipoAtivo === 'recEquip') scheduleRecEqPreview(true);
     else if(termoTipoAtivo === 'endereco') scheduleEnderecoPreview(true);
     else if(termoTipoAtivo==='ativacao') scheduleAtivPreview(true);
   }catch(e){ toast('⚠️ ' + e.message); }
@@ -3647,16 +3834,17 @@ function renderTermos(){
   box.innerHTML = visiveis.map(t=>{
     const tipoT = t.tipo || 'listagem';
     const isRec = tipoT === 'recolhimento';
+    const isReq = tipoT === 'recEquip';
     const isEnd = tipoT === 'endereco';
     const isAtiv = tipoT === 'ativacao';
     const d = t.dataEnvio ? new Date(t.dataEnvio).toLocaleDateString('pt-BR') : '-';
-    const qtd = isRec ? ((t.dados&&t.dados.equipamentos)||[]).length : (isEnd ? 0 : isAtiv ? 1 : (t.equipamentos||[]).filter(r=>r.tzpr04||r.upr04||r.fonte04||r.cinta||r.trava).length);
-    const modList = (!isRec && !isEnd && !isAtiv) ? ((t.dados&&t.dados.modelo === 'upr') ? 'UPR' : 'TZPR') : '';
-    const chip = isRec ? 'RECOLHIMENTO' : (isEnd ? 'ENDEREÇO' : (isAtiv ? 'ATIVAÇÃO' : 'LISTAGEM'));
-    const chipCls = isRec ? 'bg-blue-100 text-blue-800' : (isEnd ? 'bg-emerald-100 text-emerald-800' : (isAtiv ? 'bg-violet-100 text-violet-800' : 'bg-orange-100 text-orange-800'));
+    const qtd = (isRec || isReq) ? ((t.dados&&t.dados.equipamentos)||[]).length : (isEnd ? 0 : isAtiv ? 1 : (t.equipamentos||[]).filter(r=>r.tzpr04||r.upr04||r.fonte04||r.cinta||r.trava).length);
+    const modList = (!isRec && !isReq && !isEnd && !isAtiv) ? ((t.dados&&t.dados.modelo === 'upr') ? 'UPR' : 'TZPR') : '';
+    const chip = isRec ? 'RECOLHIMENTO' : (isReq ? 'REC. EQUIP.' : (isEnd ? 'ENDEREÇO' : (isAtiv ? 'ATIVAÇÃO' : 'LISTAGEM')));
+    const chipCls = isRec ? 'bg-blue-100 text-blue-800' : (isReq ? 'bg-cyan-100 text-cyan-800' : (isEnd ? 'bg-emerald-100 text-emerald-800' : (isAtiv ? 'bg-violet-100 text-violet-800' : 'bg-orange-100 text-orange-800')));
     const chipQtd = isEnd ? ('Nº ' + esc(((t.dados&&t.dados.numero)||'___') + '/' + ((t.dados&&t.dados.ano)||'____'))) : (isAtiv ? esc((t.dados&&t.dados.cpf)||'') : (qtd + ' itens'));
-    const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : (isEnd ? esc((t.dados&&t.dados.nome)||'Sem nome') : (isAtiv ? esc((t.dados&&t.dados.nomeMonitorado)||'Sem nome') : esc(t.destinatario||'Sem destinatário')));
-    const sub2 = isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : (isEnd ? ('Proc.: '+esc((t.dados&&t.dados.processo)||'-')+' • '+esc((t.dados&&t.dados.vara)||t.destinatario||'-')) : (isAtiv ? ('Proc.: '+esc((t.dados&&t.dados.processo)||'-')+' • '+esc((t.dados&&t.dados.vara)||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-'))));
+    const sub = isRec ? esc(((t.dados&&t.dados.itensRecebidos)||'Recolhimento')) : (isReq ? esc((t.dados&&t.dados.nomeMonitorado)||'Sem nome') : (isEnd ? esc((t.dados&&t.dados.nome)||'Sem nome') : (isAtiv ? esc((t.dados&&t.dados.nomeMonitorado)||'Sem nome') : esc(t.destinatario||'Sem destinatário'))));
+    const sub2 = isRec ? ('Por: '+esc((t.dados&&t.dados.policialNome)||(t.dados&&t.dados.tecnicoNome)||'-')) : (isReq ? ('Nº termo: '+esc((t.dados&&t.dados.numeroTermo)||'-')+' • '+esc((t.dados&&t.dados.estabelecimento)||'-')) : (isEnd ? ('Proc.: '+esc((t.dados&&t.dados.processo)||'-')+' • '+esc((t.dados&&t.dados.vara)||t.destinatario||'-')) : (isAtiv ? ('Proc.: '+esc((t.dados&&t.dados.processo)||'-')+' • '+esc((t.dados&&t.dados.vara)||'-')) : ('Entrega: '+esc(t.respEntrega||'-')+' → Receb.: '+esc(t.respRecebimento||'-')))));
     return `<div class="border border-slate-200 rounded-xl p-3 bg-white card-hover">
       <div class="flex items-center gap-2"><b class="text-xs text-indigo-600">#${t.id}</b><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${chipCls}">${chip}</span>${modList?`<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${modList==='UPR'?'bg-teal-100 text-teal-800':'bg-slate-200 text-slate-700'}">${modList}</span>`:''}<span class="text-[11px] text-slate-500">${esc(d)}</span><span class="ml-auto text-[10px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">${chipQtd}</span></div>
       <p class="text-xs font-bold truncate mt-1">${sub}</p>
@@ -3673,6 +3861,7 @@ function renderTermos(){
 async function saveTermo(){
   if(termoTipoAtivo === 'ativacao') return saveAtivacao();
   if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
+  if(termoTipoAtivo === 'recEquip') return saveTermoRecEquip();
   if(termoTipoAtivo === 'endereco') return saveTermoEndereco();
   const err = document.getElementById('termoErr');
   err.classList.add('hidden');
@@ -3723,6 +3912,7 @@ async function saveTermoRec(){
 async function previewTermoPDF(){
   if(termoTipoAtivo === 'ativacao') return previewAtivacaoPDF(false);
   if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF(false);
+  if(termoTipoAtivo === 'recEquip') return previewRecEqPDF(false);
   if(termoTipoAtivo === 'endereco') return previewEnderecoPDF(false);
   return previewTermoListagemPDF(false);
 }
@@ -3824,7 +4014,7 @@ function toggleTermoPreviewExpand(){
   const grid = document.getElementById('termosGrid');
   const btn = document.getElementById('termoPreviewExpandBtn');
   const frame = document.getElementById('termoPreviewFrameSide');
-  const forms = ['termoFormListagem', 'termoFormRecolhimento', 'termoFormEndereco','termoFormAtivacao'];
+  const forms = ['termoFormListagem', 'termoFormRecolhimento', 'termoFormRecEquip', 'termoFormEndereco','termoFormAtivacao'];
   if(termoPreviewExpand){
     forms.forEach(id=>{ const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
     if(grid){ grid.classList.remove('lg:grid-cols-3'); grid.classList.add('lg:grid-cols-1'); }
@@ -3836,7 +4026,7 @@ function toggleTermoPreviewExpand(){
     if(grid){ grid.classList.add('lg:grid-cols-3'); grid.classList.remove('lg:grid-cols-1'); }
     if(frame) frame.style.height = '';
     if(btn){ btn.textContent = '⛶'; btn.title = 'Expandir pré-visualização'; }
-    const forms = { listagem:'termoFormListagem', recolhimento:'termoFormRecolhimento', endereco:'termoFormEndereco', ativacao:'termoFormAtivacao' };
+    const forms = { listagem:'termoFormListagem', recolhimento:'termoFormRecolhimento', recEquip:'termoFormRecEquip', endereco:'termoFormEndereco', ativacao:'termoFormAtivacao' };
     Object.keys(forms).forEach(k=>{
       const el = document.getElementById(forms[k]);
       if(!el) return;
@@ -3886,7 +4076,7 @@ async function previewTermoExistente(id){
     if(!res.ok) throw new Error('Erro ao gerar PDF');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const wrap = setTermoPreview(url, '— Termo #' + id + (tipoT === 'recolhimento' ? ' (Recolhimento)' : (tipoT === 'endereco' ? ' (Endereço)' : (tipoT === 'ativacao' ? ' (Ativação)' : ' (Listagem)'))));
+    const wrap = setTermoPreview(url, '— Termo #' + id + (tipoT === 'recolhimento' ? ' (Recolhimento)' : (tipoT === 'recEquip' ? ' (Recolh. Equipamento)' : (tipoT === 'endereco' ? ' (Endereço)' : (tipoT === 'ativacao' ? ' (Ativação)' : ' (Listagem)')))));
     if(!wrap) throw new Error('Pré-visualização indisponível nesta aba');
     wrap.scrollIntoView({behavior:'smooth', block:'center'});
   }catch(e){ toast('⚠️ '+e.message); }
@@ -3952,6 +4142,12 @@ async function editTermo(id){
     renderRecEquips();
     document.getElementById('termoRecEditId').textContent = '(editando #' + t.id + ')';
     editingTermoId = t.id;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  if((t.tipo||'listagem') === 'recEquip'){
+    setTermoTipo('recEquip');
+    setRecEqFormData(t);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
