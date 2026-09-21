@@ -23,15 +23,3 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        sync: false
-      - key: OPENAI_BASE_URL
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
-      - key: LLM_MODEL
-        sync: false
