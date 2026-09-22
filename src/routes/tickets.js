@@ -25,11 +25,26 @@ router.get('/api/stats', auth(), ah(async (req, res) => {
 }));
 
 router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, res) => {
-  const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira } = req.body || {};
+  const { personId, motivo, descricao, prioridadeLegal, tecnicoRecepcao, modeloTornozeleira, setor, visitante } = req.body || {};
   const person = await store.persons.byId(personId);
   if (!person) return res.status(400).json({ error: 'Atendido inválido. Selecione ou cadastre a pessoa.' });
-  if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
-  if (!modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  const setorNorm = String(setor||'').toLowerCase();
+  const isVisitante = String(visitante)==='true' || visitante===true || setorNorm==='visitante';
+  const setorOk = ['tecnico','tecnico_tornozeleira','administrativo','psicossocial','visitante'];
+  // normaliza setor
+  let setorFinal = 'tecnico';
+  if(setorOk.includes(setorNorm)) setorFinal = setorNorm;
+  else if(setorNorm.includes('tecnico')) setorFinal='tecnico';
+  else if(setorNorm.includes('admin')) setorFinal='administrativo';
+  else if(setorNorm.includes('psico')) setorFinal='psicossocial';
+  else if(isVisitante) setorFinal='visitante';
+  if(isVisitante){
+    // Visitante: controle de entrada, não exige motivo/modelo
+  } else {
+    if (!setorFinal) return res.status(400).json({ error: 'Selecione o setor de destino' });
+    if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
+    if (setorFinal==='tecnico' && !modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  }
   // Anti-duplicidade: mesmo atendido + motivo + criador nos últimos 20s = duplo clique
   try{
     const recent = (await store.tickets.all()).filter(x =>
@@ -45,11 +60,13 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
   const consolidated = await consolidateTicketFiles(req.files, pdfPrefix);
   const files = await mapFiles(consolidated.files);
   const creator = await store.users.byName(req.auth.user);
+  const motivoFinal = isVisitante ? (motivo || 'Visitante - Controle de entrada') : motivo;
+  const modeloFinal = isVisitante ? '' : (modeloTornozeleira || '');
   let ticket = await store.tickets.insert({
     personId: person.id,
-    motivo, descricao: descricao || '',
+    motivo: motivoFinal, descricao: descricao || '',
     prioridadeLegal: String(prioridadeLegal) === 'true' || prioridadeLegal === true || prioridadeLegal === '1',
-    modeloTornozeleira,
+    modeloTornozeleira: modeloFinal,
     status: 'aguardando',
     anexos: files,
     tecnicoRecepcao: tecnicoRecepcao || '',
@@ -57,6 +74,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
     createdBy: creator ? creator.user : req.auth.user,
     createdByName: creator ? creator.name : req.auth.name,
     called: false, calledAt: null, calledBy: '',
+    setor: setorFinal, visitante: !!isVisitante,
     createdAt: new Date().toISOString(), startedAt: null, finishedAt: null
   });
   // Renomeia o PDF unificado com o código do ticket (ex.: pdfinstalacao-TK-0007.pdf)
