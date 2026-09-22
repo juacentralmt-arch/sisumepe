@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v28 fix warnsHtml -->
+<title>SISUMEPE Juazeiro</title><!-- v30 chat layout -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0b1220">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1107,43 +1107,56 @@
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
   <span id="chatBadge" class="hidden absolute -top-1.5 -right-1.5 bg-rose-600 text-[11px] font-extrabold min-w-[1.25rem] h-5 px-1 rounded-full items-center justify-center">0</span>
 </button>
-<div id="chatPanel" class="chat-hidden fixed bottom-24 right-5 z-40 w-[380px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden max-h-[min(78vh,560px)]">
-  <div class="px-4 py-3 flex items-center gap-2.5 text-white" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
-    <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center text-sm">💬</span>
+<div id="chatPanel" class="chat-hidden fixed z-40 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden
+  bottom-5 right-5 w-[720px] max-w-[calc(100vw-1rem)] h-[560px] max-h-[min(85vh,600px)]
+  max-sm:bottom-0 max-sm:right-0 max-sm:left-0 max-sm:w-auto max-sm:rounded-none max-sm:rounded-t-2xl max-sm:h-[85vh] max-sm:max-h-[85vh]">
+  <div class="px-4 py-3 flex items-center gap-2.5 text-white shrink-0" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
+    <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center text-sm shrink-0">💬</span>
     <div class="min-w-0 flex-1">
       <p class="font-display font-bold text-sm leading-none">Chat da equipe</p>
       <p id="chatActiveLabel" class="text-[11px] text-violet-200 truncate">Selecione com quem conversar</p>
     </div>
-    <button onclick="toggleChatSearch()" title="Buscar nas mensagens" class="text-violet-200 hover:text-white text-xs w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center">🔍</button>
-    <button id="chatCallBtn" onclick="startCall()" title="Ligar" class="hidden text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition items-center justify-center">📞</button>
-    <button onclick="toggleChat()" class="text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center text-lg leading-none">×</button>
+    <button onclick="toggleChatSearch()" title="Buscar nas mensagens" class="text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center shrink-0">🔍</button>
+    <button id="chatCallBtn" onclick="startCall()" title="Ligar" class="hidden text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition items-center justify-center shrink-0">📞</button>
+    <button onclick="toggleChat()" class="text-violet-200 hover:text-white w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center text-lg leading-none shrink-0">×</button>
   </div>
-  <div id="chatSearchBox" class="hidden px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+  <div id="chatSearchBox" class="hidden px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2 shrink-0">
     <input id="chatSearchInput" oninput="onChatSearchInput()" placeholder="Buscar nas mensagens..." class="inp !py-1.5 !text-xs !bg-white flex-1">
     <button onclick="clearChatSearch()" class="text-xs text-slate-400 hover:text-slate-600 font-bold px-2">✕</button>
   </div>
-  <!-- Seletor de conversa - novo visual -->
-  <div class="px-3 py-2 border-b border-slate-100 bg-white">
-    <div class="relative">
-      <input id="chatUserSearch" oninput="filterChatUsers()" placeholder="🔎 Buscar pessoa para conversar..." class="inp !py-2 !text-xs !pl-8 !pr-3 w-full bg-slate-50 border-slate-200 focus:bg-white">
-      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs">🔍</span>
-    </div>
-    <div id="chatUserList" class="mt-2 grid grid-cols-1 gap-1 max-h-32 overflow-y-auto pr-1"></div>
-    <div id="chatTabs" class="hidden"></div>
-  </div>
-  <div id="notifyBanner" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
-    <span class="text-[11px] font-bold text-amber-800">🔔 Ative as notificações para receber mensagens no computador e celular</span>
+  <div id="notifyBanner" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2 shrink-0">
+    <span class="text-[11px] font-bold text-amber-800">🔔 Ative as notificações para receber mensagens</span>
     <button onclick="requestNotifyPermission()" class="ml-auto btn btn-primary text-[11px] px-2.5 py-1.5 flex-none">Ativar</button>
   </div>
-  <div id="chatHeader" class="hidden px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
-    <span id="chatHeaderAvatar" class="avatar w-8 h-8 text-xs flex-none">?</span>
-    <div class="min-w-0 flex-1">
-      <p id="chatHeaderName" class="text-xs font-bold text-indigo-900 truncate">—</p>
-      <p id="chatHeaderSub" class="text-[11px] text-indigo-600 truncate">—</p>
+  <div class="flex flex-1 min-h-0 overflow-hidden">
+    <!-- Sidebar: conversas -->
+    <div id="chatSidebar" class="w-[260px] sm:w-[280px] border-r border-slate-200 flex flex-col bg-white shrink-0 max-sm:w-full">
+      <div class="p-2.5 border-b border-slate-100 shrink-0">
+        <div class="relative">
+          <input id="chatUserSearch" oninput="filterChatUsers()" placeholder="Buscar pessoa..." class="inp !py-2 !text-xs !pl-8 !pr-3 w-full bg-slate-50 border-slate-200 focus:bg-white">
+          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs">🔍</span>
+        </div>
+        <div class="flex gap-1 mt-2">
+          <button onclick="setConvo('todos')" id="chatGroupBtn" class="flex-1 text-[11px] font-extrabold py-1.5 rounded-full border transition">👥 Grupo</button>
+          <span class="text-[10px] text-slate-400 self-center">ou escolha abaixo</span>
+        </div>
+      </div>
+      <div id="chatUserList" class="flex-1 overflow-y-auto p-2 space-y-0.5"></div>
+      <div id="chatTabs" class="hidden"></div>
+      <div class="p-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">Clique em um contato para conversar</div>
     </div>
-    <button onclick="clearChatConvo()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded-full bg-white border border-indigo-200">Trocar</button>
-  </div>
-  <div id="chatMsgs" onscroll="onChatScroll()" class="flex-1 min-h-[220px] max-h-[320px] overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
+    <!-- Main: mensagens -->
+    <div id="chatMain" class="flex-1 flex flex-col min-w-0 bg-slate-50 max-sm:hidden">
+      <div id="chatHeader" class="px-3 py-2.5 bg-white border-b border-slate-200 flex items-center gap-2.5 shrink-0">
+        <button onclick="showChatSidebar()" class="sm:hidden w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">←</button>
+        <span id="chatHeaderAvatar" class="avatar w-9 h-9 text-xs flex-none">?</span>
+        <div class="min-w-0 flex-1">
+          <p id="chatHeaderName" class="text-sm font-bold text-slate-900 truncate">Selecione uma conversa</p>
+          <p id="chatHeaderSub" class="text-[11px] text-slate-500 truncate">Escolha na lista ao lado</p>
+        </div>
+        <button onclick="clearChatConvo()" class="hidden sm:flex text-[11px] font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200">Trocar</button>
+      </div>
+      <div id="chatMsgs" onscroll="onChatScroll()" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 bg-slate-50"></div>
   <div id="chatTyping" class="hidden px-3 py-1 bg-indigo-50 border-t border-indigo-100 text-[11px] text-indigo-700 font-medium italic animate-pulse flex items-center gap-1.5">
     <span>💬</span><span id="chatTypingText">digitando...</span>
   </div>
@@ -1154,6 +1167,8 @@
     <button id="chatMicBtn" onclick="toggleAudioRecord()" title="Gravar áudio" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none text-slate-600 hover:text-indigo-600">🎙️</button>
     <input id="chatInput" oninput="onChatInputType()" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-2">
     <button onclick="sendChat()" class="btn btn-primary px-4 text-sm flex-none">➤</button>
+  </div>
+    </div>
   </div>
 </div>
 
@@ -5655,8 +5670,17 @@ let chatOpen = false, lastChatId = Number(localStorage.getItem('te_lastchat') ||
 function toggleChat(){
   chatOpen = !chatOpen;
   document.getElementById('chatPanel').classList.toggle('chat-hidden', !chatOpen);
-  if (chatOpen) { lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); document.getElementById('chatInput').focus(); updateNotifyBanner(); markChatRead(); }
-  else { updateNotifyBanner(); }
+  if (chatOpen) {
+    lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge();
+    // mobile: ao abrir, mostra lista; desktop mostra tudo
+    if(window.innerWidth < 640){
+      if(activeConvo && activeConvo !== 'todos' && chatCache.some(m=> (m.user===activeConvo && String(m.to).toLowerCase()===session.user) || (m.user===session.user && String(m.to).toLowerCase()===activeConvo) )) showChatMain();
+      else showChatSidebar();
+    }
+    renderTabs(); updateChatPlaceholder(); renderChatMessages(true);
+    setTimeout(()=>{ const inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 100);
+    updateNotifyBanner(); markChatRead();
+  } else { updateNotifyBanner(); }
 }
 let chatMaxId = 0, chatCache = [], oldestChatId = null, hasMoreChat = true, loadingOlderChat = false;
 let chatSearchQuery = '';
@@ -5740,12 +5764,21 @@ function filterChatUsers(){
   chatUserFilter = inp ? inp.value.toLowerCase().trim() : '';
   renderTabs();
 }
+function showChatSidebar(){
+  const sb=document.getElementById('chatSidebar'), mn=document.getElementById('chatMain');
+  if(sb) sb.classList.remove('max-sm:hidden','hidden');
+  if(mn) mn.classList.add('max-sm:hidden');
+}
+function showChatMain(){
+  const sb=document.getElementById('chatSidebar'), mn=document.getElementById('chatMain');
+  if(sb) sb.classList.add('max-sm:hidden');
+  if(mn) mn.classList.remove('max-sm:hidden','hidden');
+}
 function clearChatConvo(){
   const inp = document.getElementById('chatUserSearch');
   if(inp) inp.value = '';
   chatUserFilter = '';
-  document.getElementById('chatUserList')?.classList.remove('hidden');
-  document.getElementById('chatHeader')?.classList.add('hidden');
+  showChatSidebar();
   renderTabs();
 }
 function roleBadge(role){
@@ -5842,10 +5875,12 @@ function renderTabs(){
 }
 function setConvo(to){
   activeConvo = to; oldestChatId = null; hasMoreChat = true;
-  // render imediato com cache existente (correção: antes só renderizava após fetch ou send)
   renderTabs(); updateChatPlaceholder(); renderChatMessages(true);
+  // mobile: mostra painel de mensagens ao selecionar
+  if(window.innerWidth < 640) showChatMain();
   loadChat();
   if(chatOpen){ lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); renderTabs(); markChatRead(); }
+  setTimeout(()=>{ const inp=document.getElementById('chatInput'); if(inp && chatOpen) inp.focus(); }, 80);
 }
 function updateChatPlaceholder(){
   const inp = document.getElementById('chatInput');
