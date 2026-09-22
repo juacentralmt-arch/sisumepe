@@ -46,7 +46,9 @@ create table if not exists tickets (
   transferredby text default '',
   transferredfrom text default '',
   returnedat timestamptz default null,
-  returnedby text default ''
+  returnedby text default '',
+  setor text default '',
+  visitante boolean default false
 );
 -- Migração para bases já existentes (idempotente)
 alter table tickets add column if not exists transferredat timestamptz default null;
@@ -54,6 +56,8 @@ alter table tickets add column if not exists transferredby text default '';
 alter table tickets add column if not exists transferredfrom text default '';
 alter table tickets add column if not exists returnedat timestamptz default null;
 alter table tickets add column if not exists returnedby text default '';
+alter table tickets add column if not exists setor text default '';
+alter table tickets add column if not exists visitante boolean default false;
 
 create table if not exists chat (
   id serial primary key,

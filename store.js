@@ -111,7 +111,8 @@ const T = {
   createdAt: 'createdat', startedAt: 'startedat', finishedAt: 'finishedat', reopenedAt: 'reopenedat',
   cancelledAt: 'cancelledat', cancelledBy: 'cancelledby',
   transferredAt: 'transferredat', transferredBy: 'transferredby', transferredFrom: 'transferredfrom',
-  returnedAt: 'returnedat', returnedBy: 'returnedby'
+  returnedAt: 'returnedat', returnedBy: 'returnedby',
+  setor: 'setor', visitante: 'visitante'
 };
 const A = {
   id: 'id', kind: 'kind', action: 'action', personId: 'personid', personName: 'personname',
