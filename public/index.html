@@ -5768,10 +5768,34 @@ function renderTabs(){
     box.innerHTML = tab('todos', 'GRUPO') + others.map(u => tab(u.user, (u.role === 'recepcao' ? 'REC ' : u.role === 'psico' ? 'PSI ' : 'TEC ') + esc(u.name))).join('');
   }
   if(!list) return;
-  // lista visual com avatar e busca
+  // helpers para organização: último recado e ordenação por recente
+  const getLast = (uVal) => {
+    const msgs = chatCache.filter(m=>{
+      const to=String(m.to||'todos').toLowerCase();
+      if(uVal==='todos') return to==='todos';
+      return (m.user===session.user && to===uVal) || (m.user===uVal && to===session.user);
+    });
+    return msgs.length ? msgs[msgs.length-1] : null;
+  };
+  const fmtHour = (iso) => { try{ return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch(e){ return ''; } };
   const othersAll = allUsers.filter(u => u.user !== session.user);
-  const all = [{ user:'todos', name:'Grupo - Todos', role:'grupo' }, ...othersAll];
+  let all = [{ user:'todos', name:'Grupo - Todos', role:'grupo' }, ...othersAll];
+  // ordena por mais recente (com mensagem) primeiro, grupo sempre topo
+  all = all.sort((a,b)=>{
+    if(a.user==='todos') return -1;
+    if(b.user==='todos') return 1;
+    const unA=convoUnread(a.user), unB=convoUnread(b.user);
+    if(unA!==unB) return unB - unA; // não lidas primeiro
+    const lastA=getLast(a.user), lastB=getLast(b.user);
+    const tA=lastA?new Date(lastA.at).getTime():0;
+    const tB=lastB?new Date(lastB.at).getTime():0;
+    return tB - tA;
+  });
   const filtered = q ? all.filter(u => (u.name+' '+u.user+' '+(u.role||'')).toLowerCase().includes(q)) : all;
+  // separa recentes vs contatos quando não está buscando
+  const recentes = !q ? filtered.filter(u=> getLast(u.user) || u.user==='todos') : [];
+  const semConversa = !q ? filtered.filter(u=> !getLast(u.user) && u.user!=='todos') : [];
+  const toRender = q ? filtered : [...recentes, ...semConversa];
   const isActive = (val) => activeConvo === val;
   const row = (u) => {
     const isGroup = u.user === 'todos';
@@ -5779,7 +5803,10 @@ function renderTabs(){
     const un = convoUnread(u.user);
     const ini = isGroup ? '👥' : initials(u.name);
     const bg = on ? 'background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:transparent' : 'background:#fff;border-color:#e2e8f0';
-    const sub = isGroup ? `${allUsers.length} membros • clique para grupo` : `${u.role||''} • @${u.user}${un?` • ${un} nova(s)`:''}`;
+    const last = getLast(u.user);
+    const preview = last ? (last.text ? esc(last.text.slice(0,38)) : (last.anexos&&last.anexos.length?`📎 ${esc(last.anexos[0].name||'arquivo')}`:'—')) : '';
+    const when = last ? fmtHour(last.at) : '';
+    const sub = isGroup ? `${allUsers.length} membros${last?' • '+preview:''}` : `${preview|| (u.role||'')+' • @'+u.user}${when?' • '+when:''}${un?` • ${un} nova(s)`:''}`;
     return `<button onclick="setConvo('${u.user}')" class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl border text-left transition ${on?'shadow-md':''} hover:bg-slate-50" style="${bg}">
       <span class="avatar w-9 h-9 text-xs flex-none ${isGroup?'!bg-white/20 !text-white':''}" style="${isGroup&&on?'background:rgba(255,255,255,.2)':''}">${esc(ini)}</span>
       <span class="min-w-0 flex-1">
@@ -5789,7 +5816,8 @@ function renderTabs(){
       ${on?'<span class="text-white text-xs flex-none">✓</span>':''}
     </button>`;
   };
-  list.innerHTML = filtered.length ? filtered.map(row).join('') : `<p class="text-xs text-slate-400 text-center py-2">Nenhum usuário encontrado</p>`;
+  const section = (title, arr) => arr.length ? `<p class="text-[10px] font-extrabold tracking-wider text-slate-400 px-1 mt-1 mb-1">${title}</p>` + arr.map(row).join('') : '';
+  list.innerHTML = filtered.length ? (q ? filtered.map(row).join('') : section('CONVERSAS', recentes) + (semConversa.length?`<div class="mt-2">${section('CONTATOS', semConversa)}</div>`:'') ) : `<p class="text-xs text-slate-400 text-center py-2">Nenhum usuário encontrado</p>`;
   // header ativo
   const active = all.find(a=>a.user===activeConvo);
   const lab = document.getElementById('chatActiveLabel');
@@ -5813,7 +5841,10 @@ function renderTabs(){
   }
 }
 function setConvo(to){
-  activeConvo = to; oldestChatId = null; hasMoreChat = true; renderTabs(); updateChatPlaceholder(); loadChat();
+  activeConvo = to; oldestChatId = null; hasMoreChat = true;
+  // render imediato com cache existente (correção: antes só renderizava após fetch ou send)
+  renderTabs(); updateChatPlaceholder(); renderChatMessages(true);
+  loadChat();
   if(chatOpen){ lastChatId = chatMaxId; localStorage.setItem('te_lastchat', lastChatId); paintBadge(); renderTabs(); markChatRead(); }
 }
 function updateChatPlaceholder(){
@@ -6026,7 +6057,12 @@ async function loadChat(){
           if (fresh.length && prevMax > 0) notifyIncoming(fresh[fresh.length - 1]);
           renderChatMessages(true);
           if (!chatOpen) { lastChatId = Number(localStorage.getItem('te_lastchat') || 0); paintBadge(); }
+          renderTabs();
         }
+      } else {
+        // sem mensagens novas mas trocou de conversa → precisa re-renderizar com filtro novo
+        renderChatMessages(true);
+        renderTabs();
       }
       updateNotifyBanner();
       return;
