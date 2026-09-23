@@ -5927,6 +5927,7 @@ function toggleChat(){
   } else { updateNotifyBanner(); }
 }
 let chatMaxId = 0, chatCache = [], oldestChatId = null, hasMoreChat = true, loadingOlderChat = false;
+let chatReadState = {}; // { 'todos': {user: lastReadId}, 'user:xxx': lastReadId }
 let chatSearchQuery = '';
 
 function toggleChatSearch(){
@@ -6217,11 +6218,33 @@ function handleTypingEvent(data){
 
 function markChatRead(){
   if (!session || !chatOpen) return;
-  authFetch('/api/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: activeConvo, lastReadId: chatMaxId }) }).catch(()=>{});
+  const lastId = chatMaxId;
+  // local echo para próprio "visto" imediato
+  if(activeConvo==='todos'){
+    if(!chatReadState['todos']) chatReadState['todos']={};
+    chatReadState['todos'][session.user]=lastId;
+  } else {
+    chatReadState[activeConvo]=lastId;
+  }
+  authFetch('/api/chat/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: activeConvo, lastReadId: lastId }) }).catch(()=>{});
+  renderChatMessages(false);
 }
 
 function handleReadEvent(data){
-  // can be used to update UI if showing read checks
+  if(!data || !data.from) return;
+  const from=String(data.from).toLowerCase();
+  const to=String(data.to||'todos').toLowerCase();
+  const id=Number(data.lastReadId)||0;
+  if(to==='todos'){
+    if(!chatReadState['todos']) chatReadState['todos']={};
+    chatReadState['todos'][from]=id;
+  } else {
+    // privado: quem leu foi 'from', a conversa é com 'to' se from sou eu, senão com 'from'
+    const other = (from===String(session.user).toLowerCase()) ? to : from;
+    chatReadState[other]=Math.max(chatReadState[other]||0, id);
+  }
+  renderChatMessages(false);
+  renderTabs();
 }
 
 let audioCtx = null;
@@ -6406,13 +6429,27 @@ function renderChatMessages(autoScroll = true){
   }
   const box = document.getElementById('chatMsgs');
   if (!box) return;
+  const isRead = (m) => {
+    if(!m || String(m.user).toLowerCase() !== String(me).toLowerCase()) return false;
+    const to = String(m.to||'todos').toLowerCase();
+    if(to==='todos'){
+      const grp = chatReadState['todos'];
+      if(!grp || typeof grp!=='object') return false;
+      // visto se alguém além de mim leu
+      return Object.entries(grp).some(([u, id])=> u!==String(me).toLowerCase() && Number(id) >= Number(m.id));
+    } else {
+      return Number(chatReadState[to]||0) >= Number(m.id);
+    }
+  };
   box.innerHTML = visible.length ? visible.map(m => {
     const mine = session && m.user === session.user;
+    const read = mine && isRead(m);
     return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} fade">
       <div class="max-w-[85%] px-3.5 py-2 text-[13px] leading-relaxed ${mine ? 'text-white rounded-2xl rounded-br-md' : 'bg-white border border-slate-200 rounded-2xl rounded-bl-md shadow-sm'}" ${mine ? 'style="background:linear-gradient(135deg,#4f46e5,#7c3aed)"' : ''}>
         <p class="text-[10px] font-bold ${mine ? 'text-indigo-200' : 'text-slate-400'}">${esc(m.name)} • ${new Date(m.at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
         ${m.text?`<p>${esc(m.text)}</p>`:''}
         ${(m.anexos||[]).map(a=>chatAnexo(a,mine)).join('')}
+        ${mine?`<p class="text-[10px] mt-1 flex items-center gap-1 ${read?'text-violet-200':'text-indigo-200/70'}">${read?'✓✓ Visto':'✓✓ Enviado'}${read && m.to==='todos' ? ' • grupo' : ''}</p>`:''}
       </div></div>`;
   }).join('') : `<p class="text-xs text-slate-400 text-center pt-6">${chatSearchQuery ? 'Nenhuma mensagem encontrada.' : 'Nenhuma mensagem.<br>Diga oi! 👋'}</p>`;
   if (autoScroll) box.scrollTop = box.scrollHeight;
@@ -6425,12 +6462,32 @@ function paintBadge(){
   b.classList.toggle('hidden', n === 0);
   b.classList.toggle('flex', n > 0);
 }
+async function compressChatFile(f){
+  if(!((f.type||'').startsWith('image/'))) return f;
+  try{
+    const bmp=await createImageBitmap(f);
+    const maxSide=1280;
+    const scale=Math.min(1, maxSide/Math.max(bmp.width,bmp.height));
+    const cv=document.createElement('canvas');
+    cv.width=Math.max(1,Math.round(bmp.width*scale));
+    cv.height=Math.max(1,Math.round(bmp.height*scale));
+    const ctx=cv.getContext('2d');
+    ctx.drawImage(bmp,0,0,cv.width,cv.height);
+    if(bmp.close) bmp.close();
+    const blob=await new Promise(r=> cv.toBlob(r,'image/jpeg',0.72));
+    if(!blob) return f;
+    const base=String(f.name||'foto').replace(/\.[^.]+$/,'');
+    return new File([blob], (base||'foto')+'.jpg', {type:'image/jpeg'});
+  }catch(e){ return f; }
+}
 let pendingFiles = [];
-function chatFilesChanged(){
+async function chatFilesChanged(){
   const inp = document.getElementById('chatFiles');
-  pendingFiles = [...pendingFiles, ...inp.files].slice(0, 5);
+  const compressed = await Promise.all([...inp.files].map(compressChatFile));
+  pendingFiles = [...pendingFiles, ...compressed].slice(0, 5);
   inp.value = '';
   renderPending();
+  if(compressed.some((f,i)=> f!==[...inp.files][i])) toast('🖼️ Imagem comprimida levemente para fluidez');
 }
 function removePending(i){ pendingFiles.splice(i, 1); renderPending(); }
 function renderPending(){

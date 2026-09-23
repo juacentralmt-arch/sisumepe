@@ -865,13 +865,13 @@ const store = {
     } catch {}
   },
 
-  // Expira anexos de tickets fechados há mais de maxAgeMs (padrão 24h).
+  // Expira anexos de tickets fechados e de chat com mais de maxAgeMs (padrão 24h, via FILES_TTL_HOURS).
   // Apaga o arquivo físico e deixa um marcador {expired:true} no lugar.
-  // Tickets ativos (aguardando/em_atendimento) NUNCA são tocados.
+  // Tickets ativos (aguardando/em_atendimento) NUNCA são tocados; chat expira todo anexo > TTL.
   async cleanupExpiredFiles(maxAgeMs) {
     const ttl = typeof maxAgeMs === 'number' ? maxAgeMs : (Number(process.env.FILES_TTL_HOURS) || 24) * 3600e3;
     const now = Date.now();
-    let filesRemoved = 0, ticketsTouched = 0;
+    let filesRemoved = 0, ticketsTouched = 0, chatsTouched = 0;
     const tickets = await store.tickets.all();
     for (const t of tickets) {
       if (!['finalizado', 'cancelado'].includes(t.status)) continue;
@@ -896,7 +896,35 @@ const store = {
         ticketsTouched++;
       }
     }
-    return { filesRemoved, ticketsTouched };
+    // Chat: todo anexo com mais de 24h expira (independente de status)
+    try{
+      const chats = await store.chat.list();
+      for(const m of chats){
+        if(!m || !Array.isArray(m.anexos) || !m.anexos.length) continue;
+        const ref = m.at || m.createdAt;
+        if(!ref || now - new Date(ref).getTime() < ttl) continue;
+        const hasActive = m.anexos.some(a=> a && a.url && !a.expired);
+        if(!hasActive) continue;
+        const cleaned=[];
+        for(const a of m.anexos){
+          if(!a || a.expired || !a.url){ cleaned.push(a); continue; }
+          await store.deleteStoredFile(a.url);
+          filesRemoved++;
+          cleaned.push({ name: a.name||'arquivo', expired:true, expiredAt: new Date().toISOString() });
+        }
+        // atualiza no store (suporta file e supabase via patch direto na lista)
+        if(JSON.stringify(cleaned)!==JSON.stringify(m.anexos)){
+          if(MODE==='file'){
+            const idx=mem.chat.findIndex(x=> String(x.id)===String(m.id));
+            if(idx>=0){ mem.chat[idx].anexos=cleaned; chatsTouched++; }
+          } else {
+            try{ must(await supa.from('chat').update({ anexos: cleaned }).eq('id', Number(m.id)), 'chat.expire'); chatsTouched++; }catch(e){}
+          }
+        }
+      }
+      if(chatsTouched && MODE==='file') saveFile();
+    }catch(e){}
+    return { filesRemoved, ticketsTouched, chatsTouched };
   }
 };
 
