@@ -2973,12 +2973,15 @@ function renderDocDetected(raw){
   document.getElementById('docFieldDoc').value = p.docNum || p.rg || '';
   fields.classList.remove('hidden'); actions.classList.remove('hidden');
   let html = '';
-  if(p.cpf) html += `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><span class="text-xs font-bold text-emerald-800">CPF: ${esc(p.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'))} ${validarCPF(p.cpf)?'✓':''}</span><button onclick="searchWithDoc('${esc(p.cpf)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar CPF</button></div>`;
-  if(p.rg) html += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5"><span class="text-xs font-bold text-blue-800">RG/DOC: ${esc(p.rg)}</span><button onclick="searchWithDoc('${esc(p.rg)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar RG</button></div>`;
-  if(p.docNum && p.docNum!==p.rg) html += `<div class="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-xl p-2.5"><span class="text-xs font-bold text-cyan-800">CNH: ${esc(p.docNum)}</span><button onclick="searchWithDoc('${esc(p.docNum)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar DOC</button></div>`;
-  if(p.nome) html += `<div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl p-2.5"><span class="text-xs font-bold text-violet-800 truncate">Nome: ${esc(p.nome)}</span><button onclick="searchWithDoc('${esc(p.nome)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Nome</button></div>`;
-  if(p.nomeMae) html += `<div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5"><span class="text-xs font-bold text-amber-800 truncate">Mãe: ${esc(p.nomeMae)}</span><button onclick="searchWithDoc('${esc(p.nomeMae)}')" class="ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Mãe</button></div>`;
+  if(p.cpf) html += `<div class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><span class="text-xs font-bold text-emerald-800">CPF: ${esc(p.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'))} ${validarCPF(p.cpf)?'✓':''}</span><button data-search="${esc(p.cpf)}" class="search-doc-btn ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar CPF</button></div>`;
+  if(p.rg) html += `<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-2.5"><span class="text-xs font-bold text-blue-800">RG/DOC: ${esc(p.rg)}</span><button data-search="${esc(p.rg)}" class="search-doc-btn ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar RG</button></div>`;
+  if(p.docNum && p.docNum!==p.rg) html += `<div class="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-xl p-2.5"><span class="text-xs font-bold text-cyan-800">CNH: ${esc(p.docNum)}</span><button data-search="${esc(p.docNum)}" class="search-doc-btn ml-auto btn btn-primary text-xs px-3 py-1.5">🔍 Buscar DOC</button></div>`;
+  if(p.nome) html += `<div class="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl p-2.5"><span class="text-xs font-bold text-violet-800 truncate">Nome: ${esc(p.nome)}</span><button data-search="${esc(p.nome)}" class="search-doc-btn ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Nome</button></div>`;
+  if(p.nomeMae) html += `<div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5"><span class="text-xs font-bold text-amber-800 truncate">Mãe: ${esc(p.nomeMae)}</span><button data-search="${esc(p.nomeMae)}" class="search-doc-btn ml-auto btn btn-primary text-xs px-3 py-1.5 flex-none">🔍 Mãe</button></div>`;
   box.innerHTML = html;
+  box.querySelectorAll('.search-doc-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> searchWithDoc(btn.dataset.search));
+  });
   const has = !!(p.cpf || p.rg || p.nome || p.nomeMae);
   noMatch.classList.toggle('hidden', has);
   if(!has) box.innerHTML = '';
@@ -3153,10 +3156,15 @@ async function reopenTicket(id, code){
 }
 
 // --- BACKUP ---
-function downloadBackup(){
-  let tok = '';
-  try{ const s = JSON.parse(localStorage.getItem('te_session') || 'null'); if(s && s.token) tok = s.token; }catch(e){}
-  window.open('/api/backup?token=' + encodeURIComponent(tok), '_blank');
+async function downloadBackup(){
+  try{
+    const r=await authFetch('/api/backup');
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||'Erro');
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='sisumepe-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }catch(e){ toast('⚠️ '+e.message); }
 }
 async function restoreBackup(){
   const inp = document.getElementById('restoreFile');
@@ -3613,7 +3621,14 @@ async function searchAgPerson(){
   box.innerHTML = '<p class="text-xs text-slate-400">Buscando...</p>';
   try{
     const list = await api('/api/persons?q='+encodeURIComponent(q));
-    box.innerHTML = list.length ? list.slice(0,5).map(p=>`<button onclick="selectAgPerson(${p.id},'${esc(p.nome).replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-slate-50"><b>${esc(p.nome)}</b><br><span class="text-slate-500">${esc(p.cpf||p.rg||'')}</span></button>`).join('') : '<p class="text-xs text-slate-400">Nenhum encontrado</p>';
+    box.innerHTML = list.length ? list.slice(0,5).map(p=>`<button data-ag-id="${p.id}" data-ag-nome="${esc(p.nome)}" class="select-ag-btn w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-slate-50"><b>${esc(p.nome)}</b><br><span class="text-slate-500">${esc(p.cpf||p.rg||'')}</span></button>`).join('') : '<p class="text-xs text-slate-400">Nenhum encontrado</p>';
+    box.querySelectorAll('.select-ag-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id=Number(btn.dataset.agId);
+        const nome=btn.dataset.agNome;
+        selectAgPerson(id, nome);
+      });
+    });
   }catch(e){ box.innerHTML = '<p class="text-xs text-rose-500">Erro</p>'; }
 }
 function selectAgPerson(id, nome){
@@ -4785,7 +4800,10 @@ async function loadPsiAlerts(){
     const list = await api('/api/psi/alerts');
     if(!list.length){ box.innerHTML = ''; return; }
     const ico = { falta:'🔴', falta_critica:'⛔', medida:'🟡', encaminhamento:'🔵', enc_30:'🔵', retorno:'🟠', proximo_envio:'🟣', psc:'🏗' };
-    box.innerHTML = `<div class="card p-3 border-l-4 !border-l-amber-400"><div class="flex items-center gap-2 mb-2"><b class="text-xs">⚠️ ${list.length} alerta(s)</b><button onclick="goPsi('painel')" class="ml-auto text-[11px] font-bold text-indigo-600">ver todos →</button></div><div class="space-y-1">${list.slice(0, 5).map(a=>`<button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="w-full text-left text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">${ico[a.tipo]||'⚠️'} ${esc(a.texto)}${a.personName?` — <b>${esc(a.personName)}</b>`:''}</button>`).join('')}</div></div>`;
+    box.innerHTML = `<div class="card p-3 border-l-4 !border-l-amber-400"><div class="flex items-center gap-2 mb-2"><b class="text-xs">⚠️ ${list.length} alerta(s)</b><button onclick="goPsi('painel')" class="ml-auto text-[11px] font-bold text-indigo-600">ver todos →</button></div><div class="space-y-1">${list.slice(0, 5).map(a=>`<button data-pid="${esc(a.personId||'')}" data-pname="${esc(a.personName||'')}" class="psi-alert-btn w-full text-left text-xs bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">${ico[a.tipo]||'⚠️'} ${esc(a.texto)}${a.personName?` — <b>${esc(a.personName)}</b>`:''}</button>`).join('')}</div></div>`;
+    box.querySelectorAll('.psi-alert-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> psiAlertGo(btn.dataset.pid, btn.dataset.pname));
+    });
   }catch(e){ box.innerHTML = ''; }
 }
 function psiAlertGo(pid, nome){
@@ -4803,7 +4821,10 @@ async function psiBuscarPara(p){
   try{
     const list = await api('/api/persons?q=' + encodeURIComponent(q) + '&limit=8');
     if(!list.length){ box.innerHTML = '<p class="text-xs text-slate-400">Nada encontrado.</p>'; return; }
-    box.innerHTML = list.map(x=>`<button onclick="psiEscolher('${p}',${x.id},'${esc(x.nome||'').replace(/'/g,"\\'")}')" class="w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-emerald-50"><b>${esc(x.nome)}</b><br><span class="text-slate-500">${esc(x.cpf||x.rg||'')}</span></button>`).join('');
+    box.innerHTML = list.map(x=>`<button data-psi="${esc(p)}" data-id="${x.id}" data-nome="${esc(x.nome||'')}" class="psi-escolher-btn w-full text-left border border-slate-200 rounded-lg p-2 text-xs hover:bg-emerald-50"><b>${esc(x.nome)}</b><br><span class="text-slate-500">${esc(x.cpf||x.rg||'')}</span></button>`).join('');
+    box.querySelectorAll('.psi-escolher-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> psiEscolher(btn.dataset.psi, Number(btn.dataset.id), btn.dataset.nome));
+    });
   }catch(e){ box.innerHTML = '<p class="text-xs text-rose-500">Erro na busca.</p>'; }
 }
 function psiEscolher(p, id, nome){
@@ -4940,7 +4961,7 @@ async function loadPsiFicha(){
 function psiJudicialPDF(){
   const p = psiFichaPerson || psiPerson;
   if(!p) return toast('⚠️ Selecione a pessoa');
-  window.open('/api/psi/judicial/' + p.id + '?token=' + encodeURIComponent((() => { try{ return (JSON.parse(localStorage.getItem('te_session')||'null')||{}).token || ''; }catch(e){ return ''; } })()), '_blank');
+  openPdfAuth('/api/psi/judicial/' + p.id);
 }
 async function psiOficioIrregularidade(pid, nome){
   const p = pid ? { id: pid, nome: nome || '' } : (psiFichaPerson || psiPerson);
@@ -4992,7 +5013,17 @@ async function psiDelAtend(id){
 }
 // ---- PSC (Prestação de Serviços à Comunidade) ----
 let psiLocais = [], psiVincs = [];
-function psiTok(){ try{ return (JSON.parse(localStorage.getItem('te_session')||'null')||{}).token || ''; }catch(e){ return ''; } }
+function psiTok(){ try{ const s=JSON.parse(localStorage.getItem('te_session')||'null'); return (s&&s.token)||''; }catch(e){ return ''; } }
+async function openPdfAuth(url){
+  try{
+    const r=await authFetch(url);
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||'Erro');
+    const blob=await r.blob();
+    const u=URL.createObjectURL(blob);
+    window.open(u,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(u), 60000);
+  }catch(e){ toast('⚠️ '+e.message); }
+}
 async function loadPsiPsc(){
   const d = document.getElementById('psiH_data');
   if(d && !d.value) d.value = new Date().toISOString().slice(0, 10);
@@ -5056,7 +5087,7 @@ async function savePsiHora(){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function psiCertificado(id){
-  window.open('/api/psi/psc/certificado/' + id + '?token=' + encodeURIComponent(psiTok()), '_blank');
+  openPdfAuth('/api/psi/psc/certificado/' + id);
 }
 // ---- Grupos reflexivos ----
 async function loadPsiGrupos(){
@@ -5141,7 +5172,7 @@ async function psiIntegranteStatus(gid, pid, status){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 function psiGrupoRelatorio(id){
-  window.open('/api/psi/grupo/' + id + '/relatorio?token=' + encodeURIComponent(psiTok()), '_blank');
+  openPdfAuth('/api/psi/grupo/' + id + '/relatorio');
 }
 async function psiDelIntegrante(gid, pid){
   try{
@@ -5381,18 +5412,25 @@ async function delPsiDoc(id){
   try{ await api('/api/termos/' + id, { method:'DELETE' }); toast('🗑️ Excluído'); loadPsiDocsHist(); }catch(e){ toast('⚠️ ' + e.message); }
 }
 // ---- Painel psicossocial ----
-function psiTokenQS(){
-  let tok = '';
-  try{ const s = JSON.parse(localStorage.getItem('te_session') || 'null'); if(s && s.token) tok = s.token; }catch(e){}
-  return tok ? '&token=' + encodeURIComponent(tok) : '';
-}
+function psiTokenQS(){ return ''; }
 function psiRelatorioPDF(){
   const mes = (document.getElementById('psiRelMes') || {}).value || new Date().toISOString().slice(0, 7);
-  window.open('/api/psi/relatorio?mes=' + encodeURIComponent(mes) + psiTokenQS(), '_blank');
+  openPdfAuth('/api/psi/relatorio?mes=' + encodeURIComponent(mes));
 }
 function psiExportCSV(){
   const mes = (document.getElementById('psiRelMes') || {}).value || '';
-  window.open('/api/psi/export' + (mes ? '?mes=' + encodeURIComponent(mes) : '') + (mes ? '&' : '?') + 'token=' + encodeURIComponent(psiTok()), '_blank');
+  // Use authFetch com header, não token na URL
+  (async()=>{
+    try{
+      const url='/api/psi/export' + (mes ? '?mes=' + encodeURIComponent(mes) : '');
+      const r=await authFetch(url);
+      if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||'Erro');
+      const blob=await r.blob();
+      const u=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=u; a.download='psi-export-'+(mes||'todos')+'.csv'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(u),5000);
+    }catch(e){ toast('⚠️ '+e.message); }
+  })();
 }
 async function psiImportCSV(){
   const inp = document.getElementById('psiImportFile');
@@ -5457,8 +5495,11 @@ async function loadPsiPainel(){
       return `<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-slate-100 rounded-t-lg relative" style="height:100%"><div class="absolute bottom-0 w-full rounded-t-lg" title="${s.atendimentos} atend. • ${s.faltas} faltas" style="height:${h}%;background:linear-gradient(180deg,#10b981,#059669)"></div></div><b class="text-[11px]">${s.atendimentos||0}</b><span class="text-[10px] text-slate-500">${s.mes.slice(5)}${hf?` • <span class="text-rose-600 font-bold">${hf}%F</span>`:''}</span></div>`;
     }).join('');
     const ico = { falta:'🔴 Falta', falta_critica:'⛔ Falta crítica', medida:'🟡 Medida', encaminhamento:'🔵 Encaminhamento', enc_30:'🔵 Enc. 30+d', retorno:'🟠 Retorno', proximo_envio:'🟣 Próximo envio', psc:'🏗 PSC' };
-    document.getElementById('psiAlertsList').innerHTML = alerts.length ? alerts.map(a=>`<div class="border border-slate-200 rounded-xl p-3 bg-white text-xs"><div class="flex items-center gap-2"><button onclick="psiAlertGo('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="flex-1 text-left"><b>${ico[a.tipo]||'⚠️'}</b> — ${esc(a.texto)}${a.personName?`<br><b>${esc(a.personName)}</b>`:''}</button></div>
-    <div class="flex gap-1.5 mt-2">${a.data?`<button onclick="psiAgendarLembrete('${esc(a.data)}','${esc((a.texto||'').replace(/'/g,"\\'")).slice(0,60)}')" class="btn btn-ghost flex-1 py-1.5 text-[11px]">📅 Agendar</button>`:''}${a.acao==='oficio'?`<button onclick="psiOficioIrregularidade('${esc(a.personId||'')}','${esc(a.personName||'').replace(/'/g,"\\'")}')" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✉️ Ofício</button>`:''}</div></div>`).join('') : '<p class="text-xs text-emerald-700 text-center py-6">✅ Nenhum alerta. Tudo em dia!</p>';
+    document.getElementById('psiAlertsList').innerHTML = alerts.length ? alerts.map(a=>`<div class="border border-slate-200 rounded-xl p-3 bg-white text-xs"><div class="flex items-center gap-2"><button data-pid="${esc(a.personId||'')}" data-pname="${esc(a.personName||'')}" class="psi-go-btn flex-1 text-left"><b>${ico[a.tipo]||'⚠️'}</b> — ${esc(a.texto)}${a.personName?`<br><b>${esc(a.personName)}</b>`:''}</button></div>
+    <div class="flex gap-1.5 mt-2">${a.data?`<button data-d="${esc(a.data)}" data-t="${esc((a.texto||'').slice(0,60))}" class="psi-agendar-btn btn btn-ghost flex-1 py-1.5 text-[11px]">📅 Agendar</button>`:''}${a.acao==='oficio'?`<button data-pid2="${esc(a.personId||'')}" data-pname2="${esc(a.personName||'')}" class="psi-oficio-btn btn btn-ghost flex-1 py-1.5 text-[11px]">✉️ Ofício</button>`:''}</div></div>`).join('') : '<p class="text-xs text-emerald-700 text-center py-6">✅ Nenhum alerta. Tudo em dia!</p>';
+    document.getElementById('psiAlertsList').querySelectorAll('.psi-go-btn').forEach(b=> b.addEventListener('click', ()=> psiAlertGo(b.dataset.pid, b.dataset.pname)));
+    document.getElementById('psiAlertsList').querySelectorAll('.psi-agendar-btn').forEach(b=> b.addEventListener('click', ()=> psiAgendarLembrete(b.dataset.d, b.dataset.t)));
+    document.getElementById('psiAlertsList').querySelectorAll('.psi-oficio-btn').forEach(b=> b.addEventListener('click', ()=> psiOficioIrregularidade(b.dataset.pid2, b.dataset.pname2)));
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 // Regra Infinity: só o Júlio (ou admin) assume
@@ -5945,7 +5986,7 @@ async function psiEmergencyPanel(){
 function psiEmergencyPDF(){
   const qs = psiEmgQS(); if(!qs) return;
   const mes = new Date().toISOString().slice(0, 7);
-  window.open('/api/psi/relatorio?mes=' + mes + '&' + qs + psiTokenQS(), '_blank');
+  openPdfAuth('/api/psi/relatorio?mes=' + encodeURIComponent(mes) + '&' + qs);
 }
 async function loadUsers(){ try{ allUsers = await api('/api/users'); renderTabs(); updateChatPlaceholder(); }catch(e){} }
 function convoUnread(to){
