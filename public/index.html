@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v39 fix preview hoisting -->
+<title>SISUMEPE Juazeiro</title><!-- v40 fix CSP fonts + es hoisting -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -1557,6 +1557,7 @@
 
 <script>
 let session = JSON.parse(localStorage.getItem('te_session') || 'null');
+let es = null;
 let role = session ? session.role : null;
 let lastVisaoPerson = null;
 let tickets = [], selPersonId = null, selPersonName = '', prio = false, modeloSel = '', cadModelo = '', editModelo = '', finishId = null;
@@ -6761,7 +6762,6 @@ function handleCallSignal(data){
 }
 
 // SSE realtime
-let es = null;
 function connectSSE(){
   try{ if(es) es.close(); }catch(e){}
   es = null;
