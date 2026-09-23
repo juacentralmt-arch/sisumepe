@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self)');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   // CSP: permite Tailwind CDN (temporário), Google Fonts e APIs internas
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com; connect-src 'self' https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.gstatic.com; connect-src 'self' https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; frame-ancestors 'none'");
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   if (req.path === '/' || req.path === '/index.html') res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');

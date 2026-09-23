@@ -1,4 +1,4 @@
-const CACHE = 'te-v39';
+const CACHE = 'te-v40';
 const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/tesseract.min.js', '/favicon.png', '/favicon.ico', '/logo-sisumepe.svg', '/apple-touch.png'];
 
 self.addEventListener('install', e => {
@@ -32,6 +32,7 @@ self.addEventListener('push', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const u = new URL(e.request.url);
+  if (u.origin !== location.origin) return;
   // API e uploads: sempre rede (dados em tempo real, sem cache)
   if (u.pathname.startsWith('/api/') || u.pathname.startsWith('/uploads/')) return;
   if (e.request.mode === 'navigate') {
