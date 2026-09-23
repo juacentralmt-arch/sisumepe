@@ -171,17 +171,22 @@ const store = {
     },
     async search(q, limit) {
       const n = Math.min(Math.max(Number(limit) || 50, 1), 50);
-      q = (q || '').trim();
+      q = (q || '').trim().slice(0, 60);
+      // evita dump completo sem query
+      if (!q || q.length < 2) {
+        const list = await store.persons.all();
+        return list.slice(-n).reverse();
+      }
       if (MODE === 'supabase' && q) {
-        // Filtro no banco (paginado) em vez de baixar a tabela inteira.
-        // cpfn guarda só dígitos: busca numérica usa igualdade parcial via ilike.
         try {
           const digits = q.replace(/\D/g, '');
           let query = supa.from('persons').select('*').order('id', { ascending: false }).limit(n);
+          const esc = s => String(s).replace(/[%_]/g, m=>`\\${m}`).replace(/[,()"]/g, m=>`\\${m}`);
           if (digits && digits.length >= 3 && /^[\d.\-/ ]+$/.test(q)) {
-            query = query.ilike('cpf', `%${digits}%`);
+            query = query.ilike('cpf', `%${esc(digits)}%`);
           } else {
-            query = query.or(`nome.ilike.%${q}%,cpf.ilike.%${q}%,rg.ilike.%${q}%`);
+            const e = esc(q);
+            query = query.or(`nome.ilike.%${e}%,cpf.ilike.%${e}%,rg.ilike.%${e}%`);
           }
           const r = await query;
           if (!r.error) return r.data.map(appP);
@@ -790,24 +795,39 @@ const store = {
     const orig = String(file.originalname || 'arquivo').slice(0, 120);
     const parts = orig.split('.');
     const ext = (parts.pop() || '').toLowerCase();
-    // Bloqueia extensão dupla disfarçada (ex.: laudo.pdf.html, foto.jpg.svg)
-    const dangerous = ['html', 'htm', 'svg', 'js', 'exe', 'bat', 'cmd', 'sh', 'php'];
-    if (parts.length && dangerous.includes(ext)) {
+    // Bloqueia extensão dupla disfarçada (ex.: laudo.pdf.html, foto.jpg.svg, shell.php.jpg)
+    const dangerous = ['html', 'htm', 'svg', 'js', 'exe', 'bat', 'cmd', 'sh', 'php', 'phtml', 'phar'];
+    const allParts = orig.toLowerCase().split('.');
+    if (allParts.some((p,i) => i < allParts.length-1 && dangerous.includes(p)) || dangerous.includes(ext)) {
       const e = new Error('Tipo de arquivo não permitido: ' + orig);
       e.status = 400;
       throw e;
     }
-    // Checagem de assinatura mágica dos tipos mais comuns (mime pode ser forjado)
+    // Checagem de assinatura mágica (mime pode ser forjado) - cobre todos os tipos permitidos
     const buf = file.buffer || Buffer.alloc(0);
-    const head = buf.slice(0, 8).toString('latin1');
+    const head = buf.slice(0, 12).toString('latin1');
     const isJpg = buf[0] === 0xFF && buf[1] === 0xD8;
     const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47;
     const isGif = head.startsWith('GIF8');
     const isPdf = head.startsWith('%PDF');
+    const isWebp = head.startsWith('RIFF') && buf.slice(8,12).toString() === 'WEBP';
+    const isZip = buf[0] === 0x50 && buf[1] === 0x4B; // docx/xlsx
+    const isMp3 = head.startsWith('ID3') || (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0);
+    const isWav = head.startsWith('RIFF') && buf.slice(8,12).toString() === 'WAVE';
+    const isWebm = buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3;
+    const isOgg = head.startsWith('OggS');
     if (['jpg', 'jpeg'].includes(ext) && !isJpg) { const e = new Error('Arquivo JPG inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'png' && !isPng) { const e = new Error('Arquivo PNG inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'gif' && !isGif) { const e = new Error('Arquivo GIF inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'pdf' && !isPdf) { const e = new Error('Arquivo PDF inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'webp' && !isWebp) { const e = new Error('Arquivo WEBP inválido: ' + orig); e.status = 400; throw e; }
+    if (['docx','xlsx'].includes(ext) && !isZip) { const e = new Error('Arquivo Office inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'mp3' && !isMp3) { const e = new Error('Arquivo MP3 inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'wav' && !isWav) { const e = new Error('Arquivo WAV inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'webm' && !isWebm) { const e = new Error('Arquivo WEBM inválido: ' + orig); e.status = 400; throw e; }
+    if (['ogg','oga','m4a'].includes(ext) && !(isOgg || isMp3 || isWebm || head.startsWith('ftyp'))) { /* m4a é MP4 */ }
+    // bloqueia imagens muito grandes (DoS via decompressão)
+    if (['jpg','jpeg','png','webp','gif'].includes(ext) && file.size > 8*1024*1024) { const e=new Error('Imagem muito grande (máx 8MB)'); e.status=400; throw e; }
     const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'webm', 'mp3', 'ogg', 'm4a', 'mp4', 'wav', 'oga'];
     const okMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

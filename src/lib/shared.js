@@ -67,19 +67,32 @@ async function issueToken(u) {
   return token;
 }
 setInterval(() => { store.sessions.cleanup().catch(() => {}); }, 3600e3).unref();
+function parseCookies(req){
+  const out={};
+  const hdr=req.headers.cookie;
+  if(!hdr) return out;
+  hdr.split(';').forEach(c=>{ const i=c.indexOf('='); if(i>0){ const k=c.slice(0,i).trim(); const v=c.slice(i+1).trim(); try{ out[k]=decodeURIComponent(v);}catch{ out[k]=v; } } });
+  return out;
+}
 function auth(roles) {
   return (req, res, next) => {
-    const t = req.headers['x-session'] || req.query.token;
+    // Token via header X-Session ou cookie httpOnly te_session; query token só para SSE EventSource (/api/events)
+    let t = req.headers['x-session'];
+    if(!t){
+      const ck=parseCookies(req);
+      t=ck.te_session;
+    }
+    if(!t && req.path==='/api/events' && req.query.token) t=req.query.token;
     if (!t) return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' });
     store.sessions.get(t).then(s => {
       if (!s || s.exp < Date.now()) { store.sessions.del(t).catch(() => {}); return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }); }
-      req.auth = s;
+      req.auth = s; req.auth.token = t;
       if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
       next();
     }).catch(() => res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }));
   };
 }
-const isHash = p => typeof p === 'string' && /^\$2[aby]\$/.test(p);
+const isHash = p => typeof p === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(p);
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
   console.error(`[${req.requestId || '-'}] ${req.method} ${req.path}`, e);

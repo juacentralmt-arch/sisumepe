@@ -9,7 +9,7 @@ const router = express.Router();
 // Cache curto do dashboard (15s): evita 2 full-scans de tickets por refresh.
 let dashCache = null, dashCacheAt = 0;
 const DASH_TTL_MS = 15e3;
-router.get('/api/audit', auth(['tecnico', 'admin']), ah(async (req, res) => {
+router.get('/api/audit', auth(['admin']), ah(async (req, res) => {
   res.json(await store.audit.recent(req.query.limit));
 }));
 

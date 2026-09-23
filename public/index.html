@@ -1970,8 +1970,17 @@ async function buscarPessoa(){
     box.innerHTML = (list.length? list.map(p=>`<div class="border border-slate-200 rounded-xl p-3 flex items-center gap-3 text-sm bg-white">
       <span class="avatar w-9 h-9 text-xs">${initials(p.nome)}</span>
       <div class="flex-1 min-w-0"><b class="truncate block">${esc(p.nome)}</b><span class="text-xs text-slate-500">CPF: ${esc(p.cpf||'-')} • RG: ${esc(p.rg||'-')}</span> ${modeloBadge(p.modeloTornozeleira)}</div>
-      <button onclick="selectPerson(${p.id},'${esc(p.nome).replace(/'/g,"\\'")}','${esc(p.modeloTornozeleira||'')}')" class="btn btn-primary text-xs px-3.5 py-2">Selecionar</button>
+      <button data-person-id="${p.id}" data-person-nome="${esc(p.nome)}" data-person-modelo="${esc(p.modeloTornozeleira||'')}" class="select-person-btn btn btn-primary text-xs px-3.5 py-2">Selecionar</button>
     </div>`).join('') : '<div class="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-xl p-3 text-center">Nenhum resultado para esta busca.<br><button onclick="toggleNovoCad(true)" class="mt-1.5 btn btn-dark text-xs px-4 py-2">＋ Cadastrar novo atendido</button></div>')+more;
+    // XSS fix: usar dataset em vez de inline JS com esc()
+    box.querySelectorAll('.select-person-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = Number(btn.dataset.personId);
+        const nome = btn.dataset.personNome;
+        const modelo = btn.dataset.personModelo;
+        selectPerson(id, nome, modelo);
+      });
+    });
     toggleNovoCad(list.length === 0);
   }catch(e){ box.innerHTML='<p class="text-xs text-rose-600">Erro na busca</p>'; }
 }

@@ -3,11 +3,13 @@ const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
-// Tickets
+// Tickets - recepcao só vê aguardando/em_atendimento (não finalizados com PII)
 router.get('/api/tickets', auth(), ah(async (req, res) => {
   const status = req.query.status;
   let list = await enrichAll(await store.tickets.all());
-  if (status && status !== 'todos') list = list.filter(t => t.status === status);
+  if (req.auth.role === 'recepcao' && (!status || status==='todos')) {
+    list = list.filter(t => t.status === 'aguardando' || t.status === 'em_atendimento');
+  } else if (status && status !== 'todos') list = list.filter(t => t.status === status);
   const active = list.filter(t => t.status !== 'finalizado');
   const done = list.filter(t => t.status === 'finalizado').sort((a, b) => new Date(b.finishedAt || b.createdAt) - new Date(a.finishedAt || a.createdAt));
   res.json([...sortQueue(active), ...done]);
