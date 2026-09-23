@@ -12,6 +12,24 @@ const DASH_TTL_MS = 15e3;
 router.get('/api/audit', auth(['admin']), ah(async (req, res) => {
   res.json(await store.audit.recent(req.query.limit));
 }));
+router.get('/api/audit/search', auth(['admin']), ah(async (req, res) => {
+  const { q, user, action, kind, from, to, limit, offset } = req.query;
+  res.json(await store.audit.search({ q, user, action, kind, from, to, limit, offset }));
+}));
+router.get('/api/audit/stats', auth(['admin']), ah(async (req, res) => {
+  const all = await store.audit.recent(500);
+  const byAction={}, byUser={}, byDay={};
+  for(let i=6;i>=0;i--){ const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10); byDay[d]=0; }
+  all.forEach(a=>{
+    const act=a.action||a.kind||'outro';
+    byAction[act]=(byAction[act]||0)+1;
+    const u=a.byUser||'sistema';
+    byUser[u]=(byUser[u]||0)+1;
+    const day=String(a.at||'').slice(0,10);
+    if(day in byDay) byDay[day]++;
+  });
+  res.json({ total: all.length, byAction, byUser, byDay });
+}));
 
 router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => {
   if (dashCache && Date.now() - dashCacheAt < DASH_TTL_MS) return res.json(dashCache);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v43 fix chat img auth -->
+<title>SISUMEPE Juazeiro</title><!-- v44 auditoria admin -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -139,6 +139,9 @@
     <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Usuários <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
+    <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 12 14 12"/></svg>
+      Auditoria <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
   </nav>
   <div class="p-4">
     <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(139,92,246,.15));border:1px solid rgba(255,255,255,.08)">
@@ -176,6 +179,7 @@
       <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
+      <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Auditoria</button>
     </div>
   </header>
 
@@ -1089,6 +1093,45 @@
       </div>
     </section>
 
+    <!-- AUDITORIA (ADMIN) -->
+    <section id="tab-auditoria" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Auditoria do sistema</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Rastro completo de ações — quem fez o quê, quando e em qual registro (LGPD)</p>
+      </div>
+      <div class="card p-4 mb-4">
+        <div class="grid md:grid-cols-12 gap-2.5">
+          <div class="md:col-span-3"><label class="lbl">BUSCA (pessoa, ticket, resumo)</label><input id="auditQ" placeholder="Nome, CPF, TK-0001..." class="inp mt-1" onkeydown="if(event.key==='Enter')loadAuditoria()"></div>
+          <div class="md:col-span-2"><label class="lbl">USUÁRIO</label><input id="auditUser" placeholder="joanderson" class="inp mt-1"></div>
+          <div class="md:col-span-2"><label class="lbl">AÇÃO</label><select id="auditAction" class="inp mt-1"><option value="">Todas</option><option value="criado">Criado</option><option value="iniciado">Iniciado</option><option value="finalizado">Finalizado</option><option value="editado">Editado</option><option value="cancelado">Cancelado</option><option value="transferido">Transferido</option><option value="reaberto">Reaberto</option><option value="devolvido">Devolvido</option><option value="destravado">Destravado</option></select></div>
+          <div class="md:col-span-2"><label class="lbl">TIPO</label><select id="auditKind" class="inp mt-1"><option value="">Todos</option><option value="ticket">Ticket</option><option value="cadastro">Cadastro</option><option value="chat">Chat</option></select></div>
+          <div class="md:col-span-1"><label class="lbl">DE</label><input id="auditFrom" type="date" class="inp mt-1"></div>
+          <div class="md:col-span-2"><label class="lbl">ATÉ</label><input id="auditTo" type="date" class="inp mt-1"></div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button onclick="loadAuditoria()" class="btn btn-primary text-xs px-4 py-2">🔍 Filtrar</button>
+          <button onclick="clearAuditoriaFilters()" class="btn btn-ghost text-xs px-4 py-2">Limpar</button>
+          <button onclick="exportAuditoriaCSV()" class="btn btn-ghost text-xs px-4 py-2">⬇ CSV</button>
+          <span id="auditCount" class="ml-auto text-[11px] font-bold text-slate-500 self-center"></span>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-4 gap-3 mb-4" id="auditStats"></div>
+      <div class="card p-0 overflow-hidden">
+        <div class="overflow-x-auto max-h-[560px] overflow-y-auto">
+          <table class="min-w-full text-xs">
+            <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-[11px] font-bold tracking-wide text-slate-500"><tr><th class="text-left py-2.5 px-3">Data</th><th class="text-left py-2.5 px-3">Usuário</th><th class="text-left py-2.5 px-3">Ação</th><th class="text-left py-2.5 px-3">Pessoa</th><th class="text-left py-2.5 px-3">Ticket</th><th class="text-left py-2.5 px-3">Resumo</th></tr></thead>
+            <tbody id="auditTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between p-3 border-t border-slate-200 bg-slate-50">
+          <button onclick="auditPrev()" class="btn btn-ghost text-xs px-3 py-1.5">← Anterior</button>
+          <span id="auditPageInfo" class="text-[11px] font-bold text-slate-500"></span>
+          <button onclick="auditNext()" class="btn btn-ghost text-xs px-3 py-1.5">Próxima →</button>
+        </div>
+      </div>
+      <div id="auditDetail" class="hidden card p-4 mt-4"></div>
+    </section>
+
     <!-- VISAO 360 -->
     <section id="tab-visao" class="hidden fade">
       <div class="mb-4">
@@ -1702,7 +1745,7 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
     else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'agenda'].includes(t);
-    else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico';
+    else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos' && t !== 'psico';
     b.classList.toggle('hidden', !show);
   });
@@ -1712,7 +1755,7 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios'],
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios', 'auditoria'],
   psico: ['fila', 'checkin', 'psico', 'agenda'],
   tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
@@ -1739,11 +1782,11 @@ function canSee(t){
   if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin'].includes(t);
   if(session.role==='psico') return ['fila','checkin','psico','agenda'].includes(t);
-  return t!=='usuarios' && t!=='psico';
+  return t!=='usuarios' && t!=='psico' && t!=='auditoria';
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico','auditoria'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
@@ -1753,6 +1796,7 @@ function go(tab){
   if(tab==='termos') loadTermos();
   if(tab==='psico') loadPsi();
   if(tab==='usuarios') loadUsersAdmin();
+  if(tab==='auditoria') loadAuditoria();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
@@ -5907,6 +5951,69 @@ async function saveUserEdit(){
 async function toggleUserActive(u, on){
   try{ await api('/api/users/' + encodeURIComponent(u), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester: session.user, active: on }) }); toast(on ? 'Usuário ativado!' : 'Usuário desativado!'); loadUsersAdmin(); }
   catch(e){ toast('⚠️ ' + e.message); }
+}
+// --- AUDITORIA (ADMIN) ---
+let auditPage=0, auditLimit=20, auditTotal=0, auditLastData=[];
+async function loadAuditoria(){
+  const q=document.getElementById('auditQ')?.value||'';
+  const user=document.getElementById('auditUser')?.value||'';
+  const action=document.getElementById('auditAction')?.value||'';
+  const kind=document.getElementById('auditKind')?.value||'';
+  const from=document.getElementById('auditFrom')?.value||'';
+  const to=document.getElementById('auditTo')?.value||'';
+  const params=new URLSearchParams({ q, user, action, kind, from, to, limit: auditLimit, offset: auditPage*auditLimit });
+  try{
+    const r=await api('/api/audit/search?'+params.toString());
+    auditTotal=r.total||0; auditLastData=r.items||[];
+    document.getElementById('auditCount').textContent=`${auditTotal} registro(s)`;
+    document.getElementById('auditPageInfo').textContent=`Página ${auditPage+1} de ${Math.max(1,Math.ceil(auditTotal/auditLimit))}`;
+    const tb=document.getElementById('auditTable');
+    if(!auditLastData.length){ tb.innerHTML='<tr><td colspan="6" class="text-center py-8 text-slate-400">Nenhum registro encontrado</td></tr>'; renderAuditStats([]); return; }
+    tb.innerHTML = auditLastData.map(a=>{
+      const dt=new Date(a.at).toLocaleString('pt-BR');
+      const userBadge=`<span class="font-bold">${esc(a.byUser||'')}</span><br><span class="text-slate-500">${esc(a.byName||'')}</span>`;
+      const actColor={criado:'bg-emerald-100 text-emerald-700', iniciado:'bg-blue-100 text-blue-700', finalizado:'bg-indigo-100 text-indigo-700', editado:'bg-amber-100 text-amber-700', cancelado:'bg-rose-100 text-rose-700', transferido:'bg-violet-100 text-violet-700'}[a.action]||'bg-slate-100 text-slate-600';
+      const changes=(a.changes||[]).map(c=> `${esc(c.label||c.field)}: <span class="text-rose-600 line-through">${esc(String(c.from||'').slice(0,40))}</span> → <span class="text-emerald-600 font-bold">${esc(String(c.to||'').slice(0,40))}</span>`).join('<br>') || esc(a.summary||'');
+      return `<tr class="hover:bg-slate-50 cursor-pointer" onclick="showAuditDetail(${a.id})"><td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">${esc(dt)}</td><td class="py-2.5 px-3">${userBadge}</td><td class="py-2.5 px-3"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${actColor}">${esc(a.action||a.kind||'')}</span></td><td class="py-2.5 px-3"><b>${esc(a.personName||'-')}</b><br><span class="text-slate-500">#${a.personId||''}</span></td><td class="py-2.5 px-3"><span class="font-bold text-indigo-600">${esc(a.ref||'')}</span><br><span class="text-slate-500">#${a.ticketId||''}</span></td><td class="py-2.5 px-3 max-w-[320px] truncate" title="${esc(a.summary||'')}">${changes || esc(a.summary||'-')}</td></tr>`;
+    }).join('');
+    renderAuditStats(auditLastData);
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+function renderAuditStats(list){
+  const el=document.getElementById('auditStats');
+  if(!el) return;
+  const byAction={}, byUser={};
+  (list||auditLastData||[]).forEach(a=>{
+    const k=a.action||a.kind||'outro';
+    byAction[k]=(byAction[k]||0)+1;
+    const u=a.byUser||'sistema';
+    byUser[u]=(byUser[u]||0)+1;
+  });
+  const topActions=Object.entries(byAction).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`<span class="text-[11px] bg-white border border-slate-200 rounded-full px-2.5 py-1"><b>${esc(k)}</b> ${v}</span>`).join(' ');
+  const topUsers=Object.entries(byUser).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`<span class="text-[11px] bg-white border border-slate-200 rounded-full px-2.5 py-1"><b>@${esc(k)}</b> ${v}</span>`).join(' ');
+  el.innerHTML=`<div class="card p-3"><p class="text-[11px] font-bold tracking-wide text-slate-500">TOP AÇÕES</p><div class="mt-1 flex flex-wrap gap-1.5">${topActions||'<span class="text-xs text-slate-400">—</span>'}</div></div><div class="card p-3"><p class="text-[11px] font-bold tracking-wide text-slate-500">TOP USUÁRIOS</p><div class="mt-1 flex flex-wrap gap-1.5">${topUsers||'<span class="text-xs text-slate-400">—</span>'}</div></div><div class="card p-3"><p class="text-[11px] font-bold tracking-wide text-slate-500">PERÍODO</p><p class="text-xs mt-1">${esc(document.getElementById('auditFrom')?.value||'—')} → ${esc(document.getElementById('auditTo')?.value||'—')}</p></div><div class="card p-3 flex items-center justify-center"><button onclick="exportAuditoriaCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ Exportar CSV filtrado</button></div>`;
+}
+function showAuditDetail(id){
+  const a=(auditLastData||[]).find(x=>String(x.id)===String(id));
+  if(!a) return;
+  const el=document.getElementById('auditDetail');
+  el.classList.remove('hidden');
+  el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">Detalhe #${a.id}</h3><button onclick="document.getElementById('auditDetail').classList.add('hidden')" class="text-xs font-bold text-slate-500">✕ Fechar</button></div><div class="grid grid-cols-2 gap-2 text-xs"><div><b>Data:</b> ${esc(new Date(a.at).toLocaleString('pt-BR'))}</div><div><b>Usuário:</b> ${esc(a.byUser)} (${esc(a.byName)}) [${esc(a.byRole)}]</div><div><b>Ação:</b> ${esc(a.action)} (${esc(a.kind)})</div><div><b>Ref:</b> ${esc(a.ref)} #${a.ticketId||''}</div><div class="col-span-2"><b>Pessoa:</b> ${esc(a.personName)} #${a.personId||''}</div><div class="col-span-2"><b>Resumo:</b> ${esc(a.summary||'')}</div></div>${(a.changes&&a.changes.length)?`<div class="mt-3"><b class="text-xs">Alterações:</b><div class="mt-1 space-y-1">${a.changes.map(c=>`<div class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-2"><b>${esc(c.label||c.field)}</b><br><span class="text-rose-600">De: ${esc(String(c.from||''))}</span><br><span class="text-emerald-600">Para: ${esc(String(c.to||''))}</span></div>`).join('')}</div></div>`:''}`;
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function clearAuditoriaFilters(){
+  ['auditQ','auditUser','auditAction','auditKind','auditFrom','auditTo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  auditPage=0; loadAuditoria();
+}
+function auditPrev(){ if(auditPage>0){ auditPage--; loadAuditoria(); } }
+function auditNext(){ if((auditPage+1)*auditLimit < auditTotal){ auditPage++; loadAuditoria(); } }
+function exportAuditoriaCSV(){
+  if(!auditLastData.length) return toast('⚠️ Nada para exportar');
+  const rows=[['Data','Usuario','Nome','Acao','Tipo','Pessoa','Ticket','Ref','Resumo']];
+  auditLastData.forEach(a=> rows.push([new Date(a.at).toLocaleString('pt-BR'), a.byUser, a.byName, a.action, a.kind, a.personName, a.ticketId, a.ref, a.summary]));
+  const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='auditoria-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 
 // --- CHAT DA EQUIPE ---
