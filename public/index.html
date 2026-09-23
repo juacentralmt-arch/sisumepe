@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v32 check-in setor + policia penal icon -->
+<title>SISUMEPE Juazeiro</title><!-- v33 sem tornozeleira -->
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -221,6 +221,7 @@
           <option value="">📡 Todos os modelos</option>
           <option value="Spacecom">📡 Spacecom</option>
           <option value="Infinity">📡 Infinity</option>
+          <option value="Sem tornozeleira">🚫 Sem tornozeleira</option>
         </select>
         <select id="fMotivo" onchange="setFilter()" class="inp !w-auto !py-2 text-xs font-bold">
           <option value="">🏷️ Todos os motivos</option>
@@ -299,9 +300,10 @@
           <label class="col-span-2 lbl flex items-center gap-2">DATA DE NASCIMENTO <input id="cNasc" type="date" class="inp !w-auto"></label>
         </div>
         <label class="lbl mt-3 block">MODELO DA TORNOZELEIRA *</label>
-        <div class="grid grid-cols-2 gap-2.5 mt-1">
-          <button type="button" data-cmodelo="Spacecom" onclick="pickCadModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
-          <button type="button" data-cmodelo="Infinity" onclick="pickCadModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+        <div class="grid grid-cols-3 gap-2.5 mt-1">
+          <button type="button" data-cmodelo="Spacecom" onclick="pickCadModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+          <button type="button" data-cmodelo="Infinity" onclick="pickCadModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+          <button type="button" data-cmodelo="Sem tornozeleira" onclick="pickCadModelo('Sem tornozeleira')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">🚫<br><span class="text-[11px] leading-tight">Sem<br>tornozeleira</span></button>
         </div>
         <button onclick="cadastrarPessoa()" class="btn btn-dark w-full py-3 text-sm mt-4">Cadastrar atendido</button>
         </div>
@@ -322,14 +324,18 @@
           <label class="lbl">DESCRIÇÃO</label>
           <textarea id="tDesc" rows="3" placeholder="Descreva o problema, avaria, decisão judicial..." class="inp mt-1 mb-3"></textarea>
           <label class="lbl">MODELO DA TORNOZELEIRA <span id="modeloLabelReq" class="font-normal normal-case">(vem do cadastro — toque para corrigir)</span></label>
-          <div class="grid grid-cols-2 gap-2.5 mt-1 mb-3">
-            <button type="button" data-modelo="Spacecom" onclick="pickModelo('Spacecom')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 transition min-h-[84px] active:scale-95">
+          <div class="grid grid-cols-3 gap-2.5 mt-1 mb-3">
+            <button type="button" data-modelo="Spacecom" onclick="pickModelo('Spacecom')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[84px] active:scale-95">
               <span class="mcheck absolute top-2 right-2 w-5 h-5 rounded-full text-white text-[11px] items-center justify-center" style="display:none;background:#0891b2">✓</span>
-              <span class="text-2xl">📡</span><br>Spacecom
+              <span class="text-lg">📡</span><br>Spacecom
             </button>
-            <button type="button" data-modelo="Infinity" onclick="pickModelo('Infinity')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-4 text-sm font-bold text-slate-500 transition min-h-[84px] active:scale-95">
+            <button type="button" data-modelo="Infinity" onclick="pickModelo('Infinity')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[84px] active:scale-95">
               <span class="mcheck absolute top-2 right-2 w-5 h-5 rounded-full text-white text-[11px] items-center justify-center" style="display:none;background:#c026d3">✓</span>
-              <span class="text-2xl">📡</span><br>Infinity
+              <span class="text-lg">📡</span><br>Infinity
+            </button>
+            <button type="button" data-modelo="Sem tornozeleira" onclick="pickModelo('Sem tornozeleira')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[84px] active:scale-95">
+              <span class="mcheck absolute top-2 right-2 w-5 h-5 rounded-full text-white text-[11px] items-center justify-center" style="display:none;background:#64748b">✓</span>
+              <span class="text-lg">🚫</span><br><span class="text-[11px] leading-tight">Sem<br>tornozeleira</span>
             </button>
           </div>
           <div class="flex items-center justify-between rounded-xl p-3.5 mb-3 border border-rose-200" style="background:linear-gradient(135deg,#fef2f2,#fff)">
@@ -1429,9 +1435,10 @@
       <option>Outros</option>
     </select>
     <label class="lbl">MODELO DA TORNOZELEIRA</label>
-    <div class="grid grid-cols-2 gap-2.5 mt-1 mb-2.5">
-      <button type="button" data-tmodelo="Spacecom" onclick="pickTicketModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
-      <button type="button" data-tmodelo="Infinity" onclick="pickTicketModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+    <div class="grid grid-cols-3 gap-2.5 mt-1 mb-2.5">
+      <button type="button" data-tmodelo="Spacecom" onclick="pickTicketModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+      <button type="button" data-tmodelo="Infinity" onclick="pickTicketModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+      <button type="button" data-tmodelo="Sem tornozeleira" onclick="pickTicketModelo('Sem tornozeleira')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">🚫<br><span class="text-[10px]">Sem</span></button>
     </div>
     <label class="lbl">DESCRIÇÃO</label>
     <textarea id="teDesc" rows="2" class="inp mt-1 mb-2.5"></textarea>
@@ -1463,9 +1470,10 @@
     <label class="lbl">DATA DE NASCIMENTO</label>
     <input id="eNasc" type="date" class="inp mt-1 mb-2.5">
     <label class="lbl">MODELO DA TORNOZELEIRA *</label>
-    <div class="grid grid-cols-2 gap-2.5 mt-1 mb-2.5">
-      <button type="button" data-emodelo="Spacecom" onclick="pickEditModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
-      <button type="button" data-emodelo="Infinity" onclick="pickEditModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-sm font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+    <div class="grid grid-cols-3 gap-2.5 mt-1 mb-2.5">
+      <button type="button" data-emodelo="Spacecom" onclick="pickEditModelo('Spacecom')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Spacecom</button>
+      <button type="button" data-emodelo="Infinity" onclick="pickEditModelo('Infinity')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">📡<br>Infinity</button>
+      <button type="button" data-emodelo="Sem tornozeleira" onclick="pickEditModelo('Sem tornozeleira')" class="rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[64px] active:scale-95">🚫<br><span class="text-[10px]">Sem</span></button>
     </div>
     <p id="eErr" class="hidden text-xs text-rose-600 font-semibold"></p>
     <div class="flex gap-2.5 mt-4">
@@ -1541,10 +1549,13 @@ let tickets = [], selPersonId = null, selPersonName = '', prio = false, modeloSe
 function paintModelBoxes(attr, val){
   document.querySelectorAll('[' + attr + ']').forEach(b => {
     const on = b.getAttribute(attr) === val;
-    const space = b.getAttribute(attr) === 'Spacecom';
-    b.className = 'relative rounded-2xl border-2 p-3 text-sm font-bold transition min-h-[64px] active:scale-95 ' + (on
-      ? (space ? 'border-cyan-600 bg-cyan-50 text-cyan-900' : 'border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900')
-      : 'border-slate-200 bg-white text-slate-500');
+    const v = b.getAttribute(attr);
+    let onCls='';
+    if(v==='Spacecom') onCls='border-cyan-600 bg-cyan-50 text-cyan-900';
+    else if(v==='Infinity') onCls='border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900';
+    else if(v==='Sem tornozeleira') onCls='border-slate-500 bg-slate-100 text-slate-700';
+    else onCls='border-indigo-600 bg-indigo-50 text-indigo-900';
+    b.className = 'relative rounded-2xl border-2 p-3 text-xs font-bold transition min-h-[64px] active:scale-95 ' + (on ? onCls : 'border-slate-200 bg-white text-slate-500');
   });
 }
 function pickCadModelo(m){ cadModelo = (cadModelo === m) ? '' : m; paintModelBoxes('data-cmodelo', cadModelo); }
@@ -1791,6 +1802,7 @@ async function loadAll(){
 
 function modeloBadge(m){
   if(!m) return '';
+  if(/sem/i.test(m)) return `<span class="text-[10px] font-extrabold tracking-wide px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">🚫 Sem tornozeleira</span>`;
   const isSpace = /space/i.test(m);
   return `<span class="text-[10px] font-extrabold tracking-wide px-2.5 py-1 rounded-full ${isSpace?'bg-cyan-100 text-cyan-800':'bg-fuchsia-100 text-fuchsia-800'}">📡 ${esc(m)}</span>`;
 }
@@ -1932,7 +1944,7 @@ function toggleNovoCad(show){
     }, 80);
   }
 }
-function selectPerson(id,nome,modelo){ selPersonId=id; selPersonName=nome; toggleNovoCad(false); document.getElementById('selPerson').className='rounded-xl p-3.5 text-sm mb-4 border border-emerald-300 bg-emerald-50 text-emerald-900'; document.getElementById('selPerson').innerHTML=`✅ <b>${esc(nome)}</b> selecionado (ID ${id}). Pronto para abrir o ticket.`; toast('Atendido selecionado: '+nome); if(modelo==='Spacecom'||modelo==='Infinity'){ modeloSel=modelo; paintModelo(); } document.getElementById('setorWrap')?.classList.remove('hidden'); setTimeout(()=>{ const el=document.getElementById('setorWrap'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }, 120); }
+function selectPerson(id,nome,modelo){ selPersonId=id; selPersonName=nome; toggleNovoCad(false); document.getElementById('selPerson').className='rounded-xl p-3.5 text-sm mb-4 border border-emerald-300 bg-emerald-50 text-emerald-900'; document.getElementById('selPerson').innerHTML=`✅ <b>${esc(nome)}</b> selecionado (ID ${id}). Pronto para abrir o ticket.`; toast('Atendido selecionado: '+nome); if(['Spacecom','Infinity','Sem tornozeleira'].includes(modelo)){ modeloSel=modelo; paintModelo(); } document.getElementById('setorWrap')?.classList.remove('hidden'); setTimeout(()=>{ const el=document.getElementById('setorWrap'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }, 120); }
 let setorSel='';
 function pickSetor(s){
   setorSel = (setorSel===s ? '' : s);
@@ -1976,7 +1988,7 @@ function updateTicketFieldsForSetor(){
 }
 async function cadastrarPessoa(){
   const body={ nome:document.getElementById('cNome').value, cpf:document.getElementById('cCpf').value, rg:document.getElementById('cRg').value, nomeMae:document.getElementById('cMae').value, dataNascimento:document.getElementById('cNasc').value, modeloTornozeleira:cadModelo };
-  if(!cadModelo) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity)');
+  if(!cadModelo) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)');
   try{ const p=await api('/api/persons',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); selectPerson(p.id,p.nome,p.modeloTornozeleira); toggleNovoCad(false); toast('Cadastrado com sucesso!'); ['cNome','cCpf','cRg','cMae'].forEach(i=>document.getElementById(i).value=''); document.getElementById('cNasc').value=''; cadModelo=''; paintModelBoxes('data-cmodelo',''); loadAll(); }
   catch(e){ toast('⚠️ '+e.message); }
 }
@@ -1985,10 +1997,13 @@ function pickModelo(m){ modeloSel = (modeloSel === m) ? '' : m; paintModelo(); }
 function paintModelo(){
   document.querySelectorAll('[data-modelo]').forEach(b => {
     const on = b.dataset.modelo === modeloSel;
-    const space = b.dataset.modelo === 'Spacecom';
-    b.className = 'relative rounded-2xl border-2 p-4 text-sm font-bold transition min-h-[84px] active:scale-95 ' + (on
-      ? (space ? 'border-cyan-600 bg-cyan-50 text-cyan-900 shadow-lg shadow-cyan-100' : 'border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900 shadow-lg shadow-fuchsia-100')
-      : 'border-slate-200 bg-white text-slate-500');
+    const v = b.dataset.modelo;
+    let onCls='';
+    if(v==='Spacecom') onCls='border-cyan-600 bg-cyan-50 text-cyan-900 shadow-lg shadow-cyan-100';
+    else if(v==='Infinity') onCls='border-fuchsia-600 bg-fuchsia-50 text-fuchsia-900 shadow-lg shadow-fuchsia-100';
+    else if(v==='Sem tornozeleira') onCls='border-slate-500 bg-slate-100 text-slate-700 shadow-lg';
+    else onCls='border-indigo-600 bg-indigo-50 text-indigo-900 shadow-lg';
+    b.className = 'relative rounded-2xl border-2 p-3 text-xs font-bold transition min-h-[84px] active:scale-95 ' + (on ? onCls : 'border-slate-200 bg-white text-slate-500');
     const chk = b.querySelector('.mcheck');
     if (chk) chk.style.display = on ? 'flex' : 'none';
   });

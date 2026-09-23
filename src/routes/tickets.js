@@ -43,7 +43,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
   } else {
     if (!setorFinal) return res.status(400).json({ error: 'Selecione o setor de destino' });
     if (!motivo) return res.status(400).json({ error: 'Motivo é obrigatório' });
-    if (setorFinal==='tecnico' && !modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+    if (setorFinal==='tecnico' && !modeloTornozeleira) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)' });
   }
   // Anti-duplicidade: mesmo atendido + motivo + criador nos últimos 20s = duplo clique
   try{
