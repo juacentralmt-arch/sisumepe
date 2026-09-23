@@ -30,7 +30,8 @@ router.post('/api/logout', auth(), ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.get('/api/users', auth(['admin']), ah(async (req, res) => {
+router.get('/api/users', auth(), ah(async (req, res) => {
+  // Chat precisa listar usuários para todos autenticados (apenas user/name/role, sem PII sensível)
   const list = await store.users.all();
   res.json(list.map(u => ({ user: u.user, name: u.name, role: u.role, active: u.active !== false })));
 }));
