@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v42 fix 401 + data CSP -->
+<title>SISUMEPE Juazeiro</title><!-- v43 fix chat img auth -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -5957,9 +5957,57 @@ function onChatSearchInput(){
 function fmtSize(b){ b=Number(b||0); if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(0)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 function chatAnexo(a, mine){
   const mime = (a.mimetype || '').toLowerCase();
-  if (mime.startsWith('image/')) return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}"><img src="${esc(a.url)}" loading="lazy" class="mt-1.5 rounded-xl max-h-36 max-w-full border border-white/20"></a>`;
-  if (mime.startsWith('audio/')) return `<div class="mt-1.5 flex items-center gap-2"><audio controls src="${esc(a.url)}" class="w-full h-8 rounded-lg max-w-[210px]"></audio></div>`;
-  return `<a href="${esc(a.url)}" target="_blank" title="${esc(a.name)}" class="mt-1.5 flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold break-all ${mine?'bg-white/20 text-white':'bg-slate-100 text-slate-700'}"><span class="text-sm flex-none">📄</span><span class="min-w-0 truncate">${esc(a.name)}</span><span class="flex-none opacity-70">${fmtSize(a.size)}</span></a>`;
+  const needsAuth = String(a.url||'').startsWith('/uploads/');
+  if (mime.startsWith('image/')){
+    const id='chat-img-'+Math.random().toString(36).slice(2,9);
+    // placeholder que será trocado por blob com auth se necessário
+    setTimeout(()=> loadChatImage(a.url, id), 30);
+    const src = needsAuth ? `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' rx='12' fill='%23f1f5f9'/%3E%3Ctext x='150' y='100' text-anchor='middle' font-size='12' fill='%2364748b'%3ECarregando imagem...%3C/text%3E%3C/svg%3E` : esc(a.url);
+    return `<a href="#" data-url="${esc(a.url)}" onclick="openChatFile(event,'${esc(a.url)}')" title="${esc(a.name)}"><img id="${id}" src="${src}" loading="lazy" class="mt-1.5 rounded-xl max-h-72 sm:max-h-96 max-w-full w-auto border border-white/20 bg-white object-contain cursor-zoom-in"></a>`;
+  }
+  if (mime.startsWith('audio/')){
+    if(needsAuth){
+      const id='chat-aud-'+Math.random().toString(36).slice(2,9);
+      setTimeout(()=> loadChatAudio(a.url, id), 30);
+      return `<div class="mt-1.5 flex items-center gap-2"><audio id="${id}" controls class="w-full h-8 rounded-lg max-w-[210px]"></audio></div>`;
+    }
+    return `<div class="mt-1.5 flex items-center gap-2"><audio controls src="${esc(a.url)}" class="w-full h-8 rounded-lg max-w-[210px]"></audio></div>`;
+  }
+  return `<a href="#" data-url="${esc(a.url)}" onclick="openChatFile(event,'${esc(a.url)}')" title="${esc(a.name)}" class="mt-1.5 flex items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-bold break-all ${mine?'bg-white/20 text-white hover:bg-white/30':'bg-slate-100 text-slate-700 hover:bg-slate-200'} cursor-pointer"><span class="text-sm flex-none">📄</span><span class="min-w-0 truncate">${esc(a.name)}</span><span class="flex-none opacity-70">${fmtSize(a.size)}</span></a>`;
+}
+async function loadChatImage(url, id){
+  try{
+    const needsAuth = String(url||'').startsWith('/uploads/');
+    const src = needsAuth ? await authFetch(url).then(r=>{ if(!r.ok) throw new Error(''+r.status); return r.blob(); }).then(b=> URL.createObjectURL(b)) : url;
+    const img=document.getElementById(id);
+    if(img){ img.src=src; if(needsAuth) img.dataset.blobUrl=src; }
+  }catch(e){
+    const img=document.getElementById(id);
+    if(img) img.alt='Falha ao carregar imagem';
+  }
+}
+async function loadChatAudio(url, id){
+  try{
+    const blob=await authFetch(url).then(r=>r.blob());
+    const u=URL.createObjectURL(blob);
+    const el=document.getElementById(id);
+    if(el) el.src=u;
+  }catch(e){}
+}
+async function openChatFile(ev, url){
+  if(ev) ev.preventDefault();
+  try{
+    if(String(url).startsWith('/uploads/')){
+      const r=await authFetch(url);
+      if(!r.ok) throw new Error(''+r.status);
+      const blob=await r.blob();
+      const u=URL.createObjectURL(blob);
+      window.open(u,'_blank');
+      setTimeout(()=>URL.revokeObjectURL(u), 60000);
+    } else {
+      window.open(url,'_blank');
+    }
+  }catch(e){ toast('⚠️ Falha ao abrir arquivo'); }
 }
 let activeConvo = 'todos', allUsers = [];
 // --- Acesso emergencial ao Psicossocial (admin, somente leitura, auditado) ---
