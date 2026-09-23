@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v41 fix CSP opencv + worker blob -->
+<title>SISUMEPE Juazeiro</title><!-- v42 fix 401 + data CSP -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -1791,6 +1791,7 @@ function deveAlertar(t){
 }
 let lastTicketsHash = null, lastFullRenderAt = 0;
 async function loadAll(){
+  if(!session || !session.token) return;
   try{
     tickets = await api('/api/tickets');
     // Evita re-render quando nada mudou (o maior custo: DOM + Tailwind JIT).
