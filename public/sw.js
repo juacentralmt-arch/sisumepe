@@ -1,5 +1,5 @@
-const CACHE = 'te-v35';
-const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/tesseract.min.js', '/favicon.png', '/logo-policia-penal-badge.png'];
+const CACHE = 'te-v36';
+const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/tesseract.min.js', '/favicon.png', '/favicon.ico', '/logo-policia-penal-badge-transparent.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
