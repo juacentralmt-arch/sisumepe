@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v33 sem tornozeleira -->
+<title>SISUMEPE Juazeiro</title><!-- v34 fix flash login -->
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -91,8 +91,11 @@
     .statc p:last-child{font-size:.6rem}
   }
 </style>
+  <style>#initialLoader{position:fixed;inset:0;z-index:100;background:#0b1220;display:flex;align-items:center;justify-content:center;transition:opacity .3s ease}</style>
+  <script>try{var s=JSON.parse(localStorage.getItem('te_session')||'null');if(s&&s.token)document.documentElement.classList.add('has-session');}catch(e){}</script>
 </head>
 <body class="min-h-screen">
+<div id="initialLoader"><div class="text-center"><div class="w-10 h-10 mx-auto rounded-full border-2 border-white/20 border-t-white animate-spin" style="border-top-color:#fff"></div><p class="text-white text-xs mt-3 tracking-wide">Carregando SISUMEPE...</p></div></div>
 
 <!-- ============ SIDEBAR (desktop) ============ -->
 <aside class="hidden lg:flex fixed left-0 top-0 h-screen w-[270px] flex-col z-40 text-white" style="background:linear-gradient(180deg,#0b1220 0%,#111a30 60%,#0d1426 100%)">
@@ -144,7 +147,7 @@
   </div>
 </aside>
 
-<div id="appShell" class="lg:pl-[270px] min-h-screen flex flex-col">
+<div id="appShell" class="hidden lg:pl-[270px] min-h-screen flex flex-col">
 
   <!-- ============ TOPBAR ============ -->
   <header class="sticky top-0 z-30 backdrop-blur-xl bg-white/75 border-b border-slate-200/70">
@@ -1647,6 +1650,7 @@ async function finishLogout(silent){
   const ci = document.getElementById('chatInput');
   if(ci) ci.value = '';
   try{ paintUser(); }catch(e){}
+  document.getElementById('appShell').classList.add('hidden');
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('chatPanel').classList.add('chat-hidden');
   document.getElementById('logoutOverlay').classList.add('hidden');
@@ -1708,7 +1712,10 @@ function applyNavOrder(){
       .forEach(b => nav.appendChild(b));
   });
 }
+function hideInitialLoader(){ const el=document.getElementById('initialLoader'); if(el){ el.style.opacity='0'; setTimeout(()=>el.remove(),300); } }
 function enterApp(){
+  hideInitialLoader();
+  document.getElementById('appShell').classList.remove('hidden');
   document.getElementById('loginOverlay').classList.add('hidden');
   paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
@@ -6350,7 +6357,7 @@ async function sendChat(){
   }catch(e){ toast('⚠️ ' + e.message); }
 }
 
-if (session) { enterApp(); } else { document.getElementById('loginOverlay').classList.remove('hidden'); }
+if (session) { enterApp(); } else { hideInitialLoader(); document.getElementById('appShell').classList.add('hidden'); document.getElementById('loginOverlay').classList.remove('hidden'); }
 // Polling de segurança a cada 30s (o tempo real vem via SSE); pausa com aba oculta
 setInterval(()=>{ if(session && !document.hidden){ loadAll(); loadChat(); } }, 30000);
 // Fallback de sinalização: busca sinais de chamada mesmo com o SSE caído
