@@ -19,9 +19,10 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
   const all = allTickets.filter(x => x.status !== 'cancelado');
   const t = all;
   const today = new Date().toISOString().slice(0, 10);
-  const byMotivo = {}, byModelo = {}, byTec = {}, byDay = {};
-  const byMotivoDetalhado = {};
+  const byMotivo = {}, byModelo = {}, byTec = {}, byDay = {}, bySetor = {};
+  const byMotivoDetalhado = {}, bySetorDetalhado = {};
   MOTIVOS_OK.forEach(m => { byMotivoDetalhado[m] = { total: 0, finalizados: 0, aguardando: 0, em_atendimento: 0, hoje: 0, hojeFinalizados: 0 }; });
+  ['tecnico','administrativo','psicossocial','visitante','outros'].forEach(s=>{ bySetorDetalhado[s]={ total:0, finalizados:0, aguardando:0, em_atendimento:0, hoje:0, hojeFinalizados:0 }; });
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
     byDay[d] = 0;
@@ -31,6 +32,15 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     const mot = MOTIVOS_OK.includes(x.motivo) ? x.motivo : 'Outros';
     byMotivo[mot] = (byMotivo[mot] || 0) + 1;
     byModelo[x.modeloTornozeleira || 'Não informado'] = (byModelo[x.modeloTornozeleira || 'Não informado'] || 0) + 1;
+    const setorKey = (x.visitante ? 'visitante' : String(x.setor||'outros').toLowerCase()) || 'outros';
+    const sk = ['tecnico','administrativo','psicossocial','visitante'].includes(setorKey) ? setorKey : 'outros';
+    bySetor[sk] = (bySetor[sk]||0)+1;
+    bySetorDetalhado[sk].total++;
+    if(x.status==='finalizado') bySetorDetalhado[sk].finalizados++;
+    else if(x.status==='aguardando') bySetorDetalhado[sk].aguardando++;
+    else if(x.status==='em_atendimento') bySetorDetalhado[sk].em_atendimento++;
+    const day2 = String(x.createdAt||'').slice(0,10);
+    if(day2===today){ bySetorDetalhado[sk].hoje++; if(x.status==='finalizado') bySetorDetalhado[sk].hojeFinalizados++; }
     const day = String(x.createdAt || '').slice(0, 10);
     if (day in byDay) byDay[day]++;
     if (day === today) { todayN++; if (x.status === 'finalizado') todayFin++; }
@@ -66,7 +76,7 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     esperaAlta: t.filter(x => x.status === 'aguardando' && (Date.now() - new Date(x.createdAt)) > 30 * 60000).length,
     cancelados: allTickets.filter(x => x.status === 'cancelado').length,
     prioridade: t.filter(x => x.prioridadeLegal && x.status !== 'finalizado').length,
-    byMotivo, byModelo,
+    byMotivo, byModelo, bySetor, bySetorDetalhado,
     byMotivoDetalhado, byMotivoFinalizados,
     byTec: Object.values(byTec).sort((a, b) => b.finalizados - a.finalizados),
     byDay

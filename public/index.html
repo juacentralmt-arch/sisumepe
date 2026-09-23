@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v34 fix flash login -->
+<title>SISUMEPE Juazeiro</title><!-- v35 melhorias setor/QR/ViaCEP/offline -->
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -220,6 +220,13 @@
         </div>
       </div>
       <div class="card p-3.5 mb-4 flex flex-wrap gap-2 items-center">
+        <select id="fSetor" onchange="setFilter()" class="inp !w-auto !py-2 text-xs font-bold">
+          <option value="">🏢 Todos os setores</option>
+          <option value="tecnico">🔧 Técnico</option>
+          <option value="administrativo">🏢 Administrativo</option>
+          <option value="psicossocial">🧠 Psicossocial</option>
+          <option value="visitante">👤 Visitante</option>
+        </select>
         <select id="fModelo" onchange="setFilter()" class="inp !w-auto !py-2 text-xs font-bold">
           <option value="">📡 Todos os modelos</option>
           <option value="Spacecom">📡 Spacecom</option>
@@ -747,7 +754,7 @@
               <div><label class="lbl">RESIDÊNCIA - COMPLEMENTO</label><input id="ativComplemento" class="inp mt-1" onblur="toTitleCaseInput(this)"></div>
               <div><label class="lbl">RESIDÊNCIA - PONTO DE REFERÊNCIA</label><input id="ativPontoRef" class="inp mt-1" onblur="toTitleCaseInput(this)"></div>
               <div><label class="lbl">BAIRRO</label><input id="ativBairro" class="inp mt-1" onblur="toTitleCaseInput(this)"></div>
-              <div><label class="lbl">CEP</label><input id="ativCep" placeholder="63000-000" class="inp mt-1"></div>
+              <div><label class="lbl">CEP</label><input id="ativCep" placeholder="63000-000" class="inp mt-1" onblur="viaCepFill('ativCep','ativBairro','ativCidade','ativEstado','ativEndereco')"></div>
               <div><label class="lbl">ESTADO</label><select id="ativEstado" class="inp mt-1"><option value="">Selecione</option><option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option></select></div>
               <div><label class="lbl">CIDADE</label><input id="ativCidade" class="inp mt-1" onblur="toTitleCaseInput(this)"></div>
             </div>
@@ -1006,6 +1013,8 @@
         <button onclick="exportCSV()" class="btn btn-ghost text-xs px-3.5 py-2">⬇ Exportar CSV</button>
       </div>
       <div id="dashCards" class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4"></div>
+      <!-- Quantitativo por setor -->
+      <div id="dashSetorCards" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
       <!-- Quantitativo por tipo -->
       <div id="dashMotivoCards" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4"></div>
       <div class="card p-5 mb-4 overflow-x-auto">
@@ -1563,8 +1572,9 @@ function paintModelBoxes(attr, val){
 }
 function pickCadModelo(m){ cadModelo = (cadModelo === m) ? '' : m; paintModelBoxes('data-cmodelo', cadModelo); }
 function pickEditModelo(m){ editModelo = (editModelo === m) ? '' : m; paintModelBoxes('data-emodelo', editModelo); }
-let fModelo = '', fMotivo = '', fBusca = '', lastCallKey = '', seenMaxTicket = 0, seenInit = false;
+let fSetor = '', fModelo = '', fMotivo = '', fBusca = '', lastCallKey = '', seenMaxTicket = 0, seenInit = false;
 function setFilter(){
+  fSetor = document.getElementById('fSetor').value;
   fModelo = document.getElementById('fModelo').value;
   fMotivo = document.getElementById('fMotivo').value;
   fBusca = document.getElementById('fBusca').value;
@@ -1821,6 +1831,29 @@ function setorBadge(t){
   if(s==='psicossocial') return `<span class="text-[10px] font-extrabold tracking-wide px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">🧠 Psicossocial</span>`;
   return '';
 }
+function visitanteQr(t){
+  if(!t.visitante && String(t.setor||'').toLowerCase()!=='visitante') return '';
+  const payload = `SISUMEPE|${t.code}|${(t.person&&t.person.nome)||''}|${t.setor||'visitante'}|${t.createdAt||''}`;
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(payload)}`;
+  return `<div class="mt-3 flex items-center gap-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl"><img src="${url}" alt="QR" class="w-16 h-16 rounded-lg border border-white shadow-sm"><div class="min-w-0"><p class="text-xs font-bold text-amber-900">QR Controle de Portaria</p><p class="text-[11px] text-amber-700">${esc(t.code)} • ${new Date(t.createdAt).toLocaleString('pt-BR')}</p><p class="text-[10px] text-amber-600">Apresente na portaria</p></div></div>`;
+}
+async function viaCepFill(cepInputId, bairroId, cidadeId, estadoId, endId){
+  const cepEl=document.getElementById(cepInputId);
+  if(!cepEl) return;
+  let cep=cepEl.value.replace(/\D/g,'');
+  if(cep.length!==8) return;
+  cepEl.value=cep.replace(/(\d{5})(\d{3})/,'$1-$2');
+  try{
+    const r=await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const j=await r.json();
+    if(j.erro) return;
+    if(bairroId && j.bairro) { const el=document.getElementById(bairroId); if(el && !el.value) el.value=j.bairro; }
+    if(cidadeId && j.localidade) { const el=document.getElementById(cidadeId); if(el && !el.value) el.value=j.localidade; }
+    if(estadoId && j.uf) { const el=document.getElementById(estadoId); if(el && !el.value) el.value=j.uf; }
+    if(endId && j.logradouro) { const el=document.getElementById(endId); if(el && !el.value) el.value=j.logradouro; }
+    if(endId && j.logradouro) toast('📍 Endereço preenchido via CEP');
+  }catch(e){}
+}
 // FILA
 const ALERT_MIN = 30;
 const alertedWait = new Set();
@@ -1878,6 +1911,7 @@ function cardFila(t,i){
       <p class="text-xs text-slate-500 truncate">${esc(t.person?.cpf||t.person?.rg||'sem doc.')} • ${esc(t.motivo)}</p></div>
     </div>
     ${t.descricao?`<p class="text-xs mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 leading-relaxed">${esc(t.descricao)}</p>`:''}
+    ${visitanteQr(t)}
     ${anexosHtml(t.anexos)}
     ${filaActions(t)}
   </div>`;
@@ -1907,11 +1941,15 @@ function renderFila(){
     }
   });
   const q = (fBusca || '').toLowerCase();
-  const ativos = all.filter(t =>
+  const ativos = all.filter(t =>{
+    const s=String(t.setor||'').toLowerCase();
+    const isVis = !!t.visitante || s==='visitante';
+    const setorOk = !fSetor || (fSetor==='visitante' ? isVis : s===fSetor) || (!s && fSetor==='tecnico' && !isVis);
+    return setorOk &&
     (!fModelo || t.modeloTornozeleira === fModelo) &&
     (!fMotivo || t.motivo === fMotivo) &&
     (!q || (((t.person && t.person.nome) || '').toLowerCase().includes(q) || String(t.code || '').toLowerCase().includes(q)))
-  );
+  });
   document.getElementById('filaList').innerHTML = ativos.length? ativos.map(cardFila).join('') : '<div class="col-span-2 bg-white border rounded-xl p-8 text-center text-sm text-slate-500">Fila vazia. Nenhum atendimento pendente. 🎉</div>';
 }
 
@@ -2586,7 +2624,7 @@ function ensureTesseract(){
     }
     docTesseractLoading = true;
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.src = '/vendor/tesseract.min.js';
     s.onload = () => { docTesseractReady = true; docTesseractLoading = false; res(); };
     s.onerror = () => { docTesseractLoading = false; rej(new Error('Falha ao carregar OCR. Verifique internet.')); };
     document.head.appendChild(s);
@@ -4387,11 +4425,11 @@ function ensurePdfJsAtiv(){
     }
     ativPdfJsLoading=true;
     const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.src='/vendor/pdf.min.js';
     s.onload=()=>{
       try{
         if(typeof pdfjsLib !== 'undefined'){
-          pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc='/vendor/pdf.worker.min.js';
           ativPdfJsReady=true; ativPdfJsLoading=false; res();
         } else { ativPdfJsLoading=false; rej(new Error('pdfjs falhou')); }
       }catch(e){ ativPdfJsLoading=false; rej(e); }
@@ -5673,6 +5711,23 @@ async function loadDash(){
         return motifCard(m, v.total||0, v.finalizados||0, pend);
       }).join('');
     }
+    // Setor cards
+    const setorEl = document.getElementById('dashSetorCards');
+    if(setorEl){
+      const detS = d.bySetorDetalhado || {};
+      const ordemS = ['tecnico','administrativo','psicossocial','visitante'];
+      const labelsS = { tecnico:'Técnico', administrativo:'Administrativo', psicossocial:'Psicossocial', visitante:'Visitante', outros:'Outros' };
+      const iconsS = { tecnico:'🔧', administrativo:'🏢', psicossocial:'🧠', visitante:'👤', outros:'📋' };
+      const allS = Object.keys(detS).length ? Object.keys(detS) : Object.keys(d.bySetor||{});
+      const sortedS = ordemS.filter(s=>allS.includes(s)).concat(allS.filter(s=>!ordemS.includes(s)));
+      if(!sortedS.length) setorEl.innerHTML = '<div class="col-span-full text-xs text-slate-400 text-center py-4">Sem dados por setor.</div>';
+      else setorEl.innerHTML = sortedS.map(s=>{
+        const v=detS[s]||{ total: d.bySetor[s]||0, finalizados:0, aguardando:0, em_atendimento:0 };
+        const pend=(v.aguardando||0)+(v.em_atendimento||0);
+        const pct=v.total?Math.round(v.finalizados/v.total*100):0;
+        return `<div class="card p-4"><p class="text-[11px] font-bold tracking-wide text-slate-500">${iconsS[s]||''} ${esc((labelsS[s]||s).toUpperCase())}</p><p class="font-display text-xl font-extrabold leading-none text-slate-800 mt-1">${v.total||0}</p><p class="text-[11px] text-slate-500 mt-1">${v.finalizados||0} fin. • <span class="text-amber-700 font-bold">${pend} pend.</span> • ${pct}%</p></div>`;
+      }).join('');
+    }
     const tableEl = document.getElementById('dashMotivoTable');
     if(tableEl){
       if(!sortedMotivos.length) tableEl.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">Sem dados</td></tr>';
@@ -5719,8 +5774,8 @@ function auditItem(a){
 }
 function exportCSV(){
   api('/api/tickets').then(list => {
-    const rows = [['Codigo', 'Atendido', 'CPF', 'RG', 'Motivo', 'Modelo', 'Prioridade', 'Status', 'Tecnico', 'CriadoEm', 'IniciadoEm', 'FinalizadoEm']];
-    list.forEach(t => rows.push([t.code, ((t.person || {}).nome || ''), ((t.person || {}).cpf || ''), ((t.person || {}).rg || ''), t.motivo, (t.modeloTornozeleira || ''), (t.prioridadeLegal ? 'SIM' : 'NAO'), t.status, (t.tecnico || ''), (t.createdAt || ''), (t.startedAt || ''), (t.finishedAt || '')]));
+    const rows = [['Codigo', 'Atendido', 'CPF', 'RG', 'Motivo', 'Modelo', 'Setor', 'Visitante', 'Prioridade', 'Status', 'Tecnico', 'CriadoEm', 'IniciadoEm', 'FinalizadoEm']];
+    list.forEach(t => rows.push([t.code, ((t.person || {}).nome || ''), ((t.person || {}).cpf || ''), ((t.person || {}).rg || ''), t.motivo, (t.modeloTornozeleira || ''), (t.setor||''), (t.visitante?'SIM':'NAO'), (t.prioridadeLegal ? 'SIM' : 'NAO'), t.status, (t.tecnico || ''), (t.createdAt || ''), (t.startedAt || ''), (t.finishedAt || '')]));
     const csv = rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\n');
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
