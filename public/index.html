@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v38 logo sisumepe -->
+<title>SISUMEPE Juazeiro</title><!-- v39 fix preview hoisting -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -3767,6 +3767,10 @@ function setTermoFormData(t){
   document.getElementById('termoEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
 }
+let recEquips = [];
+let recEqEquips = [];
+let recEqPreviewTimer = null;
+let ativPreviewTimer = null;
 function clearTermoForm(){
   editingTermoId = null;
   document.getElementById('termoEditId').textContent = '';
@@ -3822,11 +3826,7 @@ function clearTermoForm(){
 }
 let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
-let recEquips = [];
-let ativPreviewTimer=null;
 const REC_EQ_CHECKS = [['ladoExterno','LADO EXTERNO (TZPR)'],['cinta','CINTA DE FIXAÇÃO'],['travas','TRAVAS'],['fonte','FONTE )'],['fonteCE01','FONTE (SIM/NÃO final)'],['ladoInterno','LADO INTERNO (TZPR)'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
-let recEqEquips = [];
-let recEqPreviewTimer = null;
 function addRecEqEquip(data){ recEqEquips.push(Object.assign({ numero: '', danificado: false, checks: {} }, data||{})); renderRecEqEquips(); }
 function removeRecEqEquip(i){ recEqEquips.splice(i,1); renderRecEqEquips(); }
 function setRecEqCheck(i, k, v){
