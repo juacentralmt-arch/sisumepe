@@ -32,7 +32,7 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
   const isVisitante = String(visitante)==='true' || visitante===true || setorNorm==='visitante';
   const setorOk = ['tecnico','tecnico_tornozeleira','administrativo','psicossocial','visitante'];
   // normaliza setor
-  let setorFinal = 'tecnico';
+  let setorFinal = '';
   if(setorOk.includes(setorNorm)) setorFinal = setorNorm;
   else if(setorNorm.includes('tecnico')) setorFinal='tecnico';
   else if(setorNorm.includes('admin')) setorFinal='administrativo';

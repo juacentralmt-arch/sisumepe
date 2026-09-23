@@ -247,10 +247,26 @@ const store = {
         mem.tickets.push(row); saveFile();
         return row;
       }
-      const row = must(await supa.from('tickets').insert(toRow({ ...t, code: '' }, T)).select().single(), 'tickets.insert');
-      const code = 'TK-' + String(row.id).padStart(4, '0');
-      const upd = must(await supa.from('tickets').update({ code }).eq('id', row.id).select().single(), 'tickets.code');
-      return appT(upd);
+      try{
+        const row = must(await supa.from('tickets').insert(toRow({ ...t, code: '' }, T)).select().single(), 'tickets.insert');
+        const code = 'TK-' + String(row.id).padStart(4, '0');
+        const upd = must(await supa.from('tickets').update({ code }).eq('id', row.id).select().single(), 'tickets.code');
+        return appT(upd);
+      }catch(e){
+        // Fallback se colunas setor/visitante ainda não existem no Supabase (sem migração)
+        if(e && e.message && /setor|visitante/i.test(e.message)){
+          console.warn('tickets.insert fallback sem setor/visitante', e.message);
+          const { setor, visitante, ...rest } = t;
+          const row = must(await supa.from('tickets').insert(toRow({ ...rest, code: '' }, T)).select().single(), 'tickets.insert');
+          const code = 'TK-' + String(row.id).padStart(4, '0');
+          const upd = must(await supa.from('tickets').update({ code }).eq('id', row.id).select().single(), 'tickets.code');
+          // guarda setor/visitante em memória para exibir até migração (não persiste)
+          const out = appT(upd);
+          out.setor = setor; out.visitante = visitante;
+          return out;
+        }
+        throw e;
+      }
     },
     async patch(id, fields) {
       if (MODE === 'file') {
@@ -259,8 +275,18 @@ const store = {
         Object.assign(t, fields); saveFile();
         return t;
       }
-      const r = must(await supa.from('tickets').update(toRow(fields, T)).eq('id', Number(id)).select(), 'tickets.patch');
-      return r.length ? appT(r[0]) : null;
+      try{
+        const r = must(await supa.from('tickets').update(toRow(fields, T)).eq('id', Number(id)).select(), 'tickets.patch');
+        return r.length ? appT(r[0]) : null;
+      }catch(e){
+        if(e && e.message && /setor|visitante/i.test(e.message)){
+          console.warn('tickets.patch fallback sem setor/visitante', e.message);
+          const { setor, visitante, ...rest } = fields;
+          const r = must(await supa.from('tickets').update(toRow(rest, T)).eq('id', Number(id)).select(), 'tickets.patch');
+          return r.length ? appT(r[0]) : null;
+        }
+        throw e;
+      }
     },
     async remove(id) {
       if (MODE === 'file') {
