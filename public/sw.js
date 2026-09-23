@@ -1,4 +1,4 @@
-const CACHE = 'te-v33';
+const CACHE = 'te-v34';
 const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
