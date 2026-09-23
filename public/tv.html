@@ -135,11 +135,12 @@ async function tick(){
       document.getElementById('callInfo').textContent = (called.modelo ? called.modelo + ' • ' : '') + (called.motivo || '');
       if(key !== lastCallKey){ if(lastCallKey !== ''){ chime(); announceCall(called); } lastCallKey = key; }
     } else lastCallKey = '';
+    const escTV = s => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     document.getElementById('nextList').innerHTML = q.filter(t => !called || t.id !== called.id).slice(0, 6).map((t, i) =>
       `<div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-center gap-3">
         <span class="font-extrabold text-slate-400 text-lg w-8">${i + 1}</span>
-        <div class="min-w-0"><p class="font-bold truncate">${t.nome || '-'}</p>
-        <p class="text-xs text-slate-400">${t.code}${t.prioridade ? ' • PRIORIDADE' : ''}</p></div>
+        <div class="min-w-0"><p class="font-bold truncate">${escTV(t.nome || '-')}</p>
+        <p class="text-xs text-slate-400">${escTV(t.code)}${t.prioridade ? ' • PRIORIDADE' : ''}</p></div>
       </div>`).join('') || '<p class="text-sm text-slate-500">Fila vazia 🎉</p>';
   }catch(e){}
 }

@@ -19,7 +19,11 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self)');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  // CSP: permite Tailwind CDN (temporário), Google Fonts e APIs internas
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com; connect-src 'self' https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com; frame-ancestors 'none'");
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
+  if (req.path === '/' || req.path === '/index.html') res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   // HSTS só faz sentido atrás de HTTPS (Render define FORCE_HTTPS=1)
   if (process.env.FORCE_HTTPS === '1')
     res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
@@ -42,10 +46,21 @@ if (compression) app.use((req, res, next) => {
   if (req.path === '/api/events') return next();
   compression({ filter: (rq, rs) => (rs.getHeader('Content-Type') || '').toString().startsWith('text/event-stream') ? false : require('compression').filter(rq, rs) })(req, res, next);
 });
-app.use(express.static(path.join(ROOT, 'public'), { maxAge: '1h', etag: true }));
-app.use('/uploads', express.static(path.join(ROOT, 'uploads'), {
-  maxAge: '1h',
-  setHeaders: (res) => { res.setHeader('X-Content-Type-Options', 'nosniff'); }
+app.use(express.static(path.join(ROOT, 'public'), {
+  maxAge: '1h', etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
+// Uploads sensíveis: só com sessão, sem cache, attachment para evitar render de HTML polyglot
+app.use('/uploads', shared.auth(), express.static(path.join(ROOT, 'uploads'), {
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', 'attachment');
+  }
 }));
 
 app.get('/api/health', (req, res) => res.json({

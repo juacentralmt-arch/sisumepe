@@ -12,7 +12,11 @@ async function extractTextFromPdf(buffer){
     const data = await pdfParse(buf);
     if(data.text && data.text.trim().length > 20) return data.text;
   }catch(e){ /* tenta pdfjs */ }
-  const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
+  let pdfjs;
+  try{ pdfjs = require('pdfjs-dist/legacy/build/pdf.js'); }catch{
+    const m = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    pdfjs = m.default || m;
+  }
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf), disableWorker: true, disableFontFace: true, isEvalSupported: false, useWorkerFetch: false });
   const pdf = await loadingTask.promise;
