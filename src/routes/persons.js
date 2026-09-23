@@ -23,7 +23,7 @@ router.post('/api/persons', auth(), ah(async (req, res) => {
   const { nome, cpf, rg, nomeMae, dataNascimento, modeloTornozeleira } = req.body || {};
   if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!cpf && !rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
-  if (!['Spacecom', 'Infinity'].includes(modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  if (!['Spacecom', 'Infinity', 'Sem tornozeleira'].includes(modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)' });
   const cpfN = (cpf || '').replace(/\D/g, '');
   const all = await store.persons.all();
   const dup = all.find(p => (cpfN && p.cpfN === cpfN) || (rg && p.rg === rg));
@@ -49,7 +49,7 @@ router.patch('/api/persons/:id', auth(), ah(async (req, res) => {
   fields.forEach(f => { next[f] = f === 'dataNascimento' ? String((req.body && req.body[f]) || '') : String((req.body && req.body[f]) || '').trim(); });
   if (!next.nome) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!next.cpf && !next.rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
-  if (!['Spacecom', 'Infinity'].includes(next.modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom ou Infinity)' });
+  if (!['Spacecom', 'Infinity', 'Sem tornozeleira'].includes(next.modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)' });
   const cpfN = next.cpf.replace(/\D/g, '');
   const all = await store.persons.all();
   const dup = all.find(x => String(x.id) !== String(p.id) && ((cpfN && x.cpfN === cpfN) || (next.rg && x.rg === next.rg)));
