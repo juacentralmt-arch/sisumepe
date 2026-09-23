@@ -359,6 +359,43 @@ const store = {
       const n = Math.min(Number(limit) || 50, 200);
       if (MODE === 'file') return [...mem.audit].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, n);
       return must(await supa.from('audit').select('*').order('at', { ascending: false }).limit(n), 'audit.recent').map(appA);
+    },
+    async search({ q, user, action, kind, from, to, limit, offset } = {}) {
+      const n = Math.min(Math.max(Number(limit)||50,1),200);
+      const off = Math.max(Number(offset)||0,0);
+      const ql = String(q||'').toLowerCase().trim();
+      const u = String(user||'').toLowerCase().trim();
+      const a = String(action||'').toLowerCase().trim();
+      const k = String(kind||'').toLowerCase().trim();
+      const dFrom = from ? new Date(from) : null;
+      const dTo = to ? new Date(to) : null;
+      if(MODE==='file'){
+        let list=[...mem.audit].sort((a,b)=> new Date(b.at)-new Date(a.at));
+        if(u) list=list.filter(x=> String(x.byUser||'').toLowerCase().includes(u));
+        if(a) list=list.filter(x=> String(x.action||'').toLowerCase()===a);
+        if(k) list=list.filter(x=> String(x.kind||'').toLowerCase()===k);
+        if(dFrom && !isNaN(dFrom)) list=list.filter(x=> new Date(x.at) >= dFrom);
+        if(dTo && !isNaN(dTo)){ const t=new Date(dTo); t.setHours(23,59,59,999); list=list.filter(x=> new Date(x.at) <= t); }
+        if(ql) list=list.filter(x=> (x.personName||'').toLowerCase().includes(ql) || (x.summary||'').toLowerCase().includes(ql) || (x.ref||'').toLowerCase().includes(ql) || String(x.ticketId||'').includes(ql));
+        const total=list.length;
+        return { total, items: list.slice(off, off+n) };
+      }
+      // Supabase: filtra via query builder
+      let query=supa.from('audit').select('*', {count:'exact'}).order('at', {ascending:false}).range(off, off+n-1);
+      if(u) query=query.ilike('byuser', `%${u}%`);
+      if(a) query=query.eq('action', a);
+      if(k) query=query.eq('kind', k);
+      if(dFrom && !isNaN(dFrom)) query=query.gte('at', dFrom.toISOString());
+      if(dTo && !isNaN(dTo)){ const t=new Date(dTo); t.setHours(23,59,59,999); query=query.lte('at', t.toISOString()); }
+      if(ql) query=query.or(`personname.ilike.%${ql}%,summary.ilike.%${ql}%,ref.ilike.%${ql}%`);
+      const r=must(await query, 'audit.search');
+      // Supabase não retorna count com range, pega total via head
+      let total=0;
+      try{
+        const c=must(await supa.from('audit').select('id', {count:'exact', head:true}), 'audit.count');
+        total=c.count||r.length;
+      }catch(e){ total=r.length; }
+      return { total, items: r.map(appA) };
     }
   },
 
