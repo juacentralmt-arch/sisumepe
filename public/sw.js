@@ -1,4 +1,4 @@
-const CACHE = 'te-v36';
+const CACHE = 'te-v37';
 const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/tesseract.min.js', '/favicon.png', '/favicon.ico', '/logo-policia-penal-badge-transparent.png'];
 
 self.addEventListener('install', e => {
