@@ -1173,7 +1173,8 @@
 </button>
 <div id="chatPanel" class="chat-hidden fixed z-40 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden
   bottom-5 right-5 w-[720px] max-w-[calc(100vw-1rem)] h-[560px] max-h-[min(85vh,600px)]
-  max-sm:bottom-0 max-sm:right-0 max-sm:left-0 max-sm:w-auto max-sm:rounded-none max-sm:rounded-t-2xl max-sm:h-[85vh] max-sm:max-h-[85vh]">
+  max-sm:inset-0 max-sm:w-auto max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none">
+  <div class="sm:hidden w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-2 mb-1 shrink-0"></div>
   <div class="px-4 py-3 flex items-center gap-2.5 text-white shrink-0" style="background:linear-gradient(135deg,#1e1b4b,#4c1d95)">
     <span class="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center text-sm shrink-0">💬</span>
     <div class="min-w-0 flex-1">
@@ -1221,16 +1222,16 @@
         <button onclick="clearChatConvo()" class="hidden sm:flex text-[11px] font-bold text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200">Trocar</button>
       </div>
       <div id="chatMsgs" onscroll="onChatScroll()" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 bg-slate-50"></div>
-  <div id="chatTyping" class="hidden px-3 py-1 bg-indigo-50 border-t border-indigo-100 text-[11px] text-indigo-700 font-medium italic animate-pulse flex items-center gap-1.5">
+  <div id="chatTyping" class="hidden px-3 py-1.5 bg-indigo-50 border-t border-indigo-100 text-xs text-indigo-700 font-medium italic animate-pulse flex items-center gap-1.5">
     <span>💬</span><span id="chatTypingText">digitando...</span>
   </div>
   <div id="chatPending" class="hidden px-2.5 pt-2 flex flex-wrap gap-1.5 bg-white"></div>
-  <div class="p-2.5 border-t border-slate-100 flex gap-2 bg-white items-center">
+  <div class="p-2.5 sm:p-2.5 p-3 border-t border-slate-100 flex gap-2 bg-white items-center" style="padding-bottom:calc(0.625rem + env(safe-area-inset-bottom))">
     <input id="chatFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,audio/*" class="hidden" onchange="chatFilesChanged()">
-    <button onclick="document.getElementById('chatFiles').click()" title="Anexar foto ou arquivo" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none">📎</button>
-    <button id="chatMicBtn" onclick="toggleAudioRecord()" title="Gravar áudio" class="btn btn-ghost w-9 h-9 !rounded-xl text-base flex-none text-slate-600 hover:text-indigo-600">🎙️</button>
-    <input id="chatInput" oninput="onChatInputType()" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-2">
-    <button onclick="sendChat()" class="btn btn-primary px-4 text-sm flex-none">➤</button>
+    <button onclick="document.getElementById('chatFiles').click()" title="Anexar foto ou arquivo" class="btn btn-ghost w-11 h-11 sm:w-9 sm:h-9 !rounded-xl text-base flex-none">📎</button>
+    <button id="chatMicBtn" onclick="toggleAudioRecord()" title="Gravar áudio" class="btn btn-ghost w-11 h-11 sm:w-9 sm:h-9 !rounded-xl text-base flex-none text-slate-600 hover:text-indigo-600">🎙️</button>
+    <input id="chatInput" oninput="onChatInputType()" onkeydown="if(event.key==='Enter')sendChat()" placeholder="Mensagem..." class="inp !py-3 sm:!py-2 text-[15px] sm:text-sm">
+    <button onclick="sendChat()" class="btn btn-primary w-11 h-11 sm:w-auto sm:px-4 text-base sm:text-sm flex-none !rounded-xl sm:!rounded-xl">➤</button>
   </div>
     </div>
   </div>
