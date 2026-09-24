@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v45 preview termos -->
+<title>SISUMEPE Juazeiro</title><!-- v46 pdf tools -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -482,6 +482,7 @@
           <button id="termoTipoRecEquip" onclick="setTermoTipo('recEquip')" class="btn text-xs px-4 py-2">🧰 Recolhimento Equipamento</button>
           <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
+          <button id="termoTipoPdf" onclick="setTermoTipo('pdf')" class="btn text-xs px-4 py-2">📄 PDF</button>
         </div>
         <div class="flex gap-2">
           <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
@@ -770,6 +771,39 @@
           </div>
           <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="ativAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleAtivPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="ativPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
           <p id="ativErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
+        </div>
+        <!-- PDF Tools (iLovePDF) -->
+        <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
+          <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <button onclick="openPdfTool('merge')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-indigo-300 hover:bg-indigo-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl group-hover:bg-indigo-600 group-hover:text-white transition">⧉</div>
+              <p class="text-xs font-bold mt-2">Juntar PDF</p><p class="text-[11px] text-slate-500">Mesclar vários PDFs</p>
+            </button>
+            <button onclick="openPdfTool('split')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-violet-300 hover:bg-violet-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center text-xl group-hover:bg-violet-600 group-hover:text-white transition">✂️</div>
+              <p class="text-xs font-bold mt-2">Dividir PDF</p><p class="text-[11px] text-slate-500">Extrair páginas</p>
+            </button>
+            <button onclick="openPdfTool('compress')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-emerald-300 hover:bg-emerald-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl group-hover:bg-emerald-600 group-hover:text-white transition">🗜️</div>
+              <p class="text-xs font-bold mt-2">Comprimir PDF</p><p class="text-[11px] text-slate-500">Reduzir tamanho</p>
+            </button>
+            <button onclick="openPdfTool('jpg2pdf')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-amber-300 hover:bg-amber-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl group-hover:bg-amber-600 group-hover:text-white transition">🖼️→📄</div>
+              <p class="text-xs font-bold mt-2">JPG para PDF</p><p class="text-[11px] text-slate-500">Imagens → PDF</p>
+            </button>
+            <button onclick="openPdfTool('rotate')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-sky-300 hover:bg-sky-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center text-xl group-hover:bg-sky-600 group-hover:text-white transition">🔄</div>
+              <p class="text-xs font-bold mt-2">Girar PDF</p><p class="text-[11px] text-slate-500">90° / 180°</p>
+            </button>
+            <button onclick="openPdfTool('extract')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-rose-300 hover:bg-rose-50 transition">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl group-hover:bg-rose-600 group-hover:text-white transition">📑</div>
+              <p class="text-xs font-bold mt-2">Extrair páginas</p><p class="text-[11px] text-slate-500">Salvar seleção</p>
+            </button>
+          </div>
+          <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
+          <p id="pdfToolMsg" class="hidden text-xs font-semibold mt-2"></p>
         </div>
         <div class="space-y-4">
           <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
@@ -4010,7 +4044,7 @@ function setTermoTipo(t){
   termoTipoAtivo = t;
   try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer);}catch(e){}
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao']].forEach(([id, k])=>{
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf']].forEach(([id, k])=>{
     const b = document.getElementById(id);
     if(!b) return;
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
@@ -4021,17 +4055,20 @@ function setTermoTipo(t){
   const recEqEl = document.getElementById('termoFormRecEquip'); if(recEqEl) recEqEl.classList.toggle('hidden', t!=='recEquip');
   document.getElementById('termoFormEndereco').classList.toggle('hidden', t!=='endereco');
   const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl) ativEl.classList.toggle('hidden', t!=='ativacao');
+  const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl) pdfEl.classList.toggle('hidden', t!=='pdf');
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
   if(recEqEl) recEqEl.classList.toggle('lg:col-span-2', t==='recEquip');
   document.getElementById('termoFormEndereco').classList.toggle('lg:col-span-2', t==='endereco');
   if(ativEl) ativEl.classList.toggle('lg:col-span-2', t==='ativacao');
+  if(pdfEl) pdfEl.classList.toggle('lg:col-span-2', t==='pdf');
   renderTermos();
   if(t === 'listagem') scheduleListagemPreview(true);
   else if(t === 'recolhimento') scheduleRecPreview(true);
   else if(t === 'recEquip') scheduleRecEqPreview(true);
   else if(t === 'endereco') scheduleEnderecoPreview(true);
   else if(t==='ativacao') scheduleAtivPreview(true);
+  else if(t==='pdf') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); }
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -4246,7 +4283,76 @@ async function saveTermoEndereco(){
     document.getElementById('termoEndEditId').textContent = '';
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
-let endPreviewTimer = null;
+// --- PDF Tools (iLovePDF) ---
+let pdfToolActive=null;
+function openPdfTool(tool){
+  pdfToolActive=tool;
+  const area=document.getElementById('pdfToolArea');
+  const msg=document.getElementById('pdfToolMsg');
+  if(!area) return;
+  area.classList.remove('hidden');
+  if(msg) msg.classList.add('hidden');
+  const tools={
+    merge: `<h4 class="font-bold text-sm mb-2">⧉ Juntar PDFs</h4><p class="text-xs text-slate-500 mb-3">Selecione 2 a 10 PDFs para mesclar em um único arquivo</p><input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="inp mb-3"><button onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm">⧉ Mesclar PDFs</button>`,
+    split: `<h4 class="font-bold text-sm mb-2">✂️ Dividir PDF</h4><p class="text-xs text-slate-500 mb-3">Extraia páginas específicas. Ex: 1,3,5-7</p><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp mb-3"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button>`,
+    compress: `<h4 class="font-bold text-sm mb-2">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500 mb-3">Reduz tamanho removendo metadados</p><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="inp mb-3"><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button>`,
+    jpg2pdf: `<h4 class="font-bold text-sm mb-2">🖼️ JPG para PDF</h4><p class="text-xs text-slate-500 mb-3">Converta imagens JPG/PNG em PDF (até 20)</p><input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="inp mb-3"><button onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm">🖼️→📄 Converter</button>`,
+    rotate: `<h4 class="font-bold text-sm mb-2">🔄 Girar PDF</h4><p class="text-xs text-slate-500 mb-3">Gire todas as páginas</p><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><select id="pdfRotateAngle" class="inp mb-3"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button>`,
+    extract: `<h4 class="font-bold text-sm mb-2">📑 Extrair páginas</h4><p class="text-xs text-slate-500 mb-3">Salve páginas específicas como novo PDF</p><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp mb-3"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button>`
+  };
+  area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
+  area.scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function pdfHandleResponse(res, filename){
+  if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao processar PDF'); }
+  const blob=await res.blob();
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename||'arquivo.pdf'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  const msg=document.getElementById('pdfToolMsg');
+  if(msg){ msg.textContent='✅ Pronto! Download iniciado.'; msg.className='text-xs font-bold text-emerald-600 mt-2'; msg.classList.remove('hidden'); }
+}
+async function pdfMerge(){
+  const inp=document.getElementById('pdfMergeFiles');
+  if(!inp.files.length) return toast('⚠️ Selecione ao menos 2 PDFs');
+  if(inp.files.length<2) return toast('⚠️ Selecione 2 ou mais PDFs');
+  const fd=new FormData(); for(const f of inp.files) fd.append('files', f);
+  try{ const r=await authFetch('/api/pdf/merge',{method:'POST',body:fd}); await pdfHandleResponse(r,'mesclado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
+async function pdfSplit(){
+  const f=document.getElementById('pdfSplitFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const pages=document.getElementById('pdfSplitPages').value;
+  const fd=new FormData(); fd.append('file',f); if(pages) fd.append('pages',pages);
+  try{ const r=await authFetch('/api/pdf/split',{method:'POST',body:fd}); await pdfHandleResponse(r,'dividido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
+async function pdfCompress(){
+  const f=document.getElementById('pdfCompressFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const fd=new FormData(); fd.append('file',f);
+  try{ const r=await authFetch('/api/pdf/compress',{method:'POST',body:fd}); await pdfHandleResponse(r,'comprimido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
+async function pdfJpgToPdf(){
+  const inp=document.getElementById('pdfJpgFiles');
+  if(!inp.files.length) return toast('⚠️ Selecione imagens');
+  const fd=new FormData(); for(const f of inp.files) fd.append('files', f);
+  try{ const r=await authFetch('/api/pdf/jpg-to-pdf',{method:'POST',body:fd}); await pdfHandleResponse(r,'imagens.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
+async function pdfRotate(){
+  const f=document.getElementById('pdfRotateFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const angle=document.getElementById('pdfRotateAngle').value;
+  const fd=new FormData(); fd.append('file',f); fd.append('angle',angle);
+  try{ const r=await authFetch('/api/pdf/rotate',{method:'POST',body:fd}); await pdfHandleResponse(r,'rotacionado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
+async function pdfExtract(){
+  const f=document.getElementById('pdfExtractFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const pages=document.getElementById('pdfExtractPages').value;
+  if(!pages) return toast('⚠️ Informe as páginas. Ex: 1,3,5-7');
+  const fd=new FormData(); fd.append('file',f); fd.append('pages',pages);
+  try{ const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+}
 function scheduleEnderecoPreview(now){
   const tgl = document.getElementById('endAutoPreview');
   if(tgl && !tgl.checked) return;
