@@ -1,5 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
+const estoqueIA = require('../lib/estoqueIA');
 const router = express.Router();
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 
@@ -91,6 +92,19 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
   if(unidade) list = list.filter(m=> String(m.unidade)===String(unidade).trim() || String(m.unidadeDestino)===String(unidade).trim());
   if(limit) list = list.slice(0, Math.min(Number(limit)||50, 200));
   res.json(list);
+}));
+
+// Chat IA estoque — on-prem, sem LLM externo (parser determinístico)
+router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { message, pergunta, q } = req.body||{};
+  const query = String(message || pergunta || q || '').trim();
+  if(!query) return res.status(400).json({ error: 'Informe message' });
+  const out = await estoqueIA.answer(query, shared.store);
+  // log opcional em audit como consulta IA (não persiste saldo)
+  res.json({ pergunta: query, ...out, geradoEm: new Date().toISOString() });
+}));
+router.get('/api/estoque/ia/sugestoes', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  res.json({ sugestoes: ['saldo TZPR04 UMEPE Juazeiro CE01','saldo total CE01','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações CE01','seriais TZPR04 CE01','buscar serial 1234567890','ranking CINTA CE01','estoque baixo','saldo por unidade CE01','unidades'] });
 }));
 
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade
