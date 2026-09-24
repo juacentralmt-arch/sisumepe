@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SISUMEPE Juazeiro</title><!-- v44 auditoria admin -->
+<title>SISUMEPE Juazeiro</title><!-- v45 preview termos -->
 <link rel="icon" type="image/svg+xml" href="/logo-sisumepe.svg">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -3950,10 +3950,15 @@ async function previewRecEqPDF(silent){
   if(termoTipoAtivo !== 'recEquip') return;
   const err = document.getElementById('reqErr');
   if(err) err.classList.add('hidden');
-  const rec = getRecEqFormData();
+  let rec = getRecEqFormData();
   if(!rec.equipamentos.some(e=>e.numero)){
     if(!silent && err){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
-    return;
+    if(silent){
+      // preview com placeholder mesmo sem dados
+      rec = { ...rec, equipamentos: [{ numero: '—', danificado: false, checks: {} }], nomeMonitorado: rec.nomeMonitorado || '—' };
+    } else {
+      return;
+    }
   }
   const status = document.getElementById('reqPreviewStatus');
   try{
@@ -4253,10 +4258,14 @@ async function previewEnderecoPDF(silent){
   if(termoTipoAtivo !== 'endereco') return;
   const err = document.getElementById('endErr');
   if(err) err.classList.add('hidden');
-  const rec = getEnderecoFormData();
+  let rec = getEnderecoFormData();
   if(!rec.nome){
     if(!silent && err){ err.textContent = '⚠️ Informe o nome da pessoa para visualizar'; err.classList.remove('hidden'); }
-    return;
+    if(silent){
+      rec = { ...rec, nome: rec.nome || '—' };
+    } else {
+      return;
+    }
   }
   const status = document.getElementById('endPreviewStatus');
   try{
@@ -4375,10 +4384,14 @@ async function previewTermoRecPDF(silent){
   if(termoTipoAtivo !== 'recolhimento') return;
   const err = document.getElementById('termoRecErr');
   if(err) err.classList.add('hidden');
-  const rec = getRecFormData();
+  let rec = getRecFormData();
   if(!rec.equipamentos.some(e=>e.numero)){
     if(!silent && err){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
-    return;
+    if(silent){
+      rec = { ...rec, equipamentos: [{ numero: '—', danificado: false, checks: {} }] };
+    } else {
+      return;
+    }
   }
   const status = document.getElementById('termoRecPreviewStatus');
   try{
@@ -4771,8 +4784,15 @@ function scheduleAtivPreview(now){
 async function previewAtivacaoPDF(silent){
   if(termoTipoAtivo!=='ativacao') return;
   const err=document.getElementById('ativErr'); if(err) err.classList.add('hidden');
-  const dados=getAtivacaoFormData();
-  if(!dados.nomeMonitorado){ if(!silent && err){ err.textContent='⚠️ Informe Nome do monitorado para visualizar'; err.classList.remove('hidden'); } return; }
+  let dados=getAtivacaoFormData();
+  if(!dados.nomeMonitorado){
+    if(!silent && err){ err.textContent='⚠️ Informe Nome do monitorado para visualizar'; err.classList.remove('hidden'); }
+    if(silent){
+      dados = { ...dados, nomeMonitorado: dados.nomeMonitorado || '—', nomeMae: dados.nomeMae || '—', processo: dados.processo || '—', vara: dados.vara || '—', sexo: dados.sexo || '—', dataNascimento: dados.dataNascimento || '', religiao: dados.religiao || '—' };
+    } else {
+      return;
+    }
+  }
   const status=document.getElementById('ativPreviewStatus');
   try{
     if(status) status.textContent=silent?'⏳ atualizando...':'';
