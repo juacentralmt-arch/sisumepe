@@ -1260,6 +1260,32 @@
         </div>
         <div id="estHistResult" class="mt-3 hidden"></div>
       </div>
+      <!-- CHAT IA ESTOQUE (on-prem) -->
+      <div class="card p-5 mt-4 border-2 border-indigo-100">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-display font-bold text-sm">🤖 Chat IA — Estoque <span class="text-[11px] font-normal text-slate-500 ml-1">pergunte em linguagem natural (on-prem)</span></h3>
+          <span class="text-[11px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full font-bold">100% local</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Ex: “saldo TZPR04 UMEPE Juazeiro CE01”, “histórico 2026-09-24”, “seriais disponíveis”, “ranking CINTA”, “estoque baixo”, “últimas movimentações”, “buscar serial 1234567890”</p>
+        <div id="estIAQuick" class="flex flex-wrap gap-1.5 mb-3">
+          <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">saldo total CE01</button>
+          <button onclick="estIAAsk('saldo TZPR04 UMEPE Juazeiro CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">saldo TZPR04 UMEPE</button>
+          <button onclick="estIAAsk('histórico 2026-09-24')" class="btn btn-ghost text-[11px] px-2.5 py-1">histórico hoje</button>
+          <button onclick="estIAAsk('seriais TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">seriais</button>
+          <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">ranking CINTA</button>
+          <button onclick="estIAAsk('estoque baixo')" class="btn btn-ghost text-[11px] px-2.5 py-1">estoque baixo</button>
+          <button onclick="estIAAsk('últimas movimentações')" class="btn btn-ghost text-[11px] px-2.5 py-1">movimentações</button>
+          <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">ajuda</button>
+        </div>
+        <div id="estIAMessages" class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-[280px] overflow-y-auto space-y-2 text-sm">
+          <div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-slate-700 max-w-[85%]">Olá! Sou a IA do estoque (100% on-prem). Pergunte em linguagem natural — ex: “saldo TZPR04 em UMEPE Juazeiro CE01” ou “histórico 2026-09-24 UMEPE Juazeiro”.</div></div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <input id="estIAInput" placeholder="Digite seu comando... (Enter para enviar)" class="inp flex-1 text-sm" onkeydown="if(event.key==='Enter') estIASend()">
+          <button onclick="estIASend()" class="btn btn-primary text-sm px-5">Enviar</button>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1.5">Nenhum dado sai do servidor — parsing determinístico local.</p>
+      </div>
     </section>
 
     <!-- VISAO 360 -->
@@ -6550,6 +6576,69 @@ async function exportHistoricoCSV(){
     const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
     const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-historico-'+estoqueContratoAtivo+(unidade?'-'+unidade.replace(/\s+/g,'_'):'-detalhado')+'-'+data+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
   }catch(e){ toast('⚠️ '+e.message); }
+}
+// --- CHAT IA ESTOQUE (on-prem) ---
+function estIAAsk(q){ const el=document.getElementById('estIAInput'); if(el){ el.value=q; estIASend(); } }
+function estIAAppend(who, text){
+  const box=document.getElementById('estIAMessages'); if(!box) return;
+  const isUser=who==='user';
+  const avatar=isUser?`<span class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs shrink-0">👤</span>`:`<span class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span>`;
+  const bubble=isUser?`bg-indigo-600 text-white rounded-2xl rounded-tr-sm`:`bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm`;
+  const html=`<div class="flex gap-2 ${isUser?'justify-end':''}">${!isUser?avatar:''}<div class="${bubble} px-3 py-2 text-xs max-w-[85%] whitespace-pre-wrap break-words">${esc(text)}</div>${isUser?avatar:''}</div>`;
+  box.insertAdjacentHTML('beforeend', html);
+  box.scrollTop=box.scrollHeight;
+}
+function estIARenderData(data){
+  if(!data) return '';
+  try{
+    if(data.itens && Array.isArray(data.itens)){
+      const rows=data.itens.slice(0,20);
+      if(rows[0] && rows[0].unidade!==undefined){
+        const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+        const unidades=[...new Set(rows.map(r=>r.unidade))].slice(0,6);
+        let html='<div class="mt-2 overflow-x-auto"><table class="min-w-full text-[11px] bg-white rounded-lg overflow-hidden border"><thead class="bg-slate-50"><tr><th class="text-left py-1.5 px-2">Unidade</th>'+mats.map(m=>`<th class="text-center py-1.5 px-2">${m}</th>`).join('')+'</tr></thead><tbody>';
+        unidades.forEach(u=>{ html+='<tr class="border-t"><td class="py-1 px-2 font-semibold">'+esc(u)+'</td>'+mats.map(m=>{ const r=rows.find(x=>String(x.unidade)===u && String(x.material)===m); return '<td class="text-center py-1 px-2">'+(r?r.saldo:0)+'</td>'; }).join('')+'</tr>'; });
+        html+='</tbody></table></div>';
+        return html;
+      }
+    }
+    if(data.movs && Array.isArray(data.movs)){
+      let html='<div class="mt-2 space-y-1">';
+      data.movs.slice(0,8).forEach(m=>{ html+=`<div class="text-[11px] bg-white border rounded-lg p-2 flex justify-between"><span><b>${esc(m.material)}</b> ${esc(m.tipo)} ${m.qtd} em ${esc(m.unidade||'')} ${m.unidadeDestino?'→ '+esc(m.unidadeDestino):''}</span><span class="text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')}</span></div>`; });
+      html+='</div>';
+      return html;
+    }
+    if(data.ranking){
+      let html='<div class="mt-2 bg-white border rounded-lg p-2 text-[11px]">'+data.ranking.map((r,i)=>`<div class="flex justify-between ${i===0?'font-bold text-indigo-700':''}"><span>${i+1}. ${esc(r.unidade)}</span><span>${r.saldo}</span></div>`).join('')+'</div>';
+      return html;
+    }
+  }catch(e){}
+  return '';
+}
+async function estIASend(){
+  const input=document.getElementById('estIAInput'); if(!input) return;
+  const q=String(input.value||'').trim(); if(!q) return;
+  estIAAppend('user', q);
+  input.value='';
+  const box=document.getElementById('estIAMessages');
+  const loadingId='estIA-loading-'+Date.now();
+  box.insertAdjacentHTML('beforeend', `<div id="${loadingId}" class="flex gap-2"><span class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-slate-400">pensando…</div></div>`);
+  box.scrollTop=box.scrollHeight;
+  try{
+    const r=await api('/api/estoque/ia', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: q }) });
+    document.getElementById(loadingId)?.remove();
+    estIAAppend('bot', r.text||JSON.stringify(r,null,2));
+    const dataHtml=estIARenderData(r.data);
+    if(dataHtml){ const b=document.getElementById('estIAMessages'); b.insertAdjacentHTML('beforeend', `<div class="ml-9">${dataHtml}</div>`); b.scrollTop=b.scrollHeight; }
+    if(r.suggestions && r.suggestions.length){
+      const b=document.getElementById('estIAMessages');
+      b.insertAdjacentHTML('beforeend', `<div class="ml-9 flex flex-wrap gap-1 mt-1">${r.suggestions.slice(0,5).map(s=>`<button onclick="estIAAsk(${JSON.stringify(s)})" class="text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100">${esc(s)}</button>`).join('')}</div>`);
+      b.scrollTop=b.scrollHeight;
+    }
+  }catch(e){
+    document.getElementById(loadingId)?.remove();
+    estIAAppend('bot', '⚠️ '+e.message);
+  }
 }
 
 // --- CHAT DA EQUIPE ---
