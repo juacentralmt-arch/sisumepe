@@ -94,6 +94,7 @@ app.use(require('./src/routes/agenda'));
 app.use(require('./src/routes/termos'));
 app.use(require('./src/routes/ativacoes'));
 app.use(require('./src/routes/pdfTools'));
+app.use(require('./src/routes/estoque'));
 app.use(require('./src/routes/psico'));
 app.use(require('./src/routes/scanner'));
 

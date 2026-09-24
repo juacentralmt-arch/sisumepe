@@ -142,6 +142,9 @@
     <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 12 14 12"/></svg>
       Auditoria <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
+    <button data-tab="estoque" onclick="go('estoque')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Estoque <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
   </nav>
   <div class="p-4">
     <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(139,92,246,.15));border:1px solid rgba(255,255,255,.08)">
@@ -180,6 +183,7 @@
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
       <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Auditoria</button>
+      <button data-tab="estoque" onclick="go('estoque')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque</button>
     </div>
   </header>
 
@@ -1166,6 +1170,48 @@
       <div id="auditDetail" class="hidden card p-4 mt-4"></div>
     </section>
 
+    <!-- ESTOQUE (TÉCNICO) -->
+    <section id="tab-estoque" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Estoque por contrato</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04, UPR04, FONTE04, CINTA, TRAVAS por CE01/CE02 — com relatórios e auditoria</p>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <div class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+          <button id="estoqueBtnCE01" onclick="switchEstoqueContrato('CE01')" class="btn text-xs px-4 py-2">CE01</button>
+          <button id="estoqueBtnCE02" onclick="switchEstoqueContrato('CE02')" class="btn text-xs px-4 py-2">CE02</button>
+        </div>
+        <button onclick="loadEstoque()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
+        <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório completo</button>
+        <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF Auditoria</button>
+      </div>
+      <div id="estoqueCards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
+      <div class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque</h3>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
+            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
+            <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select></div>
+            <div><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="1000" placeholder="Ex: 10" class="inp mt-1"></div>
+          </div>
+          <label class="lbl mt-2.5 block">MOTIVO *</label>
+          <input id="estMotivo" placeholder="Ex: Recebimento lote 123, transferência p/ CE02, ajuste inventário" class="inp mt-1">
+          <button onclick="movimentarEstoque()" class="btn btn-primary w-full py-2.5 text-sm mt-3">✓ Confirmar movimentação</button>
+          <p id="estErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
+          <p class="text-[11px] text-slate-400 mt-2">Toda movimentação gera auditoria com usuário, data e saldo antes/depois.</p>
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Últimas movimentações <span id="estMovCount" class="text-xs font-normal text-slate-400"></span></h3>
+          <div id="estMovList" class="space-y-2 max-h-[380px] overflow-y-auto"></div>
+          <h3 class="font-display font-bold text-sm mt-4 mb-2">📜 Auditoria de estoque</h3>
+          <div id="estAuditList" class="space-y-1.5 max-h-[260px] overflow-y-auto text-xs"></div>
+        </div>
+      </div>
+      <div id="estRelatorio" class="hidden card p-5 mt-4"></div>
+    </section>
+
     <!-- VISAO 360 -->
     <section id="tab-visao" class="hidden fade">
       <div class="mb-4">
@@ -1789,9 +1835,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios', 'auditoria'],
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios', 'auditoria', 'estoque'],
   psico: ['fila', 'checkin', 'psico', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'estoque', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
@@ -1820,7 +1866,7 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico','auditoria'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico','auditoria','estoque'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
@@ -1831,6 +1877,7 @@ function go(tab){
   if(tab==='psico') loadPsi();
   if(tab==='usuarios') loadUsersAdmin();
   if(tab==='auditoria') loadAuditoria();
+  if(tab==='estoque') loadEstoque();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
@@ -6140,6 +6187,132 @@ function exportAuditoriaCSV(){
   const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='auditoria-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+// --- ESTOQUE (TÉCNICO) ---
+let estoqueContratoAtivo='CE01';
+let estoqueCache=[], estoqueMovCache=[];
+function switchEstoqueContrato(c){
+  estoqueContratoAtivo = (c==='CE02'?'CE02':'CE01');
+  document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
+  document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
+  document.getElementById('estContrato').value=estoqueContratoAtivo;
+  renderEstoque();
+  loadEstoqueMov();
+}
+async function loadEstoque(){
+  try{
+    const all=await api('/api/estoque');
+    estoqueCache=all;
+    renderEstoque();
+    loadEstoqueMov();
+    loadEstoqueAudit();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+function renderEstoque(){
+  const cont=document.getElementById('estoqueCards');
+  if(!cont) return;
+  const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+  const icons={ TZPR04:'📡', UPR04:'📟', FONTE04:'🔌', CINTA:'🩹', TRAVAS:'🔒' };
+  const list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
+  cont.innerHTML = mats.map(m=>{
+    const row=list.find(x=> String(x.material).toUpperCase()===m);
+    const saldo=row?Number(row.saldo||0):0;
+    const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
+    const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+    return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">unidades</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
+  }).join('');
+  // atualiza botões do seletor
+  document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
+  document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
+}
+async function loadEstoqueMov(){
+  try{
+    const list=await api('/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50');
+    estoqueMovCache=list;
+    document.getElementById('estMovCount').textContent=`${list.length} movimentações`;
+    document.getElementById('estMovList').innerHTML = list.length ? list.map(m=>{
+      const isEntrada=m.tipo==='entrada';
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> • <span class="text-slate-500">${esc(m.motivo||'')}</span></span><span class="text-[11px] text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}</span></div>`;
+    }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
+  }catch(e){ document.getElementById('estMovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
+}
+async function loadEstoqueAudit(){
+  try{
+    const r=await api('/api/audit/search?kind=estoque&limit=50');
+    const list=r.items||r||[];
+    document.getElementById('estAuditList').innerHTML = list.length ? list.map(a=>{
+      const dt=new Date(a.at).toLocaleString('pt-BR');
+      return `<div class="flex gap-2"><span class="text-slate-500 whitespace-nowrap">${dt}</span><span class="flex-1"><b>${esc(a.byUser||'')}</b> ${esc(a.action)} <b>${esc(a.ref||'')}</b><br><span class="text-slate-500">${esc(a.summary||'')}</span> ${a.changes&&a.changes.length?`<br><span class="text-[11px]">${a.changes.map(c=>`${esc(c.label)}: ${esc(String(c.from))} → ${esc(String(c.to))}`).join(' | ')}</span>`:''}</span></div>`;
+    }).join('') : '<p class="text-xs text-slate-400">Sem auditoria</p>';
+  }catch(e){ document.getElementById('estAuditList').innerHTML=''; }
+}
+function quickEstoque(material, delta){
+  document.getElementById('estContrato').value=estoqueContratoAtivo;
+  document.getElementById('estMaterial').value=material;
+  document.getElementById('estTipo').value= delta>0?'entrada':'saida';
+  document.getElementById('estQtd').value=Math.abs(delta);
+  document.getElementById('estMotivo').focus();
+}
+async function movimentarEstoque(){
+  const err=document.getElementById('estErr');
+  err.classList.add('hidden');
+  const contrato=document.getElementById('estContrato').value;
+  const material=document.getElementById('estMaterial').value;
+  const tipo=document.getElementById('estTipo').value;
+  const qtd=Number(document.getElementById('estQtd').value);
+  const motivo=document.getElementById('estMotivo').value.trim();
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade', err.classList.remove('hidden'));
+  if(!motivo) return (err.textContent='⚠️ Informe o motivo', err.classList.remove('hidden'));
+  const delta = tipo==='saida' ? -Math.abs(qtd) : Math.abs(qtd);
+  try{
+    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, material, qtd: delta, motivo }) });
+    toast('✅ Estoque atualizado: '+material+' '+(delta>0?'+':'')+delta);
+    document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value='';
+    loadEstoque();
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function gerarRelatorioEstoque(){
+  const contrato=estoqueContratoAtivo;
+  const from=document.getElementById('estRelFrom')?.value||'';
+  const to=document.getElementById('estRelTo')?.value||'';
+  try{
+    const params=new URLSearchParams({ contrato, from, to });
+    const data=await api('/api/estoque/relatorio?'+params.toString());
+    const el=document.getElementById('estRelatorio');
+    el.classList.remove('hidden');
+    const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    const saldos=data.estoque||[];
+    const totalGeral=saldos.reduce((s,x)=>s+Number(x.saldo||0),0);
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(contrato)} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('estRelatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
+    <div class="grid grid-cols-5 gap-2 mb-3">${mats.map(m=>{ const r=saldos.find(x=> String(x.material).toUpperCase()===m); const v=r?Number(r.saldo||0):0; return `<div class="text-center border rounded-xl p-2.5 bg-white"><b class="text-xs">${m}</b><br><b class="text-lg">${v}</b></div>`; }).join('')}<div class="text-center border rounded-xl p-2.5 bg-indigo-50 col-span-5"><b>TOTAL GERAL: ${totalGeral} unidades</b> • gerado em ${new Date(data.geradoEm).toLocaleString('pt-BR')}</div></div>
+    <div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Data</th><th>Contrato</th><th>Material</th><th>Tipo</th><th>Qtd</th><th>Saldo</th><th>Motivo</th><th>Usuário</th></tr></thead><tbody>${(data.movimentacoes||[]).map(m=>`<tr class="border-b"><td class="py-1.5 px-2">${new Date(m.createdAt).toLocaleString('pt-BR')}</td><td class="py-1.5 px-2">${esc(m.contrato)}</td><td class="py-1.5 px-2 font-bold">${esc(m.material)}</td><td class="py-1.5 px-2"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${esc(m.tipo)}</span></td><td class="py-1.5 px-2 font-bold">${m.qtd}</td><td class="py-1.5 px-2">${m.saldoAntes}→${m.saldoDepois}</td><td class="py-1.5 px-2">${esc(m.motivo||'')}</td><td class="py-1.5 px-2">${esc(m.userName||m.user||'')}</td></tr>`).join('')||'<tr><td colspan="8" class="text-center py-4 text-slate-400">Sem movimentações no período</td></tr>'}</tbody></table></div>
+    <div class="mt-3 flex gap-2"><button onclick="exportEstoqueRelatorioCSV()" class="btn btn-ghost text-xs px-3 py-1.5">⬇ CSV</button><button onclick="window.print()" class="btn btn-ghost text-xs px-3 py-1.5">🖨 Imprimir</button></div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+function exportEstoqueCSV(){
+  if(!estoqueCache.length) return toast('⚠️ Nada para exportar');
+  const rows=[['Contrato','Material','Saldo']];
+  estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo).forEach(e=> rows.push([e.contrato, e.material, e.saldo]));
+  const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+estoqueContratoAtivo+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+function exportEstoqueRelatorioCSV(){
+  const contrato=estoqueContratoAtivo;
+  const rows=[['Data','Contrato','Material','Tipo','Qtd','Saldo Antes','Saldo Depois','Motivo','Usuário']];
+  (estoqueMovCache||[]).forEach(m=> rows.push([new Date(m.createdAt).toLocaleString('pt-BR'), m.contrato, m.material, m.tipo, m.qtd, m.saldoAntes, m.saldoDepois, m.motivo, m.userName||m.user]));
+  const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-relatorio-'+contrato+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+async function exportEstoquePDF(){
+  try{
+    const data=await api('/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo));
+    const w=window.open('','_blank');
+    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque ${estoqueContratoAtivo}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque ${estoqueContratoAtivo} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
+    w.document.write(html); w.document.close();
+  }catch(e){ toast('⚠️ '+e.message); }
 }
 
 // --- CHAT DA EQUIPE ---

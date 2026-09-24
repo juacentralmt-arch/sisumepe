@@ -63,9 +63,21 @@ function loadFile() {
     if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
     if (!Array.isArray(mem.termos)) mem.termos = [];
     if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+    if (!Array.isArray(mem.estoque)) mem.estoque = [];
+    if (!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
+    if (!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
+    if (!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
+    // inicializa estoque padrão CE01/CE02 x 5 materiais
+    if(!mem.estoque.length){
+      const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+      ['CE01','CE02'].forEach(c=> mats.forEach(m=> mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) ));
+      saveFile();
+    }
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1 };
+    const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    ['CE01','CE02'].forEach(c=> mats.forEach(m=> mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) ));
     return mem;
   }
 }
@@ -85,6 +97,14 @@ if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.ma
 if(!mem.googleTokens) mem.googleTokens = {};
 if(!mem.termos) mem.termos = [];
 if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+if(!Array.isArray(mem.estoque)) mem.estoque=[];
+if(!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
+if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
+if(!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
+if(mem.estoque && !mem.estoque.length){
+  const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+  ['CE01','CE02'].forEach(c=> mats.forEach(m=> { if(!mem.estoque.some(e=>e.contrato===c&&e.material===m)) mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }));
+}
 if(!Array.isArray(mem.psi)) mem.psi = [];
 if(!mem.seqPsi) mem.seqPsi = mem.psi.length ? Math.max(...mem.psi.map(x=>x.id))+1 : 1;
 
@@ -130,6 +150,12 @@ const TM = {
 const PSI = {
   id: 'id', user: 'user', kind: 'kind', personId: 'personid', personName: 'personname', grupoId: 'grupoid', data: 'data', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
+const EST = {
+  id: 'id', contrato: 'contrato', material: 'material', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
+};
+const ESTMOV = {
+  id: 'id', contrato: 'contrato', material: 'material', tipo: 'tipo', qtd: 'qtd', saldoAntes: 'saldoantes', saldoDepois: 'saldodepois', motivo: 'motivo', user: 'user', userName: 'username', createdAt: 'createdat'
+};
 function toApp(row, map) {
   if (!row) return null;
   const o = {};
@@ -147,6 +173,8 @@ const appA = r => toApp(r, A);
 const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.to, text: r.text, anexos: r.anexos || [], at: r.at });
 const appAG = r => toApp(r, AG);
 const appTM = r => toApp(r, TM);
+const appEST = r => toApp(r, EST);
+const appESTMOV = r => toApp(r, ESTMOV);
 
 // Fallback em memória (se a tabela sessions ainda não existir no Supabase)
 const memSessions = new Map();
@@ -649,6 +677,93 @@ const store = {
     async remove(id){
       if(MODE==='file'){ mem.psi=mem.psi.filter(x=>!eqi(x.id,id)); saveFile(); return; }
       try{ must(await supa.from('psi_records').delete().eq('id', Number(id)),'psi.remove'); }catch(e){ console.warn('psi.remove fallback', e.message); mem.psi=mem.psi.filter(x=>!eqi(x.id,id)); }
+    }
+  },
+
+  estoque: {
+    async all(){
+      if(MODE==='file') return mem.estoque;
+      try{ return must(await supa.from('estoque').select('*').order('contrato').order('material'), 'estoque.all').map(appEST); }catch(e){ console.warn('estoque.all fallback', e.message); return mem.estoque; }
+    },
+    async byContrato(contrato){
+      const all=await store.estoque.all();
+      return all.filter(e=> String(e.contrato).toUpperCase()===String(contrato||'').toUpperCase());
+    },
+    async get(contrato, material){
+      const all=await store.estoque.all();
+      return all.find(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase() && String(e.material).toUpperCase()===String(material).toUpperCase())||null;
+    },
+    async adjust({ contrato, material, qtd, motivo, user, userName }){
+      contrato=String(contrato||'').toUpperCase().trim();
+      material=String(material||'').toUpperCase().trim();
+      if(!['CE01','CE02'].includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
+      if(!['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'].includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
+      qtd=Number(qtd); if(!Number.isFinite(qtd) || qtd===0) throw Object.assign(new Error('Quantidade deve ser diferente de zero'),{status:400});
+      // garante linha existe
+      let row=await store.estoque.get(contrato, material);
+      if(!row){
+        // cria se não existe (file mode já tem, supabase pode não ter)
+        if(MODE==='file'){
+          row={ id: mem.seqEstoque++, contrato, material, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+          mem.estoque.push(row); saveFile();
+        } else {
+          try{
+            const r=must(await supa.from('estoque').insert({ contrato, material, saldo:0 }).select().single(),'estoque.insert');
+            row=appEST(r);
+          }catch(e){
+            row={ id: mem.seqEstoque++, contrato, material, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+            mem.estoque.push(row);
+          }
+        }
+      }
+      const saldoAntes=Number(row.saldo||0);
+      const saldoDepois=saldoAntes+qtd;
+      if(saldoDepois<0) throw Object.assign(new Error('Saldo insuficiente'),{status:400});
+      // atualiza saldo
+      if(MODE==='file'){
+        row.saldo=saldoDepois; row.updatedAt=new Date().toISOString(); saveFile();
+      } else {
+        try{
+          const r=must(await supa.from('estoque').update({ saldo: saldoDepois, updatedat: new Date().toISOString() }).eq('id', Number(row.id)).select().single(),'estoque.patch');
+          row=appEST(r);
+        }catch(e){
+          console.warn('estoque.patch fallback', e.message);
+          row.saldo=saldoDepois; row.updatedAt=new Date().toISOString();
+          const idx=mem.estoque.findIndex(x=>String(x.id)===String(row.id));
+          if(idx>=0) mem.estoque[idx]=row;
+        }
+      }
+      // registra movimentação
+      const mov={ contrato, material, tipo: qtd>0?'entrada':'saida', qtd: Math.abs(qtd), saldoAntes, saldoDepois, motivo: String(motivo||'').slice(0,300), user: String(user||''), userName: String(userName||''), createdAt: new Date().toISOString() };
+      if(MODE==='file'){
+        const m={ id: mem.seqEstoqueMov++, ...mov };
+        mem.estoqueMov.push(m); saveFile();
+        // auditoria geral
+        await store.audit.insert({ kind:'estoque', action: mov.tipo, personName: `${contrato} ${material}`, ticketId: null, ref: `${contrato}/${material} ${qtd>0?'+':''}${qtd}`, byUser: user, byName: userName, byRole: 'tecnico', summary: motivo, changes: [{ field:'saldo', label:'Saldo', from: String(saldoAntes), to: String(saldoDepois)}] });
+        return { row, mov: appESTMOV(m) };
+      } else {
+        try{
+          const r=must(await supa.from('estoque_mov').insert(toRow(mov, ESTMOV)).select().single(),'estoqueMov.insert');
+          await store.audit.insert({ kind:'estoque', action: mov.tipo, personName: `${contrato} ${material}`, ticketId: null, ref: `${contrato}/${material} ${qtd>0?'+':''}${qtd}`, byUser: user, byName: userName, byRole: 'tecnico', summary: motivo, changes: [{ field:'saldo', label:'Saldo', from: String(saldoAntes), to: String(saldoDepois)}] });
+          return { row, mov: appESTMOV(r) };
+        }catch(e){
+          console.warn('estoqueMov.insert fallback', e.message);
+          const m={ id: mem.seqEstoqueMov++, ...mov };
+          mem.estoqueMov.push(m); saveFile();
+          await store.audit.insert({ kind:'estoque', action: mov.tipo, personName: `${contrato} ${material}`, ticketId: null, ref: `${contrato}/${material} ${qtd>0?'+':''}${qtd}`, byUser: user, byName: userName, byRole: 'tecnico', summary: motivo, changes: [{ field:'saldo', label:'Saldo', from: String(saldoAntes), to: String(saldoDepois)}] });
+          return { row, mov: appESTMOV(m) };
+        }
+      }
+    }
+  },
+  estoqueMov: {
+    async all(){
+      if(MODE==='file') return [...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+      try{ return must(await supa.from('estoque_mov').select('*').order('createdat',{ascending:false}).limit(500),'estoqueMov.all').map(appESTMOV); }catch(e){ console.warn('estoqueMov.all fallback',e.message); return [...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); }
+    },
+    async byContrato(contrato){
+      const all=await store.estoqueMov.all();
+      return all.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
     }
   },
 
