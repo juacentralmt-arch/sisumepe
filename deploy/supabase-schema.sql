@@ -155,6 +155,33 @@ alter table termos add column if not exists dados jsonb default '{}'::jsonb;
 create index if not exists idx_termos_user on termos ("user");
 create index if not exists idx_termos_data on termos (dataenvio);
 
+-- Estoque por contrato (CE01/CE02) x material (TZPR04/UPR04/FONTE04/CINTA/TRAVAS)
+create table if not exists estoque (
+  id serial primary key,
+  contrato text not null,
+  material text not null,
+  saldo int not null default 0,
+  createdat timestamptz default now(),
+  updatedat timestamptz default now(),
+  unique(contrato, material)
+);
+create table if not exists estoque_mov (
+  id serial primary key,
+  contrato text not null,
+  material text not null,
+  tipo text not null, -- entrada/saida
+  qtd int not null,
+  saldoantes int not null,
+  saldodepois int not null,
+  motivo text default '',
+  "user" text default '',
+  username text default '',
+  createdat timestamptz default now()
+);
+create index if not exists idx_estoque_contrato on estoque (contrato);
+create index if not exists idx_estoque_mov_contrato on estoque_mov (contrato);
+create index if not exists idx_estoque_mov_data on estoque_mov (createdat);
+
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público
 -- =====================================================================
