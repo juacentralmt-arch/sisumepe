@@ -1173,34 +1173,72 @@
     <!-- ESTOQUE (TÉCNICO) -->
     <section id="tab-estoque" class="hidden fade">
       <div class="mb-4">
-        <h2 class="font-display font-bold text-xl">Estoque por contrato</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04, UPR04, FONTE04, CINTA, TRAVAS por CE01/CE02 — com relatórios e auditoria</p>
+        <h2 class="font-display font-bold text-xl">Estoque por contrato e unidade</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04 (lote por seriais 10 dígitos), UPR04, FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade</p>
       </div>
-      <div class="flex flex-wrap gap-2 mb-4">
+      <div class="flex flex-wrap gap-2 mb-3">
         <div class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
           <button id="estoqueBtnCE01" onclick="switchEstoqueContrato('CE01')" class="btn text-xs px-4 py-2">CE01</button>
           <button id="estoqueBtnCE02" onclick="switchEstoqueContrato('CE02')" class="btn text-xs px-4 py-2">CE02</button>
         </div>
+        <select id="estoqueUnidadeFiltro" onchange="switchEstoqueUnidade(this.value)" class="inp !w-auto text-xs py-2">
+          <option value="">Todas as unidades</option>
+          <option value="UMEPE Juazeiro">UMEPE Juazeiro</option>
+          <option value="UP-Juazeiro">UP-Juazeiro</option>
+          <option value="UP-Cariri">UP-Cariri</option>
+          <option value="UP-Crato">UP-Crato</option>
+          <option value="Fórum de Crato">Fórum de Crato</option>
+          <option value="Fórum de Jardim">Fórum de Jardim</option>
+        </select>
         <button onclick="loadEstoque()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
-        <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório completo</button>
+        <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
         <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
-        <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF Auditoria</button>
+        <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
       </div>
+      <div id="estoqueUnidadeResumo" class="hidden mb-3 text-xs"></div>
       <div id="estoqueCards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
+      <div id="estoquePorUnidade" class="hidden card p-4 mb-4"></div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
-          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque</h3>
+          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR</h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
-            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
+            <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
             <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select></div>
-            <div><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="1000" placeholder="Ex: 10" class="inp mt-1"></div>
+            <div class="col-span-2"><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEstSeriaisQtd()"></div>
+          </div>
+          <div id="estSeriaisWrap" class="hidden mt-2.5">
+            <label class="lbl flex items-center justify-between">SERIAIS TZPR04 (lote — 10 dígitos, um por linha / vírgula) * <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
+            <textarea id="estSeriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD)" class="inp mt-1 font-mono text-xs" oninput="syncEstSeriaisQtd()"></textarea>
+            <div class="flex gap-2 mt-2">
+              <label class="btn btn-ghost text-xs px-3 py-1.5 cursor-pointer">📎 Importar CSV <input type="file" accept=".csv,.txt" class="hidden" onchange="importSeriaisCSV(this)"></label>
+              <button onclick="document.getElementById('estSeriais').value=''; syncEstSeriaisQtd()" class="btn btn-ghost text-xs px-3 py-1.5">🗑 Limpar</button>
+            </div>
+            <div id="estSeriaisList" class="mt-2 flex flex-wrap gap-1 max-h-[120px] overflow-y-auto"></div>
           </div>
           <label class="lbl mt-2.5 block">MOTIVO *</label>
-          <input id="estMotivo" placeholder="Ex: Recebimento lote 123, transferência p/ CE02, ajuste inventário" class="inp mt-1">
-          <button onclick="movimentarEstoque()" class="btn btn-primary w-full py-2.5 text-sm mt-3">✓ Confirmar movimentação</button>
+          <input id="estMotivo" placeholder="Ex: Recebimento lote 123 em lote, ajuste inventário" class="inp mt-1">
+          <button onclick="movimentarEstoque()" class="btn btn-primary w-full py-2.5 text-sm mt-3">✓ Confirmar movimentação na unidade</button>
           <p id="estErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
-          <p class="text-[11px] text-slate-400 mt-2">Toda movimentação gera auditoria com usuário, data e saldo antes/depois.</p>
+          <div class="mt-4 border-t border-slate-100 pt-4">
+            <h4 class="font-bold text-xs mb-2">🔄 Transferir entre unidades (lote)</h4>
+            <div class="grid grid-cols-2 gap-2">
+              <div><label class="lbl">ORIGEM *</label><select id="estTransOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+              <div><label class="lbl">DESTINO *</label><select id="estTransDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+              <div class="col-span-2 grid grid-cols-2 gap-2">
+                <div><label class="lbl">MATERIAL *</label><select id="estTransMaterial" class="inp mt-1" onchange="toggleTransSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
+                <div><label class="lbl">QTD *</label><input id="estTransQtd" type="number" min="1" max="500" class="inp mt-1" oninput="syncTransSeriaisQtd()"></div>
+              </div>
+            </div>
+            <div id="estTransSeriaisWrap" class="hidden mt-2">
+              <label class="lbl flex justify-between">SERIAIS (lote) * <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
+              <textarea id="estTransSeriais" rows="3" placeholder="Cole seriais do lote" class="inp mt-1 font-mono text-xs" oninput="syncTransSeriaisQtd()"></textarea>
+            </div>
+            <input id="estTransMotivo" placeholder="Motivo (opcional)" class="inp mt-2">
+            <button onclick="transferirEstoque()" class="btn btn-ghost w-full py-2 text-xs mt-2 border">🔄 Transferir lote</button>
+            <p id="estTransErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
+          </div>
         </div>
         <div class="lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📋 Últimas movimentações <span id="estMovCount" class="text-xs font-normal text-slate-400"></span></h3>
@@ -1210,6 +1248,18 @@
         </div>
       </div>
       <div id="estRelatorio" class="hidden card p-5 mt-4"></div>
+      <div class="card p-5 mt-4">
+        <h3 class="font-display font-bold text-sm mb-2">📅 Histórico — estoque em determinada data por unidade</h3>
+        <p class="text-xs text-slate-500 mb-2">Selecione unidade + data para ver saldo reconstruído até 23:59 (por unidade ou total geral)</p>
+        <div class="flex flex-wrap gap-2">
+          <select id="estHistUnidade" class="inp !w-auto text-xs"><option value="">Todas (total geral)</option><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select>
+          <input id="estHistData" type="date" class="inp !w-auto">
+          <button onclick="mostrarEstoqueData()" class="btn btn-ghost text-xs px-3 py-2">👁 Ver na data</button>
+          <button onclick="mostrarEstoqueDataDetalha()" class="btn btn-ghost text-xs px-3 py-2">📊 Detalhado por unidade</button>
+          <button onclick="exportHistoricoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV histórico</button>
+        </div>
+        <div id="estHistResult" class="mt-3 hidden"></div>
+      </div>
     </section>
 
     <!-- VISAO 360 -->
@@ -6188,20 +6238,77 @@ function exportAuditoriaCSV(){
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='auditoria-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
-// --- ESTOQUE (TÉCNICO) ---
+// --- ESTOQUE (TÉCNICO) por unidade + lote TZPR ---
 let estoqueContratoAtivo='CE01';
+let estoqueUnidadeAtiva=''; // '' = todas
 let estoqueCache=[], estoqueMovCache=[];
+const UNIDADES_EST=['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
+function toggleEstSeriais(){
+  const mat=document.getElementById('estMaterial')?.value||'';
+  const wrap=document.getElementById('estSeriaisWrap');
+  if(wrap) wrap.classList.toggle('hidden', mat!=='TZPR04');
+  syncEstSeriaisQtd();
+}
+function toggleTransSeriais(){
+  const mat=document.getElementById('estTransMaterial')?.value||'';
+  const wrap=document.getElementById('estTransSeriaisWrap');
+  if(wrap) wrap.classList.toggle('hidden', mat!=='TZPR04');
+  syncTransSeriaisQtd();
+}
+function syncEstSeriaisQtd(){
+  const txt=document.getElementById('estSeriais')?.value||'';
+  const list=txt.split(/[\s,;\n]+/).map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
+  const cnt=document.getElementById('estSeriaisCount');
+  if(cnt) cnt.textContent=list.length+' seriais';
+  const qtdEl=document.getElementById('estQtd');
+  const mat=document.getElementById('estMaterial')?.value||'';
+  if(mat==='TZPR04' && list.length && (!qtdEl.value || Number(qtdEl.value)!==list.length)){
+    // auto-sincroniza QTD com lote colado (útil para lote grande)
+    // não força se usuário já digitou diferente, apenas sugere
+    if(!qtdEl.value || confirm('Ajustar QTD para '+list.length+' (quantidade de seriais detectados)?')) qtdEl.value=list.length;
+  }
+  const el=document.getElementById('estSeriaisList');
+  if(el) el.innerHTML = list.length ? list.slice(0,120).map(s=> `<span class="text-[11px] font-mono bg-white border border-slate-200 rounded-full px-2 py-0.5">${esc(s)}</span>`).join('') + (list.length>120?`<span class="text-[11px] text-slate-400">+${list.length-120}...</span>`:'') : `<span class="text-[11px] text-slate-400">0 seriais detectados — cole o lote</span>`;
+}
+function syncTransSeriaisQtd(){
+  const txt=document.getElementById('estTransSeriais')?.value||'';
+  const list=txt.split(/[\s,;\n]+/).map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
+  const cnt=document.getElementById('estTransSeriaisCount');
+  if(cnt) cnt.textContent=list.length+' seriais';
+  const qtdEl=document.getElementById('estTransQtd');
+  if(list.length && (!qtdEl.value || Number(qtdEl.value)!==list.length)){
+    if(!qtdEl.value || confirm('Ajustar QTD transferência para '+list.length+'?')) qtdEl.value=list.length;
+  }
+}
+function importSeriaisCSV(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const txt=String(e.target.result||'');
+    const cur=document.getElementById('estSeriais')?.value||'';
+    document.getElementById('estSeriais').value=(cur?cur+'\n':'')+txt;
+    syncEstSeriaisQtd();
+  };
+  r.readAsText(f); input.value='';
+}
 function switchEstoqueContrato(c){
   estoqueContratoAtivo = (c==='CE02'?'CE02':'CE01');
   document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
   document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
-  document.getElementById('estContrato').value=estoqueContratoAtivo;
+  const sel=document.getElementById('estContrato'); if(sel) sel.value=estoqueContratoAtivo;
+  renderEstoque();
+  loadEstoqueMov();
+}
+function switchEstoqueUnidade(u){
+  estoqueUnidadeAtiva = String(u||'');
+  const sel=document.getElementById('estoqueUnidadeFiltro'); if(sel) sel.value=estoqueUnidadeAtiva;
+  const formSel=document.getElementById('estUnidade'); if(formSel && estoqueUnidadeAtiva) formSel.value=estoqueUnidadeAtiva;
   renderEstoque();
   loadEstoqueMov();
 }
 async function loadEstoque(){
   try{
-    const all=await api('/api/estoque');
+    const all=await api('/api/estoque?contrato='+encodeURIComponent(estoqueContratoAtivo));
     estoqueCache=all;
     renderEstoque();
     loadEstoqueMov();
@@ -6210,29 +6317,68 @@ async function loadEstoque(){
 }
 function renderEstoque(){
   const cont=document.getElementById('estoqueCards');
+  const resumo=document.getElementById('estoqueUnidadeResumo');
+  const porUnidadeEl=document.getElementById('estoquePorUnidade');
   if(!cont) return;
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
   const icons={ TZPR04:'📡', UPR04:'📟', FONTE04:'🔌', CINTA:'🩹', TRAVAS:'🔒' };
-  const list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
-  cont.innerHTML = mats.map(m=>{
-    const row=list.find(x=> String(x.material).toUpperCase()===m);
-    const saldo=row?Number(row.saldo||0):0;
-    const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
-    const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
-    return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">unidades</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
-  }).join('');
-  // atualiza botões do seletor
+  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
+  if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
+  // se filtro Todas, mostrar agregado por material (soma unidades)
+  let agg=[];
+  if(!estoqueUnidadeAtiva){
+    agg=mats.map(m=>{
+      const rows=list.filter(x=> String(x.material).toUpperCase()===m);
+      const saldo=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
+      return { material:m, saldo, rows };
+    });
+    cont.innerHTML = agg.map(a=>{
+      const m=a.material; const saldo=a.saldo;
+      const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">total ${estoqueContratoAtivo}</p><p class="text-[10px] text-slate-400">${a.rows.length} unidades com estoque</p></div>`;
+    }).join('');
+    if(resumo) resumo.classList.add('hidden');
+    // tabela por unidade
+    if(porUnidadeEl){
+      porUnidadeEl.classList.remove('hidden');
+      const totalGeral=agg.reduce((s,a)=>s+a.saldo,0);
+      porUnidadeEl.innerHTML=`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">📍 Saldo por unidade — ${esc(estoqueContratoAtivo)} <span class="font-normal text-slate-500">Total geral: ${totalGeral}</span></h4><span class="text-[11px] text-slate-400">${UNIDADES_EST.length} localidades</span></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{
+        const rowMats=mats.map(m=>{
+          const r=list.find(x=> String(x.unidade)===u && String(x.material)===m);
+          const v=r?Number(r.saldo||0):0;
+          const cls=v===0?'text-slate-300':v<3?'text-amber-600 font-bold':'text-emerald-700 font-bold';
+          return `<td class="text-center py-1.5 px-2 ${cls}">${v}</td>`;
+        }).join('');
+        const tot=mats.reduce((s,m)=>{ const r=list.find(x=> String(x.unidade)===u && String(x.material)===m); return s+Number(r?r.saldo:0); },0);
+        return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${rowMats}<td class="text-center py-1.5 px-2 font-extrabold">${tot}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    }
+  } else {
+    cont.innerHTML = mats.map(m=>{
+      const row=list.find(x=> String(x.material).toUpperCase()===m);
+      const saldo=row?Number(row.saldo||0):0;
+      const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${esc(estoqueUnidadeAtiva)}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
+    }).join('');
+    if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${estoqueContratoAtivo}</span>`; }
+    if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
+  }
   document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
   document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
 }
 async function loadEstoqueMov(){
   try{
-    const list=await api('/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50');
+    let url='/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50';
+    if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
+    const list=await api(url);
     estoqueMovCache=list;
-    document.getElementById('estMovCount').textContent=`${list.length} movimentações`;
+    document.getElementById('estMovCount').textContent=`${list.length} movimentações${estoqueUnidadeAtiva?' em '+estoqueUnidadeAtiva:''}`;
     document.getElementById('estMovList').innerHTML = list.length ? list.map(m=>{
       const isEntrada=m.tipo==='entrada';
-      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> • <span class="text-slate-500">${esc(m.motivo||'')}</span></span><span class="text-[11px] text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}</span></div>`;
+      const unidadeTxt=esc(m.unidade||'') + (m.unidadeDestino ? ` → ${esc(m.unidadeDestino)}` : '');
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span><br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('estMovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
 }
@@ -6248,70 +6394,161 @@ async function loadEstoqueAudit(){
 }
 function quickEstoque(material, delta){
   document.getElementById('estContrato').value=estoqueContratoAtivo;
+  const uSel=document.getElementById('estUnidade'); if(uSel && estoqueUnidadeAtiva) uSel.value=estoqueUnidadeAtiva;
   document.getElementById('estMaterial').value=material;
+  toggleEstSeriais();
   document.getElementById('estTipo').value= delta>0?'entrada':'saida';
   document.getElementById('estQtd').value=Math.abs(delta);
   document.getElementById('estMotivo').focus();
+  const pr=document.getElementById('tab-estoque'); if(pr) pr.scrollIntoView({behavior:'smooth'});
 }
 async function movimentarEstoque(){
   const err=document.getElementById('estErr');
   err.classList.add('hidden');
   const contrato=document.getElementById('estContrato').value;
+  const unidade=document.getElementById('estUnidade').value;
   const material=document.getElementById('estMaterial').value;
   const tipo=document.getElementById('estTipo').value;
   const qtd=Number(document.getElementById('estQtd').value);
   const motivo=document.getElementById('estMotivo').value.trim();
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade', err.classList.remove('hidden'));
+  if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (lote até 500)', err.classList.remove('hidden'));
   if(!motivo) return (err.textContent='⚠️ Informe o motivo', err.classList.remove('hidden'));
   const delta = tipo==='saida' ? -Math.abs(qtd) : Math.abs(qtd);
+  let seriais=[];
+  if(material==='TZPR04'){
+    const txt=document.getElementById('estSeriais')?.value||'';
+    seriais=txt.split(/[\s,;\n]+/).map(s=> s.replace(/\D/g,'')).filter(s=> s.length===10);
+    if(seriais.length !== Math.abs(qtd)) return (err.textContent=`⚠️ TZPR04 lote exige ${Math.abs(qtd)} seriais de 10 dígitos (encontrado ${seriais.length}) — cole o lote completo`, err.classList.remove('hidden'));
+  }
   try{
-    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, material, qtd: delta, motivo }) });
-    toast('✅ Estoque atualizado: '+material+' '+(delta>0?'+':'')+delta);
-    document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value='';
+    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, unidade, material, qtd: delta, motivo, seriais }) });
+    toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:''));
+    document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const st=document.getElementById('estSeriais'); if(st) st.value=''; document.getElementById('estSeriaisList').innerHTML='';
+    loadEstoque();
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function transferirEstoque(){
+  const err=document.getElementById('estTransErr'); err.classList.add('hidden');
+  const contrato=estoqueContratoAtivo;
+  const unidadeOrigem=document.getElementById('estTransOrigem').value;
+  const unidadeDestino=document.getElementById('estTransDestino').value;
+  const material=document.getElementById('estTransMaterial').value;
+  const qtd=Number(document.getElementById('estTransQtd').value);
+  const motivo=document.getElementById('estTransMotivo').value.trim();
+  if(unidadeOrigem===unidadeDestino) return (err.textContent='⚠️ Origem e destino diferentes', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe QTD', err.classList.remove('hidden'));
+  let seriais=[];
+  if(material==='TZPR04'){
+    const txt=document.getElementById('estTransSeriais')?.value||'';
+    seriais=txt.split(/[\s,;\n]+/).map(s=> s.replace(/\D/g,'')).filter(s=> s.length===10);
+    if(seriais.length!==Math.abs(qtd)) return (err.textContent=`⚠️ TZPR04 exige ${qtd} seriais`, err.classList.remove('hidden'));
+  }
+  try{
+    await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais }) });
+    toast(`✅ Transferido ${qtd}x ${material} de ${unidadeOrigem} → ${unidadeDestino} (lote ${seriais.length||qtd})`);
+    document.getElementById('estTransQtd').value=''; document.getElementById('estTransSeriais').value='';
     loadEstoque();
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function gerarRelatorioEstoque(){
   const contrato=estoqueContratoAtivo;
+  const unidade=estoqueUnidadeAtiva;
   const from=document.getElementById('estRelFrom')?.value||'';
   const to=document.getElementById('estRelTo')?.value||'';
   try{
     const params=new URLSearchParams({ contrato, from, to });
+    if(unidade) params.set('unidade', unidade);
     const data=await api('/api/estoque/relatorio?'+params.toString());
     const el=document.getElementById('estRelatorio');
     el.classList.remove('hidden');
     const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
     const saldos=data.estoque||[];
     const totalGeral=saldos.reduce((s,x)=>s+Number(x.saldo||0),0);
-    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(contrato)} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('estRelatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
-    <div class="grid grid-cols-5 gap-2 mb-3">${mats.map(m=>{ const r=saldos.find(x=> String(x.material).toUpperCase()===m); const v=r?Number(r.saldo||0):0; return `<div class="text-center border rounded-xl p-2.5 bg-white"><b class="text-xs">${m}</b><br><b class="text-lg">${v}</b></div>`; }).join('')}<div class="text-center border rounded-xl p-2.5 bg-indigo-50 col-span-5"><b>TOTAL GERAL: ${totalGeral} unidades</b> • gerado em ${new Date(data.geradoEm).toLocaleString('pt-BR')}</div></div>
-    <div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Data</th><th>Contrato</th><th>Material</th><th>Tipo</th><th>Qtd</th><th>Saldo</th><th>Motivo</th><th>Usuário</th></tr></thead><tbody>${(data.movimentacoes||[]).map(m=>`<tr class="border-b"><td class="py-1.5 px-2">${new Date(m.createdAt).toLocaleString('pt-BR')}</td><td class="py-1.5 px-2">${esc(m.contrato)}</td><td class="py-1.5 px-2 font-bold">${esc(m.material)}</td><td class="py-1.5 px-2"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${esc(m.tipo)}</span></td><td class="py-1.5 px-2 font-bold">${m.qtd}</td><td class="py-1.5 px-2">${m.saldoAntes}→${m.saldoDepois}</td><td class="py-1.5 px-2">${esc(m.motivo||'')}</td><td class="py-1.5 px-2">${esc(m.userName||m.user||'')}</td></tr>`).join('')||'<tr><td colspan="8" class="text-center py-4 text-slate-400">Sem movimentações no período</td></tr>'}</tbody></table></div>
+    const tituloUnidade=unidade?` • ${esc(unidade)}`:' • todas as unidades';
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(contrato)}${tituloUnidade} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('estRelatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
+    <div class="grid grid-cols-5 gap-2 mb-3">${mats.map(m=>{
+      const rows=saldos.filter(x=> String(x.material).toUpperCase()===m);
+      const v=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
+      return `<div class="text-center border rounded-xl p-2.5 bg-white"><b class="text-xs">${m}</b><br><b class="text-lg">${v}</b>${!unidade?`<br><span class="text-[10px] text-slate-400">${rows.length} unid.</span>`:''}</div>`;
+    }).join('')}<div class="text-center border rounded-xl p-2.5 bg-indigo-50 col-span-5"><b>TOTAL GERAL: ${totalGeral} unidades</b> • gerado em ${new Date(data.geradoEm).toLocaleString('pt-BR')}</div></div>
+    ${!unidade?`<div class="mb-3 overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{ const row=saldos.filter(x=>String(x.unidade)===u); const cells=mats.map(m=>{ const r=row.find(x=>String(x.material)===m); return `<td class="text-center py-1.5 px-2">${r?r.saldo:0}</td>`; }).join(''); const tot=row.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`:''}
+    <div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Data</th><th>Contrato</th><th>Unidade</th><th>Material</th><th>Tipo</th><th>Qtd</th><th>Saldo</th><th>Motivo</th><th>Usuário</th></tr></thead><tbody>${(data.movimentacoes||[]).map(m=>`<tr class="border-b"><td class="py-1.5 px-2">${new Date(m.createdAt).toLocaleString('pt-BR')}</td><td class="py-1.5 px-2">${esc(m.contrato)}</td><td class="py-1.5 px-2">${esc(m.unidade||'')}${m.unidadeDestino?' → '+esc(m.unidadeDestino):''}</td><td class="py-1.5 px-2 font-bold">${esc(m.material)}</td><td class="py-1.5 px-2"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${esc(m.tipo)}</span></td><td class="py-1.5 px-2 font-bold">${m.qtd}</td><td class="py-1.5 px-2">${m.saldoAntes}→${m.saldoDepois}</td><td class="py-1.5 px-2">${esc(m.motivo||'')} ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,2).map(esc).join(', ')}${m.seriais.length>2?' +'+(m.seriais.length-2):''}</span>`:''}</td><td class="py-1.5 px-2">${esc(m.userName||m.user||'')}</td></tr>`).join('')||'<tr><td colspan="9" class="text-center py-4 text-slate-400">Sem movimentações no período</td></tr>'}</tbody></table></div>
     <div class="mt-3 flex gap-2"><button onclick="exportEstoqueRelatorioCSV()" class="btn btn-ghost text-xs px-3 py-1.5">⬇ CSV</button><button onclick="window.print()" class="btn btn-ghost text-xs px-3 py-1.5">🖨 Imprimir</button></div>`;
     el.scrollIntoView({behavior:'smooth'});
   }catch(e){ toast('⚠️ '+e.message); }
 }
 function exportEstoqueCSV(){
   if(!estoqueCache.length) return toast('⚠️ Nada para exportar');
-  const rows=[['Contrato','Material','Saldo']];
-  estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo).forEach(e=> rows.push([e.contrato, e.material, e.saldo]));
+  let rows=[['Contrato','Unidade','Material','Saldo']];
+  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
+  if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
+  list.forEach(e=> rows.push([e.contrato, e.unidade, e.material, e.saldo]));
   const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
-  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+estoqueContratoAtivo+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+estoqueContratoAtivo+(estoqueUnidadeAtiva?'-'+estoqueUnidadeAtiva.replace(/\s+/g,'_'):'-todas')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function exportEstoqueRelatorioCSV(){
   const contrato=estoqueContratoAtivo;
-  const rows=[['Data','Contrato','Material','Tipo','Qtd','Saldo Antes','Saldo Depois','Motivo','Usuário']];
-  (estoqueMovCache||[]).forEach(m=> rows.push([new Date(m.createdAt).toLocaleString('pt-BR'), m.contrato, m.material, m.tipo, m.qtd, m.saldoAntes, m.saldoDepois, m.motivo, m.userName||m.user]));
+  const rows=[['Data','Contrato','Unidade','Material','Tipo','Qtd','Saldo Antes','Saldo Depois','Motivo','Usuário','Seriais']];
+  (estoqueMovCache||[]).forEach(m=> rows.push([new Date(m.createdAt).toLocaleString('pt-BR'), m.contrato, m.unidade||'', m.material, m.tipo, m.qtd, m.saldoAntes, m.saldoDepois, m.motivo, m.userName||m.user, (m.seriais||[]).join(' | ')]));
   const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
-  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-relatorio-'+contrato+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-relatorio-'+contrato+(estoqueUnidadeAtiva?'-'+estoqueUnidadeAtiva.replace(/\s+/g,'_'):'')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 async function exportEstoquePDF(){
   try{
-    const data=await api('/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo));
+    let url='/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo);
+    if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
+    const data=await api(url);
     const w=window.open('','_blank');
-    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque ${estoqueContratoAtivo}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque ${estoqueContratoAtivo} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
+    const unidadeTxt=estoqueUnidadeAtiva?` • ${estoqueUnidadeAtiva}`:' • todas as unidades';
+    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque ${estoqueContratoAtivo}${unidadeTxt}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque ${estoqueContratoAtivo}${unidadeTxt} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Unidade</th><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.unidade}</td><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
     w.document.write(html); w.document.close();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function mostrarEstoqueData(){
+  const data=document.getElementById('estHistData')?.value;
+  const unidade=document.getElementById('estHistUnidade')?.value||'';
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    if(unidade) url+='&unidade='+encodeURIComponent(unidade);
+    const list=await api(url);
+    const el=document.getElementById('estHistResult');
+    el.classList.remove('hidden');
+    const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
+    const titulo=unidade?`${esc(unidade)} em ${new Date(data).toLocaleDateString('pt-BR')}`:`Total geral em ${new Date(data).toLocaleDateString('pt-BR')}`;
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${estoqueContratoAtivo})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${r.material==='TZPR04' && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function mostrarEstoqueDataDetalha(){
+  const data=document.getElementById('estHistData')?.value;
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data));
+    const el=document.getElementById('estHistResult');
+    el.classList.remove('hidden');
+    const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">Detalhado por unidade em ${new Date(data).toLocaleDateString('pt-BR')} (${estoqueContratoAtivo})</b><button onclick="exportHistoricoCSV()" class="text-xs text-slate-500">⬇ CSV</button></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{ const rows=list.filter(x=> String(x.unidade)===u); const cells=mats.map(m=>{ const r=rows.find(x=> String(x.material)===m); const v=r?r.saldo:0; const det=r&&r.seriais&&r.seriais.length?`<br><span class="text-[10px] font-mono text-slate-500">${r.seriais.length} seriais</span>`:''; return `<td class="text-center py-1.5 px-2">${v}${det}</td>`; }).join(''); const tot=rows.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function exportHistoricoCSV(){
+  const data=document.getElementById('estHistData')?.value;
+  const unidade=document.getElementById('estHistUnidade')?.value||'';
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    if(unidade) url+='&unidade='+encodeURIComponent(unidade);
+    else url='/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    const list=await api(url);
+    const rows=[['Contrato','Unidade','Material','Saldo','Seriais','Data']];
+    list.forEach(r=> rows.push([r.contrato, r.unidade||unidade||'TOTAL', r.material, r.saldo, (r.seriais||[]).join(' | '), r.data]));
+    const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+    const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+    const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-historico-'+estoqueContratoAtivo+(unidade?'-'+unidade.replace(/\s+/g,'_'):'-detalhado')+'-'+data+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
   }catch(e){ toast('⚠️ '+e.message); }
 }
 
