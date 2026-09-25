@@ -1174,7 +1174,7 @@
     <section id="tab-estoque" class="hidden fade">
       <div class="mb-4">
         <h2 class="font-display font-bold text-xl">Estoque por contrato e unidade</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04 (lote por seriais 10 dígitos), UPR04, FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade</p>
+        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade</p>
       </div>
       <div class="flex flex-wrap gap-2 mb-3">
         <div class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
@@ -1196,6 +1196,7 @@
         <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
       </div>
       <div id="estoqueUnidadeResumo" class="hidden mb-3 text-xs"></div>
+      <div id="estoqueAlertas" class="mb-3"></div>
       <div id="estoqueCards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
       <div id="estoquePorUnidade" class="hidden card p-4 mb-4"></div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
@@ -1208,9 +1209,9 @@
             <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select></div>
             <div class="col-span-2"><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEstSeriaisQtd()"></div>
           </div>
-          <div id="estSeriaisWrap" class="hidden mt-2.5">
-            <label class="lbl flex items-center justify-between">SERIAIS TZPR04 (lote — 10 dígitos, um por linha / vírgula) * <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
-            <textarea id="estSeriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD)" class="inp mt-1 font-mono text-xs" oninput="syncEstSeriaisQtd()"></textarea>
+          <div id="estSeriaisWrap" class="mt-2.5">
+            <label class="lbl flex items-center justify-between">SERIAIS TZPR04/UPR04 (lote — 10 dígitos, um por linha / vírgula) * <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
+            <textarea id="estSeriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD — deixe QTD vazio para auto-preencher)" class="inp mt-1 font-mono text-xs" oninput="syncEstSeriaisQtd()"></textarea>
             <div class="flex gap-2 mt-2">
               <label class="btn btn-ghost text-xs px-3 py-1.5 cursor-pointer">📎 Importar CSV <input type="file" accept=".csv,.txt" class="hidden" onchange="importSeriaisCSV(this)"></label>
               <button onclick="document.getElementById('estSeriais').value=''; syncEstSeriaisQtd()" class="btn btn-ghost text-xs px-3 py-1.5">🗑 Limpar</button>
@@ -1231,9 +1232,9 @@
                 <div><label class="lbl">QTD *</label><input id="estTransQtd" type="number" min="1" max="500" class="inp mt-1" oninput="syncTransSeriaisQtd()"></div>
               </div>
             </div>
-            <div id="estTransSeriaisWrap" class="hidden mt-2">
-              <label class="lbl flex justify-between">SERIAIS (lote) * <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
-              <textarea id="estTransSeriais" rows="3" placeholder="Cole seriais do lote" class="inp mt-1 font-mono text-xs" oninput="syncTransSeriaisQtd()"></textarea>
+            <div id="estTransSeriaisWrap" class="mt-2">
+              <label class="lbl flex justify-between">SERIAIS TZPR04/UPR04 (lote) * <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
+              <textarea id="estTransSeriais" rows="3" placeholder="Cole seriais do lote (10 dígitos cada)" class="inp mt-1 font-mono text-xs" oninput="syncTransSeriaisQtd()"></textarea>
             </div>
             <input id="estTransMotivo" placeholder="Motivo (opcional)" class="inp mt-2">
             <button onclick="transferirEstoque()" class="btn btn-ghost w-full py-2 text-xs mt-2 border">🔄 Transferir lote</button>
@@ -6266,44 +6267,68 @@ function exportAuditoriaCSV(){
 }
 // --- ESTOQUE (TÉCNICO) por unidade + lote TZPR ---
 let estoqueContratoAtivo='CE01';
-let estoqueUnidadeAtiva=''; // '' = todas
+let estoqueUnidadeAtiva='UMEPE Juazeiro'; // pré-selecionado
 let estoqueCache=[], estoqueMovCache=[];
 const UNIDADES_EST=['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
+const LIMITES_EST={ TZPR04:5, UPR04:5, FONTE04:5, CINTA:10, TRAVAS:20 };
+const MATERIAIS_SERIAL_EST=['TZPR04','UPR04'];
+function temSerialEst(m){ return MATERIAIS_SERIAL_EST.includes(String(m||'').toUpperCase()); }
 function toggleEstSeriais(){
   const mat=document.getElementById('estMaterial')?.value||'';
   const wrap=document.getElementById('estSeriaisWrap');
-  if(wrap) wrap.classList.toggle('hidden', mat!=='TZPR04');
+  if(wrap) wrap.classList.toggle('hidden', !temSerialEst(mat));
   syncEstSeriaisQtd();
 }
 function toggleTransSeriais(){
   const mat=document.getElementById('estTransMaterial')?.value||'';
   const wrap=document.getElementById('estTransSeriaisWrap');
-  if(wrap) wrap.classList.toggle('hidden', mat!=='TZPR04');
+  if(wrap) wrap.classList.toggle('hidden', !temSerialEst(mat));
   syncTransSeriaisQtd();
+}
+function parseSeriais(txt){
+  const s=String(txt||'');
+  // captura exatamente 10 dígitos contínuos, ignora formatação (espaços, vírgulas, quebras, traços)
+  // usa \b para evitar pegar 10 dígitos dentro de número maior (ex: 11 dígitos)
+  const m=s.match(/\b\d{10}\b/g);
+  if(m && m.length) return m;
+  // fallback: extrai sequências de 10 dígitos mesmo sem borda (ex: colado sem separador claro)
+  const m2=s.match(/\d{10}/g);
+  return m2||[];
 }
 function syncEstSeriaisQtd(){
   const txt=document.getElementById('estSeriais')?.value||'';
-  const list=txt.split(/[\s,;\n]+/).map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
+  const list=parseSeriais(txt);
   const cnt=document.getElementById('estSeriaisCount');
   if(cnt) cnt.textContent=list.length+' seriais';
   const qtdEl=document.getElementById('estQtd');
   const mat=document.getElementById('estMaterial')?.value||'';
-  if(mat==='TZPR04' && list.length && (!qtdEl.value || Number(qtdEl.value)!==list.length)){
-    // auto-sincroniza QTD com lote colado (útil para lote grande)
-    // não força se usuário já digitou diferente, apenas sugere
-    if(!qtdEl.value || confirm('Ajustar QTD para '+list.length+' (quantidade de seriais detectados)?')) qtdEl.value=list.length;
+  if(temSerialEst(mat) && list.length && !qtdEl.value){
+    qtdEl.value=list.length;
+  }
+  // se já tem QTD e lote tem tamanho diferente, apenas avisa visualmente (sem confirm)
+  if(temSerialEst(mat) && list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
+    if(cnt) cnt.textContent=list.length+' seriais ⚠️ diverge de QTD='+qtdEl.value;
+    cnt?.classList.add('text-amber-600');
+  } else {
+    cnt?.classList.remove('text-amber-600');
   }
   const el=document.getElementById('estSeriaisList');
-  if(el) el.innerHTML = list.length ? list.slice(0,120).map(s=> `<span class="text-[11px] font-mono bg-white border border-slate-200 rounded-full px-2 py-0.5">${esc(s)}</span>`).join('') + (list.length>120?`<span class="text-[11px] text-slate-400">+${list.length-120}...</span>`:'') : `<span class="text-[11px] text-slate-400">0 seriais detectados — cole o lote</span>`;
+  if(el) el.innerHTML = list.length ? list.slice(0,120).map(s=> `<span class="text-[11px] font-mono bg-white border border-slate-200 rounded-full px-2 py-0.5">${esc(s)}</span>`).join('') + (list.length>120?`<span class="text-[11px] text-slate-400">+${list.length-120}...</span>`:'') : `<span class="text-[11px] text-slate-400">0 seriais detectados — cole o lote (10 dígitos cada)</span>`;
 }
 function syncTransSeriaisQtd(){
   const txt=document.getElementById('estTransSeriais')?.value||'';
-  const list=txt.split(/[\s,;\n]+/).map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
+  const list=parseSeriais(txt);
   const cnt=document.getElementById('estTransSeriaisCount');
   if(cnt) cnt.textContent=list.length+' seriais';
   const qtdEl=document.getElementById('estTransQtd');
-  if(list.length && (!qtdEl.value || Number(qtdEl.value)!==list.length)){
-    if(!qtdEl.value || confirm('Ajustar QTD transferência para '+list.length+'?')) qtdEl.value=list.length;
+  if(list.length && !qtdEl.value){
+    qtdEl.value=list.length;
+  }
+  if(list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
+    if(cnt) cnt.textContent=list.length+' seriais ⚠️ diverge de QTD='+qtdEl.value;
+    cnt?.classList.add('text-amber-600');
+  } else {
+    cnt?.classList.remove('text-amber-600');
   }
 }
 function importSeriaisCSV(input){
@@ -6339,7 +6364,28 @@ async function loadEstoque(){
     renderEstoque();
     loadEstoqueMov();
     loadEstoqueAudit();
+    loadEstoqueAlertas();
+    // garante que o campo de seriais apareça corretamente para TZPR04/UPR04 (lote)
+    toggleEstSeriais(); toggleTransSeriais();
   }catch(e){ toast('⚠️ '+e.message); }
+}
+// Inicialização: garante visibilidade do campo seriais ao carregar (default TZPR04/UPR04 = com lote)
+try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){}
+document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){} });
+setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){} }, 300);
+async function loadEstoqueAlertas(){
+  try{
+    let url='/api/estoque/alertas?contrato='+encodeURIComponent(estoqueContratoAtivo);
+    if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
+    const data=await api(url);
+    const el=document.getElementById('estoqueAlertas');
+    if(!el) return;
+    if(!data.total){
+      el.innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700">✅ Nenhum alerta — estoque acima do mínimo em ${esc(estoqueContratoAtivo)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''}</div>`;
+      return;
+    }
+    el.innerHTML=`<div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center justify-between"><b class="text-amber-800">⚠️ ${data.total} itens abaixo do mínimo${data.criticos?` • ${data.criticos} zerados 🔴`:''}</b><span class="text-amber-600 text-[11px]">${esc(estoqueContratoAtivo)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''}</span></div><div class="mt-1.5 flex flex-wrap gap-1.5">${data.itens.slice(0,12).map(r=>`<span class="bg-white border ${r.saldo===0?'border-rose-200 text-rose-700':'border-amber-200 text-amber-700'} rounded-full px-2 py-0.5 font-mono text-[11px]">${esc(r.material)} ${esc(r.unidade)}: ${r.saldo}/${r.limite}</span>`).join('')}${data.itens.length>12?`<span class="text-slate-500 text-[11px]">+${data.itens.length-12}...</span>`:''}</div></div>`;
+  }catch(e){ /* silencioso */ }
 }
 function renderEstoque(){
   const cont=document.getElementById('estoqueCards');
@@ -6356,13 +6402,15 @@ function renderEstoque(){
     agg=mats.map(m=>{
       const rows=list.filter(x=> String(x.material).toUpperCase()===m);
       const saldo=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
-      return { material:m, saldo, rows };
+      const limite=LIMITES_EST[m]||5;
+      return { material:m, saldo, rows, limite };
     });
     cont.innerHTML = agg.map(a=>{
-      const m=a.material; const saldo=a.saldo;
-      const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
-      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">total ${estoqueContratoAtivo}</p><p class="text-[10px] text-slate-400">${a.rows.length} unidades com estoque</p></div>`;
+      const m=a.material; const saldo=a.saldo; const limite=a.limite;
+      const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      const alerta= saldo<limite ? (saldo===0?' 🔴 ZERADO':' ⚠️ BAIXO') : '';
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">total ${estoqueContratoAtivo} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p></div>`;
     }).join('');
     if(resumo) resumo.classList.add('hidden');
     // tabela por unidade
@@ -6384,9 +6432,11 @@ function renderEstoque(){
     cont.innerHTML = mats.map(m=>{
       const row=list.find(x=> String(x.material).toUpperCase()===m);
       const saldo=row?Number(row.saldo||0):0;
-      const color= saldo===0?'text-slate-400': saldo<5?'text-amber-600': saldo<10?'text-blue-600':'text-emerald-600';
-      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<5?'bg-amber-50 border-amber-200': saldo<10?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${esc(estoqueUnidadeAtiva)}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
+      const limite=LIMITES_EST[m]||5;
+      const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
     }).join('');
     if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${estoqueContratoAtivo}</span>`; }
     if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
@@ -6398,15 +6448,24 @@ async function loadEstoqueMov(){
   try{
     let url='/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50';
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
-    const list=await api(url);
+    const resp=await api(url);
+    const list=Array.isArray(resp) ? resp : (resp.items||[]);
+    const total=Array.isArray(resp) ? list.length : (resp.total||list.length);
     estoqueMovCache=list;
-    document.getElementById('estMovCount').textContent=`${list.length} movimentações${estoqueUnidadeAtiva?' em '+estoqueUnidadeAtiva:''}`;
+    document.getElementById('estMovCount').textContent=`${total} movimentações${estoqueUnidadeAtiva?' em '+estoqueUnidadeAtiva:''}${total>list.length?` • mostrando ${list.length}`:''}`;
     document.getElementById('estMovList').innerHTML = list.length ? list.map(m=>{
       const isEntrada=m.tipo==='entrada';
       const unidadeTxt=esc(m.unidade||'') + (m.unidadeDestino ? ` → ${esc(m.unidadeDestino)}` : '');
-      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span><br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}</span></div>`;
+      const estornado=m.estornado ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">ESTORNADO</span>' : '';
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('estMovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
+}
+async function estornarMov(id){
+  const motivo=prompt('Motivo do estorno (mín. 3 caracteres):');
+  if(!motivo || motivo.trim().length<3) return toast('⚠️ Motivo obrigatório');
+  if(!confirm('Confirma estorno da movimentação #'+id+'? Isso reverte o saldo.')) return;
+  try{ await api('/api/estoque/estornar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ movId: id, motivo })}); toast('✅ Estorno realizado'); loadEstoque(); }catch(e){ toast('⚠️ '+e.message); }
 }
 async function loadEstoqueAudit(){
   try{
@@ -6439,13 +6498,21 @@ async function movimentarEstoque(){
   const motivo=document.getElementById('estMotivo').value.trim();
   if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
   if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (lote até 500)', err.classList.remove('hidden'));
-  if(!motivo) return (err.textContent='⚠️ Informe o motivo', err.classList.remove('hidden'));
+  if(qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
+  if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
   const delta = tipo==='saida' ? -Math.abs(qtd) : Math.abs(qtd);
   let seriais=[];
-  if(material==='TZPR04'){
+  if(temSerialEst(material)){
     const txt=document.getElementById('estSeriais')?.value||'';
-    seriais=txt.split(/[\s,;\n]+/).map(s=> s.replace(/\D/g,'')).filter(s=> s.length===10);
-    if(seriais.length !== Math.abs(qtd)) return (err.textContent=`⚠️ TZPR04 lote exige ${Math.abs(qtd)} seriais de 10 dígitos (encontrado ${seriais.length}) — cole o lote completo`, err.classList.remove('hidden'));
+    seriais=parseSeriais(txt);
+    if(seriais.length !== Math.abs(qtd)){
+      const dica = seriais.length===0 ? ' — verifique se colou 10 dígitos por linha (ex: 1234567890) ou use Importar CSV' : ` — você colou ${seriais.length}, mas QTD=${Math.abs(qtd)}`;
+      err.innerHTML=`⚠️ ${material} lote exige <b>${Math.abs(qtd)} seriais</b> de 10 dígitos (encontrado ${seriais.length})${dica}<br><span class="text-[11px]">Dica: QTD é ajustado automaticamente se deixar em branco.</span>`;
+      err.classList.remove('hidden');
+      return;
+    }
+    if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
     await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, unidade, material, qtd: delta, motivo, seriais }) });
@@ -6462,13 +6529,15 @@ async function transferirEstoque(){
   const material=document.getElementById('estTransMaterial').value;
   const qtd=Number(document.getElementById('estTransQtd').value);
   const motivo=document.getElementById('estTransMotivo').value.trim();
-  if(unidadeOrigem===unidadeDestino) return (err.textContent='⚠️ Origem e destino diferentes', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe QTD', err.classList.remove('hidden'));
+  if(unidadeOrigem===unidadeDestino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe QTD (1-500)', err.classList.remove('hidden'));
+  if(qtd>500) return (err.textContent='⚠️ Lote máximo 500', err.classList.remove('hidden'));
   let seriais=[];
-  if(material==='TZPR04'){
+  if(temSerialEst(material)){
     const txt=document.getElementById('estTransSeriais')?.value||'';
-    seriais=txt.split(/[\s,;\n]+/).map(s=> s.replace(/\D/g,'')).filter(s=> s.length===10);
-    if(seriais.length!==Math.abs(qtd)) return (err.textContent=`⚠️ TZPR04 exige ${qtd} seriais`, err.classList.remove('hidden'));
+    seriais=parseSeriais(txt);
+    if(seriais.length!==Math.abs(qtd)) return (err.innerHTML=`⚠️ ${material} exige <b>${qtd} seriais</b> (encontrado ${seriais.length}) — verifique o lote`, err.classList.remove('hidden'));
+    if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados', err.classList.remove('hidden'));
   }
   try{
     await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais }) });
@@ -6478,13 +6547,18 @@ async function transferirEstoque(){
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function gerarRelatorioEstoque(){
-  const contrato=estoqueContratoAtivo;
+  let contrato=(estoqueContratoAtivo||'CE01').toUpperCase();
+  if(!['CE01','CE02'].includes(contrato)) contrato='CE01';
   const unidade=estoqueUnidadeAtiva;
   const from=document.getElementById('estRelFrom')?.value||'';
   const to=document.getElementById('estRelTo')?.value||'';
   try{
-    const params=new URLSearchParams({ contrato, from, to });
+    const params=new URLSearchParams();
+    params.set('contrato', contrato);
+    if(from) params.set('from', from);
+    if(to) params.set('to', to);
     if(unidade) params.set('unidade', unidade);
+    console.log('[relatorio] GET /api/estoque/relatorio?'+params.toString());
     const data=await api('/api/estoque/relatorio?'+params.toString());
     const el=document.getElementById('estRelatorio');
     el.classList.remove('hidden');
@@ -6545,7 +6619,7 @@ async function mostrarEstoqueData(){
     el.classList.remove('hidden');
     const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
     const titulo=unidade?`${esc(unidade)} em ${new Date(data).toLocaleDateString('pt-BR')}`:`Total geral em ${new Date(data).toLocaleDateString('pt-BR')}`;
-    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${estoqueContratoAtivo})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${r.material==='TZPR04' && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
+     el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${estoqueContratoAtivo})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${MATERIAIS_SERIAL_EST.includes(r.material) && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
     el.scrollIntoView({behavior:'smooth'});
   }catch(e){ toast('⚠️ '+e.message); }
 }

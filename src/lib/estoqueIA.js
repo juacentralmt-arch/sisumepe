@@ -1,5 +1,7 @@
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_SERIAL = ['TZPR04','UPR04'];
+const LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
 
 function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
 function extractContrato(q){
@@ -36,10 +38,13 @@ function extractSerial(q){
   const m=String(q).match(/\b\d{10}\b/);
   return m?m[0]:null;
 }
-function extractThreshold(q){
+function extractThreshold(q, material){
   const m=String(q).match(/(abaixo de|menor que|<)\s*(\d+)/i);
   if(m) return Number(m[2]);
-  if(/baixo|critico|alerta/.test(norm(q))) return 5;
+  if(/baixo|critico|alerta/.test(norm(q))){
+    if(material && LIMITES[material]) return LIMITES[material];
+    return null; // usa limite por material no store
+  }
   return null;
 }
 
@@ -57,17 +62,24 @@ async function answer(query, store){
   if(/ajuda|help|como usar|comandos/.test(q)){
     return {
       intent:'help',
-      text:`Comandos disponíveis (on-prem, sem IA externa):\n• saldo [material] [unidade] [CE01/CE02] — ex: “saldo TZPR04 UMEPE Juazeiro CE01”\n• saldo por unidade / total geral\n• histórico [data YYYY-MM-DD] [unidade]\n• movimentações [hoje|últimas]\n• seriais [material] / buscar serial 1234567890\n• ranking [material] — unidade com mais estoque\n• estoque baixo / abaixo de N\n• unidades — lista localidades`,
+      text:`Comandos disponíveis (on-prem, sem IA externa):\n• saldo [material] [unidade] [CE01/CE02] — ex: “saldo TZPR04 UMEPE Juazeiro CE01”\n• resumo [CE01/CE02] [unidade] — visão consolidada\n• alertas / estoque baixo / abaixo de N — itens críticos (limites: TZPR04=5, UPR04=5, FONTE04=5, CINTA=10, TRAVAS=20)\n• histórico [data YYYY-MM-DD] [unidade] — reconstrução até 23:59\n• movimentações [hoje|últimas] — últimas 20\n• seriais [material] / buscar serial 1234567890\n• ranking [material] — unidade com mais estoque\n• unidades — lista localidades`,
       data:null,
-      suggestions:['saldo total CE01','saldo TZPR04 UMEPE Juazeiro','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações','seriais TZPR04 CE01','ranking CINTA','estoque baixo']
+      suggestions:['saldo total CE01','resumo CE01','alertas CE01','saldo TZPR04 UMEPE Juazeiro','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações','seriais TZPR04 CE01','ranking CINTA','estoque baixo']
     };
+  }
+
+  // RESUMO
+  if(/resumo|consolidado|visao geral/.test(q)){
+    const res=await store.estoque.resumo({ contrato, unidade });
+    const txt=`Resumo ${contrato||'geral'}${unidade?' em '+unidade:''} — Total: ${res.total} unidades\nPor contrato: ${Object.entries(res.porContrato).map(([c,v])=>c+': '+v).join(', ')}\nPor unidade: ${Object.entries(res.porUnidade).map(([u,v])=>u+': '+v).join(', ')}\nPor material: ${Object.entries(res.porMaterial).map(([m,v])=>m+': '+v).join(', ')}${res.alertas && res.alertas.total?'\n⚠️ Alertas: '+res.alertas.total+' itens abaixo do mínimo ('+res.alertas.criticos+' zerados)':''}`;
+    return { intent:'resumo', text: txt, data: res, suggestions:['alertas'+(contrato?' '+contrato:''),'saldo total'+(contrato?' '+contrato:''),'ranking CINTA'] };
   }
 
   // SERIAL BUSCA
   if(serial){
-    const allSer=await store.estoqueSerial.all();
+    const allSer=await store.estoqueSerial.all(contrato? { contrato }: undefined);
     const found=allSer.find(s=> String(s.serial)===serial);
-    if(!found) return { intent:'serial', text:`Serial ${serial} não encontrado em estoque.`, data:{ serial, found:false }, suggestions:['seriais TZPR04 CE01','saldo TZPR04'] };
+    if(!found) return { intent:'serial', text:`Serial ${serial} não encontrado em estoque${contrato?' em '+contrato:''}.`, data:{ serial, found:false }, suggestions:['seriais TZPR04 CE01','saldo TZPR04'] };
     const statusTxt=found.status==='disponivel' ? `disponível em ${found.unidade} (${found.contrato})` : `em uso (baixa) — último registro ${found.unidade} (${found.contrato})`;
     return { intent:'serial', text:`Serial ${serial}: ${statusTxt}.`, data:{ serial, found:true, row: found }, suggestions:['saldo TZPR04 '+found.unidade,'histórico '+found.unidade] };
   }
@@ -82,7 +94,7 @@ async function answer(query, store){
       else if(/detalhado|por unidade/.test(q)) list=await store.estoque.atDateDetailed(c, d);
       else list=await store.estoque.atDate(c, d);
       const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
-      const detalhe=list.map(r=> `${r.material}${r.unidade&&r.unidade!=='TOTAL'?' ('+r.unidade+')':''}: ${r.saldo}${r.material==='TZPR04'&&r.seriais&&r.seriais.length?' ['+r.seriais.length+' seriais]':''}`).join('\n');
+      const detalhe=list.map(r=> `${r.material}${r.unidade&&r.unidade!=='TOTAL'?' ('+r.unidade+')':''}: ${r.saldo}${MATERIAIS_SERIAL.includes(r.material)&&r.seriais&&r.seriais.length?' ['+r.seriais.length+' seriais]':''}`).join('\n');
       const titulo=unidade?`Histórico ${c} em ${d} — ${unidade}`:`Histórico ${c} em ${d} — total geral`+ (/detalhado/.test(q)?' (detalhado por unidade)':'');
       return { intent:'historico', text:`${titulo} — Total: ${total} unidades\n${detalhe}`, data:{ contrato:c, data:d, unidade:unidade||null, total, itens:list }, suggestions:['saldo atual '+c, 'movimentações '+c] };
     }catch(e){ return { intent:'erro', text:'Erro ao buscar histórico: '+e.message } }
@@ -90,33 +102,35 @@ async function answer(query, store){
 
   // MOVIMENTAÇÕES
   if(/movimentac|ultimas|recentes|hoje/.test(q)){
-    let movs=await store.estoqueMov.all();
-    if(contrato) movs=movs.filter(m=> String(m.contrato).toUpperCase()===contrato);
-    if(unidade) movs=movs.filter(m=> String(m.unidade)===unidade || String(m.unidadeDestino)===unidade);
-    if(material) movs=movs.filter(m=> String(m.material).toUpperCase()===material);
+    let movs=await store.estoqueMov.all({ limit: 50, contrato, unidade, material });
     if(/hoje/.test(q)){
       const hoje=new Date().toISOString().slice(0,10);
       movs=movs.filter(m=> String(m.createdAt).slice(0,10)===hoje);
     }
     movs=movs.slice(0, 20);
     if(!movs.length) return { intent:'movs', text:'Nenhuma movimentação encontrada para o filtro.', data:{ movs:[] } };
-    const txt=movs.map(m=> `${new Date(m.createdAt).toLocaleString('pt-BR')} — ${m.tipo.toUpperCase()} ${m.qtd}x ${m.material} em ${m.unidade}${m.unidadeDestino?' → '+m.unidadeDestino:''} (${m.contrato}) | ${m.motivo||''} | ${m.userName||m.user} [${m.saldoAntes}→${m.saldoDepois}]${m.seriais&&m.seriais.length?' | seriais: '+m.seriais.slice(0,3).join(', ')+(m.seriais.length>3?' +'+(m.seriais.length-3):''):''}`).join('\n');
+    const txt=movs.map(m=> `${new Date(m.createdAt).toLocaleString('pt-BR')} — ${m.tipo.toUpperCase()} ${m.qtd}x ${m.material} em ${m.unidade}${m.unidadeDestino?' → '+m.unidadeDestino:''} (${m.contrato}) | ${m.motivo||''} | ${m.userName||m.user} [${m.saldoAntes}→${m.saldoDepois}]${m.seriais&&m.seriais.length?' | seriais: '+m.seriais.slice(0,3).join(', ')+(m.seriais.length>3?' +'+(m.seriais.length-3):''):''}${m.estornado?' (ESTORNADO)':''}`).join('\n');
     return { intent:'movs', text:`Últimas ${movs.length} movimentações${contrato?' '+contrato:''}${unidade?' em '+unidade:''}${material?' '+material:''}:\n${txt}`, data:{ movs } };
   }
 
   // SERIAIS LISTAGEM
   if(/seriais|serial/.test(q) && !serial){
-    let ser=await store.estoqueSerial.all();
-    if(contrato) ser=ser.filter(s=> String(s.contrato).toUpperCase()===contrato);
-    if(unidade) ser=ser.filter(s=> String(s.unidade)===unidade);
-    if(material && material!=='TZPR04') return { intent:'erro', text:'Apenas TZPR04 possui seriais rastreados.' };
-    const disponiveis=ser.filter(s=> s.status==='disponivel');
+    let ser=await store.estoqueSerial.all({ contrato, unidade });
+    const matSerial = material && MATERIAIS_SERIAL.includes(material) ? material : null;
+    if(material && !MATERIAIS_SERIAL.includes(material)) return { intent:'erro', text:`Apenas ${MATERIAIS_SERIAL.join('/')} possuem seriais rastreados (10 dígitos).` };
+    let serFiltrado = ser;
+    if(matSerial){
+      // filtra por material implícito via saldo? Serial store não guarda material, mas separa por contrato/unidade; assume TZPR04/UPR04 compartilham pool mas exibimos total
+    }
+    const disponiveis=serFiltrado.filter(s=> s.status==='disponivel');
+    const emUso=serFiltrado.filter(s=> s.status==='em_uso');
     const porUnidade={};
     disponiveis.forEach(s=>{ porUnidade[s.unidade]=(porUnidade[s.unidade]||0)+1; });
     const total=disponiveis.length;
     const detalhe=Object.entries(porUnidade).map(([u,c])=> `${u}: ${c}`).join('\n') || 'nenhum';
     const lista=disponiveis.slice(0,30).map(s=> `${s.serial} — ${s.unidade} (${s.contrato})`).join('\n');
-    return { intent:'seriais', text:`Seriais TZPR04 disponíveis — Total ${total}\nPor unidade:\n${detalhe}${lista?'\n\nExemplos:\n'+lista:''}`, data:{ total, porUnidade, seriais: disponiveis.slice(0,100) } };
+    const label=matSerial||'TZPR04/UPR04';
+    return { intent:'seriais', text:`Seriais ${label} disponíveis — Total ${total} (em uso: ${emUso.length})\nPor unidade:\n${detalhe}${lista?'\n\nExemplos:\n'+lista:''}`, data:{ total, emUso: emUso.length, porUnidade, seriais: disponiveis.slice(0,100) } };
   }
 
   // RANKING
@@ -132,18 +146,17 @@ async function answer(query, store){
     return { intent:'ranking', text:`Ranking ${mat} ${c} — maior: ${top.unidade} com ${top.saldo} unidades\n\n${txt}`, data:{ material:mat, contrato:c, ranking:sorted } };
   }
 
-  // ESTOQUE BAIXO
-  if(/baixo|critico|alerta|abaixo/.test(q)){
-    const thr=extractThreshold(qRaw)||5;
-    const all=await store.estoque.all();
-    let rows=all;
-    if(contrato) rows=rows.filter(e=> String(e.contrato).toUpperCase()===contrato);
-    if(unidade) rows=rows.filter(e=> String(e.unidade)===unidade);
-    if(material) rows=rows.filter(e=> String(e.material).toUpperCase()===material);
-    const baixos=rows.filter(e=> Number(e.saldo||0) < thr).sort((a,b)=> Number(a.saldo)-Number(b.saldo));
-    if(!baixos.length) return { intent:'baixo', text:`Nenhum item abaixo de ${thr} unidades${contrato?' em '+contrato:''}${unidade?' em '+unidade:''}.`, data:{ threshold:thr, baixos:[] } };
-    const txt=baixos.map(r=> `${r.contrato} ${r.material} em ${r.unidade}: ${r.saldo}`).join('\n');
-    return { intent:'baixo', text:`Itens abaixo de ${thr} unidades (${baixos.length}):\n${txt}`, data:{ threshold:thr, baixos } };
+  // ESTOQUE BAIXO / ALERTAS
+  if(/baixo|critico|alerta|abaixo|zerado/.test(q)){
+    const thrOverride=extractThreshold(qRaw, material);
+    const res=await store.estoque.alertas({ contrato, unidade, limite: thrOverride||undefined });
+    // se filtro material específico, refina
+    let baixos=res.itens;
+    if(material) baixos=baixos.filter(e=> String(e.material).toUpperCase()===material);
+    if(!baixos.length) return { intent:'baixo', text:`✅ Nenhum item abaixo do mínimo${contrato?' em '+contrato:''}${unidade?' em '+unidade:''}${material?' ('+material+')':''}.`, data:{ threshold: thrOverride, baixos:[], ...res } };
+    const txt=baixos.map(r=> `${r.contrato} ${r.material} em ${r.unidade}: ${r.saldo}/${r.limite} (faltam ${r.deficit})${r.saldo===0?' 🔴 ZERADO':''}`).join('\n');
+    const thrInfo = thrOverride ? `abaixo de ${thrOverride}` : 'abaixo do mínimo configurado';
+    return { intent:'baixo', text:`⚠️ Itens ${thrInfo} (${baixos.length}${res.criticos?`, ${res.criticos} zerados`:''}):\n${txt}`, data:{ threshold: thrOverride, baixos, ...res } };
   }
 
   // UNIDADES
@@ -181,10 +194,10 @@ async function answer(query, store){
     } else if(material && unidade){
       const row=all[0];
       detalhe=row?`${row.material} em ${row.unidade} (${row.contrato}): ${row.saldo} unidades`:`Sem registro para ${material} em ${unidade}`;
-      if(row && material==='TZPR04'){
+      if(row && MATERIAIS_SERIAL.includes(material)){
         const serAll=await store.estoqueSerial.byContratoUnidade(row.contrato, row.unidade);
         const disp=serAll.filter(s=> s.status==='disponivel');
-        detalhe+=`\nSeriais disponíveis: ${disp.length}${disp.length?'\n'+disp.slice(0,10).map(s=>s.serial).join(', ')+(disp.length>10?' +'+(disp.length-10):''):''}`;
+        detalhe+=`\nSeriais ${material} disponíveis: ${disp.length}${disp.length?'\n'+disp.slice(0,10).map(s=>s.serial).join(', ')+(disp.length>10?' +'+(disp.length-10):''):''}`;
       }
     } else {
       detalhe=all.map(e=> `${e.contrato} ${e.material} em ${e.unidade}: ${e.saldo}`).join('\n');
@@ -194,7 +207,7 @@ async function answer(query, store){
   }
 
   // fallback
-  return { intent:'nao_entendi', text:`Não entendi: “${qRaw}”.\nTente: “saldo TZPR04 UMEPE Juazeiro CE01”, “histórico 2026-09-24”, “seriais disponíveis”, “ranking CINTA”, “estoque baixo”, “últimas movimentações”.`, suggestions:['saldo total CE01','saldo TZPR04 UMEPE Juazeiro CE01','histórico 2026-09-24','seriais TZPR04','ranking CINTA'] };
+  return { intent:'nao_entendi', text:`Não entendi: “${qRaw}”.\nTente: “saldo TZPR04 UMEPE Juazeiro CE01”, “resumo CE01”, “alertas CE01”, “histórico 2026-09-24”, “seriais disponíveis”, “ranking CINTA”, “estoque baixo”, “últimas movimentações”.`, suggestions:['saldo total CE01','resumo CE01','alertas CE01','saldo TZPR04 UMEPE Juazeiro CE01','histórico 2026-09-24','seriais TZPR04','ranking CINTA'] };
 }
 
 module.exports={ answer, UNIDADES, MATERIAIS };

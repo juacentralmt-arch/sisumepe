@@ -15,6 +15,19 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const DEFAULT_UNIDADE = 'UMEPE Juazeiro';
+const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_COM_SERIAL = ['TZPR04','UPR04'];
+const ESTOQUE_LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+const ESTOQUE_CONTRATOS = ['CE01','CE02'];
+function temSerial(material){ return MATERIAIS_COM_SERIAL.includes(String(material||'').toUpperCase()); }
+function parseSeriaisInput(v){
+  if(Array.isArray(v)) return v.map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
+  const s=String(v||'');
+  const m=s.match(/\b\d{10}\b/g);
+  if(m && m.length) return m;
+  const m2=s.match(/\d{10}/g);
+  return m2||[];
+}
 function normalizeUnidade(u){
   const s=String(u||'').trim();
   if(!s) return DEFAULT_UNIDADE;
@@ -735,6 +748,8 @@ const store = {
 
   // Unidades disponíveis — fonte única
   unidades: UNIDADES,
+  materiais: MATERIAIS,
+  estoqueLimites: ESTOQUE_LIMITES,
   estoque: {
     async all(){
       if(MODE==='file') return mem.estoque;
@@ -760,20 +775,37 @@ const store = {
       const u=unidade ? normalizeUnidade(unidade) : null;
       return all.find(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase() && String(e.material).toUpperCase()===String(material).toUpperCase() && (u? String(e.unidade)===u : true))||null;
     },
+    async resumo({ contrato, unidade }={}){
+      let all=await store.estoque.all();
+      if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
+      if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
+      const porContrato={}, porUnidade={}, porMaterial={}, total=all.reduce((s,x)=>s+Number(x.saldo||0),0);
+      all.forEach(e=>{ porContrato[e.contrato]=(porContrato[e.contrato]||0)+Number(e.saldo||0); porUnidade[e.unidade]=(porUnidade[e.unidade]||0)+Number(e.saldo||0); porMaterial[e.material]=(porMaterial[e.material]||0)+Number(e.saldo||0); });
+      const alertas=await store.estoque.alertas({ contrato, unidade });
+      return { total, porContrato, porUnidade, porMaterial, itens: all, alertas, limites: ESTOQUE_LIMITES, geradoEm: new Date().toISOString() };
+    },
+    async alertas({ contrato, unidade, limite }={}){
+      let all=await store.estoque.all();
+      if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
+      if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
+      const baixos=all.filter(e=>{ const thr=(limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5); return Number(e.saldo||0) < thr; }).map(e=>({ ...e, limite: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5), deficit: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5)-Number(e.saldo||0) })).sort((a,b)=> a.deficit - b.deficit || a.saldo - b.saldo);
+      const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
+      return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
+    },
     async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais }){
       contrato=String(contrato||'').toUpperCase().trim();
       material=String(material||'').toUpperCase().trim();
       unidade=normalizeUnidade(unidade||DEFAULT_UNIDADE);
-      if(!['CE01','CE02'].includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
-      if(!['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'].includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
+      if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
+      if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido: '+MATERIAIS.join(', ')),{status:400});
       if(!UNIDADES.includes(unidade)) throw Object.assign(new Error('Unidade inválida: '+UNIDADES.join(', ')),{status:400});
       qtd=Number(qtd); if(!Number.isFinite(qtd) || qtd===0) throw Object.assign(new Error('Quantidade deve ser diferente de zero'),{status:400});
       if(Math.abs(qtd)>500) throw Object.assign(new Error('Lote máximo 500 unidades por movimentação'),{status:400});
+      if(motivo!=null && String(motivo).trim() && String(motivo).trim().length < 3) throw Object.assign(new Error('Motivo deve ter ao menos 3 caracteres'),{status:400});
       let serialList=[];
-      if(material==='TZPR04'){
-        const raw=Array.isArray(seriais)? seriais : String(seriais||'').split(/[\s,;\n]+/).filter(Boolean);
-        serialList=raw.map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
-        if(serialList.length !== Math.abs(qtd)) throw Object.assign(new Error(`TZPR04 exige ${Math.abs(qtd)} seriais de 10 dígitos (recebido ${serialList.length})`),{status:400});
+      if(temSerial(material)){
+        serialList=parseSeriaisInput(seriais);
+        if(serialList.length !== Math.abs(qtd)) throw Object.assign(new Error(`${material} exige ${Math.abs(qtd)} seriais de 10 dígitos (recebido ${serialList.length}) — verifique se colou 10 dígitos por linha`),{status:400});
         if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na lista'),{status:400});
       }
       // garante linha existe
@@ -795,15 +827,24 @@ const store = {
       const saldoAntes=Number(row.saldo||0);
       const saldoDepois=saldoAntes+qtd;
       if(saldoDepois<0) throw Object.assign(new Error(`Saldo insuficiente em ${unidade} (${saldoAntes} disponível)`),{status:400});
-      if(material==='TZPR04' && serialList.length){
+      if(temSerial(material) && serialList.length){
         if(qtd>0){
           for(const s of serialList){
-            const exists = (MODE==='file' ? mem.estoqueSerial : []).find(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='disponivel');
-            if(exists) throw Object.assign(new Error(`Serial ${s} já está em estoque em ${exists.unidade||'outra unidade'}`),{status:400});
+            const existsFile = (MODE==='file' ? mem.estoqueSerial.find(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s) : null);
+            if(existsFile){
+              if(existsFile.status==='disponivel') throw Object.assign(new Error(`Serial ${s} já está em estoque em ${existsFile.unidade||'outra unidade'}`),{status:400});
+              if(existsFile.status==='em_uso'){
+                // reativação: permitir retorno ao estoque — será reativado abaixo em vez de inserir
+                continue;
+              }
+            }
             if(MODE==='supabase'){
               try{
-                const r=must(await supa.from('estoque_serial').select('id,unidade').eq('contrato',contrato).eq('serial',s).eq('status','disponivel').limit(1),'estoqueSerial.check');
-                if(r.length) throw Object.assign(new Error(`Serial ${s} já está em estoque em ${r[0].unidade||'outra unidade'}`),{status:400});
+                const r=must(await supa.from('estoque_serial').select('id,unidade,status').eq('contrato',contrato).eq('serial',s).limit(1),'estoqueSerial.check');
+                if(r.length){
+                  if(r[0].status==='disponivel') throw Object.assign(new Error(`Serial ${s} já está em estoque em ${r[0].unidade||'outra unidade'}`),{status:400});
+                  // em_uso será reativado
+                }
               }catch(e){ if(e.status===400) throw e; }
             }
           }
@@ -835,9 +876,30 @@ const store = {
           if(idx>=0) mem.estoque[idx]=row;
         }
       }
-      if(material==='TZPR04' && serialList.length){
+      if(temSerial(material) && serialList.length){
         if(qtd>0){
           for(const s of serialList){
+            const idxExist = MODE==='file' ? mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s) : -1;
+            if(idxExist>=0 && mem.estoqueSerial[idxExist].status==='em_uso'){
+              // reativação de serial previamente baixado
+              mem.estoqueSerial[idxExist].status='disponivel';
+              mem.estoqueSerial[idxExist].unidade=unidade;
+              mem.estoqueSerial[idxExist].updatedAt=new Date().toISOString();
+              if(MODE==='supabase'){
+                try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso'),'estoqueSerial.reativar'); }catch(e){}
+              }
+              continue;
+            }
+            if(MODE==='supabase'){
+              // tenta reativar no supabase se estiver em_uso
+              try{
+                const r=must(await supa.from('estoque_serial').select('id,status').eq('contrato',contrato).eq('serial',s).limit(1),'estoqueSerial.checkReativar');
+                if(r.length && r[0].status==='em_uso'){
+                  must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, updatedat: new Date().toISOString() }).eq('id', r[0].id),'estoqueSerial.reativar2');
+                  continue;
+                }
+              }catch(e){}
+            }
             if(MODE==='file'){
               mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade, status: 'disponivel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
             } else {
@@ -884,30 +946,71 @@ const store = {
       unidadeOrigem=normalizeUnidade(unidadeOrigem);
       unidadeDestino=normalizeUnidade(unidadeDestino);
       if(unidadeOrigem===unidadeDestino) throw Object.assign(new Error('Origem e destino devem ser diferentes'),{status:400});
+      if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido'),{status:400});
+      if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
+      if(!UNIDADES.includes(unidadeOrigem)) throw Object.assign(new Error('Unidade origem inválida'),{status:400});
+      if(!UNIDADES.includes(unidadeDestino)) throw Object.assign(new Error('Unidade destino inválida'),{status:400});
       qtd=Math.abs(Number(qtd));
       if(!qtd) throw Object.assign(new Error('Quantidade inválida'),{status:400});
+      if(qtd>500) throw Object.assign(new Error('Lote máximo 500 unidades por transferência'),{status:400});
       let serialList=[];
-      if(material==='TZPR04'){
-        const raw=Array.isArray(seriais)? seriais : String(seriais||'').split(/[\s,;\n]+/).filter(Boolean);
-        serialList=raw.map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
-        if(serialList.length !== qtd) throw Object.assign(new Error(`TZPR04 exige ${qtd} seriais (recebido ${serialList.length})`),{status:400});
+      if(temSerial(material)){
+        serialList=parseSeriaisInput(seriais);
+        if(serialList.length !== qtd) throw Object.assign(new Error(`${material} exige ${qtd} seriais (recebido ${serialList.length}) — verifique o lote`),{status:400});
+        if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na transferência'),{status:400});
       }
+      // verifica saldo origem antes para falhar rápido
+      const rowOrig = await store.estoque.get(contrato, material, unidadeOrigem);
+      if(!rowOrig || Number(rowOrig.saldo||0) < qtd) throw Object.assign(new Error(`Saldo insuficiente em ${unidadeOrigem} (${rowOrig?rowOrig.saldo:0} disponível)`),{status:400});
       // saida origem
       const out = await store.estoque.adjust({ contrato, material, unidade: unidadeOrigem, qtd: -qtd, motivo: motivo ? `${motivo} → transf. p/ ${unidadeDestino}` : `Transferência p/ ${unidadeDestino}`, user, userName, seriais: serialList });
-      // entrada destino
+      // Para materiais com serial (TZPR04/UPR04), os seriais saíram como em_uso; reativar diretamente em destino:
+      // faz update direto de unidade/status para evitar re-inserção bloqueada
       let inn;
-      try{
-        inn = await store.estoque.adjust({ contrato, material, unidade: unidadeDestino, qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, user, userName, seriais: serialList });
-      }catch(e){
-        // rollback origem tentando reverter
-        try{ await store.estoque.adjust({ contrato, material, unidade: unidadeOrigem, qtd, motivo: `Rollback transferência falha: ${e.message}`, user, userName, seriais: serialList }); }catch(_){}
-        throw e;
+      if(temSerial(material) && serialList.length){
+        // saldo já ajustado na saída; agora ajusta saldo destino manualmente e move seriais
+        let rowDest=await store.estoque.get(contrato, material, unidadeDestino);
+        if(!rowDest){
+          if(MODE==='file'){ rowDest={ id: mem.seqEstoque++, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); }
+          else { try{ const r=must(await supa.from('estoque').insert({ contrato, material, unidade: unidadeDestino, saldo:0 }).select().single(),'estoque.insertDest'); rowDest=appEST(r);}catch(e){ rowDest={ id: mem.seqEstoque++, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); } }
+        }
+        const saldoAntes=Number(rowDest.saldo||0);
+        const saldoDepois=saldoAntes+qtd;
+        if(MODE==='file'){ rowDest.saldo=saldoDepois; rowDest.updatedAt=new Date().toISOString(); }
+        else { try{ const r=must(await supa.from('estoque').update({ saldo: saldoDepois, updatedat: new Date().toISOString() }).eq('id', Number(rowDest.id)).select().single(),'estoque.patchDest'); rowDest=appEST(r);}catch(e){ rowDest.saldo=saldoDepois; const idx=mem.estoque.findIndex(x=>String(x.id)===String(rowDest.id)); if(idx>=0) mem.estoque[idx]=rowDest; }}
+        // move seriais: em_uso -> disponivel + unidadeDestino
+        for(const s of serialList){
+          if(MODE==='file'){
+            const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='em_uso');
+            if(idx>=0){ mem.estoqueSerial[idx].status='disponivel'; mem.estoqueSerial[idx].unidade=unidadeDestino; mem.estoqueSerial[idx].updatedAt=new Date().toISOString(); }
+            else {
+              mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
+            }
+          } else {
+            try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade: unidadeDestino, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso'),'estoqueSerial.move'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }
+          }
+        }
+        if(MODE==='file') saveFile();
+        const mov={ contrato, material, unidade: unidadeDestino, tipo:'entrada', qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, seriais: serialList, user: user||null, userName: userName||null, createdAt: new Date().toISOString(), unidadeDestino: unidadeOrigem };
+        const auditRef=`${contrato}/${material}/${unidadeDestino} +${qtd} (de ${unidadeOrigem})`;
+        let movRow;
+        if(MODE==='file'){ movRow={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois }; mem.estoqueMov.push(movRow); saveFile(); await store.audit.insert({ kind:'estoque', action:'entrada', personName:`${contrato} ${material} ${unidadeDestino}`, ticketId:null, ref:auditRef, byUser:user, byName:userName, byRole:'tecnico', summary: mov.motivo, changes:[{ field:'saldo', label:`Saldo ${unidadeDestino}`, from:String(saldoAntes), to:String(saldoDepois)}]}); }
+        else { try{ const r=must(await supa.from('estoque_mov').insert(toRow({...mov, saldoAntes, saldoDepois}, ESTMOV)).select().single(),'estoqueMov.insertDest'); movRow=appESTMOV(r); await store.audit.insert({ kind:'estoque', action:'entrada', personName:`${contrato} ${material} ${unidadeDestino}`, ticketId:null, ref:auditRef, byUser:user, byName:userName, byRole:'tecnico', summary: mov.motivo, changes:[{ field:'saldo', label:`Saldo ${unidadeDestino}`, from:String(saldoAntes), to:String(saldoDepois)}]});}catch(e){ movRow={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois }; mem.estoqueMov.push(movRow); } }
+        inn={ row: rowDest, mov: movRow };
+      } else {
+        try{
+          inn = await store.estoque.adjust({ contrato, material, unidade: unidadeDestino, qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, user, userName, seriais: serialList });
+        }catch(e){
+          try{ await store.estoque.adjust({ contrato, material, unidade: unidadeOrigem, qtd, motivo: `Rollback transferência falha: ${e.message}`, user, userName, seriais: serialList }); }catch(_){}
+          throw e;
+        }
       }
       // atualiza mov de saída com destino
       if(MODE==='file'){
         const lastMov=mem.estoqueMov.find(x=> x.id===out.mov.id);
-        if(lastMov) lastMov.unidadeDestino=unidadeDestino;
-        saveFile();
+        if(lastMov) { lastMov.unidadeDestino=unidadeDestino; saveFile(); }
+      } else {
+        try{ must(await supa.from('estoque_mov').update({ unidadedestino: unidadeDestino }).eq('id', Number(out.mov.id)),'estoqueMov.patchDestino'); }catch(e){}
       }
       return { origem: out, destino: inn };
     },
@@ -922,25 +1025,16 @@ const store = {
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
       const allMov = await store.estoqueMov.all();
       let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      // aplica filtros de data: ignora movimentos futuros já filtrado, mas garante ordenação cronológica
       const unidadeFiltro = unidade ? normalizeUnidade(unidade) : null;
-      if(unidadeFiltro) filtered = filtered.filter(m=> String(m.unidade)===unidadeFiltro || String(m.unidadeDestino)===unidadeFiltro);
-      const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-      // Se filtro de unidade informado, retorna 5 materiais daquela unidade; senão retorna por unidade + agregado
+      const mats=MATERIAIS;
       if(unidadeFiltro){
         const result=[];
         for(const mat of mats){
-          const movs=filtered.filter(m=> {
-            if(m.material!==mat) return false;
-            // para saldo da unidade: entrada na unidade (+) e saída da unidade (-) ; transferência conta como saída se origem, entrada se destino já filtrado, mas ambos têm unidade fields
-            if(String(m.unidade)===unidadeFiltro) return true;
-            // caso de mov de transferência onde unidadeDestino = filtro e tipo entrada já coberto, mas mov de origem não deve contar
-            return false;
-          }).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          // Na verdade precisamos considerar apenas movs onde unidade === filtro para cálculo de saldo daquela unidade
           const movsUnidade = filtered.filter(m=> String(m.unidade)===unidadeFiltro && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
           const saldo=movsUnidade.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
           let seriais=[];
-          if(mat==='TZPR04'){
+          if(temSerial(mat)){
             const active=new Map();
             for(const m of movsUnidade){
               const list=Array.isArray(m.seriais)? m.seriais : [];
@@ -955,13 +1049,12 @@ const store = {
         }
         return result;
       }
-      // sem filtro: retorna agregado por material (soma todas unidades) + detalhe por unidade
       const result=[];
       for(const mat of mats){
         const movs=filtered.filter(m=> m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
         const saldo=movs.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
         let seriais=[];
-        if(mat==='TZPR04'){
+        if(temSerial(mat)){
           const active=new Map();
           for(const m of movs){
             const list=Array.isArray(m.seriais)? m.seriais : [];
@@ -972,32 +1065,8 @@ const store = {
           }
           seriais=[...active.keys()].sort();
         }
-        // agregado
         result.push({ contrato: String(contrato).toUpperCase(), material: mat, unidade: 'TOTAL', saldo, seriais, data: target.toISOString().slice(0,10) });
       }
-      // detalhe por unidade (útil para frontend)
-      const porUnidade=[];
-      for(const u of UNIDADES){
-        for(const mat of mats){
-          const movsU=filtered.filter(m=> String(m.unidade)===u && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          const saldo=movsU.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
-          let seriais=[];
-          if(mat==='TZPR04'){
-            const active=new Map();
-            for(const m of movsU){
-              const list=Array.isArray(m.seriais)? m.seriais : [];
-              for(const s of list){
-                if(m.tipo==='entrada') active.set(String(s), true);
-                else active.delete(String(s));
-              }
-            }
-            seriais=[...active.keys()].sort();
-          }
-          porUnidade.push({ contrato: String(contrato).toUpperCase(), material: mat, unidade: u, saldo, seriais, data: target.toISOString().slice(0,10) });
-        }
-      }
-      // mantém compatibilidade: retorna agregado + anexa detalhe em propriedade estendida se caller esperar array simples, retornamos agregado mas também expomos porUnidade via segundo retorno? Para não quebrar, retornamos agregado quando chamado sem unidade, e frontend novo pode chamar com unidade
-      // Para histórico geral com detalhe, caller pode usar atDateDetailed
       return result;
     },
     async atDateDetailed(contrato, dateStr){
@@ -1005,14 +1074,14 @@ const store = {
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
       const allMov = await store.estoqueMov.all();
       const filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
-      const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+      const mats=MATERIAIS;
       const porUnidade=[];
       for(const u of UNIDADES){
         for(const mat of mats){
           const movsU=filtered.filter(m=> String(m.unidade)===u && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
           const saldo=movsU.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
           let seriais=[];
-          if(mat==='TZPR04'){
+          if(temSerial(mat)){
             const active=new Map();
             for(const m of movsU){
               const list=Array.isArray(m.seriais)? m.seriais : [];
@@ -1027,12 +1096,49 @@ const store = {
         }
       }
       return porUnidade;
+    },
+    async estornar(movId, { motivo, user, userName }){
+      const id=Number(movId);
+      if(!id) throw Object.assign(new Error('ID da movimentação inválido'),{status:400});
+      if(!motivo || String(motivo).trim().length < 3) throw Object.assign(new Error('Motivo do estorno obrigatório (mín. 3 caracteres)'),{status:400});
+      const all=await store.estoqueMov.all();
+      const mov=all.find(m=> Number(m.id)===id);
+      if(!mov) throw Object.assign(new Error('Movimentação não encontrada'),{status:404});
+      // estorno é operação inversa
+      const qtdEstorno = mov.tipo==='entrada' ? -Number(mov.qtd) : Number(mov.qtd);
+      const res=await store.estoque.adjust({ contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
+      // marca mov original como estornada (audit trail)
+      if(MODE==='file'){
+        const orig=mem.estoqueMov.find(m=> Number(m.id)===id);
+        if(orig) { orig.estornado=true; orig.estornadoAt=new Date().toISOString(); orig.estornadoBy=user; }
+        saveFile();
+      } else {
+        try{ must(await supa.from('estoque_mov').update({ estornado: true }).eq('id', id),'estoqueMov.estornar'); }catch(e){}
+      }
+      await store.audit.insert({ kind:'estoque', action:'estorno', personName:`${mov.contrato} ${mov.material} ${mov.unidade}`, ticketId:null, ref:`ESTORNO #${mov.id} ${mov.contrato}/${mov.material}`, byUser:user, byName:userName, byRole:'tecnico', summary: motivo, changes:[{ field:'estorno', label:'Estorno mov #'+mov.id, from: String(mov.id), to: String(res.mov.id)}]});
+      return { original: mov, estorno: res };
     }
   },
   estoqueMov: {
-    async all(){
-      if(MODE==='file') return [...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
-      try{ return must(await supa.from('estoque_mov').select('*').order('createdat',{ascending:false}).limit(500),'estoqueMov.all').map(appESTMOV); }catch(e){ console.warn('estoqueMov.all fallback',e.message); return [...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); }
+    async all(opts){
+      let limit=500, contrato, unidade, material;
+      if(opts && typeof opts==='object' && !Array.isArray(opts)){ limit=opts.limit!=null? opts.limit : 500; contrato=opts.contrato; unidade=opts.unidade; material=opts.material; }
+      else if(typeof opts==='number'){ limit=opts; }
+      const n=Math.min(Math.max(Number(limit)||500,1),1000);
+      if(MODE==='file'){
+        let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+        if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
+        if(unidade){ const u=normalizeUnidade(unidade); list=list.filter(m=> String(m.unidade)===u || String(m.unidadeDestino)===u); }
+        if(material) list=list.filter(m=> String(m.material).toUpperCase()===String(material).toUpperCase());
+        return list.slice(0,n);
+      }
+      try{
+        let q=supa.from('estoque_mov').select('*').order('createdat',{ascending:false}).limit(n);
+        if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
+        if(unidade) q=q.or(`unidade.eq.${normalizeUnidade(unidade)},unidadedestino.eq.${normalizeUnidade(unidade)}`);
+        if(material) q=q.eq('material', String(material).toUpperCase());
+        return must(await q,'estoqueMov.all').map(appESTMOV);
+      }catch(e){ console.warn('estoqueMov.all fallback',e.message); let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase()); return list.slice(0,n); }
     },
     async byContrato(contrato){
       const all=await store.estoqueMov.all();
@@ -1051,9 +1157,23 @@ const store = {
     }
   },
   estoqueSerial: {
-    async all(){
-      if(MODE==='file') return [...mem.estoqueSerial].sort((a,b)=> String(a.unidade).localeCompare(String(b.unidade)) || String(a.serial).localeCompare(String(b.serial)));
-      try{ return must(await supa.from('estoque_serial').select('*').order('unidade').order('serial').limit(1000),'estoqueSerial.all').map(appESTSER); }catch(e){ console.warn('estoqueSerial.all fallback', e.message); return [...mem.estoqueSerial]; }
+    async all(opts){
+      let contrato, unidade, status;
+      if(opts && typeof opts==='object'){ contrato=opts.contrato; unidade=opts.unidade; status=opts.status; }
+      if(MODE==='file'){
+        let list=[...mem.estoqueSerial].sort((a,b)=> String(a.unidade).localeCompare(String(b.unidade)) || String(a.serial).localeCompare(String(b.serial)));
+        if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase());
+        if(unidade) list=list.filter(s=> String(s.unidade)===normalizeUnidade(unidade));
+        if(status) list=list.filter(s=> String(s.status)===String(status));
+        return list;
+      }
+      try{
+        let q=supa.from('estoque_serial').select('*').order('unidade').order('serial').limit(1000);
+        if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
+        if(unidade) q=q.eq('unidade', normalizeUnidade(unidade));
+        if(status) q=q.eq('status', String(status));
+        return must(await q,'estoqueSerial.all').map(appESTSER);
+      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase()); return list; }
     },
     async byContrato(contrato){
       const all=await store.estoqueSerial.all();
