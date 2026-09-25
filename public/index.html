@@ -1282,6 +1282,8 @@
             <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total CE01</button>
             <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo CE01</button>
             <button onclick="estIAAsk('reposição CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">🛒 reposição CE01</button>
+            <button onclick="estIAAsk('consumo TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 consumo TZPR04</button>
+            <button onclick="estIAAsk('ficha UPR04 UMEPE Juazeiro CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📋 ficha UPR04</button>
             <button onclick="estIAAsk('alertas CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚠️ alertas</button>
             <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
             <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução 7d</button>
@@ -6760,6 +6762,21 @@ function estIARenderData(data){
     }
     if(data.porUnidade){
       let html='<div class="mt-2 bg-white border rounded-lg p-2 text-[11px]">'+Object.entries(data.porUnidade).map(([u,c])=>`<div class="flex justify-between"><span>${esc(u)}</span><span class="font-bold">${c}</span></div>`).join('')+'</div>';
+      return html;
+    }
+    // ficha
+    if(data.row && data.movs){
+      let html='<div class="mt-2 bg-white border rounded-xl overflow-hidden"><div class="bg-slate-50 px-3 py-2 border-b text-xs font-bold">📋 '+esc(data.row.material)+' — '+esc(data.row.unidade)+' ('+esc(data.row.contrato)+') — Saldo '+data.row.saldo+'</div><div class="p-2 space-y-1">';
+      if(data.seriais && data.seriais.length) html+=`<div class="text-[11px]"><b>Seriais disp.:</b> ${data.seriais.slice(0,4).map(s=>esc(s.serial)).join(', ')}${data.seriais.length>4?' …':''}</div>`;
+      data.movs.slice(0,4).forEach(m=>{ html+=`<div class="text-[11px] flex justify-between"><span>${esc(m.tipo)} ${m.qtd} — ${esc(m.motivo||'')}</span><span class="text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')}</span></div>`; });
+      html+='</div></div>';
+      return html;
+    }
+    // consumo
+    if(data.media!==undefined){
+      const diasTxt=data.diasAteAcabar===Infinity?'∞': data.diasAteAcabar+' dias';
+      const cls=data.diasAteAcabar<=3?'text-rose-600': data.diasAteAcabar<=7?'text-amber-600':'text-emerald-600';
+      let html=`<div class="mt-2 bg-white border rounded-xl p-3 text-xs"><div class="flex justify-between"><span>Consumo médio</span><span class="font-bold">${Number(data.media).toFixed(2)}/dia</span></div><div class="flex justify-between"><span>Saldo atual</span><span class="font-bold">${data.saldoAtual}</span></div><div class="flex justify-between ${cls}"><span>Dura</span><span class="font-bold">${diasTxt}</span></div></div>`;
       return html;
     }
   }catch(e){}

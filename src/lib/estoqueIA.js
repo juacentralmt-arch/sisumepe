@@ -2,6 +2,10 @@ const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum 
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
 const MATERIAIS_SERIAL = ['TZPR04','UPR04'];
 const LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+// Memória simples para follow-up (“e UPR?”)
+const _ctx = new Map();
+function getCtx(key){ return _ctx.get(key)||{}; }
+function setCtx(key, obj){ _ctx.set(key, {...getCtx(key), ...obj}); if(_ctx.size>200) _ctx.delete(_ctx.keys().next().value); }
 
 function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
 function extractContrato(q){
@@ -75,22 +79,29 @@ function extractThreshold(q, material){
 }
 function fmtSaldo(n){ return Number(n||0).toLocaleString('pt-BR'); }
 
-async function answer(query, store){
+async function answer(query, store, opts){
   const qRaw=String(query||'').trim();
   if(!qRaw) return { intent:'vazio', text:'Digite um comando. Ex: “saldo TZPR04 em UMEPE Juazeiro CE01”', suggestions:['saldo TZPR04 UMEPE Juazeiro CE01','histórico ontem','seriais disponíveis','ranking CINTA','reposição CE01','comparar UMEPE vs UP-Cariri'] };
   const q=norm(qRaw);
-  const contrato=extractContrato(qRaw);
-  const material=extractMaterial(qRaw);
-  const unidade=extractUnidade(qRaw);
+  let contrato=extractContrato(qRaw);
+  let material=extractMaterial(qRaw);
+  let unidade=extractUnidade(qRaw);
   const data=extractData(qRaw);
   const periodo=extractPeriodo(qRaw);
   const serial=extractSerial(qRaw);
+  // contexto para follow-up (“e UPR?”, “e em UMEPE?”)
+  const ctxKey = (opts && opts.user) || 'global';
+  const last=getCtx(ctxKey);
+  if(!contrato && last.contrato && /^(e |e\?|para |com |e o |e a )?/.test(q) && (material||unidade||/saldo|estoque|quanto/.test(q))) contrato=last.contrato;
+  if(!material && last.material && /^(e |e\?)/.test(q)) material=last.material;
+  if(!unidade && last.unidade && /^(e |e\?)/.test(q)) unidade=last.unidade;
+  if(contrato||material||unidade) setCtx(ctxKey, { contrato: contrato||last.contrato, material: material||last.material, unidade: unidade||last.unidade });
 
   // HELP
   if(/ajuda|help|como usar|comandos|o que voce faz/.test(q)){
     return {
       intent:'help',
-      text:`🤖 **Chat IA Estoque — Comandos** (100% on-prem, sem dados externos)
+      text:`🤖 **Chat IA Estoque — Comandos** (100% on-prem)
 
 **📦 Saldo**
 • \`saldo [material] [unidade] [CE01/CE02]\` — ex: “saldo TZPR04 UMEPE Juazeiro CE01”
@@ -99,22 +110,26 @@ async function answer(query, store){
 **📊 Visão geral**
 • \`resumo [CE01/CE02] [unidade]\` — consolidado com alertas
 • \`alertas / estoque baixo / zerado\` — abaixo do mínimo (TZPR04=5, UPR04=5, FONTE04=5, CINTA=10, TRAVAS=20)
-• \`reposição / comprar / o que falta [CE01]\` — lista de compra sugerida
-• \`comparar UMEPE vs UP-Cariri CE01\` — comparativo entre unidades
-• \`ranking [material] CE01\` — onde tem mais estoque
+• \`reposição / comprar / o que falta [CE01]\` — lista de compra
+• \`comparar UMEPE vs UP-Cariri CE01\` — comparativo
+• \`ranking [material] CE01\` — onde tem mais
+
+**📈 Análise**
+• \`consumo / giro / ruptura [material] [unidade]\` — média diária e dias até acabar
+• \`ficha [material] [unidade]\` — detalhe + seriais + últimos movs
+• \`evolução 7 dias TZPR04 CE01\` — tendência + gráfico
 
 **📅 Histórico**
 • \`histórico [data] [unidade]\` — ex: “histórico ontem UMEPE” / “2026-09-24”
-• \`evolução 7 dias TZPR04 CE01\` — tendência recente
-• \`movimentações [hoje|últimos 7 dias]\` — últimas 20
+• \`movimentações [hoje|ontem|últimos 7 dias]\` — últimas 20
 
 **🔢 Seriais (TZPR04/UPR04)**
-• \`seriais [CE01] [unidade]\` — disponíveis por unidade
-• \`buscar serial 1234567890\` — rastreio exato ou parcial
+• \`seriais [CE01] [unidade]\` — disponíveis
+• \`buscar serial 1234567890\` — exato ou parcial “buscar 4315”
 
 **📍 Outros**
-• \`unidades\` — lista localidades
-• \`tendência / evolução\` — consumo recente`,
+• \`unidades\` • \`exportar / csv / relatório\``,
+
       data:null,
       suggestions:['saldo total CE01','resumo CE01','reposição CE01','alertas CE01','comparar UMEPE vs UP-Cariri','histórico ontem','seriais UPR04 CE01','ranking CINTA','evolução 7 dias','estoque baixo']
     };
@@ -155,6 +170,47 @@ async function answer(query, store){
     const linhas=mats.map(m=>{ const a=getSaldo(u1,m), b=getSaldo(u2,m); const diff=a-b; return { material:m, u1:a, u2:b, diff, vencedor: diff>0?u1: diff<0?u2:'empate' }; });
     const txt=`⚖️ **Comparativo ${c}: ${u1} vs ${u2}**\n` + linhas.map(l=> `• ${l.material}: ${u1} **${l.u1}** vs ${u2} **${l.u2}** ${l.diff!==0?`(${l.diff>0?'+':''}${l.diff})`:''} → ${l.vencedor}`).join('\n');
     return { intent:'comparar', text: txt, data:{ contrato:c, u1, u2, linhas }, suggestions:[`saldo ${u1} ${c}`,`saldo ${u2} ${c}`,'ranking TZPR04 '+c] };
+  }
+
+  // CONSUMO / GIRO / RUPTURA
+  if(/consumo|media|giro|quanto consome|ruptura|quando acaba|dias ate acabar|duracao/.test(q)){
+    const c=contrato||last.contrato||'CE01';
+    const mat=material||last.material||'TZPR04';
+    const uni=unidade||last.unidade||null;
+    const dias=periodo||30;
+    const movs=await store.estoqueMov.all({ limit: 500, contrato:c, material:mat, unidade:uni });
+    const saidas=movs.filter(m=> m.tipo==='saida' && new Date(m.createdAt) >= new Date(Date.now()-dias*86400000));
+    const totalSaidas=saidas.reduce((s,m)=>s+Number(m.qtd||0),0);
+    const media=totalSaidas/dias;
+    const saldoAtual=(await store.estoque.all()).filter(e=> String(e.contrato).toUpperCase()===c && String(e.material).toUpperCase()===mat && (!uni || String(e.unidade)===uni)).reduce((s,e)=>s+Number(e.saldo||0),0);
+    const diasAteAcabar=media>0 ? Math.floor(saldoAtual/media) : Infinity;
+    const rupturaTxt = diasAteAcabar===Infinity ? '✅ Sem consumo recente' : diasAteAcabar<=3 ? '🔴 Ruptura em ~'+diasAteAcabar+' dias!' : '⏳ Dura ~'+diasAteAcabar+' dias (em ritmo atual)';
+    const txt=`📊 **Consumo ${mat} ${c}${uni?' • '+uni:''} — últimos ${dias} dias**\nSaídas: **${totalSaidas}** un (${media.toFixed(2)}/dia)\nSaldo atual: **${saldoAtual}**\n`+rupturaTxt+`\n\n💡 Dica: “reposição ${c}” para o que comprar.`;
+    setCtx(ctxKey, {contrato:c, material:mat, unidade:uni});
+    return { intent:'consumo', text: txt, data:{ contrato:c, material:mat, unidade:uni, dias, totalSaidas, media, saldoAtual, diasAteAcabar }, suggestions:['reposição '+c,'evolução 7 dias '+mat,'alertas '+c] };
+  }
+
+  // FICHA / DETALHE
+  if(/ficha|detalhe|detalhar|mostra.*detalhe/.test(q)){
+    const c=contrato||last.contrato||'CE01';
+    const mat=material||'TZPR04';
+    const uni=unidade||last.unidade||'UMEPE Juazeiro';
+    const row=(await store.estoque.all()).find(e=> String(e.contrato).toUpperCase()===c && String(e.material).toUpperCase()===mat && String(e.unidade)===uni);
+    if(!row) { setCtx(ctxKey, {contrato:c, material:mat, unidade:uni}); return { intent:'ficha', text:`Sem registro para ${mat} em ${uni} (${c})`, data:{ contrato:c, material:mat, unidade:uni } }; }
+    const movs=(await store.estoqueMov.all({ limit: 20, contrato:c, material:mat, unidade:uni })).slice(0,5);
+    const seriais=MATERIAIS_SERIAL.includes(mat) ? (await store.estoqueSerial.all({ contrato:c, unidade:uni })).filter(s=> s.status==='disponivel').slice(0,8) : [];
+    let txt=`📋 **Ficha ${mat} — ${uni} (${c})**\nSaldo: **${row.saldo}** / mínimo ${LIMITES[mat]||5} ${Number(row.saldo||0) < (LIMITES[mat]||5)?'⚠️ ABAIXO':''}\n`;
+    if(seriais.length) txt+=`Seriais disp.: ${seriais.map(s=>s.serial).join(', ')}${seriais.length>=8?'…':''}\n`;
+    if(movs.length) txt+=`Últimos movs:\n` + movs.map(m=> `• ${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${m.tipo} ${m.qtd} — ${m.motivo||''} [${m.saldoAntes}→${m.saldoDepois}]`).join('\n');
+    setCtx(ctxKey, {contrato:c, material:mat, unidade:uni});
+    return { intent:'ficha', text: txt, data:{ row, movs, seriais }, suggestions:['saldo '+mat+' '+uni, 'histórico '+uni, 'reposição '+c] };
+  }
+
+  // EXPORTAR / CSV
+  if(/export|csv|planilha|relatorio|relatório/.test(q) && !/historico/.test(q)){
+    const c=contrato||'CE01';
+    setCtx(ctxKey, {contrato:c, material, unidade});
+    return { intent:'export', text:`📤 Para exportar, use os botões **⬇ CSV** / **⬇ PDF** na aba Estoque ou digite:\n• “histórico ${new Date().toISOString().slice(0,10)} ${c}” para ver e exportar por data\n• “seriais ${c}” para lista de seriais\n\nDica: O relatório completo está em **Estoque > 📊 Relatório**.`, data:{ contrato:c }, suggestions:['histórico hoje '+c,'seriais '+c,'relatório'] };
   }
 
   // TENDÊNCIA / EVOLUÇÃO
@@ -320,8 +376,11 @@ async function answer(query, store){
     return { intent:'saldo', text:`📦 ${titulo} — Total: **${fmtSaldo(total)}** unidades\n${detalhe}`, data:{ total, itens: all, contrato, unidade, material }, suggestions:['alertas '+(contrato||'CE01'),'ranking '+(material||'TZPR04')] };
   }
 
+  // salva contexto para follow-up
+  if(contrato||material||unidade) setCtx(ctxKey, { contrato: contrato||last.contrato, material: material||last.material, unidade: unidade||last.unidade });
+
   // fallback
-  return { intent:'nao_entendi', text:`🤔 Não entendi: “${qRaw}”.\nTente:\n• “saldo TZPR04 UMEPE Juazeiro CE01”\n• “reposição CE01” — o que comprar\n• “comparar UMEPE vs UP-Cariri”\n• “histórico ontem” / “evolução 7 dias TZPR04”\n• “seriais disponíveis” / “buscar serial 1234”\n• “ranking CINTA” / “estoque baixo”`, suggestions:['saldo total CE01','reposição CE01','comparar UMEPE vs UP-Cariri','histórico ontem','seriais UPR04','ranking CINTA'] };
+  return { intent:'nao_entendi', text:`🤔 Não entendi: “${qRaw}”.\nTente:\n• “saldo TZPR04 UMEPE Juazeiro CE01”\n• “reposição CE01” — o que comprar\n• “comparar UMEPE vs UP-Cariri”\n• “consumo TZPR04” — média e ruptura\n• “ficha UPR04 UMEPE” — detalhe\n• “histórico ontem” / “evolução 7 dias TZPR04”\n• “seriais disponíveis” / “buscar serial 1234”`, suggestions:['saldo total CE01','reposição CE01','consumo TZPR04','ficha TZPR04 UMEPE','comparar UMEPE vs UP-Cariri','histórico ontem','seriais UPR04'] };
 }
 
 module.exports={ answer, UNIDADES, MATERIAIS };
