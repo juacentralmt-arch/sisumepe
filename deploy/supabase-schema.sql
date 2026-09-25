@@ -91,8 +91,10 @@ create table if not exists users (
   name text default '',
   role text default 'recepcao',
   pass text default '',
-  active boolean default true
+  active boolean default true,
+  sistema text default 'spacecom'
 );
+alter table users add column if not exists sistema text default 'spacecom';
 
 -- Índices úteis
 create index if not exists idx_tickets_status on tickets (status);
@@ -106,8 +108,10 @@ create table if not exists sessions (
   "user" text,
   role text,
   name text,
+  sistema text,
   exp timestamptz
 );
+alter table sessions add column if not exists sistema text;
 
 -- Agenda do técnico (com Google Calendar opcional)
 create table if not exists agenda (
@@ -155,19 +159,21 @@ alter table termos add column if not exists dados jsonb default '{}'::jsonb;
 create index if not exists idx_termos_user on termos ("user");
 create index if not exists idx_termos_data on termos (dataenvio);
 
--- Estoque por contrato (CE01/CE02) x material (TZPR04/UPR04/FONTE04/CINTA/TRAVAS) x unidade (UMEPE Juazeiro / UP-Juazeiro / UP-Cariri / UP-Crato / Fórum de Crato / Fórum de Jardim)
+-- Estoque por contrato (CE01/CE02) x material (TZPR04/UPR04/FONTE04/CINTA/TRAVAS) x unidade (UMEPE Juazeiro / UP-Juazeiro / UP-Cariri / UP-Crato / Fórum de Crato / Fórum de Jardim) x sistema (spacecom/infinity)
 create table if not exists estoque (
   id serial primary key,
+  sistema text not null default 'spacecom',
   contrato text not null,
   material text not null,
   unidade text not null default 'UMEPE Juazeiro',
   saldo int not null default 0,
   createdat timestamptz default now(),
   updatedat timestamptz default now(),
-  unique(contrato, material, unidade)
+  unique(sistema, contrato, material, unidade)
 );
 create table if not exists estoque_mov (
   id serial primary key,
+  sistema text not null default 'spacecom',
   contrato text not null,
   material text not null,
   unidade text not null default 'UMEPE Juazeiro',
@@ -184,32 +190,44 @@ create table if not exists estoque_mov (
 );
 create table if not exists estoque_serial (
   id serial primary key,
+  sistema text not null default 'spacecom',
   contrato text not null,
   serial text not null,
   unidade text not null default 'UMEPE Juazeiro',
   status text not null default 'disponivel',
   createdat timestamptz default now(),
   updatedat timestamptz default now(),
-  unique(contrato, serial)
+  unique(sistema, contrato, serial)
 );
 create index if not exists idx_estoque_contrato on estoque (contrato);
 create index if not exists idx_estoque_unidade on estoque (unidade);
+create index if not exists idx_estoque_sistema on estoque (sistema);
 create index if not exists idx_estoque_mov_contrato on estoque_mov (contrato);
 create index if not exists idx_estoque_mov_unidade on estoque_mov (unidade);
+create index if not exists idx_estoque_mov_sistema on estoque_mov (sistema);
 create index if not exists idx_estoque_mov_data on estoque_mov (createdat);
 create index if not exists idx_estoque_serial_contrato on estoque_serial (contrato);
 create index if not exists idx_estoque_serial_unidade on estoque_serial (unidade);
+create index if not exists idx_estoque_serial_sistema on estoque_serial (sistema);
 create index if not exists idx_estoque_serial_status on estoque_serial (status);
--- colunas para compatibilidade (caso tabela já exista sem seriais/unidade)
+create index if not exists idx_users_sistema on users (sistema);
+-- colunas para compatibilidade (caso tabela já exista sem seriais/unidade/sistema)
 alter table estoque add column if not exists unidade text not null default 'UMEPE Juazeiro';
+alter table estoque add column if not exists sistema text not null default 'spacecom';
 alter table estoque drop constraint if exists estoque_contrato_material_key;
-alter table estoque add constraint estoque_contrato_material_unidade_key unique(contrato, material, unidade);
+alter table estoque drop constraint if exists estoque_contrato_material_unidade_key;
+alter table estoque add constraint estoque_sistema_contrato_material_unidade_key unique(sistema, contrato, material, unidade);
 alter table estoque_mov add column if not exists seriais jsonb default '[]'::jsonb;
 alter table estoque_mov add column if not exists unidade text not null default 'UMEPE Juazeiro';
+alter table estoque_mov add column if not exists sistema text not null default 'spacecom';
 alter table estoque_mov add column if not exists unidadedestino text default null;
 alter table estoque_mov add column if not exists saldoantes int not null default 0;
 alter table estoque_mov add column if not exists saldodepois int not null default 0;
 alter table estoque_serial add column if not exists unidade text not null default 'UMEPE Juazeiro';
+alter table estoque_serial add column if not exists sistema text not null default 'spacecom';
+alter table estoque_serial drop constraint if exists estoque_serial_contrato_serial_key;
+alter table estoque_serial add constraint estoque_serial_sistema_contrato_serial_key unique(sistema, contrato, serial);
+alter table users add column if not exists sistema text default 'spacecom';
 
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público

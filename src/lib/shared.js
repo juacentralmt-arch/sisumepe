@@ -63,7 +63,8 @@ function requestId(req, res, next) {
 // Sessões por token (12h, persistentes no banco). O servidor NUNCA confia no usuário vindo do app.
 async function issueToken(u) {
   const token = crypto.randomBytes(32).toString('hex');
-  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, exp: Date.now() + 12 * 3600e3 });
+  const sistema = u.sistema || (u.user && require('../../store').getUserSistema ? require('../../store').getUserSistema(u) : 'spacecom');
+  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, sistema: u.role==='admin' ? null : sistema, exp: Date.now() + 12 * 3600e3 });
   return token;
 }
 setInterval(() => { store.sessions.cleanup().catch(() => {}); }, 3600e3).unref();

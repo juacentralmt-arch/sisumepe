@@ -20,7 +20,8 @@ router.post('/api/login', loginRateLimit, ah(async (req, res) => {
   const token = await issueToken(u);
   // httpOnly cookie para mitigar XSS steal via localStorage
   res.setHeader('Set-Cookie', `te_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${12*3600}${process.env.FORCE_HTTPS==='1' ? '; Secure' : ''}`);
-  res.json({ user: u.user, role: u.role, name: u.name, token });
+  const sistema = u.sistema || (u.user && require('../../store').getUserSistema ? require('../../store').getUserSistema(u) : null);
+  res.json({ user: u.user, role: u.role, name: u.name, sistema: u.role==='admin' ? null : sistema, token });
 }));
 
 router.post('/api/logout', auth(), ah(async (req, res) => {
