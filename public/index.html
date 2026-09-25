@@ -1279,21 +1279,20 @@
         <div class="p-4">
           <p class="text-xs text-slate-500 mb-3">Pergunte em linguagem natural. Novos comandos: <b>reposição</b>, <b>comparar</b>, <b>evolução 7 dias</b>, <b>ontem</b>.</p>
           <div id="estIAQuick" class="flex flex-wrap gap-1.5 mb-3">
-            <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total CE01</button>
-            <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo CE01</button>
-            <button onclick="estIAAsk('reposição CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">🛒 reposição CE01</button>
-            <button onclick="estIAAsk('consumo TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 consumo TZPR04</button>
-            <button onclick="estIAAsk('ficha UPR04 UMEPE Juazeiro CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📋 ficha UPR04</button>
-            <button onclick="estIAAsk('alertas CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚠️ alertas</button>
+            <button onclick="estIAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
+            <button onclick="estIAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
+            <button onclick="estIAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
+            <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+            <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
             <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
-            <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução 7d</button>
+            <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
             <button onclick="estIAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
             <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
             <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
             <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
           </div>
           <div id="estIAMessages" class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-[340px] overflow-y-auto space-y-3 text-sm">
-            <div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2.5 text-xs text-slate-700 max-w-[85%] leading-relaxed">Olá! Sou a IA do estoque — <b>100% on-prem</b>, sem enviar dados para fora.<br><br>Posso te ajudar com:<br>• <b>Saldo</b> — “saldo TZPR04 em UMEPE Juazeiro CE01”<br>• <b>Reposição</b> — “o que falta em CE01?”<br>• <b>Comparar</b> — “comparar UMEPE vs UP-Cariri”<br>• <b>Evolução</b> — “evolução 7 dias TZPR04”<br>• <b>Seriais</b> — “buscar 1234567890”<br><br>Digite ou clique nos atalhos acima.</div></div>
+            <div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2.5 text-xs text-slate-700 max-w-[85%] leading-relaxed">Olá! Sou a IA do estoque — <b>100% on-prem</b>.<br><br><b>1️⃣ Estoque Atual:</b> “estoque atual UMEPE Juazeiro CE01” — TZPR e UPR prontos<br><b>2️⃣ Média Mensal:</b> “média de consumo mensal UMEPE CE01” — previsão 30d<br><b>3️⃣ Reposição:</b> “necessidade de reposição UMEPE CE01” — faltas para segurança<br><br>Outros: “saldo TZPR04”, “reposição CE01”, “comparar UMEPE vs UP-Cariri”, “evolução 7 dias”, “buscar 1234567890”.</div></div>
           </div>
           <div class="flex gap-2 mt-3">
             <input id="estIAInput" placeholder="Ex: reposição CE01, comparar UMEPE vs UP-Cariri, saldo TZPR04..." class="inp flex-1 text-sm" onkeydown="if(event.key==='Enter') estIASend()" autocomplete="off">
