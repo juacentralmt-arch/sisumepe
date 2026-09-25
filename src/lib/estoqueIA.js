@@ -57,9 +57,12 @@ function extractPeriodo(q){
 function extractSerial(q){
   const m=String(q).match(/\b\d{10}\b/);
   if(m) return m[0];
-  // parcial 4+ digitos para busca aproximada
-  const m2=String(q).match(/\b\d{4,9}\b/);
-  return m2?m2[0]:null;
+  // parcial 4-9 digitos só se mencionar serial/buscar
+  if(/serial|buscar/.test(norm(q))){
+    const m2=String(q).match(/\b\d{4,9}\b/);
+    return m2?m2[0]:null;
+  }
+  return null;
 }
 function extractThreshold(q, material){
   const m=String(q).match(/(abaixo de|menor que|<)\s*(\d+)/i);
