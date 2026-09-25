@@ -19,8 +19,42 @@ const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
 const MATERIAIS_COM_SERIAL = ['TZPR04','UPR04'];
 const ESTOQUE_LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
 const ESTOQUE_CONTRATOS = ['CE01','CE02'];
+const CONTRATO_INFINITY = 'INF';
+const CONTRATOS_SPACECOM = ['CE01','CE02'];
 const SISTEMAS = ['spacecom','infinity'];
 const DEFAULT_SISTEMA = 'spacecom';
+function temSerial(material){ return MATERIAIS_COM_SERIAL.includes(String(material||'').toUpperCase()); }
+function normalizeContrato(contrato, sistema){
+  const raw=String(contrato||'').toUpperCase().trim();
+  const sis=sistema ? normalizeSistema(sistema) : null;
+  if(sis==='infinity'){
+    // Infinity é estoque único: tudo vira INF (CE01/CE02 legados também)
+    if(!raw) return CONTRATO_INFINITY;
+    if(raw==='INF'||raw==='INFINITY'||raw==='ESTOQUE INFINITY'||raw==='ESTOQUEINFINITY') return CONTRATO_INFINITY;
+    if(raw==='CE01'||raw==='CE02') return CONTRATO_INFINITY;
+    return CONTRATO_INFINITY;
+  }
+  if(sis==='spacecom'){
+    if(!raw) return null;
+    if(raw==='CE01'||raw==='CE02') return raw;
+    return raw; // validação posterior rejeita
+  }
+  // sistema null (admin vendo tudo): normaliza aliases
+  if(!raw) return null;
+  if(raw==='INF'||raw==='INFINITY'||raw==='ESTOQUE INFINITY'||raw==='ESTOQUEINFINITY') return CONTRATO_INFINITY;
+  return raw;
+}
+function contratoLabel(contrato){
+  const c=String(contrato||'').toUpperCase().trim();
+  if(c==='INF'||c==='INFINITY') return 'Estoque Infinity';
+  return c;
+}
+function contratosDoSistema(sistema){
+  const sis=normalizeSistema(sistema);
+  if(sis==='infinity') return [CONTRATO_INFINITY];
+  if(sis==='spacecom') return [...CONTRATOS_SPACECOM];
+  return [...CONTRATOS_SPACECOM, CONTRATO_INFINITY];
+}
 function normalizeSistema(s){
   const v=String(s||'').toLowerCase().trim();
   if(v==='infinity' || v==='inf' || v==='infinito') return 'infinity';
@@ -123,34 +157,70 @@ function loadFile() {
     if (!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueSerial)) mem.estoqueSerial = [];
     if (!mem.seqEstoqueSerial) mem.seqEstoqueSerial = mem.estoqueSerial.length ? Math.max(...mem.estoqueSerial.map(x=>x.id))+1 : 1;
-     // inicializa estoque padrão CE01/CE02 x 5 materiais x 6 unidades x 2 sistemas
-    // migração: garante campo unidade e sistema em registros antigos
+     // inicializa estoque padrão: spacecom CE01/CE02 x 5 materiais x 6 unidades + infinity INF (Estoque Infinity) x 5 x 6
+    // migração: garante campo unidade e sistema em registros antigos + unifica infinity CE01/CE02 em INF
     let needSave=false;
     mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; needSave=true; } else e.unidade=normalizeUnidade(e.unidade); if(!e.sistema){ e.sistema=DEFAULT_SISTEMA; needSave=true; } else e.sistema=normalizeSistema(e.sistema)||DEFAULT_SISTEMA; });
     mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; needSave=true; } else m.unidade=normalizeUnidade(m.unidade); if(!m.sistema){ m.sistema=DEFAULT_SISTEMA; needSave=true; } else m.sistema=normalizeSistema(m.sistema)||DEFAULT_SISTEMA; });
     mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; needSave=true; } else s.unidade=normalizeUnidade(s.unidade); if(!s.sistema){ s.sistema=DEFAULT_SISTEMA; needSave=true; } else s.sistema=normalizeSistema(s.sistema)||DEFAULT_SISTEMA; });
+    // unifica infinity: CE01/CE02 legados viram INF (soma saldos por material/unidade)
+    {
+      const infRows=mem.estoque.filter(e=> e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF');
+      if(infRows.length){
+        const sums=new Map();
+        for(const e of infRows){
+          const k=`${e.material}::${e.unidade}`;
+          sums.set(k, (sums.get(k)||0)+Number(e.saldo||0));
+        }
+        // remove linhas legadas CE01/CE02 do infinity
+        mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+        // soma nos INF existentes ou cria
+        for(const [k, saldo] of sums){
+          const [mat, uni]=k.split('::');
+          const exist=mem.estoque.find(e=> e.sistema==='infinity' && e.contrato==='INF' && e.material===mat && e.unidade===uni);
+          if(exist){ exist.saldo=Number(exist.saldo||0)+saldo; exist.updatedAt=new Date().toISOString(); }
+          else { mem.estoque.push({ id: mem.seqEstoque++, sistema:'infinity', contrato:'INF', material:mat, unidade:uni, saldo, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }
+        }
+        needSave=true;
+      }
+      // histórico e seriais do infinity passam a INF
+      let changedMov=false, changedSer=false;
+      mem.estoqueMov.forEach(m=>{ if(normalizeSistema(m.sistema||DEFAULT_SISTEMA)==='infinity' && String(m.contrato).toUpperCase()!=='INF'){ m.contrato='INF'; changedMov=true; } });
+      mem.estoqueSerial.forEach(s=>{ if(normalizeSistema(s.sistema||DEFAULT_SISTEMA)==='infinity' && String(s.contrato).toUpperCase()!=='INF'){ s.contrato='INF'; changedSer=true; } });
+      if(changedMov||changedSer) needSave=true;
+    }
     const matsAll=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-    const contratosAll=['CE01','CE02'];
     const unidadesAll=UNIDADES;
-    const sistemasAll=SISTEMAS;
     // deduplica estoque por (sistema,contrato,material,unidade) somando saldo
     const dedup=new Map();
     for(const e of mem.estoque){
+      const c=normalizeContrato(e.contrato, e.sistema)||e.contrato;
+      e.contrato=c;
       const k=`${e.sistema}::${e.contrato}::${e.material}::${e.unidade}`;
       if(!dedup.has(k)) dedup.set(k, e);
       else { dedup.get(k).saldo = Number(dedup.get(k).saldo||0)+Number(e.saldo||0); needSave=true; }
     }
     if(dedup.size !== mem.estoque.length){ mem.estoque=[...dedup.values()]; needSave=true; }
-    // garante todas combinações existem para ambos os sistemas
+    // garante todas combinações existem: spacecom CE01/CE02, infinity INF
     let added=0;
-    sistemasAll.forEach(sis=> contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=>{
+    const ensureCombos=[
+      ...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})),
+      {sis:'infinity', c:CONTRATO_INFINITY}
+    ];
+    ensureCombos.forEach(({sis, c})=> matsAll.forEach(m=> unidadesAll.forEach(u=>{
       if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
         mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
         added++; needSave=true;
       }
-    }))));
+    })));
+    // remove combinações obsoletas: infinity CE01/CE02 zeradas (caso sobrem)
+    {
+      const before=mem.estoque.length;
+      mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+      if(mem.estoque.length!==before) needSave=true;
+    }
     if(!mem.estoque.length){
-      sistemasAll.forEach(sis=> contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) ))));
+      ensureCombos.forEach(({sis, c})=> matsAll.forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
       needSave=true;
     }
     if(needSave||added) saveFile();
@@ -158,7 +228,7 @@ function loadFile() {
   } catch {
     mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1 };
     const mats2=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-    ['CE01','CE02'].forEach(c=> mats2.forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
+    [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> mats2.forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
     return mem;
   }
 }
@@ -184,20 +254,43 @@ if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
 if(!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueSerial)) mem.estoqueSerial=[];
 if(!mem.seqEstoqueSerial) mem.seqEstoqueSerial = mem.estoqueSerial.length ? Math.max(...mem.estoqueSerial.map(x=>x.id))+1 : 1;
-// fallback garante campo unidade/sistema e combinações (supabase sem tabela ainda)
+// fallback garante campo unidade/sistema e combinações (supabase sem tabela ainda) + unifica infinity em INF
 (()=>{
   let need=false;
   mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; need=true; } if(!e.sistema){ e.sistema=DEFAULT_SISTEMA; need=true; } else e.sistema=normalizeSistema(e.sistema)||DEFAULT_SISTEMA; });
   mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; need=true; } if(!m.sistema){ m.sistema=DEFAULT_SISTEMA; need=true; } else m.sistema=normalizeSistema(m.sistema)||DEFAULT_SISTEMA; });
   mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; need=true; } if(!s.sistema){ s.sistema=DEFAULT_SISTEMA; need=true; } else s.sistema=normalizeSistema(s.sistema)||DEFAULT_SISTEMA; });
+  // unifica infinity legado
+  const infLegacy=mem.estoque.filter(e=> e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF');
+  if(infLegacy.length){
+    const sums=new Map();
+    for(const e of infLegacy){ const k=`${e.material}::${e.unidade}`; sums.set(k,(sums.get(k)||0)+Number(e.saldo||0)); }
+    mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+    for(const [k, saldo] of sums){
+      const [mat, uni]=k.split('::');
+      const exist=mem.estoque.find(e=> e.sistema==='infinity' && e.contrato==='INF' && e.material===mat && e.unidade===uni);
+      if(exist){ exist.saldo=Number(exist.saldo||0)+saldo; }
+      else { mem.estoque.push({ id: mem.seqEstoque++, sistema:'infinity', contrato:'INF', material:mat, unidade:uni, saldo, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }
+    }
+    need=true;
+  }
+  mem.estoqueMov.forEach(m=>{ if(normalizeSistema(m.sistema||DEFAULT_SISTEMA)==='infinity' && String(m.contrato).toUpperCase()!=='INF'){ m.contrato='INF'; need=true; } });
+  mem.estoqueSerial.forEach(s=>{ if(normalizeSistema(s.sistema||DEFAULT_SISTEMA)==='infinity' && String(s.contrato).toUpperCase()!=='INF'){ s.contrato='INF'; need=true; } });
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
   let added=0;
-  SISTEMAS.forEach(sis=> ['CE01','CE02'].forEach(c=> mats.forEach(m=> UNIDADES.forEach(u=>{
+  const combos=[...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}];
+  combos.forEach(({sis, c})=> mats.forEach(m=> UNIDADES.forEach(u=>{
     if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
       mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
       added++; need=true;
     }
-  }))));
+  })));
+  // remove obsoletos infinity CE01/CE02
+  {
+    const before=mem.estoque.length;
+    mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+    if(mem.estoque.length!==before) need=true;
+  }
   if(need) saveFile();
 })();
 if(!Array.isArray(mem.psi)) mem.psi = [];
@@ -799,7 +892,9 @@ const store = {
     },
     async byContrato(contrato, sistema){
       const all=await store.estoque.all(sistema);
-      return all.filter(e=> String(e.contrato).toUpperCase()===String(contrato||'').toUpperCase());
+      const c=normalizeContrato(contrato, sistema);
+      if(!c) return all;
+      return all.filter(e=> String(e.contrato).toUpperCase()===c);
     },
     async byUnidade(unidade, sistema){
       const all=await store.estoque.all(sistema);
@@ -808,19 +903,22 @@ const store = {
     },
     async byContratoUnidade(contrato, unidade, sistema){
       const all=await store.estoque.all(sistema);
-      const c=String(contrato||'').toUpperCase().trim();
+      const c=normalizeContrato(contrato, sistema);
       const u=normalizeUnidade(unidade);
+      if(!c) return all.filter(e=> String(e.unidade)===u);
       return all.filter(e=> String(e.contrato).toUpperCase()===c && String(e.unidade)===u);
     },
     async get(contrato, material, unidade, sistema){
       const all=await store.estoque.all(sistema);
       const u=unidade ? normalizeUnidade(unidade) : null;
       const sis=sistema ? normalizeSistema(sistema) : null;
-      return all.find(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase() && String(e.material).toUpperCase()===String(material).toUpperCase() && (u? String(e.unidade)===u : true) && (!sis || normalizeSistema(e.sistema||DEFAULT_SISTEMA)===sis))||null;
+      const c=normalizeContrato(contrato, sistema) || String(contrato||'').toUpperCase().trim();
+      return all.find(e=> String(e.contrato).toUpperCase()===c && String(e.material).toUpperCase()===String(material).toUpperCase() && (u? String(e.unidade)===u : true) && (!sis || normalizeSistema(e.sistema||DEFAULT_SISTEMA)===sis))||null;
     },
     async resumo({ contrato, unidade, sistema }={}){
       let all=await store.estoque.all(sistema);
-      if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
+      const c=contrato ? normalizeContrato(contrato, sistema) : null;
+      if(c) all=all.filter(e=> String(e.contrato).toUpperCase()===c);
       if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
       const porContrato={}, porUnidade={}, porMaterial={}, total=all.reduce((s,x)=>s+Number(x.saldo||0),0);
       all.forEach(e=>{ porContrato[e.contrato]=(porContrato[e.contrato]||0)+Number(e.saldo||0); porUnidade[e.unidade]=(porUnidade[e.unidade]||0)+Number(e.saldo||0); porMaterial[e.material]=(porMaterial[e.material]||0)+Number(e.saldo||0); });
@@ -829,19 +927,24 @@ const store = {
     },
     async alertas({ contrato, unidade, limite, sistema }={}){
       let all=await store.estoque.all(sistema);
-      if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
+      const c=contrato ? normalizeContrato(contrato, sistema) : null;
+      if(c) all=all.filter(e=> String(e.contrato).toUpperCase()===c);
       if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
       const baixos=all.filter(e=>{ const thr=(limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5); return Number(e.saldo||0) < thr; }).map(e=>({ ...e, limite: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5), deficit: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5)-Number(e.saldo||0) })).sort((a,b)=> a.deficit - b.deficit || a.saldo - b.saldo);
       const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
       return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
     },
     async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema }){
-      contrato=String(contrato||'').toUpperCase().trim();
-      material=String(material||'').toUpperCase().trim();
-      unidade=normalizeUnidade(unidade||DEFAULT_UNIDADE);
       sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
       if(!SISTEMAS.includes(sistema)) throw Object.assign(new Error('Sistema inválido (spacecom/infinity)'),{status:400});
-      if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
+      contrato=normalizeContrato(contrato, sistema);
+      material=String(material||'').toUpperCase().trim();
+      unidade=normalizeUnidade(unidade||DEFAULT_UNIDADE);
+      if(sistema==='infinity'){
+        if(contrato!==CONTRATO_INFINITY) throw Object.assign(new Error('Contrato inválido para Infinity (use Estoque Infinity)'),{status:400});
+      } else {
+        if(!CONTRATOS_SPACECOM.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
+      }
       if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido: '+MATERIAIS.join(', ')),{status:400});
       if(!UNIDADES.includes(unidade)) throw Object.assign(new Error('Unidade inválida: '+UNIDADES.join(', ')),{status:400});
       qtd=Number(qtd); if(!Number.isFinite(qtd) || qtd===0) throw Object.assign(new Error('Quantidade deve ser diferente de zero'),{status:400});
@@ -987,14 +1090,18 @@ const store = {
       }
     },
     async transferir({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, user, userName, sistema }){
-      contrato=String(contrato||'').toUpperCase().trim();
+      sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
+      if(!SISTEMAS.includes(sistema)) throw Object.assign(new Error('Sistema inválido'),{status:400});
+      contrato=normalizeContrato(contrato, sistema);
       material=String(material||'').toUpperCase().trim();
       unidadeOrigem=normalizeUnidade(unidadeOrigem);
       unidadeDestino=normalizeUnidade(unidadeDestino);
-      sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
-      if(!SISTEMAS.includes(sistema)) throw Object.assign(new Error('Sistema inválido'),{status:400});
       if(unidadeOrigem===unidadeDestino) throw Object.assign(new Error('Origem e destino devem ser diferentes'),{status:400});
-      if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido'),{status:400});
+      if(sistema==='infinity'){
+        if(contrato!==CONTRATO_INFINITY) throw Object.assign(new Error('Contrato inválido para Infinity (use Estoque Infinity)'),{status:400});
+      } else {
+        if(!CONTRATOS_SPACECOM.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
+      }
       if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
       if(!UNIDADES.includes(unidadeOrigem)) throw Object.assign(new Error('Unidade origem inválida'),{status:400});
       if(!UNIDADES.includes(unidadeDestino)) throw Object.assign(new Error('Unidade destino inválida'),{status:400});
@@ -1071,8 +1178,9 @@ const store = {
         if(!isNaN(target)) target.setUTCHours(23,59,59,999);
       }
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
+      const c=normalizeContrato(contrato, sistema) || String(contrato||'').toUpperCase().trim();
       const allMov = await store.estoqueMov.all(sistema ? {sistema} : undefined);
-      let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===c && new Date(m.createdAt) <= target);
       if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
       // aplica filtros de data: ignora movimentos futuros já filtrado, mas garante ordenação cronológica
       const unidadeFiltro = unidade ? normalizeUnidade(unidade) : null;
@@ -1094,7 +1202,7 @@ const store = {
             }
             seriais=[...active.keys()].sort();
           }
-          result.push({ contrato: String(contrato).toUpperCase(), material: mat, unidade: unidadeFiltro, saldo, seriais, data: target.toISOString().slice(0,10) });
+          result.push({ sistema: sistema?normalizeSistema(sistema):null, contrato: c, material: mat, unidade: unidadeFiltro, saldo, seriais, data: target.toISOString().slice(0,10) });
         }
         return result;
       }
@@ -1114,15 +1222,16 @@ const store = {
           }
           seriais=[...active.keys()].sort();
         }
-        result.push({ contrato: String(contrato).toUpperCase(), material: mat, unidade: 'TOTAL', saldo, seriais, data: target.toISOString().slice(0,10) });
+        result.push({ sistema: sistema?normalizeSistema(sistema):null, contrato: c, material: mat, unidade: 'TOTAL', saldo, seriais, data: target.toISOString().slice(0,10) });
       }
       return result;
     },
     async atDateDetailed(contrato, dateStr, sistema){
       const target = (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) ? new Date(String(dateStr).trim() + 'T23:59:59.999Z') : new Date(dateStr||Date.now());
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
+      const c=normalizeContrato(contrato, sistema) || String(contrato||'').toUpperCase().trim();
       const allMov = await store.estoqueMov.all(sistema ? {sistema} : undefined);
-      let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===c && new Date(m.createdAt) <= target);
       if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
       const mats=MATERIAIS;
       const porUnidade=[];
@@ -1142,7 +1251,7 @@ const store = {
             }
             seriais=[...active.keys()].sort();
           }
-          porUnidade.push({ contrato: String(contrato).toUpperCase(), material: mat, unidade: u, saldo, seriais, data: target.toISOString().slice(0,10) });
+          porUnidade.push({ sistema: sistema?normalizeSistema(sistema):null, contrato: c, material: mat, unidade: u, saldo, seriais, data: target.toISOString().slice(0,10) });
         }
       }
       return porUnidade;
@@ -1176,10 +1285,11 @@ const store = {
       else if(typeof opts==='number'){ limit=opts; }
       const n=Math.min(Math.max(Number(limit)||500,1),1000);
       const sisNorm = sistema ? normalizeSistema(sistema) : null;
+      const cNorm = contrato ? (normalizeContrato(contrato, sisNorm||sistema) || String(contrato).toUpperCase()) : null;
       if(MODE==='file'){
         let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
         if(sisNorm) list=list.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sisNorm);
-        if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
+        if(cNorm) list=list.filter(m=> String(m.contrato).toUpperCase()===cNorm);
         if(unidade){ const u=normalizeUnidade(unidade); list=list.filter(m=> String(m.unidade)===u || String(m.unidadeDestino)===u); }
         if(material) list=list.filter(m=> String(m.material).toUpperCase()===String(material).toUpperCase());
         return list.slice(0,n);
@@ -1187,11 +1297,11 @@ const store = {
       try{
         let q=supa.from('estoque_mov').select('*').order('createdat',{ascending:false}).limit(n);
         if(sisNorm) q=q.eq('sistema', sisNorm);
-        if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
+        if(cNorm) q=q.eq('contrato', cNorm);
         if(unidade) q=q.or(`unidade.eq.${normalizeUnidade(unidade)},unidadedestino.eq.${normalizeUnidade(unidade)}`);
         if(material) q=q.eq('material', String(material).toUpperCase());
         return must(await q,'estoqueMov.all').map(appESTMOV);
-      }catch(e){ console.warn('estoqueMov.all fallback',e.message); let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); if(sisNorm) list=list.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sisNorm); if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase()); return list.slice(0,n); }
+      }catch(e){ console.warn('estoqueMov.all fallback',e.message); let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); if(sisNorm) list=list.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sisNorm); if(cNorm) list=list.filter(m=> String(m.contrato).toUpperCase()===cNorm); return list.slice(0,n); }
     },
     async byContrato(contrato){
       const all=await store.estoqueMov.all();
@@ -1214,10 +1324,11 @@ const store = {
       let contrato, unidade, status, sistema;
       if(opts && typeof opts==='object'){ contrato=opts.contrato; unidade=opts.unidade; status=opts.status; sistema=opts.sistema; }
       const sisNorm = sistema ? normalizeSistema(sistema) : null;
+      const cNorm = contrato ? (normalizeContrato(contrato, sisNorm||sistema) || String(contrato).toUpperCase()) : null;
       if(MODE==='file'){
         let list=[...mem.estoqueSerial].sort((a,b)=> String(a.unidade).localeCompare(String(b.unidade)) || String(a.serial).localeCompare(String(b.serial)));
         if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm);
-        if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase());
+        if(cNorm) list=list.filter(s=> String(s.contrato).toUpperCase()===cNorm);
         if(unidade) list=list.filter(s=> String(s.unidade)===normalizeUnidade(unidade));
         if(status) list=list.filter(s=> String(s.status)===String(status));
         return list;
@@ -1225,11 +1336,11 @@ const store = {
       try{
         let q=supa.from('estoque_serial').select('*').order('unidade').order('serial').limit(1000);
         if(sisNorm) q=q.eq('sistema', sisNorm);
-        if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
+        if(cNorm) q=q.eq('contrato', cNorm);
         if(unidade) q=q.eq('unidade', normalizeUnidade(unidade));
         if(status) q=q.eq('status', String(status));
         return must(await q,'estoqueSerial.all').map(appESTSER);
-      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm); if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase()); return list; }
+      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm); if(cNorm) list=list.filter(s=> String(s.contrato).toUpperCase()===cNorm); return list; }
     },
     async byContrato(contrato){
       const all=await store.estoqueSerial.all();
@@ -1562,3 +1673,13 @@ const store = {
 };
 
 module.exports = store;
+module.exports.normalizeSistema = normalizeSistema;
+module.exports.normalizeContrato = normalizeContrato;
+module.exports.contratoLabel = contratoLabel;
+module.exports.contratosDoSistema = contratosDoSistema;
+module.exports.getUserSistema = getUserSistema;
+module.exports.normalizeUnidade = normalizeUnidade;
+module.exports.SISTEMAS = SISTEMAS;
+module.exports.CONTRATO_INFINITY = CONTRATO_INFINITY;
+module.exports.CONTRATOS_SPACECOM = CONTRATOS_SPACECOM;
+module.exports.MATERIAIS = MATERIAIS;

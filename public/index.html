@@ -1173,11 +1173,14 @@
     <!-- ESTOQUE (TÉCNICO) -->
     <section id="tab-estoque" class="hidden fade">
       <div class="mb-4">
-        <h2 class="font-display font-bold text-xl">Estoque por contrato e unidade</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade</p>
+        <div class="flex items-center gap-3">
+          <h2 class="font-display font-bold text-xl">Estoque por unidade</h2>
+          <span id="estoqueContratoBadge" class="text-[11px] font-bold px-2.5 py-1 rounded-full border hidden"></span>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5" id="estoqueSubtitulo">Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por contrato em cada unidade</p>
       </div>
       <div class="flex flex-wrap gap-2 mb-3">
-        <div class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+        <div id="estoqueContratoBtns" class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
           <button id="estoqueBtnCE01" onclick="switchEstoqueContrato('CE01')" class="btn text-xs px-4 py-2">CE01</button>
           <button id="estoqueBtnCE02" onclick="switchEstoqueContrato('CE02')" class="btn text-xs px-4 py-2">CE02</button>
         </div>
@@ -1948,17 +1951,50 @@ function applyNavOrder(){
   });
 }
 function hideInitialLoader(){ const el=document.getElementById('initialLoader'); if(el){ el.style.opacity='0'; setTimeout(()=>el.remove(),300); } }
+function isInfinitySistema(){ return estoqueSistemaAtivo==='infinity'; }
+function getEstoqueContratoEfetivo(){ return isInfinitySistema() ? 'INF' : estoqueContratoAtivo; }
+function updateEstoqueContratoUI(){
+  const btns=document.getElementById('estoqueContratoBtns');
+  const badge=document.getElementById('estoqueContratoBadge');
+  const sub=document.getElementById('estoqueSubtitulo');
+  const selForm=document.getElementById('estContrato');
+  const infinito=isInfinitySistema();
+  if(btns) btns.classList.toggle('hidden', infinito || estoqueSistemaAtivo==='all');
+  if(badge){
+    if(infinito){
+      badge.textContent='🟣 Estoque Infinity — unificado';
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-violet-50 text-violet-700 border-violet-200';
+      badge.classList.remove('hidden');
+    } else if(estoqueSistemaAtivo==='all'){
+      badge.textContent='👁️ Ambos os sistemas';
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200';
+      badge.classList.remove('hidden');
+    } else {
+      badge.textContent=estoqueContratoAtivo;
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-white text-slate-700 border-slate-200';
+      badge.classList.remove('hidden');
+    }
+  }
+  if(sub){
+    if(infinito) sub.textContent='Estoque unificado Infinity (sem CE01/CE02) — TZPR04/UPR04 com lote 10 dígitos, FONTE04, CINTA, TRAVAS';
+    else sub.textContent='Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade';
+  }
+  if(selForm){
+    selForm.innerHTML = infinito
+      ? '<option value="INF">Estoque Infinity</option>'
+      : '<option value="CE01">CE01</option><option value="CE02">CE02</option>';
+    selForm.value = infinito ? 'INF' : estoqueContratoAtivo;
+    selForm.disabled = infinito;
+    selForm.classList.toggle('opacity-60', infinito);
+  }
+}
 function initEstoqueSistema(){
   const sel=document.getElementById('estoqueSistemaFiltro');
   if(!sel) return;
-  // mostra/oculta opção "Ambos" só para admin
   const optAll=sel.querySelector('option[value="all"]');
   if(optAll) optAll.hidden = !(session && session.role==='admin');
-  // define sistema ativo baseado na sessão
   if(session && session.role==='admin'){
-    // admin vê ambos por padrão
     estoqueSistemaAtivo = estoqueSistemaAtivo || 'all';
-    // se valor atual for spacecom/infinity e admin quer ver ambos, mantém
     if(!['spacecom','infinity','all'].includes(estoqueSistemaAtivo)) estoqueSistemaAtivo='all';
   } else if(session && session.sistema){
     estoqueSistemaAtivo = session.sistema;
@@ -1977,6 +2013,7 @@ function initEstoqueSistema(){
     sel.classList.remove('opacity-60','cursor-not-allowed');
     sel.title='Admin: escolha Spacecom, Infinity ou Ambos';
   }
+  updateEstoqueContratoUI();
 }
 function enterApp(){
   hideInitialLoader();
@@ -6401,6 +6438,13 @@ function importSeriaisCSV(input){
   r.readAsText(f); input.value='';
 }
 function switchEstoqueContrato(c){
+  if(isInfinitySistema()){
+    estoqueContratoAtivo='INF';
+    document.getElementById('estoqueBtnCE01')?.classList.remove('btn-primary');
+    document.getElementById('estoqueBtnCE02')?.classList.remove('btn-primary');
+    const sel=document.getElementById('estContrato'); if(sel) sel.value='INF';
+    return;
+  }
   estoqueContratoAtivo = (c==='CE02'?'CE02':'CE01');
   document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
   document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
@@ -6415,8 +6459,11 @@ function switchEstoqueSistema(s){
     estoqueSistemaAtivo='all';
   } else {
     estoqueSistemaAtivo = (v==='infinity' ? 'infinity' : 'spacecom');
+    if(estoqueSistemaAtivo==='infinity') estoqueContratoAtivo='INF';
+    else if(!['CE01','CE02'].includes(estoqueContratoAtivo)) estoqueContratoAtivo='CE01';
   }
   const sel=document.getElementById('estoqueSistemaFiltro'); if(sel) sel.value=estoqueSistemaAtivo;
+  updateEstoqueContratoUI();
   renderEstoque();
   loadEstoque();
 }
@@ -6429,8 +6476,11 @@ function switchEstoqueUnidade(u){
 }
 async function loadEstoque(){
   try{
-    // usa sistema ativo (spacecom/infinity) - admin pode ver ambos, tecnico só o seu
-    const all=await api('/api/estoque?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
+    const contratoReq = estoqueSistemaAtivo==='all' ? '' : getEstoqueContratoEfetivo();
+    const urlContrato = contratoReq ? '?contrato='+encodeURIComponent(contratoReq) : '';
+    const sep = urlContrato ? '&' : '?';
+    // usa sistema ativo (spacecom/infinity/all) - admin pode ver ambos, tecnico só o seu
+    const all=await api('/api/estoque'+urlContrato+sep+'sistema='+encodeURIComponent(estoqueSistemaAtivo));
     estoqueCache=all;
     renderEstoque();
     loadEstoqueMov();
@@ -6446,16 +6496,18 @@ document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); tog
 setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); const s=document.getElementById('estoqueUnidadeFiltro'); if(s) s.value=estoqueUnidadeAtiva; const f=document.getElementById('estUnidade'); if(f) f.value=estoqueUnidadeAtiva; }catch(e){} }, 300);
 async function loadEstoqueAlertas(){
   try{
-    let url='/api/estoque/alertas?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    const cParam = getEstoqueContratoEfetivo();
+    let url='/api/estoque/alertas?contrato='+encodeURIComponent(cParam)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const data=await api(url);
     const el=document.getElementById('estoqueAlertas');
     if(!el) return;
+    const labelC = isInfinitySistema() ? 'Estoque Infinity' : getEstoqueContratoEfetivo();
     if(!data.total){
-      el.innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700">✅ Nenhum alerta — estoque acima do mínimo em ${esc(estoqueContratoAtivo)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''}</div>`;
+      el.innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700">✅ Nenhum alerta — estoque acima do mínimo em ${esc(labelC)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''}</div>`;
       return;
     }
-    el.innerHTML=`<div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center justify-between"><b class="text-amber-800">⚠️ ${data.total} itens abaixo do mínimo${data.criticos?` • ${data.criticos} zerados 🔴`:''}</b><span class="text-amber-600 text-[11px]">${esc(estoqueContratoAtivo)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''}</span></div><div class="mt-1.5 flex flex-wrap gap-1.5">${data.itens.slice(0,12).map(r=>`<span class="bg-white border ${r.saldo===0?'border-rose-200 text-rose-700':'border-amber-200 text-amber-700'} rounded-full px-2 py-0.5 font-mono text-[11px]">${esc(r.material)} ${esc(r.unidade)}: ${r.saldo}/${r.limite}</span>`).join('')}${data.itens.length>12?`<span class="text-slate-500 text-[11px]">+${data.itens.length-12}...</span>`:''}</div></div>`;
+    el.innerHTML=`<div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center justify-between"><b class="text-amber-800">⚠️ ${data.total} itens abaixo do mínimo${data.criticos?` • ${data.criticos} zerados 🔴`:''}</b><span class="text-amber-600 text-[11px]">${esc(labelC)}${estoqueUnidadeAtiva?' • '+esc(estoqueUnidadeAtiva):''} • ${estoqueSistemaAtivo==='infinity'?'Infinity': estoqueSistemaAtivo==='all'?'Ambos':estoqueContratoAtivo}</span></div><div class="mt-1.5 flex flex-wrap gap-1.5">${data.itens.slice(0,12).map(r=>`<span class="bg-white border ${r.saldo===0?'border-rose-200 text-rose-700':'border-amber-200 text-amber-700'} rounded-full px-2 py-0.5 font-mono text-[11px]">${esc(r.material)} ${esc(r.unidade)}: ${r.saldo}/${r.limite}</span>`).join('')}${data.itens.length>12?`<span class="text-slate-500 text-[11px]">+${data.itens.length-12}...</span>`:''}</div></div>`;
   }catch(e){ /* silencioso */ }
 }
 function renderEstoque(){
@@ -6465,8 +6517,8 @@ function renderEstoque(){
   if(!cont) return;
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
   const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=7" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=9" alt="FONTE04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
-  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
-  if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
+  const contratoFiltro = getEstoqueContratoEfetivo();
+  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===contratoFiltro);
   // se filtro Todas, mostrar agregado por material (soma unidades)
   let agg=[];
   if(!estoqueUnidadeAtiva){
@@ -6476,19 +6528,21 @@ function renderEstoque(){
       const limite=LIMITES_EST[m]||5;
       return { material:m, saldo, rows, limite };
     });
-    cont.innerHTML = agg.map(a=>{
+      cont.innerHTML = agg.map(a=>{
       const m=a.material; const saldo=a.saldo; const limite=a.limite;
       const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?' 🔴 ZERADO':' ⚠️ BAIXO') : '';
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">total ${estoqueContratoAtivo} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p></div>`;
+      const labelC = isInfinitySistema() ? 'Estoque Infinity' : getEstoqueContratoEfetivo();
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinitySistema()?'Estoque Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p></div>`;
     }).join('');
     if(resumo) resumo.classList.add('hidden');
     // tabela por unidade
     if(porUnidadeEl){
       porUnidadeEl.classList.remove('hidden');
       const totalGeral=agg.reduce((s,a)=>s+a.saldo,0);
-      porUnidadeEl.innerHTML=`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">📍 Saldo por unidade — ${esc(estoqueContratoAtivo)} <span class="font-normal text-slate-500">Total geral: ${totalGeral}</span></h4><span class="text-[11px] text-slate-400">${UNIDADES_EST.length} localidades</span></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{
+      const labelC2 = isInfinitySistema() ? 'Estoque Infinity' : getEstoqueContratoEfetivo();
+      porUnidadeEl.innerHTML=`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">📍 Saldo por unidade — ${esc(labelC2)} <span class="font-normal text-slate-500">Total geral: ${totalGeral}</span></h4><span class="text-[11px] text-slate-400">${UNIDADES_EST.length} localidades</span></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{
         const rowMats=mats.map(m=>{
           const r=list.find(x=> String(x.unidade)===u && String(x.material)===m);
           const v=r?Number(r.saldo||0):0;
@@ -6509,15 +6563,18 @@ function renderEstoque(){
       const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
       return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
     }).join('');
-    if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${estoqueContratoAtivo}</span>`; }
+    if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); const lab=isInfinitySistema()?'Estoque Infinity':estoqueContratoAtivo; resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${esc(lab)}</span>`; }
     if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
   }
-  document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
-  document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
+  if(!isInfinitySistema()){
+    document.getElementById('estoqueBtnCE01')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE01');
+    document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
+  }
+  updateEstoqueContratoUI();
 }
 async function loadEstoqueMov(){
   try{
-    let url='/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    let url='/api/estoque-mov?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&limit=50&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const resp=await api(url);
     const list=Array.isArray(resp) ? resp : (resp.items||[]);
@@ -6549,7 +6606,7 @@ async function loadEstoqueAudit(){
   }catch(e){ document.getElementById('estAuditList').innerHTML=''; }
 }
 function quickEstoque(material, delta){
-  document.getElementById('estContrato').value=estoqueContratoAtivo;
+  document.getElementById('estContrato').value=getEstoqueContratoEfetivo();
   const uSel=document.getElementById('estUnidade'); if(uSel && estoqueUnidadeAtiva) uSel.value=estoqueUnidadeAtiva;
   document.getElementById('estMaterial').value=material;
   toggleEstSeriais();
@@ -6561,7 +6618,7 @@ function quickEstoque(material, delta){
 async function movimentarEstoque(){
   const err=document.getElementById('estErr');
   err.classList.add('hidden');
-  const contrato=document.getElementById('estContrato').value;
+  const contrato=isInfinitySistema() ? 'INF' : document.getElementById('estContrato').value;
   const unidade=document.getElementById('estUnidade').value;
   const material=document.getElementById('estMaterial').value;
   const tipo=document.getElementById('estTipo').value;
@@ -6586,7 +6643,7 @@ async function movimentarEstoque(){
     if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
-    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, material, qtd: delta, motivo, seriais }) });
+    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: contrato, unidade, material, qtd: delta, motivo, seriais }) });
     toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoqueSistemaAtivo+']');
     document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const st=document.getElementById('estSeriais'); if(st) st.value=''; document.getElementById('estSeriaisList').innerHTML='';
     loadEstoque();
@@ -6594,7 +6651,7 @@ async function movimentarEstoque(){
 }
 async function transferirEstoque(){
   const err=document.getElementById('estTransErr'); err.classList.add('hidden');
-  const contrato=estoqueContratoAtivo;
+  const contrato=getEstoqueContratoEfetivo();
   const unidadeOrigem=document.getElementById('estTransOrigem').value;
   const unidadeDestino=document.getElementById('estTransDestino').value;
   const material=document.getElementById('estTransMaterial').value;
@@ -6618,8 +6675,7 @@ async function transferirEstoque(){
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function gerarRelatorioEstoque(){
-  let contrato=(estoqueContratoAtivo||'CE01').toUpperCase();
-  if(!['CE01','CE02'].includes(contrato)) contrato='CE01';
+  let contrato=getEstoqueContratoEfetivo();
   const unidade=estoqueUnidadeAtiva;
   const from=document.getElementById('estRelFrom')?.value||'';
   const to=document.getElementById('estRelTo')?.value||'';
@@ -6638,7 +6694,8 @@ async function gerarRelatorioEstoque(){
     const saldos=data.estoque||[];
     const totalGeral=saldos.reduce((s,x)=>s+Number(x.saldo||0),0);
     const tituloUnidade=unidade?` • ${esc(unidade)}`:' • todas as unidades';
-    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(contrato)}${tituloUnidade} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('estRelatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
+    const labelRel = contrato==='INF' ? 'Estoque Infinity' : contrato;
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(labelRel)}${tituloUnidade} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('estRelatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
     <div class="grid grid-cols-5 gap-2 mb-3">${mats.map(m=>{
       const rows=saldos.filter(x=> String(x.material).toUpperCase()===m);
       const v=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
@@ -6653,15 +6710,16 @@ async function gerarRelatorioEstoque(){
 function exportEstoqueCSV(){
   if(!estoqueCache.length) return toast('⚠️ Nada para exportar');
   let rows=[['Contrato','Unidade','Material','Saldo']];
-  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
+  const cCSV=getEstoqueContratoEfetivo();
+  let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===cCSV);
   if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
   list.forEach(e=> rows.push([e.contrato, e.unidade, e.material, e.saldo]));
   const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
-  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+estoqueContratoAtivo+(estoqueUnidadeAtiva?'-'+estoqueUnidadeAtiva.replace(/\s+/g,'_'):'-todas')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+getEstoqueContratoEfetivo()+(estoqueUnidadeAtiva?'-'+estoqueUnidadeAtiva.replace(/\s+/g,'_'):'-todas')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
 function exportEstoqueRelatorioCSV(){
-  const contrato=estoqueContratoAtivo;
+  const contrato=getEstoqueContratoEfetivo();
   const rows=[['Data','Contrato','Unidade','Material','Tipo','Qtd','Saldo Antes','Saldo Depois','Motivo','Usuário','Seriais']];
   (estoqueMovCache||[]).forEach(m=> rows.push([new Date(m.createdAt).toLocaleString('pt-BR'), m.contrato, m.unidade||'', m.material, m.tipo, m.qtd, m.saldoAntes, m.saldoDepois, m.motivo, m.userName||m.user, (m.seriais||[]).join(' | ')]));
   const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
@@ -6670,12 +6728,13 @@ function exportEstoqueRelatorioCSV(){
 }
 async function exportEstoquePDF(){
   try{
-    let url='/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    let url='/api/estoque/relatorio?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const data=await api(url);
     const w=window.open('','_blank');
+    const contratoLbl = getEstoqueContratoEfetivo()==='INF'?'Estoque Infinity':getEstoqueContratoEfetivo();
     const unidadeTxt=estoqueUnidadeAtiva?` • ${estoqueUnidadeAtiva}`:' • todas as unidades';
-    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque ${estoqueContratoAtivo}${unidadeTxt}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque ${estoqueContratoAtivo}${unidadeTxt} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Unidade</th><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.unidade}</td><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
+    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque ${contratoLbl}${unidadeTxt}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque ${contratoLbl}${unidadeTxt} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Unidade</th><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.unidade}</td><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
     w.document.write(html); w.document.close();
   }catch(e){ toast('⚠️ '+e.message); }
 }
@@ -6684,14 +6743,15 @@ async function mostrarEstoqueData(){
   const unidade=document.getElementById('estHistUnidade')?.value||'';
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(unidade) url+='&unidade='+encodeURIComponent(unidade);
     const list=await api(url);
     const el=document.getElementById('estHistResult');
     el.classList.remove('hidden');
-    const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
+     const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
+    const labelH = getEstoqueContratoEfetivo()==='INF'?'Estoque Infinity':getEstoqueContratoEfetivo();
     const titulo=unidade?`${esc(unidade)} em ${new Date(data).toLocaleDateString('pt-BR')}`:`Total geral em ${new Date(data).toLocaleDateString('pt-BR')}`;
-     el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${estoqueContratoAtivo})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${MATERIAIS_SERIAL_EST.includes(r.material) && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
+     el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${esc(labelH)})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${MATERIAIS_SERIAL_EST.includes(r.material) && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
     el.scrollIntoView({behavior:'smooth'});
   }catch(e){ toast('⚠️ '+e.message); }
 }
@@ -6699,11 +6759,12 @@ async function mostrarEstoqueDataDetalha(){
   const data=document.getElementById('estHistData')?.value;
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
+    const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
     const el=document.getElementById('estHistResult');
     el.classList.remove('hidden');
     const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">Detalhado por unidade em ${new Date(data).toLocaleDateString('pt-BR')} (${estoqueContratoAtivo})</b><button onclick="exportHistoricoCSV()" class="text-xs text-slate-500">⬇ CSV</button></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{ const rows=list.filter(x=> String(x.unidade)===u); const cells=mats.map(m=>{ const r=rows.find(x=> String(x.material)===m); const v=r?r.saldo:0; const det=r&&r.seriais&&r.seriais.length?`<br><span class="text-[10px] font-mono text-slate-500">${r.seriais.length} seriais</span>`:''; return `<td class="text-center py-1.5 px-2">${v}${det}</td>`; }).join(''); const tot=rows.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`;
+    const labelDet = getEstoqueContratoEfetivo()==='INF'?'Estoque Infinity':getEstoqueContratoEfetivo();
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">Detalhado por unidade em ${new Date(data).toLocaleDateString('pt-BR')} (${esc(labelDet)})</b><button onclick="exportHistoricoCSV()" class="text-xs text-slate-500">⬇ CSV</button></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{ const rows=list.filter(x=> String(x.unidade)===u); const cells=mats.map(m=>{ const r=rows.find(x=> String(x.material)===m); const v=r?r.saldo:0; const det=r&&r.seriais&&r.seriais.length?`<br><span class="text-[10px] font-mono text-slate-500">${r.seriais.length} seriais</span>`:''; return `<td class="text-center py-1.5 px-2">${v}${det}</td>`; }).join(''); const tot=rows.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`;
     el.scrollIntoView({behavior:'smooth'});
   }catch(e){ toast('⚠️ '+e.message); }
 }
@@ -6712,9 +6773,9 @@ async function exportHistoricoCSV(){
   const unidade=document.getElementById('estHistUnidade')?.value||'';
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(unidade) url+='&unidade='+encodeURIComponent(unidade);
-    else url='/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
+    else url='/api/estoque/historico/detalhado?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     const list=await api(url);
     const rows=[['Contrato','Unidade','Material','Saldo','Seriais','Data']];
     list.forEach(r=> rows.push([r.contrato, r.unidade||unidade||'TOTAL', r.material, r.saldo, (r.seriais||[]).join(' | '), r.data]));

@@ -228,6 +228,29 @@ alter table estoque_serial add column if not exists sistema text not null defaul
 alter table estoque_serial drop constraint if exists estoque_serial_contrato_serial_key;
 alter table estoque_serial add constraint estoque_serial_sistema_contrato_serial_key unique(sistema, contrato, serial);
 alter table users add column if not exists sistema text default 'spacecom';
+-- Migração: unifica Infinity CE01/CE02 em Estoque Infinity (INF) — soma saldos por material/unidade
+do $$ begin
+  -- achata infinity para INF (CE01/CE02 legados somam em INF)
+  with sums as (
+    select material, unidade, sum(saldo)::int as soma
+    from estoque where sistema='infinity' and contrato in ('CE01','CE02') group by material, unidade
+  )
+  insert into estoque (sistema, contrato, material, unidade, saldo)
+    select 'infinity','INF',material,unidade,0 from sums
+    on conflict (sistema, contrato, material, unidade) do nothing;
+  update estoque e set saldo = e.saldo + s.soma, updatedat = now()
+    from sums s where e.sistema='infinity' and e.contrato='INF' and e.material=s.material and e.unidade=s.unidade;
+  delete from estoque where sistema='infinity' and contrato in ('CE01','CE02');
+  -- histórico e seriais passam a INF
+  update estoque_mov set contrato='INF' where sistema='infinity' and contrato in ('CE01','CE02');
+  update estoque_serial set contrato='INF' where sistema='infinity' and contrato in ('CE01','CE02');
+  -- garante linhas INF para todas as combinações (5 materiais x 6 unidades)
+  insert into estoque (sistema, contrato, material, unidade, saldo)
+    select 'infinity','INF',m.material,u.unidade,0
+    from (values ('TZPR04'),('UPR04'),('FONTE04'),('CINTA'),('TRAVAS')) as m(material),
+         (values ('UMEPE Juazeiro'),('UP-Juazeiro'),('UP-Cariri'),('UP-Crato'),('Fórum de Crato'),('Fórum de Jardim')) as u(unidade)
+    on conflict (sistema, contrato, material, unidade) do nothing;
+end $$;
 
 -- =====================================================================
 --  STORAGE (anexos/fotos) — bucket público
