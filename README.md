@@ -12,6 +12,24 @@ Sem `SUPABASE_URL` + `SUPABASE_KEY` no ambiente, usa `db.json` local. Veja `.env
 
 Usuários iniciais: `recepcao` / `joanderson` / `adailton` / `admin` (sufixo `123`).
 
+## Estoque — dados massivos de demonstração
+
+Gera até 60 dias de histórico nos 6 locais e nos dois sistemas (Spacecom
+CE01/CE02 e Infinity INF), com adições, saídas e transferências entre locais —
+datas reais de cada operação, seriais contínuos e nenhum saldo negativo:
+
+```powershell
+npm run seed:estoque                          # 60 dias
+node scripts/seed-estoque-60d.js --dias=30    # janela menor
+node scripts/seed-estoque-60d.js --seed=7     # outro histórico (reproduzível)
+node scripts/seed-estoque-60d.js --dry        # simula sem gravar
+```
+
+Em produção (Supabase) o mesmo gerador roda pelo endpoint
+`POST /api/estoque/seed` (admin): `?force=1` libera em base que já tem
+histórico, `?dias=N` limita a janela e `?assincrono=1` responde na hora (avisa
+quem está online via SSE ao terminar).
+
 ## Deploy (Render + Supabase, grátis)
 
 Guia completo em `deploy/README-RENDER.md`. Resumo:

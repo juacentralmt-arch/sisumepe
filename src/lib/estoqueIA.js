@@ -173,7 +173,7 @@ async function answer(query, store, opts){
     const dias=30;
     let linhas=[];
     for(const mat of mats){
-      const movs=await store.estoqueMov.all({ limit: 500, contrato:cNorm, material:mat, unidade:uni, sistema:sis });
+      const movs=await store.estoqueMov.all({ limit: 'all', contrato:cNorm, material:mat, unidade:uni, sistema:sis });
       const saidas=movs.filter(m=> m.tipo==='saida' && new Date(m.createdAt) >= new Date(Date.now()-dias*86400000));
       const totalSaidas=saidas.reduce((s,m)=>s+Number(m.qtd||0),0);
       const mediaDiaria=totalSaidas/dias;
@@ -299,7 +299,7 @@ async function answer(query, store, opts){
     const mat=material||last.material||'TZPR04';
     const uni=unidade||last.unidade||null;
     const dias=periodo||30;
-    const movs=await store.estoqueMov.all({ limit: 500, contrato:c, material:mat, unidade:uni });
+    const movs=await store.estoqueMov.all({ limit: 'all', contrato:c, material:mat, unidade:uni });
     const saidas=movs.filter(m=> m.tipo==='saida' && new Date(m.createdAt) >= new Date(Date.now()-dias*86400000));
     const totalSaidas=saidas.reduce((s,m)=>s+Number(m.qtd||0),0);
     const media=totalSaidas/dias;

@@ -10,7 +10,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "check": "node --check server.js && node --check store.js && node --check src/lib/shared.js && node --check src/routes/auth.js && node --check src/routes/admin.js && echo OK",
-    "backup": "node -e \"require('./store').backup().then(b=>require('fs').writeFileSync('backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(b)))\""
+    "backup": "node -e \"require('./store').backup().then(b=>require('fs').writeFileSync('backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(b)))\"",
+    "seed:estoque": "node scripts/seed-estoque-60d.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.44.0",

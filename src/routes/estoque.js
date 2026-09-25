@@ -1,6 +1,7 @@
 const express = require('express');
 const shared = require('../lib/shared');
 const estoqueIA = require('../lib/estoqueIA');
+const { popularEstoque } = require('../lib/estoqueSeed');
 const router = express.Router();
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
@@ -214,7 +215,8 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
   const off=Math.max(Number(offset)||0,0);
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
-  let list = await shared.store.estoqueMov.all({ limit: 1000, contrato: resolveContrato(contrato, effectiveSistema), unidade, material, sistema: effectiveSistema });
+  // limit:'all' — o total informado tem de refletir o histórico inteiro, não só as 1000 últimas
+  let list = await shared.store.estoqueMov.all({ limit: 'all', contrato: resolveContrato(contrato, effectiveSistema), unidade, material, sistema: effectiveSistema });
   const total=list.length;
   list=list.slice(off, off+n);
   res.json({ total, offset: off, limit: n, items: list, hasMore: off+n < total });
@@ -245,8 +247,9 @@ router.get('/api/estoque/ia/sugestoes', shared.auth(['tecnico','admin']), shared
   res.json({ sugestoes: ['saldo TZPR04 UMEPE Juazeiro CE01','saldo total CE01','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações CE01','seriais TZPR04 CE01','buscar serial 1234567890','ranking CINTA CE01','estoque baixo','resumo CE01','alertas CE01','saldo por unidade CE01','unidades'] });
 }));
 
-// Seed de demonstração - popula 60 dias de histórico (admin apenas)
-router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,res)=>{
+// Seed antigo de demonstração (só modo arquivo, sem transferências entre
+// locais). Mantido para compatibilidade; prefira POST /api/estoque/seed.
+router.post('/api/estoque/seed-demo', shared.auth(['admin']), shared.ah(async (req,res)=>{
   const { force, sistema } = req.query;
   const seedSistema = normalizeSistema(sistema) || 'spacecom';
   const movs = await shared.store.estoqueMov.all();
@@ -339,6 +342,42 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
   res.json({ ok:true, inseridos: ok, skips: skip, total: (await shared.store.estoqueMov.all({ sistema: seedSistema })).length, resumo, sistema: seedSistema });
 }));
 
+// Seed completo (admin): até 60 dias de histórico em todos os locais e
+// sistemas, com adições, saídas E transferências entre locais, gravando as
+// datas reais — funciona igual em modo arquivo e no Supabase.
+//   ?dias=N      janela (1..60, padrão 60)
+//   ?force=1     libera em base que já tem movimentações
+//   ?lote=0      pula o lote inicial (só movimentações)
+//   ?assincrono=1 responde na hora e avisa quem está online (SSE) ao terminar
+let seedEstoqueRodando = false;
+router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,res)=>{
+  const { force, dias, semente, lote, assincrono } = req.query;
+  const janela = Math.min(Math.max(Math.round(Number(dias)||60),1),60);
+  const existentes = await shared.store.estoqueMov.all({ limit: 6 });
+  if(existentes.length > 5 && force!=='1')
+    return res.json({ ok:false, msg:`Já existem movimentações no estoque. Use ?force=1 para acrescentar mais ${janela} dias de histórico.` });
+  const opcoes = {
+    dias: janela,
+    semente: Number(semente)||undefined,
+    semLote: lote==='0',
+    user: req.auth.user,
+    userName: req.auth.name || req.auth.user,
+  };
+  const log = m=> console.log('[seed-estoque]', m);
+  if(assincrono==='1'){
+    if(seedEstoqueRodando) return res.json({ ok:false, msg:'Já existe uma carga de estoque em andamento.' });
+    seedEstoqueRodando = true;
+    popularEstoque({ ...opcoes, log })
+      .then(r=>{ console.log('[seed-estoque] concluída:', JSON.stringify(r.stats)); shared.broadcast(); })
+      .catch(e=> console.error('[seed-estoque] falhou:', e.message))
+      .finally(()=>{ seedEstoqueRodando = false; });
+    return res.json({ ok:true, assincrono:true, dias:janela, msg:'Carga iniciada — o estoque e a auditoria são atualizados ao terminar.' });
+  }
+  const rel = await popularEstoque({ ...opcoes, log });
+  shared.broadcast();
+  res.json(rel);
+}));
+
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema
 router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, from, to } = req.query;
@@ -349,7 +388,8 @@ router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah
   if(contrato && c && !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
   let estoque = c ? await shared.store.estoque.byContrato(c, effectiveSistema) : await shared.store.estoque.all(effectiveSistema);
   if(unidade) estoque = estoque.filter(e=> String(e.unidade)===String(unidade).trim());
-  let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema });
+  // limit:'all' — o filtro por período precisa enxergar o histórico completo
+  let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema, limit: 'all' });
   if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
   if(unidade) movs = movs.filter(m=> String(m.unidade)===String(unidade).trim() || String(m.unidadeDestino)===String(unidade).trim());
   if(from){ const d=new Date(from); if(!isNaN(d)) movs=movs.filter(m=> new Date(m.createdAt) >= d); }
@@ -359,7 +399,8 @@ router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah
   if(effectiveSistema) audit = audit.filter(a=> String(a.ref||'').toLowerCase().includes(effectiveSistema) || String(a.summary||'').toLowerCase().includes(effectiveSistema));
   if(c) audit = audit.filter(a=> String(a.ref||'').includes(c) || String(a.ref||'').includes(contratoLabel(c)));
   if(unidade) audit = audit.filter(a=> String(a.ref||'').includes(String(unidade).trim()) || String(a.summary||'').includes(String(unidade).trim()));
-  res.json({ estoque, movimentacoes: movs, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null });
+  // limita o corpo (relatórios longos) mas informa o total real do período
+  res.json({ estoque, movimentacoes: movs.slice(0, 5000), totalMovimentacoes: movs.length, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null });
 }));
 
 // Rota paramétrica por contrato - DEVE ficar por último entre /api/estoque/* para não sombrear /relatorio, /seriais, /historico, etc.
