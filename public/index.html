@@ -6397,7 +6397,7 @@ function renderEstoque(){
   const porUnidadeEl=document.getElementById('estoquePorUnidade');
   if(!cont) return;
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-  const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=6" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'🔌', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
+  const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=6" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=9" alt="FONTE04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
   let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
   if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
   // se filtro Todas, mostrar agregado por material (soma unidades)
