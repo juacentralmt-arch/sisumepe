@@ -6397,7 +6397,7 @@ function renderEstoque(){
   const porUnidadeEl=document.getElementById('estoquePorUnidade');
   if(!cont) return;
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-  const icons={ TZPR04:'<img src="/tzpr.png?v=4" alt="TZPR04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=4" alt="UPR04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=1" alt="FONTE04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'🩹', TRAVAS:'🔒' };
+  const icons={ TZPR04:'<img src="/tzpr.png?v=4" alt="TZPR04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=4" alt="UPR04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=1" alt="FONTE04" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'🩹', TRAVAS:'<img src="/travas.png?v=1" alt="TRAVAS" class="w-10 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
   let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===estoqueContratoAtivo);
   if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoqueUnidadeAtiva);
   // se filtro Todas, mostrar agregado por material (soma unidades)
