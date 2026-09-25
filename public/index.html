@@ -1183,7 +1183,7 @@
         </div>
         <select id="estoqueUnidadeFiltro" onchange="switchEstoqueUnidade(this.value)" class="inp !w-auto text-xs py-2">
           <option value="">Todas as unidades</option>
-          <option value="UMEPE Juazeiro">UMEPE Juazeiro</option>
+          <option value="UMEPE Juazeiro" selected>UMEPE Juazeiro</option>
           <option value="UP-Juazeiro">UP-Juazeiro</option>
           <option value="UP-Cariri">UP-Cariri</option>
           <option value="UP-Crato">UP-Crato</option>
@@ -1201,7 +1201,7 @@
       <div id="estoquePorUnidade" class="hidden card p-4 mb-4"></div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
-          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR</h3>
+          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR/UPR</h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
             <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
@@ -1210,7 +1210,7 @@
             <div class="col-span-2"><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEstSeriaisQtd()"></div>
           </div>
           <div id="estSeriaisWrap" class="mt-2.5">
-            <label class="lbl flex items-center justify-between">SERIAIS TZPR04/UPR04 (lote — 10 dígitos, um por linha / vírgula) * <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
+            <label class="lbl flex items-center justify-between"><span id="estSeriaisLabel">SERIAIS TZPR04/UPR04 (lote — 10 dígitos, um por linha / vírgula) *</span> <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
             <textarea id="estSeriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD — deixe QTD vazio para auto-preencher)" class="inp mt-1 font-mono text-xs" oninput="syncEstSeriaisQtd()"></textarea>
             <div class="flex gap-2 mt-2">
               <label class="btn btn-ghost text-xs px-3 py-1.5 cursor-pointer">📎 Importar CSV <input type="file" accept=".csv,.txt" class="hidden" onchange="importSeriaisCSV(this)"></label>
@@ -1233,7 +1233,7 @@
               </div>
             </div>
             <div id="estTransSeriaisWrap" class="mt-2">
-              <label class="lbl flex justify-between">SERIAIS TZPR04/UPR04 (lote) * <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
+              <label class="lbl flex justify-between"><span id="estTransSeriaisLabel">SERIAIS TZPR04/UPR04 (lote) *</span> <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
               <textarea id="estTransSeriais" rows="3" placeholder="Cole seriais do lote (10 dígitos cada)" class="inp mt-1 font-mono text-xs" oninput="syncTransSeriaisQtd()"></textarea>
             </div>
             <input id="estTransMotivo" placeholder="Motivo (opcional)" class="inp mt-2">
@@ -6277,12 +6277,16 @@ function toggleEstSeriais(){
   const mat=document.getElementById('estMaterial')?.value||'';
   const wrap=document.getElementById('estSeriaisWrap');
   if(wrap) wrap.classList.toggle('hidden', !temSerialEst(mat));
+  const lbl=document.getElementById('estSeriaisLabel');
+  if(lbl) lbl.textContent = temSerialEst(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *';
   syncEstSeriaisQtd();
 }
 function toggleTransSeriais(){
   const mat=document.getElementById('estTransMaterial')?.value||'';
   const wrap=document.getElementById('estTransSeriaisWrap');
   if(wrap) wrap.classList.toggle('hidden', !temSerialEst(mat));
+  const lbl=document.getElementById('estTransSeriaisLabel');
+  if(lbl) lbl.textContent = temSerialEst(mat) ? `SERIAIS ${mat} (lote) *` : 'SERIAIS (lote) *';
   syncTransSeriaisQtd();
 }
 function parseSeriais(txt){
@@ -6371,8 +6375,8 @@ async function loadEstoque(){
 }
 // Inicialização: garante visibilidade do campo seriais ao carregar (default TZPR04/UPR04 = com lote)
 try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){}
-document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){} });
-setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){} }, 300);
+document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); document.getElementById('estoqueUnidadeFiltro').value=estoqueUnidadeAtiva; document.getElementById('estUnidade').value=estoqueUnidadeAtiva; }catch(e){} });
+setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); const s=document.getElementById('estoqueUnidadeFiltro'); if(s) s.value=estoqueUnidadeAtiva; const f=document.getElementById('estUnidade'); if(f) f.value=estoqueUnidadeAtiva; }catch(e){} }, 300);
 async function loadEstoqueAlertas(){
   try{
     let url='/api/estoque/alertas?contrato='+encodeURIComponent(estoqueContratoAtivo);
