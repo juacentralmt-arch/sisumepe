@@ -6690,7 +6690,7 @@ function estIAAppend(who, text, opts){
   const avatar=isUser?`<span class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs shrink-0">👤</span>`:`<span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span>`;
   const bubble=isUser?`bg-indigo-600 text-white rounded-2xl rounded-tr-sm`:`bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-sm shadow-sm`;
   const time=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  const copyBtn=!isUser ? `<button onclick="navigator.clipboard.writeText(${JSON.stringify(text)}).then(()=>toast('📋 Copiado'))" class="text-[11px] text-slate-400 hover:text-indigo-600 ml-2" title="Copiar">📋</button>` : '';
+  const copyBtn=!isUser ? `<button data-text="${encodeURIComponent(text).replace(/"/g,'&quot;')}" onclick="navigator.clipboard.writeText(decodeURIComponent(this.dataset.text)).then(()=>toast('📋 Copiado'))" class="text-[11px] text-slate-400 hover:text-indigo-600 ml-2" title="Copiar">📋</button>` : '';
   const html=`<div class="flex gap-2 ${isUser?'justify-end':''} group">${!isUser?avatar:''}<div class="max-w-[85%]"><div class="${bubble} px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words">${estIAFormatText(text)}${copyBtn}</div><div class="text-[10px] text-slate-400 mt-1 ${isUser?'text-right':''}">${time}</div></div>${isUser?avatar:''}</div>`;
   box.insertAdjacentHTML('beforeend', html);
   if(opts && opts.suggestions) {/* handled outside */}
@@ -6798,7 +6798,7 @@ async function estIASend(){
     if(dataHtml){ const b=document.getElementById('estIAMessages'); b.insertAdjacentHTML('beforeend', `<div class="ml-9">${dataHtml}</div>`); b.scrollTop=b.scrollHeight; }
     if(r.suggestions && r.suggestions.length){
       const b=document.getElementById('estIAMessages');
-      b.insertAdjacentHTML('beforeend', `<div class="ml-9 flex flex-wrap gap-1 mt-2">${r.suggestions.slice(0,6).map(s=>`<button onclick="estIAAsk(${JSON.stringify(s)})" class="text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100 transition">`+esc(s)+`</button>`).join('')}</div>`);
+      b.insertAdjacentHTML('beforeend', `<div class="ml-9 flex flex-wrap gap-1 mt-2">${r.suggestions.slice(0,6).map(s=>`<button onclick='estIAAsk(${JSON.stringify(s)})' class="text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100 transition">`+esc(s)+`</button>`).join('')}</div>`);
       b.scrollTop=b.scrollHeight;
     }
   }catch(e){
