@@ -19,7 +19,24 @@ const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
 const MATERIAIS_COM_SERIAL = ['TZPR04','UPR04'];
 const ESTOQUE_LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
 const ESTOQUE_CONTRATOS = ['CE01','CE02'];
-function temSerial(material){ return MATERIAIS_COM_SERIAL.includes(String(material||'').toUpperCase()); }
+const SISTEMAS = ['spacecom','infinity'];
+const DEFAULT_SISTEMA = 'spacecom';
+function normalizeSistema(s){
+  const v=String(s||'').toLowerCase().trim();
+  if(v==='infinity' || v==='inf' || v==='infinito') return 'infinity';
+  if(v==='spacecom' || v==='space' || v==='spc') return 'spacecom';
+  return null;
+}
+function getUserSistema(userObj){
+  if(!userObj) return DEFAULT_SISTEMA;
+  if(userObj.role==='admin') return null; // null = acesso a todos
+  if(userObj.sistema) return normalizeSistema(userObj.sistema) || DEFAULT_SISTEMA;
+  // fallback por usuário
+  const u=normalizeUser(userObj.user||'');
+  if(['julio','marcelo'].includes(u)) return 'infinity';
+  if(['joanderson','adailton','secretaria'].includes(u)) return 'spacecom';
+  return DEFAULT_SISTEMA;
+}
 function parseSeriaisInput(v){
   if(Array.isArray(v)) return v.map(s=> String(s).replace(/\D/g,'')).filter(s=> s.length===10);
   const s=String(v||'');
@@ -41,12 +58,14 @@ function normalizeUser(u) {
 
 function seedUsers() {
   return [
-    { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true },
-    { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: 'joanderson123', active: true },
-    { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: 'adailton123', active: true },
-    { user: 'psicologo', name: 'Psicólogo', role: 'psico', pass: 'psicologo123', active: true },
-    { user: 'secretaria', name: 'Secretária', role: 'tecnico', pass: 'secretaria123', active: true },
-    { user: 'admin', name: 'Administrador', role: 'admin', pass: 'admin123', active: true }
+    { user: 'recepcao', name: 'Recepção', role: 'recepcao', pass: 'recepcao123', active: true, sistema: 'spacecom' },
+    { user: 'joanderson', name: 'Joanderson', role: 'tecnico', pass: 'joanderson123', active: true, sistema: 'spacecom' },
+    { user: 'adailton', name: 'Adailton', role: 'tecnico', pass: 'adailton123', active: true, sistema: 'spacecom' },
+    { user: 'julio', name: 'Júlio Cesar', role: 'tecnico', pass: 'julio123', active: true, sistema: 'infinity' },
+    { user: 'marcelo', name: 'Marcelo', role: 'tecnico', pass: 'marcelo123', active: true, sistema: 'infinity' },
+    { user: 'psicologo', name: 'Psicólogo', role: 'psico', pass: 'psicologo123', active: true, sistema: 'spacecom' },
+    { user: 'secretaria', name: 'Secretária', role: 'tecnico', pass: 'secretaria123', active: true, sistema: 'spacecom' },
+    { user: 'admin', name: 'Administrador', role: 'admin', pass: 'admin123', active: true, sistema: null }
   ];
 }
 
@@ -79,6 +98,19 @@ function loadFile() {
     }
     mem.users = deduped;
     mem.users.forEach(u => { if (u.active === undefined) u.active = true; });
+    // Migração sistema: garante campo sistema para controle Spacecom/Infinity
+    mem.users.forEach(u=>{
+      if(u.sistema===undefined){
+        const s=getUserSistema(u);
+        if(u.role==='admin') u.sistema=null;
+        else u.sistema=s;
+      } else if(u.sistema){
+        u.sistema=normalizeSistema(u.sistema);
+        if(u.role==='admin') u.sistema=null;
+      } else if(u.role!=='admin' && !u.sistema){
+        u.sistema=getUserSistema(u);
+      }
+    });
     if (!mem.sessions || typeof mem.sessions !== 'object') mem.sessions = {};
     if (!Array.isArray(mem.agenda)) mem.agenda = [];
     if (!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
@@ -91,33 +123,34 @@ function loadFile() {
     if (!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueSerial)) mem.estoqueSerial = [];
     if (!mem.seqEstoqueSerial) mem.seqEstoqueSerial = mem.estoqueSerial.length ? Math.max(...mem.estoqueSerial.map(x=>x.id))+1 : 1;
-     // inicializa estoque padrão CE01/CE02 x 5 materiais x 6 unidades
-    // migração: garante campo unidade em registros antigos
+     // inicializa estoque padrão CE01/CE02 x 5 materiais x 6 unidades x 2 sistemas
+    // migração: garante campo unidade e sistema em registros antigos
     let needSave=false;
-    mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; needSave=true; } else e.unidade=normalizeUnidade(e.unidade); });
-    mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; needSave=true; } else m.unidade=normalizeUnidade(m.unidade); });
-    mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; needSave=true; } else s.unidade=normalizeUnidade(s.unidade); });
+    mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; needSave=true; } else e.unidade=normalizeUnidade(e.unidade); if(!e.sistema){ e.sistema=DEFAULT_SISTEMA; needSave=true; } else e.sistema=normalizeSistema(e.sistema)||DEFAULT_SISTEMA; });
+    mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; needSave=true; } else m.unidade=normalizeUnidade(m.unidade); if(!m.sistema){ m.sistema=DEFAULT_SISTEMA; needSave=true; } else m.sistema=normalizeSistema(m.sistema)||DEFAULT_SISTEMA; });
+    mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; needSave=true; } else s.unidade=normalizeUnidade(s.unidade); if(!s.sistema){ s.sistema=DEFAULT_SISTEMA; needSave=true; } else s.sistema=normalizeSistema(s.sistema)||DEFAULT_SISTEMA; });
     const matsAll=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
     const contratosAll=['CE01','CE02'];
     const unidadesAll=UNIDADES;
-    // deduplica estoque por (contrato,material,unidade) somando saldo
+    const sistemasAll=SISTEMAS;
+    // deduplica estoque por (sistema,contrato,material,unidade) somando saldo
     const dedup=new Map();
     for(const e of mem.estoque){
-      const k=`${e.contrato}::${e.material}::${e.unidade}`;
+      const k=`${e.sistema}::${e.contrato}::${e.material}::${e.unidade}`;
       if(!dedup.has(k)) dedup.set(k, e);
       else { dedup.get(k).saldo = Number(dedup.get(k).saldo||0)+Number(e.saldo||0); needSave=true; }
     }
     if(dedup.size !== mem.estoque.length){ mem.estoque=[...dedup.values()]; needSave=true; }
-    // garante todas combinações existem
+    // garante todas combinações existem para ambos os sistemas
     let added=0;
-    contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=>{
-      if(!mem.estoque.some(e=> e.contrato===c && e.material===m && e.unidade===u)){
-        mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
+    sistemasAll.forEach(sis=> contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=>{
+      if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
+        mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
         added++; needSave=true;
       }
-    })));
+    }))));
     if(!mem.estoque.length){
-      contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
+      sistemasAll.forEach(sis=> contratosAll.forEach(c=> matsAll.forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) ))));
       needSave=true;
     }
     if(needSave||added) saveFile();
@@ -151,20 +184,20 @@ if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
 if(!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueSerial)) mem.estoqueSerial=[];
 if(!mem.seqEstoqueSerial) mem.seqEstoqueSerial = mem.estoqueSerial.length ? Math.max(...mem.estoqueSerial.map(x=>x.id))+1 : 1;
-// fallback garante campo unidade e combinações (supabase sem tabela ainda)
+// fallback garante campo unidade/sistema e combinações (supabase sem tabela ainda)
 (()=>{
   let need=false;
-  mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; need=true; }});
-  mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; need=true; }});
-  mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; need=true; }});
+  mem.estoque.forEach(e=>{ if(!e.unidade){ e.unidade=DEFAULT_UNIDADE; need=true; } if(!e.sistema){ e.sistema=DEFAULT_SISTEMA; need=true; } else e.sistema=normalizeSistema(e.sistema)||DEFAULT_SISTEMA; });
+  mem.estoqueMov.forEach(m=>{ if(!m.unidade){ m.unidade=DEFAULT_UNIDADE; need=true; } if(!m.sistema){ m.sistema=DEFAULT_SISTEMA; need=true; } else m.sistema=normalizeSistema(m.sistema)||DEFAULT_SISTEMA; });
+  mem.estoqueSerial.forEach(s=>{ if(!s.unidade){ s.unidade=DEFAULT_UNIDADE; need=true; } if(!s.sistema){ s.sistema=DEFAULT_SISTEMA; need=true; } else s.sistema=normalizeSistema(s.sistema)||DEFAULT_SISTEMA; });
   const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
   let added=0;
-  ['CE01','CE02'].forEach(c=> mats.forEach(m=> UNIDADES.forEach(u=>{
-    if(!mem.estoque.some(e=> e.contrato===c && e.material===m && e.unidade===u)){
-      mem.estoque.push({ id: mem.seqEstoque++, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
+  SISTEMAS.forEach(sis=> ['CE01','CE02'].forEach(c=> mats.forEach(m=> UNIDADES.forEach(u=>{
+    if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
+      mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
       added++; need=true;
     }
-  })));
+  }))));
   if(need) saveFile();
 })();
 if(!Array.isArray(mem.psi)) mem.psi = [];
@@ -213,13 +246,13 @@ const PSI = {
   id: 'id', user: 'user', kind: 'kind', personId: 'personid', personName: 'personname', grupoId: 'grupoid', data: 'data', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const EST = {
-  id: 'id', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
+  id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ESTMOV = {
-  id: 'id', contrato: 'contrato', material: 'material', unidade: 'unidade', tipo: 'tipo', qtd: 'qtd', saldoAntes: 'saldoantes', saldoDepois: 'saldodepois', motivo: 'motivo', user: 'user', userName: 'username', createdAt: 'createdat', seriais: 'seriais', unidadeDestino: 'unidadedestino'
+  id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', tipo: 'tipo', qtd: 'qtd', saldoAntes: 'saldoantes', saldoDepois: 'saldodepois', motivo: 'motivo', user: 'user', userName: 'username', createdAt: 'createdat', seriais: 'seriais', unidadeDestino: 'unidadedestino'
 };
 const ESTSER = {
-  id: 'id', contrato: 'contrato', serial: 'serial', unidade: 'unidade', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
+  id: 'id', sistema: 'sistema', contrato: 'contrato', serial: 'serial', unidade: 'unidade', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 function toApp(row, map) {
   if (!row) return null;
@@ -751,51 +784,63 @@ const store = {
   materiais: MATERIAIS,
   estoqueLimites: ESTOQUE_LIMITES,
   estoque: {
-    async all(){
-      if(MODE==='file') return mem.estoque;
-      try{ return must(await supa.from('estoque').select('*').order('contrato').order('material').order('unidade'), 'estoque.all').map(appEST); }catch(e){ console.warn('estoque.all fallback', e.message); return mem.estoque; }
+    async all(sistema){
+      let list;
+      if(MODE==='file') list=[...mem.estoque];
+      else {
+        try{ list=must(await supa.from('estoque').select('*').order('contrato').order('material').order('unidade'), 'estoque.all').map(appEST); }catch(e){ console.warn('estoque.all fallback', e.message); list=[...mem.estoque]; }
+      }
+      // filtra por sistema se informado
+      if(sistema) {
+        const sis=normalizeSistema(sistema);
+        if(sis) list=list.filter(e=> normalizeSistema(e.sistema||DEFAULT_SISTEMA)===sis);
+      }
+      return list;
     },
-    async byContrato(contrato){
-      const all=await store.estoque.all();
+    async byContrato(contrato, sistema){
+      const all=await store.estoque.all(sistema);
       return all.filter(e=> String(e.contrato).toUpperCase()===String(contrato||'').toUpperCase());
     },
-    async byUnidade(unidade){
-      const all=await store.estoque.all();
+    async byUnidade(unidade, sistema){
+      const all=await store.estoque.all(sistema);
       const u=normalizeUnidade(unidade);
       return all.filter(e=> String(e.unidade)===u);
     },
-    async byContratoUnidade(contrato, unidade){
-      const all=await store.estoque.all();
+    async byContratoUnidade(contrato, unidade, sistema){
+      const all=await store.estoque.all(sistema);
       const c=String(contrato||'').toUpperCase().trim();
       const u=normalizeUnidade(unidade);
       return all.filter(e=> String(e.contrato).toUpperCase()===c && String(e.unidade)===u);
     },
-    async get(contrato, material, unidade){
-      const all=await store.estoque.all();
+    async get(contrato, material, unidade, sistema){
+      const all=await store.estoque.all(sistema);
       const u=unidade ? normalizeUnidade(unidade) : null;
-      return all.find(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase() && String(e.material).toUpperCase()===String(material).toUpperCase() && (u? String(e.unidade)===u : true))||null;
+      const sis=sistema ? normalizeSistema(sistema) : null;
+      return all.find(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase() && String(e.material).toUpperCase()===String(material).toUpperCase() && (u? String(e.unidade)===u : true) && (!sis || normalizeSistema(e.sistema||DEFAULT_SISTEMA)===sis))||null;
     },
-    async resumo({ contrato, unidade }={}){
-      let all=await store.estoque.all();
+    async resumo({ contrato, unidade, sistema }={}){
+      let all=await store.estoque.all(sistema);
       if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
       if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
       const porContrato={}, porUnidade={}, porMaterial={}, total=all.reduce((s,x)=>s+Number(x.saldo||0),0);
       all.forEach(e=>{ porContrato[e.contrato]=(porContrato[e.contrato]||0)+Number(e.saldo||0); porUnidade[e.unidade]=(porUnidade[e.unidade]||0)+Number(e.saldo||0); porMaterial[e.material]=(porMaterial[e.material]||0)+Number(e.saldo||0); });
-      const alertas=await store.estoque.alertas({ contrato, unidade });
-      return { total, porContrato, porUnidade, porMaterial, itens: all, alertas, limites: ESTOQUE_LIMITES, geradoEm: new Date().toISOString() };
+      const alertas=await store.estoque.alertas({ contrato, unidade, sistema });
+      return { total, porContrato, porUnidade, porMaterial, itens: all, alertas, limites: ESTOQUE_LIMITES, geradoEm: new Date().toISOString(), sistema: sistema||null };
     },
-    async alertas({ contrato, unidade, limite }={}){
-      let all=await store.estoque.all();
+    async alertas({ contrato, unidade, limite, sistema }={}){
+      let all=await store.estoque.all(sistema);
       if(contrato) all=all.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
       if(unidade) all=all.filter(e=> String(e.unidade)===normalizeUnidade(unidade));
       const baixos=all.filter(e=>{ const thr=(limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5); return Number(e.saldo||0) < thr; }).map(e=>({ ...e, limite: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5), deficit: (limite!=null? Number(limite): ESTOQUE_LIMITES[e.material]||5)-Number(e.saldo||0) })).sort((a,b)=> a.deficit - b.deficit || a.saldo - b.saldo);
       const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
       return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
     },
-    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais }){
+    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema }){
       contrato=String(contrato||'').toUpperCase().trim();
       material=String(material||'').toUpperCase().trim();
       unidade=normalizeUnidade(unidade||DEFAULT_UNIDADE);
+      sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
+      if(!SISTEMAS.includes(sistema)) throw Object.assign(new Error('Sistema inválido (spacecom/infinity)'),{status:400});
       if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
       if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido: '+MATERIAIS.join(', ')),{status:400});
       if(!UNIDADES.includes(unidade)) throw Object.assign(new Error('Unidade inválida: '+UNIDADES.join(', ')),{status:400});
@@ -808,18 +853,18 @@ const store = {
         if(serialList.length !== Math.abs(qtd)) throw Object.assign(new Error(`${material} exige ${Math.abs(qtd)} seriais de 10 dígitos (recebido ${serialList.length}) — verifique se colou 10 dígitos por linha`),{status:400});
         if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na lista'),{status:400});
       }
-      // garante linha existe
-      let row=await store.estoque.get(contrato, material, unidade);
+      // garante linha existe (por sistema)
+      let row=await store.estoque.get(contrato, material, unidade, sistema);
       if(!row){
         if(MODE==='file'){
-          row={ id: mem.seqEstoque++, contrato, material, unidade, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+          row={ id: mem.seqEstoque++, sistema, contrato, material, unidade, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
           mem.estoque.push(row); saveFile();
         } else {
           try{
-            const r=must(await supa.from('estoque').insert({ contrato, material, unidade, saldo:0 }).select().single(),'estoque.insert');
+            const r=must(await supa.from('estoque').insert({ sistema, contrato, material, unidade, saldo:0 }).select().single(),'estoque.insert');
             row=appEST(r);
           }catch(e){
-            row={ id: mem.seqEstoque++, contrato, material, unidade, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+            row={ id: mem.seqEstoque++, sistema, contrato, material, unidade, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
             mem.estoque.push(row);
           }
         }
@@ -830,7 +875,7 @@ const store = {
       if(temSerial(material) && serialList.length){
         if(qtd>0){
           for(const s of serialList){
-            const existsFile = (MODE==='file' ? mem.estoqueSerial.find(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s) : null);
+            const existsFile = (MODE==='file' ? mem.estoqueSerial.find(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema) : null);
             if(existsFile){
               if(existsFile.status==='disponivel') throw Object.assign(new Error(`Serial ${s} já está em estoque em ${existsFile.unidade||'outra unidade'}`),{status:400});
               if(existsFile.status==='em_uso'){
@@ -840,7 +885,7 @@ const store = {
             }
             if(MODE==='supabase'){
               try{
-                const r=must(await supa.from('estoque_serial').select('id,unidade,status').eq('contrato',contrato).eq('serial',s).limit(1),'estoqueSerial.check');
+                const r=must(await supa.from('estoque_serial').select('id,unidade,status').eq('contrato',contrato).eq('serial',s).eq('sistema',sistema).limit(1),'estoqueSerial.check');
                 if(r.length){
                   if(r[0].status==='disponivel') throw Object.assign(new Error(`Serial ${s} já está em estoque em ${r[0].unidade||'outra unidade'}`),{status:400});
                   // em_uso será reativado
@@ -879,47 +924,48 @@ const store = {
       if(temSerial(material) && serialList.length){
         if(qtd>0){
           for(const s of serialList){
-            const idxExist = MODE==='file' ? mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s) : -1;
+            const idxExist = MODE==='file' ? mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema) : -1;
             if(idxExist>=0 && mem.estoqueSerial[idxExist].status==='em_uso'){
               // reativação de serial previamente baixado
               mem.estoqueSerial[idxExist].status='disponivel';
               mem.estoqueSerial[idxExist].unidade=unidade;
+              mem.estoqueSerial[idxExist].sistema=sistema;
               mem.estoqueSerial[idxExist].updatedAt=new Date().toISOString();
               if(MODE==='supabase'){
-                try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso'),'estoqueSerial.reativar'); }catch(e){}
+                try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, sistema, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso').eq('sistema',sistema),'estoqueSerial.reativar'); }catch(e){}
               }
               continue;
             }
             if(MODE==='supabase'){
               // tenta reativar no supabase se estiver em_uso
               try{
-                const r=must(await supa.from('estoque_serial').select('id,status').eq('contrato',contrato).eq('serial',s).limit(1),'estoqueSerial.checkReativar');
+                const r=must(await supa.from('estoque_serial').select('id,status').eq('contrato',contrato).eq('serial',s).eq('sistema',sistema).limit(1),'estoqueSerial.checkReativar');
                 if(r.length && r[0].status==='em_uso'){
-                  must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, updatedat: new Date().toISOString() }).eq('id', r[0].id),'estoqueSerial.reativar2');
+                  must(await supa.from('estoque_serial').update({ status:'disponivel', unidade, sistema, updatedat: new Date().toISOString() }).eq('id', r[0].id),'estoqueSerial.reativar2');
                   continue;
                 }
               }catch(e){}
             }
             if(MODE==='file'){
-              mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade, status: 'disponivel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+              mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade, status: 'disponivel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
             } else {
-              try{ must(await supa.from('estoque_serial').insert({ contrato, serial: s, unidade, status: 'disponivel' }).select().single(),'estoqueSerial.insert'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade, status: 'disponivel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
+              try{ must(await supa.from('estoque_serial').insert({ sistema, contrato, serial: s, unidade, status: 'disponivel' }).select().single(),'estoqueSerial.insert'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade, status: 'disponivel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
             }
           }
           if(MODE==='file') saveFile();
         } else {
           for(const s of serialList){
             if(MODE==='file'){
-              const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='disponivel' && String(x.unidade)===unidade);
+              const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='disponivel' && String(x.unidade)===unidade && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema);
               if(idx>=0){ mem.estoqueSerial[idx].status='em_uso'; mem.estoqueSerial[idx].updatedAt=new Date().toISOString(); }
             } else {
-              try{ must(await supa.from('estoque_serial').update({ status: 'em_uso', updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','disponivel').eq('unidade',unidade),'estoqueSerial.patch'); }catch(e){ const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='disponivel' && String(x.unidade)===unidade); if(idx>=0){ mem.estoqueSerial[idx].status='em_uso'; } }
+              try{ must(await supa.from('estoque_serial').update({ status: 'em_uso', updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','disponivel').eq('unidade',unidade).eq('sistema',sistema),'estoqueSerial.patch'); }catch(e){ const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='disponivel' && String(x.unidade)===unidade && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema); if(idx>=0){ mem.estoqueSerial[idx].status='em_uso'; } }
             }
           }
           if(MODE==='file') saveFile();
         }
       }
-      const mov={ contrato, material, unidade, tipo: qtd>0?'entrada':'saida', qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: new Date().toISOString(), unidadeDestino: null };
+      const mov={ sistema, contrato, material, unidade, tipo: qtd>0?'entrada':'saida', qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: new Date().toISOString(), unidadeDestino: null };
       const auditRef=`${contrato}/${material}/${unidade} ${qtd>0?'+':''}${qtd}`;
       if(MODE==='file'){
         const m={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois };
@@ -940,11 +986,13 @@ const store = {
         }
       }
     },
-    async transferir({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, user, userName }){
+    async transferir({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, user, userName, sistema }){
       contrato=String(contrato||'').toUpperCase().trim();
       material=String(material||'').toUpperCase().trim();
       unidadeOrigem=normalizeUnidade(unidadeOrigem);
       unidadeDestino=normalizeUnidade(unidadeDestino);
+      sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
+      if(!SISTEMAS.includes(sistema)) throw Object.assign(new Error('Sistema inválido'),{status:400});
       if(unidadeOrigem===unidadeDestino) throw Object.assign(new Error('Origem e destino devem ser diferentes'),{status:400});
       if(!ESTOQUE_CONTRATOS.includes(contrato)) throw Object.assign(new Error('Contrato inválido'),{status:400});
       if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
@@ -960,48 +1008,48 @@ const store = {
         if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na transferência'),{status:400});
       }
       // verifica saldo origem antes para falhar rápido
-      const rowOrig = await store.estoque.get(contrato, material, unidadeOrigem);
+      const rowOrig = await store.estoque.get(contrato, material, unidadeOrigem, sistema);
       if(!rowOrig || Number(rowOrig.saldo||0) < qtd) throw Object.assign(new Error(`Saldo insuficiente em ${unidadeOrigem} (${rowOrig?rowOrig.saldo:0} disponível)`),{status:400});
       // saida origem
-      const out = await store.estoque.adjust({ contrato, material, unidade: unidadeOrigem, qtd: -qtd, motivo: motivo ? `${motivo} → transf. p/ ${unidadeDestino}` : `Transferência p/ ${unidadeDestino}`, user, userName, seriais: serialList });
+      const out = await store.estoque.adjust({ sistema, contrato, material, unidade: unidadeOrigem, qtd: -qtd, motivo: motivo ? `${motivo} → transf. p/ ${unidadeDestino}` : `Transferência p/ ${unidadeDestino}`, user, userName, seriais: serialList });
       // Para materiais com serial (TZPR04/UPR04), os seriais saíram como em_uso; reativar diretamente em destino:
       // faz update direto de unidade/status para evitar re-inserção bloqueada
       let inn;
       if(temSerial(material) && serialList.length){
         // saldo já ajustado na saída; agora ajusta saldo destino manualmente e move seriais
-        let rowDest=await store.estoque.get(contrato, material, unidadeDestino);
+        let rowDest=await store.estoque.get(contrato, material, unidadeDestino, sistema);
         if(!rowDest){
-          if(MODE==='file'){ rowDest={ id: mem.seqEstoque++, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); }
-          else { try{ const r=must(await supa.from('estoque').insert({ contrato, material, unidade: unidadeDestino, saldo:0 }).select().single(),'estoque.insertDest'); rowDest=appEST(r);}catch(e){ rowDest={ id: mem.seqEstoque++, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); } }
+          if(MODE==='file'){ rowDest={ id: mem.seqEstoque++, sistema, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); }
+          else { try{ const r=must(await supa.from('estoque').insert({ sistema, contrato, material, unidade: unidadeDestino, saldo:0 }).select().single(),'estoque.insertDest'); rowDest=appEST(r);}catch(e){ rowDest={ id: mem.seqEstoque++, sistema, contrato, material, unidade: unidadeDestino, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }; mem.estoque.push(rowDest); } }
         }
         const saldoAntes=Number(rowDest.saldo||0);
         const saldoDepois=saldoAntes+qtd;
         if(MODE==='file'){ rowDest.saldo=saldoDepois; rowDest.updatedAt=new Date().toISOString(); }
         else { try{ const r=must(await supa.from('estoque').update({ saldo: saldoDepois, updatedat: new Date().toISOString() }).eq('id', Number(rowDest.id)).select().single(),'estoque.patchDest'); rowDest=appEST(r);}catch(e){ rowDest.saldo=saldoDepois; const idx=mem.estoque.findIndex(x=>String(x.id)===String(rowDest.id)); if(idx>=0) mem.estoque[idx]=rowDest; }}
-        // move seriais: em_uso -> disponivel + unidadeDestino
+        // move seriais: em_uso -> disponivel + unidadeDestino (por sistema)
         for(const s of serialList){
           if(MODE==='file'){
-            const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='em_uso');
-            if(idx>=0){ mem.estoqueSerial[idx].status='disponivel'; mem.estoqueSerial[idx].unidade=unidadeDestino; mem.estoqueSerial[idx].updatedAt=new Date().toISOString(); }
+            const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='em_uso' && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema);
+            if(idx>=0){ mem.estoqueSerial[idx].status='disponivel'; mem.estoqueSerial[idx].unidade=unidadeDestino; mem.estoqueSerial[idx].sistema=sistema; mem.estoqueSerial[idx].updatedAt=new Date().toISOString(); }
             else {
-              mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
+              mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
             }
           } else {
-            try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade: unidadeDestino, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso'),'estoqueSerial.move'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }
+            try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade: unidadeDestino, sistema, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso').eq('sistema',sistema),'estoqueSerial.move'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }); }
           }
         }
         if(MODE==='file') saveFile();
-        const mov={ contrato, material, unidade: unidadeDestino, tipo:'entrada', qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, seriais: serialList, user: user||null, userName: userName||null, createdAt: new Date().toISOString(), unidadeDestino: unidadeOrigem };
-        const auditRef=`${contrato}/${material}/${unidadeDestino} +${qtd} (de ${unidadeOrigem})`;
+        const mov={ sistema, contrato, material, unidade: unidadeDestino, tipo:'entrada', qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, seriais: serialList, user: user||null, userName: userName||null, createdAt: new Date().toISOString(), unidadeDestino: unidadeOrigem };
+        const auditRef=`${sistema}/${contrato}/${material}/${unidadeDestino} +${qtd} (de ${unidadeOrigem})`;
         let movRow;
         if(MODE==='file'){ movRow={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois }; mem.estoqueMov.push(movRow); saveFile(); await store.audit.insert({ kind:'estoque', action:'entrada', personName:`${contrato} ${material} ${unidadeDestino}`, ticketId:null, ref:auditRef, byUser:user, byName:userName, byRole:'tecnico', summary: mov.motivo, changes:[{ field:'saldo', label:`Saldo ${unidadeDestino}`, from:String(saldoAntes), to:String(saldoDepois)}]}); }
         else { try{ const r=must(await supa.from('estoque_mov').insert(toRow({...mov, saldoAntes, saldoDepois}, ESTMOV)).select().single(),'estoqueMov.insertDest'); movRow=appESTMOV(r); await store.audit.insert({ kind:'estoque', action:'entrada', personName:`${contrato} ${material} ${unidadeDestino}`, ticketId:null, ref:auditRef, byUser:user, byName:userName, byRole:'tecnico', summary: mov.motivo, changes:[{ field:'saldo', label:`Saldo ${unidadeDestino}`, from:String(saldoAntes), to:String(saldoDepois)}]});}catch(e){ movRow={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois }; mem.estoqueMov.push(movRow); } }
         inn={ row: rowDest, mov: movRow };
       } else {
         try{
-          inn = await store.estoque.adjust({ contrato, material, unidade: unidadeDestino, qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, user, userName, seriais: serialList });
+          inn = await store.estoque.adjust({ sistema, contrato, material, unidade: unidadeDestino, qtd, motivo: motivo ? `${motivo} ← transf. de ${unidadeOrigem}` : `Transferência de ${unidadeOrigem}`, user, userName, seriais: serialList });
         }catch(e){
-          try{ await store.estoque.adjust({ contrato, material, unidade: unidadeOrigem, qtd, motivo: `Rollback transferência falha: ${e.message}`, user, userName, seriais: serialList }); }catch(_){}
+          try{ await store.estoque.adjust({ sistema, contrato, material, unidade: unidadeOrigem, qtd, motivo: `Rollback transferência falha: ${e.message}`, user, userName, seriais: serialList, sistema }); }catch(_){}
           throw e;
         }
       }
@@ -1014,7 +1062,7 @@ const store = {
       }
       return { origem: out, destino: inn };
     },
-    async atDate(contrato, dateStr, unidade){
+    async atDate(contrato, dateStr, unidade, sistema){
       let target;
       if(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())){
         target = new Date(String(dateStr).trim() + 'T23:59:59.999Z');
@@ -1023,8 +1071,9 @@ const store = {
         if(!isNaN(target)) target.setUTCHours(23,59,59,999);
       }
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
-      const allMov = await store.estoqueMov.all();
+      const allMov = await store.estoqueMov.all(sistema ? {sistema} : undefined);
       let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
       // aplica filtros de data: ignora movimentos futuros já filtrado, mas garante ordenação cronológica
       const unidadeFiltro = unidade ? normalizeUnidade(unidade) : null;
       const mats=MATERIAIS;
@@ -1069,11 +1118,12 @@ const store = {
       }
       return result;
     },
-    async atDateDetailed(contrato, dateStr){
+    async atDateDetailed(contrato, dateStr, sistema){
       const target = (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) ? new Date(String(dateStr).trim() + 'T23:59:59.999Z') : new Date(dateStr||Date.now());
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
-      const allMov = await store.estoqueMov.all();
-      const filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      const allMov = await store.estoqueMov.all(sistema ? {sistema} : undefined);
+      let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===String(contrato||'').toUpperCase() && new Date(m.createdAt) <= target);
+      if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
       const mats=MATERIAIS;
       const porUnidade=[];
       for(const u of UNIDADES){
@@ -1104,9 +1154,9 @@ const store = {
       const all=await store.estoqueMov.all();
       const mov=all.find(m=> Number(m.id)===id);
       if(!mov) throw Object.assign(new Error('Movimentação não encontrada'),{status:404});
-      // estorno é operação inversa
+      // estorno é operação inversa - preserva sistema original
       const qtdEstorno = mov.tipo==='entrada' ? -Number(mov.qtd) : Number(mov.qtd);
-      const res=await store.estoque.adjust({ contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
+      const res=await store.estoque.adjust({ sistema: mov.sistema||DEFAULT_SISTEMA, contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
       // marca mov original como estornada (audit trail)
       if(MODE==='file'){
         const orig=mem.estoqueMov.find(m=> Number(m.id)===id);
@@ -1121,12 +1171,14 @@ const store = {
   },
   estoqueMov: {
     async all(opts){
-      let limit=500, contrato, unidade, material;
-      if(opts && typeof opts==='object' && !Array.isArray(opts)){ limit=opts.limit!=null? opts.limit : 500; contrato=opts.contrato; unidade=opts.unidade; material=opts.material; }
+      let limit=500, contrato, unidade, material, sistema;
+      if(opts && typeof opts==='object' && !Array.isArray(opts)){ limit=opts.limit!=null? opts.limit : 500; contrato=opts.contrato; unidade=opts.unidade; material=opts.material; sistema=opts.sistema; }
       else if(typeof opts==='number'){ limit=opts; }
       const n=Math.min(Math.max(Number(limit)||500,1),1000);
+      const sisNorm = sistema ? normalizeSistema(sistema) : null;
       if(MODE==='file'){
         let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+        if(sisNorm) list=list.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sisNorm);
         if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
         if(unidade){ const u=normalizeUnidade(unidade); list=list.filter(m=> String(m.unidade)===u || String(m.unidadeDestino)===u); }
         if(material) list=list.filter(m=> String(m.material).toUpperCase()===String(material).toUpperCase());
@@ -1134,11 +1186,12 @@ const store = {
       }
       try{
         let q=supa.from('estoque_mov').select('*').order('createdat',{ascending:false}).limit(n);
+        if(sisNorm) q=q.eq('sistema', sisNorm);
         if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
         if(unidade) q=q.or(`unidade.eq.${normalizeUnidade(unidade)},unidadedestino.eq.${normalizeUnidade(unidade)}`);
         if(material) q=q.eq('material', String(material).toUpperCase());
         return must(await q,'estoqueMov.all').map(appESTMOV);
-      }catch(e){ console.warn('estoqueMov.all fallback',e.message); let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase()); return list.slice(0,n); }
+      }catch(e){ console.warn('estoqueMov.all fallback',e.message); let list=[...mem.estoqueMov].sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt)); if(sisNorm) list=list.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sisNorm); if(contrato) list=list.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase()); return list.slice(0,n); }
     },
     async byContrato(contrato){
       const all=await store.estoqueMov.all();
@@ -1158,10 +1211,12 @@ const store = {
   },
   estoqueSerial: {
     async all(opts){
-      let contrato, unidade, status;
-      if(opts && typeof opts==='object'){ contrato=opts.contrato; unidade=opts.unidade; status=opts.status; }
+      let contrato, unidade, status, sistema;
+      if(opts && typeof opts==='object'){ contrato=opts.contrato; unidade=opts.unidade; status=opts.status; sistema=opts.sistema; }
+      const sisNorm = sistema ? normalizeSistema(sistema) : null;
       if(MODE==='file'){
         let list=[...mem.estoqueSerial].sort((a,b)=> String(a.unidade).localeCompare(String(b.unidade)) || String(a.serial).localeCompare(String(b.serial)));
+        if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm);
         if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase());
         if(unidade) list=list.filter(s=> String(s.unidade)===normalizeUnidade(unidade));
         if(status) list=list.filter(s=> String(s.status)===String(status));
@@ -1169,11 +1224,12 @@ const store = {
       }
       try{
         let q=supa.from('estoque_serial').select('*').order('unidade').order('serial').limit(1000);
+        if(sisNorm) q=q.eq('sistema', sisNorm);
         if(contrato) q=q.eq('contrato', String(contrato).toUpperCase());
         if(unidade) q=q.eq('unidade', normalizeUnidade(unidade));
         if(status) q=q.eq('status', String(status));
         return must(await q,'estoqueSerial.all').map(appESTSER);
-      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase()); return list; }
+      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm); if(contrato) list=list.filter(s=> String(s.contrato).toUpperCase()===String(contrato).toUpperCase()); return list; }
     },
     async byContrato(contrato){
       const all=await store.estoqueSerial.all();
@@ -1197,7 +1253,7 @@ const store = {
     async insert(token, row) {
       if (MODE === 'file') { mem.sessions[token] = row; saveFile(); return; }
       try {
-        const r = await supa.from('sessions').upsert({ token, user: row.user, role: row.role, name: row.name, exp: new Date(row.exp).toISOString() }, { onConflict: 'token' });
+        const r = await supa.from('sessions').upsert({ token, user: row.user, role: row.role, name: row.name, sistema: row.sistema||null, exp: new Date(row.exp).toISOString() }, { onConflict: 'token' });
         if (r.error) throw r.error;
       } catch (e) { warnSessions(e); memSessions.set(token, row); }
     },
@@ -1209,7 +1265,7 @@ const store = {
         if (r.error) throw r.error;
         if (!r.data.length) return memSessions.get(token) || null;
         const s = r.data[0];
-        return { user: s.user, role: s.role, name: s.name, exp: new Date(s.exp).getTime() };
+        return { user: s.user, role: s.role, name: s.name, sistema: s.sistema||null, exp: new Date(s.exp).getTime() };
       } catch (e) { warnSessions(e); return memSessions.get(token) || null; }
     },
     async del(token) {

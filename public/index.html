@@ -1181,6 +1181,11 @@
           <button id="estoqueBtnCE01" onclick="switchEstoqueContrato('CE01')" class="btn text-xs px-4 py-2">CE01</button>
           <button id="estoqueBtnCE02" onclick="switchEstoqueContrato('CE02')" class="btn text-xs px-4 py-2">CE02</button>
         </div>
+        <select id="estoqueSistemaFiltro" onchange="switchEstoqueSistema(this.value)" class="inp !w-auto text-xs py-2 font-bold">
+          <option value="spacecom">🔵 Spacecom</option>
+          <option value="infinity">🟣 Infinity</option>
+          <option value="all">👁️ Ambos (Admin)</option>
+        </select>
         <select id="estoqueUnidadeFiltro" onchange="switchEstoqueUnidade(this.value)" class="inp !w-auto text-xs py-2">
           <option value="">Todas as unidades</option>
           <option value="UMEPE Juazeiro" selected>UMEPE Juazeiro</option>
@@ -1943,10 +1948,41 @@ function applyNavOrder(){
   });
 }
 function hideInitialLoader(){ const el=document.getElementById('initialLoader'); if(el){ el.style.opacity='0'; setTimeout(()=>el.remove(),300); } }
+function initEstoqueSistema(){
+  const sel=document.getElementById('estoqueSistemaFiltro');
+  if(!sel) return;
+  // mostra/oculta opção "Ambos" só para admin
+  const optAll=sel.querySelector('option[value="all"]');
+  if(optAll) optAll.hidden = !(session && session.role==='admin');
+  // define sistema ativo baseado na sessão
+  if(session && session.role==='admin'){
+    // admin vê ambos por padrão
+    estoqueSistemaAtivo = estoqueSistemaAtivo || 'all';
+    // se valor atual for spacecom/infinity e admin quer ver ambos, mantém
+    if(!['spacecom','infinity','all'].includes(estoqueSistemaAtivo)) estoqueSistemaAtivo='all';
+  } else if(session && session.sistema){
+    estoqueSistemaAtivo = session.sistema;
+  } else if(session){
+    const u=String(session.user||'').toLowerCase();
+    if(['julio','marcelo'].includes(u)) estoqueSistemaAtivo='infinity';
+    else estoqueSistemaAtivo='spacecom';
+  }
+  sel.value=estoqueSistemaAtivo;
+  if(session && session.role!=='admin'){
+    sel.disabled=true;
+    sel.classList.add('opacity-60','cursor-not-allowed');
+    sel.title='Seu estoque: '+(estoqueSistemaAtivo==='infinity'?'Infinity':'Spacecom');
+  } else {
+    sel.disabled=false;
+    sel.classList.remove('opacity-60','cursor-not-allowed');
+    sel.title='Admin: escolha Spacecom, Infinity ou Ambos';
+  }
+}
 function enterApp(){
   hideInitialLoader();
   document.getElementById('appShell').classList.remove('hidden');
   document.getElementById('loginOverlay').classList.add('hidden');
+  initEstoqueSistema();
   paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
   setTimeout(preloadOCR, 1200);
@@ -6282,9 +6318,10 @@ function exportAuditoriaCSV(){
   const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='auditoria-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
 }
-// --- ESTOQUE (TÉCNICO) por unidade + lote TZPR ---
+// --- ESTOQUE (TÉCNICO) por unidade + lote TZPR/UPR + sistema Spacecom/Infinity ---
 let estoqueContratoAtivo='CE01';
 let estoqueUnidadeAtiva='UMEPE Juazeiro'; // pré-selecionado
+let estoqueSistemaAtivo='spacecom';
 let estoqueCache=[], estoqueMovCache=[];
 const UNIDADES_EST=['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const LIMITES_EST={ TZPR04:5, UPR04:5, FONTE04:5, CINTA:10, TRAVAS:20 };
@@ -6371,6 +6408,18 @@ function switchEstoqueContrato(c){
   renderEstoque();
   loadEstoqueMov();
 }
+function switchEstoqueSistema(s){
+  const v=String(s||'').toLowerCase();
+  if(v==='all' || v==='todos'){
+    if(session && session.role!=='admin'){ toast('🔒 Apenas admin vê ambos os estoques'); return; }
+    estoqueSistemaAtivo='all';
+  } else {
+    estoqueSistemaAtivo = (v==='infinity' ? 'infinity' : 'spacecom');
+  }
+  const sel=document.getElementById('estoqueSistemaFiltro'); if(sel) sel.value=estoqueSistemaAtivo;
+  renderEstoque();
+  loadEstoque();
+}
 function switchEstoqueUnidade(u){
   estoqueUnidadeAtiva = String(u||'');
   const sel=document.getElementById('estoqueUnidadeFiltro'); if(sel) sel.value=estoqueUnidadeAtiva;
@@ -6380,7 +6429,8 @@ function switchEstoqueUnidade(u){
 }
 async function loadEstoque(){
   try{
-    const all=await api('/api/estoque?contrato='+encodeURIComponent(estoqueContratoAtivo));
+    // usa sistema ativo (spacecom/infinity) - admin pode ver ambos, tecnico só o seu
+    const all=await api('/api/estoque?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
     estoqueCache=all;
     renderEstoque();
     loadEstoqueMov();
@@ -6396,7 +6446,7 @@ document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); tog
 setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); const s=document.getElementById('estoqueUnidadeFiltro'); if(s) s.value=estoqueUnidadeAtiva; const f=document.getElementById('estUnidade'); if(f) f.value=estoqueUnidadeAtiva; }catch(e){} }, 300);
 async function loadEstoqueAlertas(){
   try{
-    let url='/api/estoque/alertas?contrato='+encodeURIComponent(estoqueContratoAtivo);
+    let url='/api/estoque/alertas?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const data=await api(url);
     const el=document.getElementById('estoqueAlertas');
@@ -6467,7 +6517,7 @@ function renderEstoque(){
 }
 async function loadEstoqueMov(){
   try{
-    let url='/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50';
+    let url='/api/estoque-mov?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&limit=50&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const resp=await api(url);
     const list=Array.isArray(resp) ? resp : (resp.items||[]);
@@ -6536,8 +6586,8 @@ async function movimentarEstoque(){
     if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
-    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, unidade, material, qtd: delta, motivo, seriais }) });
-    toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:''));
+    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, material, qtd: delta, motivo, seriais }) });
+    toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoqueSistemaAtivo+']');
     document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const st=document.getElementById('estSeriais'); if(st) st.value=''; document.getElementById('estSeriaisList').innerHTML='';
     loadEstoque();
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
@@ -6561,8 +6611,8 @@ async function transferirEstoque(){
     if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados', err.classList.remove('hidden'));
   }
   try{
-    await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais }) });
-    toast(`✅ Transferido ${qtd}x ${material} de ${unidadeOrigem} → ${unidadeDestino} (lote ${seriais.length||qtd})`);
+    await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais }) });
+    toast(`✅ Transferido ${qtd}x ${material} de ${unidadeOrigem} → ${unidadeDestino} (lote ${seriais.length||qtd}) [${estoqueSistemaAtivo}]`);
     document.getElementById('estTransQtd').value=''; document.getElementById('estTransSeriais').value='';
     loadEstoque();
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
@@ -6576,6 +6626,7 @@ async function gerarRelatorioEstoque(){
   try{
     const params=new URLSearchParams();
     params.set('contrato', contrato);
+    params.set('sistema', estoqueSistemaAtivo);
     if(from) params.set('from', from);
     if(to) params.set('to', to);
     if(unidade) params.set('unidade', unidade);
@@ -6619,7 +6670,7 @@ function exportEstoqueRelatorioCSV(){
 }
 async function exportEstoquePDF(){
   try{
-    let url='/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo);
+    let url='/api/estoque/relatorio?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(estoqueUnidadeAtiva) url+='&unidade='+encodeURIComponent(estoqueUnidadeAtiva);
     const data=await api(url);
     const w=window.open('','_blank');
@@ -6633,7 +6684,7 @@ async function mostrarEstoqueData(){
   const unidade=document.getElementById('estHistUnidade')?.value||'';
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(unidade) url+='&unidade='+encodeURIComponent(unidade);
     const list=await api(url);
     const el=document.getElementById('estHistResult');
@@ -6648,7 +6699,7 @@ async function mostrarEstoqueDataDetalha(){
   const data=document.getElementById('estHistData')?.value;
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data));
+    const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
     const el=document.getElementById('estHistResult');
     el.classList.remove('hidden');
     const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
@@ -6661,9 +6712,9 @@ async function exportHistoricoCSV(){
   const unidade=document.getElementById('estHistUnidade')?.value||'';
   if(!data) return toast('⚠️ Selecione a data');
   try{
-    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    let url='/api/estoque/historico?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     if(unidade) url+='&unidade='+encodeURIComponent(unidade);
-    else url='/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data);
+    else url='/api/estoque/historico/detalhado?contrato='+encodeURIComponent(estoqueContratoAtivo)+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo);
     const list=await api(url);
     const rows=[['Contrato','Unidade','Material','Saldo','Seriais','Data']];
     list.forEach(r=> rows.push([r.contrato, r.unidade||unidade||'TOTAL', r.material, r.saldo, (r.seriais||[]).join(' | '), r.data]));
@@ -6791,7 +6842,7 @@ async function estIASend(){
   box.insertAdjacentHTML('beforeend', `<div id="${loadingId}" class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-slate-400 flex items-center gap-2">pensando<span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style="animation-delay:.15s"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style="animation-delay:.3s"></span></div></div>`);
   box.scrollTop=box.scrollHeight;
   try{
-    const r=await api('/api/estoque/ia', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: q }) });
+    const r=await api('/api/estoque/ia', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: q, sistema: estoqueSistemaAtivo }) });
     document.getElementById(loadingId)?.remove();
     estIAAppend('bot', r.text||JSON.stringify(r,null,2));
     const dataHtml=estIARenderData(r.data);

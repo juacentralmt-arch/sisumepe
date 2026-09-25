@@ -13,11 +13,44 @@ function validaQtd(q){
   if(Math.abs(n)>500) return 'Lote máximo 500 unidades';
   return null;
 }
+function getSistema(req){
+  // admin pode especificar ?sistema=spacecom|infinity|all via query ou body, tecnico é forçado ao seu sistema
+  const qSistema = (req.query && req.query.sistema) || (req.body && req.body.sistema);
+  const userSistema = req.auth && req.auth.sistema ? req.auth.sistema : null;
+  // se admin e especificar sistema, usa; se admin e não especificar, retorna null (todos)
+  if(req.auth && req.auth.role==='admin'){
+    if(qSistema){
+      const s=String(qSistema).toLowerCase();
+      if(s==='all' || s==='todos') return null;
+      const norm=require('../../store').normalizeSistema ? require('../../store').normalizeSistema(s) : s;
+      return norm || null;
+    }
+    return null;
+  }
+  // tecnico: usa seu sistema, ignora query
+  if(userSistema) return userSistema;
+  // fallback: tenta inferir via store
+  try{
+    const store=require('../../store');
+    const u=store.users ? null : null;
+  }catch(e){}
+  return 'spacecom';
+}
+function getSistemaFromUser(user){
+  // helper para pegar sistema do user object (para auth)
+  if(!user) return 'spacecom';
+  if(user.sistema) return user.sistema;
+  const store=require('../../store');
+  if(store.getUserSistema) return store.getUserSistema(user) || 'spacecom';
+  return 'spacecom';
+}
 
 // Todas as rotas exigem perfil tecnico ou admin
 router.get('/api/estoque', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade } = req.query;
-  let list = await shared.store.estoque.all();
+  const { contrato, unidade, sistema } = req.query;
+  const sis = getSistema(req) || sistema;
+  const effectiveSistema = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  let list = await shared.store.estoque.all(effectiveSistema);
   if(contrato) list = list.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
   if(unidade) list = list.filter(e=> String(e.unidade)===String(unidade).trim());
   res.json(list);
@@ -33,26 +66,30 @@ router.get('/api/estoque/materiais', shared.auth(['tecnico','admin']), shared.ah
 
 router.get('/api/estoque/resumo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade } = req.query;
-  res.json(await shared.store.estoque.resumo({ contrato, unidade }));
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  res.json(await shared.store.estoque.resumo({ contrato, unidade, sistema }));
 }));
 
 router.get('/api/estoque/alertas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, limite } = req.query;
   const thr = limite!=null ? Number(limite) : undefined;
-  res.json(await shared.store.estoque.alertas({ contrato, unidade, limite: thr }));
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  res.json(await shared.store.estoque.alertas({ contrato, unidade, limite: thr, sistema }));
 }));
 
 // Movimentação simples por unidade (com lote TZPR)
 router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, material, unidade, qtd, motivo, seriais, tipo } = req.body||{};
+  const { contrato, material, unidade, qtd, motivo, seriais, tipo, sistema } = req.body||{};
   // compat: aceita tipo entrada/saida + qtd positiva, ou qtd com sinal
   let qtdFinal = qtd;
   if(tipo && String(tipo).toLowerCase()==='saida' && Number(qtd)>0) qtdFinal = -Math.abs(Number(qtd));
   if(tipo && String(tipo).toLowerCase()==='entrada' && Number(qtd)>0) qtdFinal = Math.abs(Number(qtd));
   const errQ=validaQtd(qtdFinal); if(errQ) return res.status(400).json({ error: errQ });
   if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  const sis = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = sis || getSistema(req) || 'spacecom';
   const r = await shared.store.estoque.adjust({
-    contrato, material, unidade, qtd: qtdFinal, motivo, seriais,
+    sistema: effectiveSistema, contrato, material, unidade, qtd: qtdFinal, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
   shared.broadcast();
@@ -71,11 +108,13 @@ router.post('/api/estoque/estornar', shared.auth(['tecnico','admin']), shared.ah
 
 // Transferência entre unidades (atômica) — lote TZPR suportado
 router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais } = req.body||{};
+  const { contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, sistema } = req.body||{};
   if(!unidadeOrigem || !unidadeDestino) return res.status(400).json({ error: 'Informe unidadeOrigem e unidadeDestino' });
   const errQ=validaQtd(qtd); if(errQ) return res.status(400).json({ error: errQ });
+  const sis = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = sis || getSistema(req) || 'spacecom';
   const r = await shared.store.estoque.transferir({
-    contrato, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
+    sistema: effectiveSistema, contrato, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
   shared.broadcast();
@@ -85,22 +124,26 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
 // Seriais TZPR04/UPR04 disponíveis por contrato/unidade (10 dígitos)
 router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade } = req.query;
-  if(contrato && unidade) return res.json(await shared.store.estoqueSerial.byContratoUnidade(contrato, unidade));
-  if(contrato) return res.json(await shared.store.estoqueSerial.byContrato(contrato));
-  if(unidade) return res.json(await shared.store.estoqueSerial.byUnidade(unidade));
-  res.json(await shared.store.estoqueSerial.all());
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const opts = sistema ? { sistema } : {};
+  if(contrato && unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato, unidade }));
+  if(contrato) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato }));
+  if(unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, unidade }));
+  res.json(await shared.store.estoqueSerial.all(opts));
 }));
 
-// Histórico: estoque como estava em determinada data (suporta unidade)
+// Histórico: estoque como estava em determinada data (suporta unidade e sistema)
 router.get('/api/estoque/historico', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, data, unidade } = req.query;
   const c = String(contrato||'CE01').toUpperCase();
   if(!['CE01','CE02'].includes(c)) return res.status(400).json({ error: 'Contrato inválido' });
   if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
   if(unidade){
-    res.json(await shared.store.estoque.atDate(c, data, unidade));
+    res.json(await shared.store.estoque.atDate(c, data, unidade, effectiveSistema));
   } else {
-    res.json(await shared.store.estoque.atDate(c, data));
+    res.json(await shared.store.estoque.atDate(c, data, null, effectiveSistema));
   }
 }));
 
@@ -109,7 +152,9 @@ router.get('/api/estoque/historico/detalhado', shared.auth(['tecnico','admin']),
   const c = String(contrato||'CE01').toUpperCase();
   if(!['CE01','CE02'].includes(c)) return res.status(400).json({ error: 'Contrato inválido' });
   if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
-  res.json(await shared.store.estoque.atDateDetailed(c, data));
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  res.json(await shared.store.estoque.atDateDetailed(c, data, effectiveSistema));
 }));
 
 // Histórico de movimentações (com paginação e filtros server-side)
@@ -117,7 +162,9 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
   const { contrato, unidade, material, limit, offset } = req.query;
   const n=Math.min(Math.max(Number(limit)||50,1),200);
   const off=Math.max(Number(offset)||0,0);
-  let list = await shared.store.estoqueMov.all({ limit: 1000, contrato, unidade, material });
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  let list = await shared.store.estoqueMov.all({ limit: 1000, contrato, unidade, material, sistema: effectiveSistema });
   const total=list.length;
   list=list.slice(off, off+n);
   res.json({ total, offset: off, limit: n, items: list, hasMore: off+n < total });
@@ -135,9 +182,12 @@ router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.ah(async
   const { message, pergunta, q } = req.body||{};
   const query = String(message || pergunta || q || '').trim();
   if(!query) return res.status(400).json({ error: 'Informe message' });
-  const out = await estoqueIA.answer(query, shared.store);
+  const sistema = req.auth.role==='admin' ? (req.body.sistema || req.query.sistema ? require('../../store').normalizeSistema(req.body.sistema || req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  // passa sistema e usuário para contexto
+  const out = await estoqueIA.answer(query, shared.store, { sistema: effectiveSistema, user: req.auth.user });
   // log opcional em audit como consulta IA (não persiste saldo)
-  res.json({ pergunta: query, ...out, geradoEm: new Date().toISOString() });
+  res.json({ pergunta: query, ...out, geradoEm: new Date().toISOString(), sistema: effectiveSistema });
 }));
 router.get('/api/estoque/ia/sugestoes', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   res.json({ sugestoes: ['saldo TZPR04 UMEPE Juazeiro CE01','saldo total CE01','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações CE01','seriais TZPR04 CE01','buscar serial 1234567890','ranking CINTA CE01','estoque baixo','resumo CE01','alertas CE01','saldo por unidade CE01','unidades'] });
@@ -236,23 +286,26 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
   res.json({ ok:true, inseridos: ok, skips: skip, total: (await shared.store.estoqueMov.all()).length, resumo });
 }));
 
-// Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade
+// Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema
 router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, from, to } = req.query;
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
   // valida contrato apenas se informado
   if(contrato && !['CE01','CE02'].includes(String(contrato).toUpperCase())) return res.status(400).json({ error: 'Contrato inválido' });
-  let estoque = contrato ? await shared.store.estoque.byContrato(contrato) : await shared.store.estoque.all();
+  let estoque = contrato ? await shared.store.estoque.byContrato(contrato, effectiveSistema) : await shared.store.estoque.all(effectiveSistema);
   if(unidade) estoque = estoque.filter(e=> String(e.unidade)===String(unidade).trim());
-  let movs = await shared.store.estoqueMov.all();
+  let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema });
   if(contrato) movs = movs.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
   if(unidade) movs = movs.filter(m=> String(m.unidade)===String(unidade).trim() || String(m.unidadeDestino)===String(unidade).trim());
   if(from){ const d=new Date(from); if(!isNaN(d)) movs=movs.filter(m=> new Date(m.createdAt) >= d); }
   if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); movs=movs.filter(m=> new Date(m.createdAt) <= d); } }
   let audit = await shared.store.audit.recent(500);
   audit = audit.filter(a=> String(a.kind)==='estoque');
+  if(effectiveSistema) audit = audit.filter(a=> String(a.ref||'').toLowerCase().includes(effectiveSistema) || String(a.summary||'').toLowerCase().includes(effectiveSistema));
   if(contrato) audit = audit.filter(a=> String(a.ref||'').includes(contrato));
   if(unidade) audit = audit.filter(a=> String(a.ref||'').includes(String(unidade).trim()) || String(a.summary||'').includes(String(unidade).trim()));
-  res.json({ estoque, movimentacoes: movs, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES });
+  res.json({ estoque, movimentacoes: movs, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema });
 }));
 
 // Rota paramétrica por contrato - DEVE ficar por último entre /api/estoque/* para não sombrear /relatorio, /seriais, /historico, etc.
