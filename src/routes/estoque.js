@@ -13,6 +13,12 @@ function validaQtd(q){
   if(Math.abs(n)>500) return 'Lote máximo 500 unidades';
   return null;
 }
+const storeMod = require('../../store');
+const normalizeSistema = storeMod.normalizeSistema || ((s)=> String(s||'').toLowerCase().trim() || null);
+const normalizeContrato = storeMod.normalizeContrato || ((c)=> String(c||'').toUpperCase().trim() || null);
+const contratoLabel = storeMod.contratoLabel || ((c)=> String(c||'').toUpperCase());
+const contratosDoSistema = storeMod.contratosDoSistema || (()=> ['CE01','CE02']);
+const CONTRATO_INFINITY = storeMod.CONTRATO_INFINITY || 'INF';
 function getSistema(req){
   // admin pode especificar ?sistema=spacecom|infinity|all via query ou body, tecnico é forçado ao seu sistema
   const qSistema = (req.query && req.query.sistema) || (req.body && req.body.sistema);
@@ -22,38 +28,73 @@ function getSistema(req){
     if(qSistema){
       const s=String(qSistema).toLowerCase();
       if(s==='all' || s==='todos') return null;
-      const norm=require('../../store').normalizeSistema ? require('../../store').normalizeSistema(s) : s;
-      return norm || null;
+      return normalizeSistema(s) || null;
     }
     return null;
   }
   // tecnico: usa seu sistema, ignora query
-  if(userSistema) return userSistema;
-  // fallback: tenta inferir via store
-  try{
-    const store=require('../../store');
-    const u=store.users ? null : null;
-  }catch(e){}
+  if(userSistema) return normalizeSistema(userSistema) || 'spacecom';
   return 'spacecom';
 }
 function getSistemaFromUser(user){
   // helper para pegar sistema do user object (para auth)
   if(!user) return 'spacecom';
-  if(user.sistema) return user.sistema;
-  const store=require('../../store');
-  if(store.getUserSistema) return store.getUserSistema(user) || 'spacecom';
+  if(user.sistema) return normalizeSistema(user.sistema) || 'spacecom';
+  if(storeMod.getUserSistema) return storeMod.getUserSistema(user) || 'spacecom';
   return 'spacecom';
+}
+// Resolve contrato respeitando o sistema: infinity sempre INF (unificado)
+function resolveContrato(contrato, sistema){
+  if(sistema){
+    const sis=normalizeSistema(sistema);
+    if(sis==='infinity') return CONTRATO_INFINITY;
+    if(sis==='spacecom'){
+      if(!contrato) return null;
+      const c=String(contrato).toUpperCase().trim();
+      return (c==='CE01'||c==='CE02') ? c : c; // deixa validação posterior decidir
+    }
+  }
+  // admin sem sistema definido (vendo tudo): normaliza aliases
+  if(!contrato) return null;
+  return normalizeContrato(contrato, sistema);
+}
+function contratosValidos(sistema){
+  if(!sistema) return ['CE01','CE02',CONTRATO_INFINITY];
+  const sis=normalizeSistema(sistema);
+  if(sis==='infinity') return [CONTRATO_INFINITY];
+  return ['CE01','CE02'];
 }
 
 // Todas as rotas exigem perfil tecnico ou admin
 router.get('/api/estoque', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, sistema } = req.query;
-  const sis = getSistema(req) || sistema;
-  const effectiveSistema = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   let list = await shared.store.estoque.all(effectiveSistema);
-  if(contrato) list = list.filter(e=> String(e.contrato).toUpperCase()===String(contrato).toUpperCase());
+  const c = resolveContrato(contrato, effectiveSistema);
+  if(c) list = list.filter(e=> String(e.contrato).toUpperCase()===c);
   if(unidade) list = list.filter(e=> String(e.unidade)===String(unidade).trim());
   res.json(list);
+}));
+
+// Contratos disponíveis por sistema (spacecom: CE01/CE02, infinity: Estoque Infinity)
+router.get('/api/estoque/contratos', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const effectiveSistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  if(!effectiveSistema || effectiveSistema==='all'){
+    res.json([
+      { sistema:'spacecom', value:'CE01', label:'CE01' },
+      { sistema:'spacecom', value:'CE02', label:'CE02' },
+      { sistema:'infinity', value:CONTRATO_INFINITY, label:'Estoque Infinity' }
+    ]);
+    return;
+  }
+  if(effectiveSistema==='infinity'){
+    res.json([{ sistema:'infinity', value:CONTRATO_INFINITY, label:'Estoque Infinity' }]);
+    return;
+  }
+  res.json([
+    { sistema:'spacecom', value:'CE01', label:'CE01' },
+    { sistema:'spacecom', value:'CE02', label:'CE02' }
+  ]);
 }));
 
 router.get('/api/estoque/unidades', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
@@ -66,15 +107,15 @@ router.get('/api/estoque/materiais', shared.auth(['tecnico','admin']), shared.ah
 
 router.get('/api/estoque/resumo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade } = req.query;
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
-  res.json(await shared.store.estoque.resumo({ contrato, unidade, sistema }));
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  res.json(await shared.store.estoque.resumo({ contrato: resolveContrato(contrato, sistema), unidade, sistema }));
 }));
 
 router.get('/api/estoque/alertas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, limite } = req.query;
   const thr = limite!=null ? Number(limite) : undefined;
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
-  res.json(await shared.store.estoque.alertas({ contrato, unidade, limite: thr, sistema }));
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  res.json(await shared.store.estoque.alertas({ contrato: resolveContrato(contrato, sistema), unidade, limite: thr, sistema }));
 }));
 
 // Movimentação simples por unidade (com lote TZPR)
@@ -86,10 +127,14 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   if(tipo && String(tipo).toLowerCase()==='entrada' && Number(qtd)>0) qtdFinal = Math.abs(Number(qtd));
   const errQ=validaQtd(qtdFinal); if(errQ) return res.status(400).json({ error: errQ });
   if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
-  const sis = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req) || 'spacecom';
+  const contratoNorm = resolveContrato(contrato, effectiveSistema);
+  if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
+  if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
+  if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
   const r = await shared.store.estoque.adjust({
-    sistema: effectiveSistema, contrato, material, unidade, qtd: qtdFinal, motivo, seriais,
+    sistema: effectiveSistema, contrato: contratoNorm, material, unidade, qtd: qtdFinal, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
   shared.broadcast();
@@ -111,10 +156,14 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
   const { contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, sistema } = req.body||{};
   if(!unidadeOrigem || !unidadeDestino) return res.status(400).json({ error: 'Informe unidadeOrigem e unidadeDestino' });
   const errQ=validaQtd(qtd); if(errQ) return res.status(400).json({ error: errQ });
-  const sis = req.auth.role==='admin' ? (sistema ? require('../../store').normalizeSistema(sistema) : null) : getSistema(req);
+  const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req) || 'spacecom';
+  const contratoNorm = resolveContrato(contrato, effectiveSistema);
+  if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
+  if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
+  if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
   const r = await shared.store.estoque.transferir({
-    sistema: effectiveSistema, contrato, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
+    sistema: effectiveSistema, contrato: contratoNorm, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
   shared.broadcast();
@@ -124,22 +173,23 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
 // Seriais TZPR04/UPR04 disponíveis por contrato/unidade (10 dígitos)
 router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade } = req.query;
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const opts = sistema ? { sistema } : {};
-  if(contrato && unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato, unidade }));
-  if(contrato) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato }));
+  const c = contrato ? resolveContrato(contrato, sistema) : null;
+  if(c && unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato: c, unidade }));
+  if(c) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato: c }));
   if(unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, unidade }));
   res.json(await shared.store.estoqueSerial.all(opts));
 }));
 
-// Histórico: estoque como estava em determinada data (suporta unidade e sistema)
+// Histórico: estoque como estava em determinada data (suporta unidade e sistema; infinity = Estoque Infinity único)
 router.get('/api/estoque/historico', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, data, unidade } = req.query;
-  const c = String(contrato||'CE01').toUpperCase();
-  if(!['CE01','CE02'].includes(c)) return res.status(400).json({ error: 'Contrato inválido' });
-  if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  if(!contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
   if(unidade){
     res.json(await shared.store.estoque.atDate(c, data, unidade, effectiveSistema));
   } else {
@@ -149,11 +199,11 @@ router.get('/api/estoque/historico', shared.auth(['tecnico','admin']), shared.ah
 
 router.get('/api/estoque/historico/detalhado', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, data } = req.query;
-  const c = String(contrato||'CE01').toUpperCase();
-  if(!['CE01','CE02'].includes(c)) return res.status(400).json({ error: 'Contrato inválido' });
-  if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  if(!contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  if(!data) return res.status(400).json({ error: 'Informe a data (YYYY-MM-DD)' });
   res.json(await shared.store.estoque.atDateDetailed(c, data, effectiveSistema));
 }));
 
@@ -162,9 +212,9 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
   const { contrato, unidade, material, limit, offset } = req.query;
   const n=Math.min(Math.max(Number(limit)||50,1),200);
   const off=Math.max(Number(offset)||0,0);
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
-  let list = await shared.store.estoqueMov.all({ limit: 1000, contrato, unidade, material, sistema: effectiveSistema });
+  let list = await shared.store.estoqueMov.all({ limit: 1000, contrato: resolveContrato(contrato, effectiveSistema), unidade, material, sistema: effectiveSistema });
   const total=list.length;
   list=list.slice(off, off+n);
   res.json({ total, offset: off, limit: n, items: list, hasMore: off+n < total });
@@ -173,7 +223,9 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
 // Compat: rota antiga ainda retorna array direto para fallback
 router.get('/api/estoque/mov', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, limit } = req.query;
-  const list = await shared.store.estoqueMov.all({ limit: Math.min(Number(limit)||50,200), contrato, unidade });
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const list = await shared.store.estoqueMov.all({ limit: Math.min(Number(limit)||50,200), contrato: resolveContrato(contrato, effectiveSistema), unidade, sistema: effectiveSistema });
   res.json(list);
 }));
 
@@ -182,7 +234,7 @@ router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.ah(async
   const { message, pergunta, q } = req.body||{};
   const query = String(message || pergunta || q || '').trim();
   if(!query) return res.status(400).json({ error: 'Informe message' });
-  const sistema = req.auth.role==='admin' ? (req.body.sistema || req.query.sistema ? require('../../store').normalizeSistema(req.body.sistema || req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.body.sistema || req.query.sistema ? normalizeSistema(req.body.sistema || req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
   // passa sistema e usuário para contexto
   const out = await estoqueIA.answer(query, shared.store, { sistema: effectiveSistema, user: req.auth.user });
@@ -195,7 +247,8 @@ router.get('/api/estoque/ia/sugestoes', shared.auth(['tecnico','admin']), shared
 
 // Seed de demonstração - popula 60 dias de histórico (admin apenas)
 router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,res)=>{
-  const { force } = req.query;
+  const { force, sistema } = req.query;
+  const seedSistema = normalizeSistema(sistema) || 'spacecom';
   const movs = await shared.store.estoqueMov.all();
   if(movs.length > 5 && force!=='1') return res.json({ ok:false, msg: `Já existem ${movs.length} movimentações. Use ?force=1 para forçar.` });
   // Se já tem dados e não forçado, não faz nada
@@ -242,7 +295,7 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
   let ok=0, skip=0;
   for(const op of opsBase){
     try{
-      const res = await shared.store.estoque.adjust({ contrato:op.contrato, material:op.material, unidade:op.unidade, qtd:op.qtd, motivo:op.motivo, seriais:op.seriais||[], user:req.auth.user, userName:req.auth.name });
+      const res = await shared.store.estoque.adjust({ sistema: seedSistema, contrato: resolveContrato(op.contrato, seedSistema), material:op.material, unidade:op.unidade, qtd:op.qtd, motivo:op.motivo, seriais:op.seriais||[], user:req.auth.user, userName:req.auth.name });
       // backdate
       const pastISO = daysAgoISO(op.dias);
       // patch direto no store (file ou supabase via fallback)
@@ -282,41 +335,45 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
     }
   }catch(e){}
   shared.broadcast();
-  const resumo = await shared.store.estoque.resumo({contrato:'CE01'});
-  res.json({ ok:true, inseridos: ok, skips: skip, total: (await shared.store.estoqueMov.all()).length, resumo });
+  const resumo = await shared.store.estoque.resumo({contrato: seedSistema==='infinity' ? CONTRATO_INFINITY : 'CE01', sistema: seedSistema});
+  res.json({ ok:true, inseridos: ok, skips: skip, total: (await shared.store.estoqueMov.all({ sistema: seedSistema })).length, resumo, sistema: seedSistema });
 }));
 
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema
 router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, from, to } = req.query;
-  const sistema = req.auth.role==='admin' ? (req.query.sistema ? require('../../store').normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
-  // valida contrato apenas se informado
-  if(contrato && !['CE01','CE02'].includes(String(contrato).toUpperCase())) return res.status(400).json({ error: 'Contrato inválido' });
-  let estoque = contrato ? await shared.store.estoque.byContrato(contrato, effectiveSistema) : await shared.store.estoque.all(effectiveSistema);
+  // valida contrato conforme o sistema (infinity = INF único)
+  const c = resolveContrato(contrato, effectiveSistema);
+  if(contrato && c && !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  let estoque = c ? await shared.store.estoque.byContrato(c, effectiveSistema) : await shared.store.estoque.all(effectiveSistema);
   if(unidade) estoque = estoque.filter(e=> String(e.unidade)===String(unidade).trim());
   let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema });
-  if(contrato) movs = movs.filter(m=> String(m.contrato).toUpperCase()===String(contrato).toUpperCase());
+  if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
   if(unidade) movs = movs.filter(m=> String(m.unidade)===String(unidade).trim() || String(m.unidadeDestino)===String(unidade).trim());
   if(from){ const d=new Date(from); if(!isNaN(d)) movs=movs.filter(m=> new Date(m.createdAt) >= d); }
   if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); movs=movs.filter(m=> new Date(m.createdAt) <= d); } }
   let audit = await shared.store.audit.recent(500);
   audit = audit.filter(a=> String(a.kind)==='estoque');
   if(effectiveSistema) audit = audit.filter(a=> String(a.ref||'').toLowerCase().includes(effectiveSistema) || String(a.summary||'').toLowerCase().includes(effectiveSistema));
-  if(contrato) audit = audit.filter(a=> String(a.ref||'').includes(contrato));
+  if(c) audit = audit.filter(a=> String(a.ref||'').includes(c) || String(a.ref||'').includes(contratoLabel(c)));
   if(unidade) audit = audit.filter(a=> String(a.ref||'').includes(String(unidade).trim()) || String(a.summary||'').includes(String(unidade).trim()));
-  res.json({ estoque, movimentacoes: movs, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema });
+  res.json({ estoque, movimentacoes: movs, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null });
 }));
 
 // Rota paramétrica por contrato - DEVE ficar por último entre /api/estoque/* para não sombrear /relatorio, /seriais, /historico, etc.
+// Aceita CE01/CE02 (spacecom) e INF/Estoque Infinity (infinity)
 router.get('/api/estoque/:contrato', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const c = String(req.params.contrato||'').toUpperCase();
-  if(!['CE01','CE02'].includes(c)) return res.status(400).json({ error: 'Contrato inválido' });
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(req.params.contrato, effectiveSistema) || normalizeContrato(req.params.contrato, effectiveSistema);
+  if(!c || !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
   const { unidade } = req.query;
   if(unidade){
-    res.json(await shared.store.estoque.byContratoUnidade(c, unidade));
+    res.json(await shared.store.estoque.byContratoUnidade(c, unidade, effectiveSistema));
   } else {
-    res.json(await shared.store.estoque.byContrato(c));
+    res.json(await shared.store.estoque.byContrato(c, effectiveSistema));
   }
 }));
 
