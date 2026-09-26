@@ -342,17 +342,17 @@ router.post('/api/estoque/seed-demo', shared.auth(['admin']), shared.ah(async (r
   res.json({ ok:true, inseridos: ok, skips: skip, total: (await shared.store.estoqueMov.all({ sistema: seedSistema })).length, resumo, sistema: seedSistema });
 }));
 
-// Seed completo (admin): até 60 dias de histórico em todos os locais e
+// Seed completo (admin): até 300 dias de histórico em todos os locais e
 // sistemas, com adições, saídas E transferências entre locais, gravando as
 // datas reais — funciona igual em modo arquivo e no Supabase.
-//   ?dias=N      janela (1..60, padrão 60)
+//   ?dias=N      janela (1..300, padrão 60)
 //   ?force=1     libera em base que já tem movimentações
 //   ?lote=0      pula o lote inicial (só movimentações)
 //   ?assincrono=1 responde na hora e avisa quem está online (SSE) ao terminar
 let seedEstoqueRodando = false;
 router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,res)=>{
   const { force, dias, semente, lote, assincrono } = req.query;
-  const janela = Math.min(Math.max(Math.round(Number(dias)||60),1),60);
+  const janela = Math.min(Math.max(Math.round(Number(dias)||60),1),300);
   const existentes = await shared.store.estoqueMov.all({ limit: 6 });
   if(existentes.length > 5 && force!=='1')
     return res.json({ ok:false, msg:`Já existem movimentações no estoque. Use ?force=1 para acrescentar mais ${janela} dias de histórico.` });

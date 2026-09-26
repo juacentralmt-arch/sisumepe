@@ -1,5 +1,5 @@
 // =====================================================================
-//  Gerador de histórico massivo de estoque (até 60 dias).
+//  Gerador de histórico massivo de estoque (até 300 dias).
 //  Usado pelo script scripts/seed-estoque-60d.js e pelo endpoint
 //  admin POST /api/estoque/seed — uma única implementação para os dois,
 //  valendo tanto em modo arquivo (db.json) quanto no Supabase.
@@ -65,11 +65,12 @@ function proximoNumero(material, seriaisExistentes) {
 }
 
 async function popularEstoque(opts = {}) {
-  const dias = Math.min(Math.max(Math.round(Number(opts.dias) || 60), 1), 60);
+  const MAX_DIAS = 300;
+  const dias = Math.min(Math.max(Math.round(Number(opts.dias) || 60), 1), MAX_DIAS);
   const semLote = !!opts.semLote;
   const dry = !!opts.dry;
-  const user = opts.user || 'seed-60d';
-  const userName = opts.userName || 'Seed 60 dias';
+  const user = opts.user || 'seed-estoque';
+  const userName = opts.userName || `Seed ${dias} dias`;
   const log = typeof opts.log === 'function' ? opts.log : () => {};
   const rnd = mulberry32(Math.round(Number(opts.semente) || 20260925));
   const randInt = (a, b) => a + Math.floor(rnd() * (b - a + 1));
@@ -241,13 +242,19 @@ async function popularEstoque(opts = {}) {
     }
   }
   const primeiroDia = Math.max(dias - 5, 0);
-  const transfPorDia = Math.max(1, Math.ceil(fila.length / (primeiroDia + 1)));
+  // Densidade mínima: janelas longas (até 300 dias) mantêm ~2 transf/dia
+  // determinísticas + extras aleatórias, sem esparsar o histórico.
+  const transfPorDia = Math.max(2, Math.ceil(fila.length / (primeiroDia + 1)));
+  // Janelas longas têm mais dias: aumenta o volume diário para não deixar
+  // unidades paradas por semanas.
+  const faixaAdicao = dias > 120 ? [2, 3] : [1, 2];
+  const faixaSaida = dias > 120 ? [2, 4] : [1, 3];
 
   for (let d = primeiroDia; d >= 0; d--) {
     const hora = horaDoDia(d);
     const quando = () => quandoDoDia(d, hora, randInt(0, 59));
 
-    for (let i = 0, n = randInt(1, 2); i < n; i++) {
+    for (let i = 0, n = randInt(faixaAdicao[0], faixaAdicao[1]); i < n; i++) {
       const material = pick(MATERIAIS);
       await adicao(pick(COMBOS), pick(UNIDADES), material, randInt(QTD_ENTRADA[material][0], QTD_ENTRADA[material][1]), quando());
     }
@@ -263,9 +270,32 @@ async function popularEstoque(opts = {}) {
       const destino = pick(UNIDADES.filter(u => u !== origem));
       await transferencia(pick(COMBOS), material, origem, destino, randInt(QTD_TRANSF[material][0], QTD_TRANSF[material][1]), quando());
     }
-    for (let i = 0, n = randInt(1, 3); i < n; i++) {
+    for (let i = 0, n = randInt(faixaSaida[0], faixaSaida[1]); i < n; i++) {
       const material = pick(MATERIAIS);
       await saida(pick(COMBOS), pick(UNIDADES), material, randInt(QTD_SAIDA[material][0], QTD_SAIDA[material][1]), quando());
+    }
+
+    // ---- cobertura garantida em TODAS as unidades ----
+    // Giro diário: todo dia uma unidade diferente tem ao menos 1 saída.
+    // Varredura semanal (d % 7 === 0): todas as 6 unidades movimentam.
+    // Reposição mensal por unidade: evita saldo zerado em janelas de 300 dias.
+    const unidadeGiro = UNIDADES[d % UNIDADES.length];
+    {
+      const matGiro = pick(MATERIAIS);
+      await saida(pick(COMBOS), unidadeGiro, matGiro,
+        randInt(QTD_SAIDA[matGiro][0], QTD_SAIDA[matGiro][1]), quando());
+    }
+    if (d % 7 === 0) {
+      for (const u of UNIDADES) {
+        const mat = pick(MATERIAIS);
+        await saida(pick(COMBOS), u, mat, randInt(QTD_SAIDA[mat][0], QTD_SAIDA[mat][1]), quando());
+      }
+    }
+    if (dias > 60 && d % 30 === 0) {
+      for (const u of UNIDADES) {
+        const mat = pick(MATERIAIS);
+        await adicao(pick(COMBOS), u, mat, randInt(QTD_ENTRADA[mat][0], QTD_ENTRADA[mat][1]), quando());
+      }
     }
   }
 
