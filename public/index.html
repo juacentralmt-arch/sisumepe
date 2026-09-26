@@ -440,8 +440,8 @@
     <section id="tab-agenda" class="hidden fade">
       <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
-          <h2 class="font-display font-bold text-xl">Agenda do técnico</h2>
-          <p class="text-xs text-slate-500 mt-0.5">Seus agendamentos locais</p>
+          <h2 class="font-display font-bold text-xl">Agenda</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Agendamentos locais + Calendly (andre, daniel e admin)</p>
         </div>
         <div class="flex gap-2">
           <button id="googleConnectBtn" onclick="googleConnect()" class="hidden btn btn-ghost text-xs px-3.5 py-2">🔗 Conectar Google</button>
@@ -450,12 +450,25 @@
         </div>
       </div>
       <div id="googleStatus" class="hidden mb-4 rounded-xl p-3 text-xs font-semibold border"></div>
+      <div id="calendlyPanel" class="card p-4 mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 class="font-display font-bold text-sm">📅 Calendly <span id="calendlyStatus" class="text-xs font-normal text-slate-400">verificando…</span></h3>
+          <div class="flex gap-2">
+            <a id="calendlyOpenBtn" href="https://calendly.com/" target="_blank" rel="noopener" class="hidden btn btn-ghost text-xs px-3 py-1.5">🔗 Abrir Calendly</a>
+            <button onclick="loadCalendlyEventos(true)" class="btn btn-ghost text-xs px-3 py-1.5">↻ Atualizar</button>
+            <button onclick="importarCalendly()" class="btn btn-primary text-xs px-3 py-1.5">⬇ Importar próximos</button>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-2">Agendamentos marcados no Calendly. Importar traz para a agenda local (roxo no calendário).</p>
+        <div id="calendlyList" class="space-y-1.5 max-h-[260px] overflow-y-auto text-xs"></div>
+      </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="lg:col-span-2 card p-4">
           <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px] font-bold">
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-rose-200 border border-rose-400"></span> Feriado (não trabalhamos)</span>
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-amber-200 border border-amber-400"></span> Ponto facultativo</span>
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-indigo-500"></span> Agendamento</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-violet-600"></span> Calendly</span>
           </div>
           <div id="agendaCalendar" class="min-h-[420px]"></div>
         </div>
@@ -1960,8 +1973,8 @@ function paintUser(){
   document.querySelectorAll('[data-tab]').forEach(b => {
     const t = b.dataset.tab;
     let show = true;
-    if(r === 'recepcao') show = ['fila', 'checkin'].includes(t);
-    else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'agenda'].includes(t);
+    if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
+    else if(r === 'psico') show = ['fila', 'checkin', 'psico'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos' && t !== 'psico';
     b.classList.toggle('hidden', !show);
@@ -1975,7 +1988,7 @@ const NAV_ORDER = {
   admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios', 'auditoria', 'estoque'],
   psico: ['fila', 'checkin', 'psico', 'agenda'],
   tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'estoque', 'visao', 'dash'],
-  recepcao: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
+  recepcao: ['fila', 'checkin', 'agenda', 'tecnico', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
   const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
@@ -2059,11 +2072,13 @@ function enterApp(){
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
   setTimeout(preloadOCR, 1200);
 }
+function agendaUser(){ return session && (session.role==='admin' || ['andre','daniel'].includes(String(session.user||'').toLowerCase().trim())); }
 function canSee(t){
   if(!session) return false;
+  if(t==='agenda') return agendaUser();
   if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin'].includes(t);
-  if(session.role==='psico') return ['fila','checkin','psico','agenda'].includes(t);
+  if(session.role==='psico') return ['fila','checkin','psico'].includes(t);
   return t!=='usuarios' && t!=='psico' && t!=='auditoria';
 }
 function go(tab){
@@ -3768,7 +3783,49 @@ async function loadAgenda(){
     renderAgendaList();
     renderFeriadosList();
     await renderAgendaCalendar();
+    loadCalendlyEventos(false).catch(()=>{});
   }catch(e){ toast('⚠️ ' + e.message); }
+}
+let calendlyEventosCache=[];
+async function loadCalendlyEventos(manual){
+  const box=document.getElementById('calendlyList'); const st=document.getElementById('calendlyStatus');
+  try{
+    const s=await api('/api/agenda/calendly/status');
+    const openBtn=document.getElementById('calendlyOpenBtn');
+    if(!s.configured){
+      if(st) st.textContent='não configurado (CALENDLY_TOKEN no servidor)';
+      if(box) box.innerHTML='<p class="text-[11px] text-slate-400">Para vincular os dados do <b>calendly.com</b>: gere um Personal Access Token em Calendly → Integrations → API & Webhooks e defina <b>CALENDLY_TOKEN</b> no servidor (Render → Environment). Escopos: <b>event_types:read, scheduled_events:read</b>.</p>';
+      if(openBtn) openBtn.classList.remove('hidden');
+      return;
+    }
+    if(st) st.textContent=`conectado: ${s.user&&s.user.name?s.user.name:''}${s.user&&s.user.email?' ('+s.user.email+')':''}`;
+    if(openBtn){ const url=(s.publicUrl)||(s.user&&s.user.schedulingUrl)||'https://calendly.com/'; openBtn.href=url; openBtn.classList.remove('hidden'); }
+    const list=await api('/api/agenda/calendly/eventos');
+    calendlyEventosCache=Array.isArray(list)?list:[];
+    if(box) box.innerHTML=calendlyEventosCache.length?calendlyEventosCache.map((e,i)=>{
+      const s2=new Date(e.start), e2=new Date(e.end);
+      return `<div class="flex items-center gap-2 border border-slate-100 rounded-xl p-2 ${e.importado?'bg-violet-50/60':'bg-white'}"><span class="flex-1"><b>${esc(e.title)}</b> ${e.importado?'<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">na agenda</span>':''}<br><span class="text-slate-500">${s2.toLocaleString('pt-BR')} → ${e2.toLocaleString('pt-BR')}${e.inviteeName?' • '+esc(e.inviteeName):''}${e.inviteeEmail?' ('+esc(e.inviteeEmail)+')':''}</span></span>${e.importado?'':`<button onclick="importarCalendlyUm(${i})" class="btn btn-ghost text-[11px] px-2 py-1">⬇ Importar</button>`}</div>`;
+    }).join(''):'<p class="text-[11px] text-slate-400 text-center py-3">Nenhum agendamento futuro no Calendly.</p>';
+  }catch(e){
+    if(st) st.textContent='erro: '+e.message;
+    if(box && manual) box.innerHTML='<p class="text-[11px] text-rose-500">Erro ao buscar Calendly: '+esc(e.message)+'</p>';
+    if(manual) toast('⚠️ '+e.message);
+  }
+}
+async function importarCalendlyUm(i){
+  const e=calendlyEventosCache[i]; if(!e) return;
+  try{
+    const r=await api('/api/agenda/calendly/importar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uris:[e.calendlyUri]})});
+    toast(`✅ Importado (${r.importados}) • ignorados: ${r.ignorados}`);
+    await loadCalendlyEventos(false); loadAgenda();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function importarCalendly(){
+  try{
+    const r=await api('/api/agenda/calendly/importar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    toast(`✅ Importados ${r.importados} • já estavam: ${r.ignorados}`);
+    await loadCalendlyEventos(false); loadAgenda();
+  }catch(e){ toast('⚠️ '+e.message); }
 }
 async function renderAgendaCalendar(){
   const el = document.getElementById('agendaCalendar');
@@ -3776,12 +3833,12 @@ async function renderAgendaCalendar(){
   try{ await ensureFullCalendar(); }catch(e){ el.innerHTML = '<p class="text-xs text-slate-500">Calendário não carregado (sem internet)</p>'; return; }
   const events = agendaEvents.map(ev => ({
     id: String(ev.id),
-    title: ev.title,
+    title: (ev.origem === 'calendly' || ev.calendlyUri ? '📅 ' : '') + ev.title,
     start: ev.start,
     end: ev.end,
     extendedProps: ev,
-    backgroundColor: '#0ea5e9',
-    borderColor: '#0ea5e9'
+    backgroundColor: (ev.origem === 'calendly' || ev.calendlyUri) ? '#7c3aed' : '#0ea5e9',
+    borderColor: (ev.origem === 'calendly' || ev.calendlyUri) ? '#7c3aed' : '#0ea5e9'
   }));
   // Feriados visíveis como eventos com destaque (vermelho = feriado não trabalhamos, âmbar = facultativo)
   try{
@@ -3863,7 +3920,8 @@ function renderAgendaList(){
   box.innerHTML = upcoming.map(ev=>{
     const s = new Date(ev.start), e = new Date(ev.end);
     const isPast = e < now;
-    const gBadge = '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>';
+    const isCal = ev.origem === 'calendly' || ev.calendlyUri;
+    const gBadge = isCal ? '<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Calendly</span>' : '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>';
     return `<div class="border ${isPast?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPast?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})">
       <div class="flex items-center gap-2"><b class="text-xs flex-1 truncate">${esc(ev.title)}</b>${gBadge}</div>
       <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleString('pt-BR')} → ${e.toLocaleString('pt-BR')}</p>

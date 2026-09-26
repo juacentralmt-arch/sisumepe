@@ -23,3 +23,7 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false
+      - key: CALENDLY_TOKEN
+        sync: false
+      - key: CALENDLY_URL
+        sync: false

@@ -131,6 +131,8 @@ create index if not exists idx_agenda_user on agenda ("user");
 create index if not exists idx_agenda_start on agenda (start);
 -- Migração idempotente para bases já existentes
 alter table agenda add column if not exists googleeventid text default '';
+alter table agenda add column if not exists calendlyuri text default '';
+alter table agenda add column if not exists origem text default '';
 
 create table if not exists google_tokens (
   "user" text primary key,
