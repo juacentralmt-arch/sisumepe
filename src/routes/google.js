@@ -1,11 +1,11 @@
 const express = require('express');
 const crypto = require('crypto');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, authAgenda, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
-// ============ GOOGLE AGENDA ============
-router.get('/api/auth/google', auth(['tecnico','admin']), ah(async (req,res)=>{
+// ============ GOOGLE AGENDA (parte do módulo Agenda: andre, daniel e admin) ============
+router.get('/api/auth/google', authAgenda(), ah(async (req,res)=>{
   const cfg = getGoogleConfig();
   if(!cfg) return res.status(500).json({ error: 'Google Agenda não configurado. Defina GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI no servidor.' });
   const o = makeOAuthClient();

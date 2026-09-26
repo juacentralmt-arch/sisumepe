@@ -91,6 +91,7 @@ app.use(require('./src/routes/tickets'));
 app.use(require('./src/routes/admin'));
 app.use(require('./src/routes/google'));
 app.use(require('./src/routes/agenda'));
+app.use(require('./src/routes/calendly'));
 app.use(require('./src/routes/termos'));
 app.use(require('./src/routes/ativacoes'));
 app.use(require('./src/routes/pdfTools'));

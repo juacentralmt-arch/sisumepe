@@ -380,7 +380,7 @@ const A = {
 };
 const AG = {
   id: 'id', user: 'user', title: 'title', description: 'description', start: 'start', end: 'end',
-  personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', createdAt: 'createdat', updatedAt: 'updatedat'
+  personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', calendlyUri: 'calendlyuri', origem: 'origem', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const TM = {
   id: 'id', user: 'user', tipo: 'tipo', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'

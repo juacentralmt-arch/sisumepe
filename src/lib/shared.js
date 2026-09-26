@@ -95,6 +95,22 @@ function auth(roles) {
 }
 const isHash = p => typeof p === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(p);
 
+// Agenda restrita: só admin + andre/daniel (por usuário, independente do perfil).
+const AGENDA_USERS = ['andre', 'daniel'];
+function isAgendaUser(s){
+  if(!s) return false;
+  if(s.role === 'admin') return true;
+  return AGENDA_USERS.includes(String(s.user || '').toLowerCase().trim());
+}
+function authAgenda() {
+  return (req, res, next) => {
+    auth()(req, res, () => {
+      if(!isAgendaUser(req.auth)) return res.status(403).json({ error: 'Agenda restrita a andre, daniel e admin.' });
+      next();
+    });
+  };
+}
+
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
   console.error(`[${req.requestId || '-'}] ${req.method} ${req.path}`, e);
   const code = e.status || 500;
@@ -362,7 +378,7 @@ const pendingGoogleStates = new Map();
 module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
-  loginRateLimit, apiRateLimit, requestId, issueToken, auth, isHash,
+  loginRateLimit, apiRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
   upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked,
   PERSON_LABELS, MOTIVOS_OK,
