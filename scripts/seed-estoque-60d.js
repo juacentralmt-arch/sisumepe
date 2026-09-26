@@ -1,5 +1,5 @@
 // =====================================================================
-//  Seed massivo de estoque — até 60 dias de histórico em TODAS as
+//  Seed massivo de estoque — até 300 dias de histórico em TODAS as
 //  unidades (6 locais), nos dois sistemas (Spacecom CE01/CE02 e
 //  Infinity INF), com:
 //    • adições (recebimento de lote) por local;
@@ -9,6 +9,7 @@
 //
 //  Uso:
 //    node scripts/seed-estoque-60d.js                 # 60 dias (padrão)
+//    node scripts/seed-estoque-60d.js --dias=300      # até 300 dias, todas as unidades
 //    node scripts/seed-estoque-60d.js --dias=30       # janela menor
 //    node scripts/seed-estoque-60d.js --seed=7        # outro histórico
 //    node scripts/seed-estoque-60d.js --sem-lote      # só movimentações
