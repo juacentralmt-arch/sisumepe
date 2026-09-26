@@ -1,7 +1,10 @@
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
-const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-const MATERIAIS_SERIAL = ['TZPR04','UPR04'];
-const LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+const MATERIAIS = ['TZPR04','TZPR','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_SERIAL = ['TZPR04','TZPR','UPR04'];
+const LIMITES = { TZPR04: 5, TZPR: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+// Infinity usa TZPR (sem UPR04); Spacecom usa TZPR04 + UPR04.
+function matTZPR(sistema){ return String(sistema)==='infinity' ? 'TZPR' : 'TZPR04'; }
+function matsProntos(sistema){ return String(sistema)==='infinity' ? ['TZPR'] : ['TZPR04','UPR04']; }
 // Memória simples para follow-up (“e UPR?”)
 const _ctx = new Map();
 function getCtx(key){ return _ctx.get(key)||{}; }
@@ -121,6 +124,9 @@ async function answer(query, store, opts){
   let sistema = (opts && opts.sistema) ? opts.sistema : (extractSistema(qRaw) || last.sistema || null);
   // normaliza sistema via store quando possível
   if(sistema && store && store.normalizeSistema){ try{ sistema=store.normalizeSistema(sistema)||sistema; }catch(e){} }
+  // Infinity: TZPR04 vira TZPR; UPR04 não existe (foi retirada)
+  if(sistema==='infinity' && material==='TZPR04') material='TZPR';
+  if(sistema==='infinity' && material==='UPR04') return { intent:'erro', text:'❌ UPR04 não existe no Infinity — materiais: TZPR, FONTE04, CINTA, TRAVAS.', suggestions:['estoque atual Infinity','saldo TZPR Infinity','seriais Infinity'] };
   // contrato respeita o sistema: infinity sempre INF (unificado)
   let contrato;
   if(sistema==='infinity'){
@@ -141,7 +147,7 @@ async function answer(query, store, opts){
   const contratoTxt = contrato ? labelContrato(contrato, store) : null;
   const sistemaTxt = sistema==='infinity' ? 'Infinity' : sistema==='spacecom' ? 'Spacecom' : null;
 
-  // 1️⃣ ESTOQUE ATUAL (Prontos para uso) - TZPR e UPR - respeita sistema Infinity (INF único)
+  // 1️⃣ ESTOQUE ATUAL (Prontos para uso) - TZPR (e UPR no Spacecom) - respeita sistema Infinity (INF único)
   if(/estoque atual|prontos para uso|pronto para uso/.test(q)){
     const sis=sistema||last.sistema||null;
     const cRaw=contrato||last.contrato|| (sis==='infinity' ? 'INF' : 'CE01');
@@ -149,17 +155,22 @@ async function answer(query, store, opts){
     const uni=unidade||last.unidade||'UMEPE Juazeiro';
     const cLabel=labelContrato(cNorm, store);
     const all=await store.estoque.all(sis);
-    const tzpr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && String(e.material).toUpperCase()==='TZPR04' && String(e.unidade)===uni);
-    const upr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && String(e.material).toUpperCase()==='UPR04' && String(e.unidade)===uni);
+    const matT=matTZPR(sis);
+    const tzpr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && String(e.material).toUpperCase()===matT && String(e.unidade)===uni);
+    const upr=sis==='infinity' ? null : all.find(e=> String(e.contrato).toUpperCase()===cNorm && String(e.material).toUpperCase()==='UPR04' && String(e.unidade)===uni);
     const tzprSaldo=tzpr?Number(tzpr.saldo||0):0;
     const uprSaldo=upr?Number(upr.saldo||0):0;
-    const tzprStatus=tzprSaldo < LIMITES.TZPR04 ? '⚠️ ABAIXO DO MÍNIMO' : '✅ OK';
+    const tzprStatus=tzprSaldo < (LIMITES[matT]||5) ? '⚠️ ABAIXO DO MÍNIMO' : '✅ OK';
     const uprStatus=uprSaldo < LIMITES.UPR04 ? '⚠️ ABAIXO DO MÍNIMO' : '✅ OK';
-    if(material==='TZPR04') return { intent:'estoque_atual', text:`📦 **Estoque Atual — ${uni} (${cLabel}${sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):''}) — Prontos para uso**\n• TZPR04: **${tzprSaldo}** un ${tzprStatus} (mín ${LIMITES.TZPR04})`, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo }, suggestions:['média de consumo mensal '+uni,'necessidade de reposição '+uni,'ficha TZPR04 '+uni] };
-    if(material==='UPR04') return { intent:'estoque_atual', text:`📦 **Estoque Atual — ${uni} (${cLabel}${sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):''}) — Prontos para uso**\n• UPR04: **${uprSaldo}** un ${uprStatus} (mín ${LIMITES.UPR04})`, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo }, suggestions:['média de consumo mensal '+uni,'necessidade de reposição '+uni] };
-    const txt=`📦 **Estoque Atual — ${uni} (${cLabel}${sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):''}) — Prontos para uso**\n• TZPR04: **${tzprSaldo}** un ${tzprStatus} (mín ${LIMITES.TZPR04})\n• UPR04: **${uprSaldo}** un ${uprStatus} (mín ${LIMITES.UPR04})\n• **Total TZPR+UPR: ${tzprSaldo+uprSaldo}** un`;
+    const siglaSys=sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):'';
+    if(material===matT) return { intent:'estoque_atual', text:`📦 **Estoque Atual — ${uni} (${cLabel}${siglaSys}) — Prontos para uso**\n• ${matT}: **${tzprSaldo}** un ${tzprStatus} (mín ${LIMITES[matT]||5})`, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo }, suggestions:['média de consumo mensal '+uni,'necessidade de reposição '+uni,'ficha '+matT+' '+uni] };
+    if(material==='UPR04') return { intent:'estoque_atual', text:`📦 **Estoque Atual — ${uni} (${cLabel}${siglaSys}) — Prontos para uso**\n• UPR04: **${uprSaldo}** un ${uprStatus} (mín ${LIMITES.UPR04})`, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo }, suggestions:['média de consumo mensal '+uni,'necessidade de reposição '+uni] };
+    const linhasT=`• ${matT}: **${tzprSaldo}** un ${tzprStatus} (mín ${LIMITES[matT]||5})`;
+    const txt=sis==='infinity'
+      ? `📦 **Estoque Atual — ${uni} (${cLabel}${siglaSys}) — Prontos para uso**\n${linhasT}`
+      : `📦 **Estoque Atual — ${uni} (${cLabel}${siglaSys}) — Prontos para uso**\n${linhasT}\n• UPR04: **${uprSaldo}** un ${uprStatus} (mín ${LIMITES.UPR04})\n• **Total TZPR+UPR: ${tzprSaldo+uprSaldo}** un`;
     setCtx(ctxKey, {contrato:cNorm, unidade:uni, sistema:sis});
-    return { intent:'estoque_atual', text: txt, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo, total: tzprSaldo+uprSaldo }, suggestions:['média de consumo mensal '+uni+' '+(sis==='infinity'?'Infinity':cNorm),'necessidade de reposição '+uni+' '+(sis==='infinity'?'Infinity':cNorm),'ficha TZPR04 '+uni] };
+    return { intent:'estoque_atual', text: txt, data:{ contrato:cNorm, sistema:sis, unidade:uni, tzpr:tzprSaldo, upr:uprSaldo, total: tzprSaldo+uprSaldo }, suggestions:['média de consumo mensal '+uni+' '+(sis==='infinity'?'Infinity':cNorm),'necessidade de reposição '+uni+' '+(sis==='infinity'?'Infinity':cNorm),'ficha '+matT+' '+uni] };
   }
 
   // 2️⃣ MÉDIA DE CONSUMO MENSAL
@@ -169,7 +180,7 @@ async function answer(query, store, opts){
     const cNorm=normContrato(cRaw, sis, store)|| (sis==='infinity' ? 'INF' : 'CE01');
     const uni=unidade||last.unidade||'UMEPE Juazeiro';
     const cLabel=labelContrato(cNorm, store);
-    const mats = (material && MATERIAIS.includes(material)) ? [material] : ['TZPR04','UPR04'];
+    const mats = (material && MATERIAIS.includes(material)) ? [material] : matsProntos(sis);
     const dias=30;
     let linhas=[];
     for(const mat of mats){
@@ -194,13 +205,15 @@ async function answer(query, store, opts){
     const uni=unidade||last.unidade||'UMEPE Juazeiro';
     const cLabel=labelContrato(cNorm, store);
     const res=await store.estoque.alertas({ contrato:cNorm, unidade:uni, sistema:sis });
-    let itens=res.itens.filter(r=> ['TZPR04','UPR04'].includes(r.material));
+    let itens=res.itens.filter(r=> matsProntos(sis).includes(r.material));
     if(material && MATERIAIS.includes(material)) itens=res.itens.filter(r=> r.material===material);
     if(!itens.length){
       const all=await store.estoque.all(sis);
-      const tzpr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && e.material==='TZPR04' && e.unidade===uni);
-      const upr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && e.material==='UPR04' && e.unidade===uni);
-      return { intent:'reposicao_seguranca', text:`✅ **Necessidade de Reposição — ${uni} (${cLabel}${sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):''})**\nNenhuma falta hoje. Estoque de segurança OK:\n• TZPR04: ${tzpr?tzpr.saldo:0}/${LIMITES.TZPR04}\n• UPR04: ${upr?upr.saldo:0}/${LIMITES.UPR04}`, data:{ contrato:cNorm, sistema:sis, unidade:uni, itens:[] }, suggestions:['estoque atual '+uni,'média de consumo mensal '+uni] };
+      const matT=matTZPR(sis);
+      const tzpr=all.find(e=> String(e.contrato).toUpperCase()===cNorm && e.material===matT && e.unidade===uni);
+      const upr=sis==='infinity' ? null : all.find(e=> String(e.contrato).toUpperCase()===cNorm && e.material==='UPR04' && e.unidade===uni);
+      const linhaUpr = sis==='infinity' ? '' : `\n• UPR04: ${upr?upr.saldo:0}/${LIMITES.UPR04}`;
+      return { intent:'reposicao_seguranca', text:`✅ **Necessidade de Reposição — ${uni} (${cLabel}${sis? ' • '+(sis==='infinity'?'Infinity':'Spacecom'):''})**\nNenhuma falta hoje. Estoque de segurança OK:\n• ${matT}: ${tzpr?tzpr.saldo:0}/${LIMITES[matT]||5}${linhaUpr}`, data:{ contrato:cNorm, sistema:sis, unidade:uni, itens:[] }, suggestions:['estoque atual '+uni,'média de consumo mensal '+uni] };
     }
     const sug=itens.map(r=>{ const alvo=r.limite; const falta=Math.max(0, alvo - Number(r.saldo||0)); return { ...r, alvo, falta }; }).sort((a,b)=> b.falta - a.falta);
     const totalFalta=sug.reduce((s,x)=>s+x.falta,0);
@@ -267,7 +280,7 @@ async function answer(query, store, opts){
     // calcula sugestão: levar até limite + 50% de margem (ex: TZPR04 de 0/5 sugere 8)
     const sug=itens.map(r=>{ const alvo=Math.ceil(r.limite*1.5); const qtd=Math.max(0, alvo - Number(r.saldo||0)); return { ...r, alvo, qtdSugerida: qtd }; }).sort((a,b)=> b.qtdSugerida - a.qtdSugerida);
     const totalPecas=sug.reduce((s,x)=>s+x.qtdSugerida,0);
-    const txt=`🛒 **Reposição sugerida${contrato?' '+contrato:''}${unidade?' • '+unidade:''}** — ${sug.length} itens abaixo do mínimo (total ${totalPecas} peças para atingir 150% do mínimo)\n` + sug.map(r=> `• ${r.contrato} ${r.material} em ${r.unidade}: ${r.saldo}/${r.limite} → comprar **${r.qtdSugerida}** (alvo ${r.alvo})${r.saldo===0?' 🔴 ZERADO':''}`).join('\n') + `\n\n💡 Mínimos: TZPR04=5, UPR04=5, FONTE04=5, CINTA=10, TRAVAS=20`;
+    const txt=`🛒 **Reposição sugerida${contrato?' '+contrato:''}${unidade?' • '+unidade:''}** — ${sug.length} itens abaixo do mínimo (total ${totalPecas} peças para atingir 150% do mínimo)\n` + sug.map(r=> `• ${r.contrato} ${r.material} em ${r.unidade}: ${r.saldo}/${r.limite} → comprar **${r.qtdSugerida}** (alvo ${r.alvo})${r.saldo===0?' 🔴 ZERADO':''}`).join('\n') + `\n\n💡 Mínimos: TZPR04/TZPR=5, UPR04=5, FONTE04=5, CINTA=10, TRAVAS=20`;
     return { intent:'reposicao', text: txt, data:{ itens: sug, totalPecas }, suggestions:['alertas '+(contrato||'CE01'),'comparar UMEPE vs UP-Cariri','saldo total '+(contrato||'CE01')] };
   }
 
@@ -427,7 +440,7 @@ async function answer(query, store, opts){
     const total=disponiveis.length;
     const detalhe=Object.entries(porUnidade).map(([u,c])=> `${u}: ${c}`).join('\n') || 'nenhum';
     const lista=disponiveis.slice(0,30).map(s=> `${s.serial} — ${s.unidade} (${s.contrato})`).join('\n');
-    const label=matSerial||'TZPR04/UPR04';
+    const label=matSerial||(sistema==='infinity'?'TZPR':'TZPR04/UPR04');
     return { intent:'seriais', text:`🔢 Seriais ${label} disponíveis — Total **${total}** (em uso: ${emUso.length})\nPor unidade:\n${detalhe}${lista?'\n\nExemplos:\n'+lista:''}`, data:{ total, emUso: emUso.length, porUnidade, seriais: disponiveis.slice(0,100) }, suggestions:['buscar serial 1234567890','saldo '+label] };
   }
 
