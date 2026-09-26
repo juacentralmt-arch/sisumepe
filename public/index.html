@@ -2011,7 +2011,7 @@ function updateEstoqueContratoUI(){
     }
   }
   if(sub){
-    if(infinito) sub.textContent='Estoque unificado Infinity (sem CE01/CE02) — TZPR04/UPR04 com lote 10 dígitos, FONTE04, CINTA, TRAVAS';
+    if(infinito) sub.textContent='Estoque unificado Infinity (sem CE01/CE02) — TZPR com lote 10 dígitos, FONTE04, CINTA, TRAVAS (sem UPR04)';
     else sub.textContent='Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade';
   }
   if(selForm){
@@ -6396,9 +6396,30 @@ let estoqueUnidadeAtiva='UMEPE Juazeiro'; // pré-selecionado
 let estoqueSistemaAtivo='spacecom';
 let estoqueCache=[], estoqueMovCache=[];
 const UNIDADES_EST=['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
-const LIMITES_EST={ TZPR04:5, UPR04:5, FONTE04:5, CINTA:10, TRAVAS:20 };
-const MATERIAIS_SERIAL_EST=['TZPR04','UPR04'];
+const LIMITES_EST={ TZPR04:5, TZPR:5, UPR04:5, FONTE04:5, CINTA:10, TRAVAS:20 };
+const MATERIAIS_SERIAL_EST=['TZPR04','TZPR','UPR04'];
+const MATERIAIS_EST_SPACECOM=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_EST_INFINITY=['TZPR','FONTE04','CINTA','TRAVAS'];
+function matsEstoqueAtivo(){ return isInfinitySistema()?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM; }
 function temSerialEst(m){ return MATERIAIS_SERIAL_EST.includes(String(m||'').toUpperCase()); }
+// Mantém os selects de material coerentes com o sistema (Infinity: sem UPR04, TZPR no lugar de TZPR04)
+function syncEstMaterialOptions(){
+  const inf=isInfinitySistema();
+  const mapa={ estMaterial: inf?'TZPR':'TZPR04', estTransMaterial: inf?'TZPR':'TZPR04' };
+  for(const [id, padrao] of Object.entries(mapa)){
+    const sel=document.getElementById(id); if(!sel) continue;
+    const atual=sel.value;
+    const lista=inf?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM;
+    sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('');
+    sel.value=lista.includes(atual)?atual:padrao;
+  }
+  const serM=document.getElementById('estSerMat'); if(serM){
+    const atual=serM.value;
+    serM.innerHTML=`<option value="">${inf?'TZPR':"TZPR04 + UPR04"}</option>`+(inf?`<option value="TZPR">TZPR</option>`:`<option value="TZPR04">TZPR04</option><option value="UPR04">UPR04</option>`);
+    serM.value=(atual==='TZPR04'&&inf)?'':atual;
+  }
+  try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){}
+}
 function toggleEstSeriais(){
   const mat=document.getElementById('estMaterial')?.value||'';
   const wrap=document.getElementById('estSeriaisWrap');
@@ -6498,6 +6519,7 @@ function switchEstoqueSistema(s){
     else if(!['CE01','CE02'].includes(estoqueContratoAtivo)) estoqueContratoAtivo='CE01';
   }
   const sel=document.getElementById('estoqueSistemaFiltro'); if(sel) sel.value=estoqueSistemaAtivo;
+  syncEstMaterialOptions();
   updateEstoqueContratoUI();
   renderEstoque();
   loadEstoque();
@@ -6550,7 +6572,7 @@ function renderEstoque(){
   const resumo=document.getElementById('estoqueUnidadeResumo');
   const porUnidadeEl=document.getElementById('estoquePorUnidade');
   if(!cont) return;
-  const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+  const mats=matsEstoqueAtivo();
   const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=7" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=9" alt="FONTE04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
   const contratoFiltro = getEstoqueContratoEfetivo();
   let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===contratoFiltro);
@@ -6569,7 +6591,7 @@ function renderEstoque(){
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?' 🔴 ZERADO':' ⚠️ BAIXO') : '';
       const labelC = isInfinitySistema() ? 'Estoque Infinity' : getEstoqueContratoEfetivo();
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinitySistema()?'Estoque Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p>${(m==='TZPR04'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinitySistema()?'Estoque Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p>${(m==='TZPR04'||m==='TZPR'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
     }).join('');
     if(resumo) resumo.classList.add('hidden');
     // tabela por unidade
@@ -6596,7 +6618,7 @@ function renderEstoque(){
       const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div>${(m==='TZPR04'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div>${(m==='TZPR04'||m==='TZPR'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
     }).join('');
     if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); const lab=isInfinitySistema()?'Estoque Infinity':estoqueContratoAtivo; resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${esc(lab)}</span>`; }
     if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
@@ -6659,7 +6681,7 @@ async function loadEstSeriais(){
     try{
       const r=await api('/api/estoque/seriais/resumo?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo()));
       const el=document.getElementById('estSeriaisResumo');
-      if(el && r && r.porMaterial) el.textContent=`TZPR04: ${r.porMaterial.TZPR04.disponivel} disp. • UPR04: ${r.porMaterial.UPR04.disponivel} disp. (total ${r.total})`;
+      if(el && r && r.porMaterial) el.textContent=Object.entries(r.porMaterial).map(([m,v])=>`${m}: ${v.disponivel} disp.`).join(' • ')+` (total ${r.total})`;
     }catch(e){}
   }catch(e){ if(listEl) listEl.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar seriais</p>'; }
 }
@@ -6774,7 +6796,7 @@ async function gerarRelatorioEstoque(){
     const data=await api('/api/estoque/relatorio?'+params.toString());
     const el=document.getElementById('estRelatorio');
     el.classList.remove('hidden');
-    const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    const mats=matsEstoqueAtivo();
     const saldos=data.estoque||[];
     const totalGeral=saldos.reduce((s,x)=>s+Number(x.saldo||0),0);
     const tituloUnidade=unidade?` • ${esc(unidade)}`:' • todas as unidades';
@@ -6846,7 +6868,7 @@ async function mostrarEstoqueDataDetalha(){
     const list=await api('/api/estoque/historico/detalhado?contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoqueSistemaAtivo));
     const el=document.getElementById('estHistResult');
     el.classList.remove('hidden');
-    const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    const mats=matsEstoqueAtivo();
     const labelDet = getEstoqueContratoEfetivo()==='INF'?'Estoque Infinity':getEstoqueContratoEfetivo();
     el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">Detalhado por unidade em ${new Date(data).toLocaleDateString('pt-BR')} (${esc(labelDet)})</b><button onclick="exportHistoricoCSV()" class="text-xs text-slate-500">⬇ CSV</button></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST.map(u=>{ const rows=list.filter(x=> String(x.unidade)===u); const cells=mats.map(m=>{ const r=rows.find(x=> String(x.material)===m); const v=r?r.saldo:0; const det=r&&r.seriais&&r.seriais.length?`<br><span class="text-[10px] font-mono text-slate-500">${r.seriais.length} seriais</span>`:''; return `<td class="text-center py-1.5 px-2">${v}${det}</td>`; }).join(''); const tot=rows.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`;
     el.scrollIntoView({behavior:'smooth'});
@@ -6937,7 +6959,8 @@ function estIARenderData(data){
     if(data.itens && Array.isArray(data.itens)){
       const rows=data.itens.slice(0,20);
       if(rows[0] && rows[0].unidade!==undefined){
-        const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+        const ordem=[...MATERIAIS_EST_SPACECOM, ...MATERIAIS_EST_INFINITY.filter(m=>!MATERIAIS_EST_SPACECOM.includes(m))];
+        const mats=ordem.filter(m=>rows.some(r=>String(r.material)===m));
         const unidades=[...new Set(rows.map(r=>r.unidade))].slice(0,6);
         let html='<div class="mt-2 overflow-x-auto"><table class="min-w-full text-[11px] bg-white rounded-lg overflow-hidden border"><thead class="bg-slate-50"><tr><th class="text-left py-1.5 px-2">Unidade</th>'+mats.map(m=>`<th class="text-center py-1.5 px-2">${m}</th>`).join('')+'</tr></thead><tbody>';
         unidades.forEach(u=>{ html+='<tr class="border-t"><td class="py-1 px-2 font-semibold">'+esc(u)+'</td>'+mats.map(m=>{ const r=rows.find(x=>String(x.unidade)===u && String(x.material)===m); const v=r?r.saldo:0; const cls=v===0?'text-slate-300': v < (LIMITES_EST[m]||5)?'text-amber-700 font-bold':'text-emerald-700'; return '<td class="text-center py-1 px-2 '+cls+'">'+v+'</td>'; }).join('')+'</tr>'; });

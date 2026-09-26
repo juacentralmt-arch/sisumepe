@@ -20,6 +20,21 @@ const normalizeContrato = storeMod.normalizeContrato || ((c)=> String(c||'').toU
 const contratoLabel = storeMod.contratoLabel || ((c)=> String(c||'').toUpperCase());
 const contratosDoSistema = storeMod.contratosDoSistema || (()=> ['CE01','CE02']);
 const CONTRATO_INFINITY = storeMod.CONTRATO_INFINITY || 'INF';
+// Materiais por sistema: Infinity = TZPR + insumos (sem UPR04).
+const MATERIAIS_SPACECOM = storeMod.MATERIAIS_SPACECOM || MATERIAIS;
+const MATERIAIS_INFINITY = storeMod.MATERIAIS_INFINITY || MATERIAIS;
+function materiaisDoSistemaRoute(sistema){
+  const s = normalizeSistema(sistema);
+  if(s==='infinity') return MATERIAIS_INFINITY;
+  if(s==='spacecom') return MATERIAIS_SPACECOM;
+  return [...new Set([...MATERIAIS_SPACECOM, ...MATERIAIS_INFINITY])];
+}
+function validaMaterial(material, sistema){
+  const m = String(material||'').toUpperCase().trim();
+  const validos = materiaisDoSistemaRoute(sistema);
+  if(!validos.includes(m)) return `Material inválido para ${sistema||'sistema'} (${validos.join(', ')})`;
+  return null;
+}
 function getSistema(req){
   // admin pode especificar ?sistema=spacecom|infinity|all via query ou body, tecnico é forçado ao seu sistema
   const qSistema = (req.query && req.query.sistema) || (req.body && req.body.sistema);
@@ -103,7 +118,8 @@ router.get('/api/estoque/unidades', shared.auth(['tecnico','admin']), shared.ah(
 }));
 
 router.get('/api/estoque/materiais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  res.json(MATERIAIS);
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  res.json(materiaisDoSistemaRoute(sistema));
 }));
 
 router.get('/api/estoque/resumo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
@@ -134,6 +150,7 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
   if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
   if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
+  const errM=validaMaterial(material, effectiveSistema); if(errM) return res.status(400).json({ error: errM });
   const r = await shared.store.estoque.adjust({
     sistema: effectiveSistema, contrato: contratoNorm, material, unidade, qtd: qtdFinal, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
@@ -163,6 +180,7 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
   if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
   if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
   if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
+  const errTM=validaMaterial(material, effectiveSistema); if(errTM) return res.status(400).json({ error: errTM });
   const r = await shared.store.estoque.transferir({
     sistema: effectiveSistema, contrato: contratoNorm, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
@@ -171,20 +189,20 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
   res.json(r);
 }));
 
-// Seriais TZPR04/UPR04 cadastrados (10 dígitos), com material derivado do
-// prefixo (431→TZPR04, 471→UPR04).
-// Filtros: ?contrato=CE01|CE02|INF & ?unidade= & ?sistema= & ?material=TZPR04|UPR04
+// Seriais cadastrados (10 dígitos), com material derivado do prefixo + sistema
+// (431→TZPR04 no Spacecom, TZPR no Infinity; 471→UPR04).
+// Filtros: ?contrato=CE01|CE02|INF & ?unidade= & ?sistema= & ?material=TZPR04|TZPR|UPR04
 //   & ?status=disponivel|em_uso & ?q=trecho-do-serial & ?limit=500|all
 // Resposta: array [{ sistema, contrato, serial, unidade, status, material, ... }]
 // (limit padrão 500, máx 2000 — use limit=all para a base inteira).
-const SERIAL_MATERIAL_PREFIX = { TZPR04: '431', UPR04: '471' };
-function serialMaterial(serial){
+function serialMaterial(serial, sistema){
+  if(storeMod.materialDoSerial) return storeMod.materialDoSerial(serial, sistema);
   const v = String(serial || '');
-  for (const [mat, prefixo] of Object.entries(SERIAL_MATERIAL_PREFIX)) {
-    if (v.startsWith(prefixo)) return mat;
-  }
+  if(v.startsWith('431')) return normalizeSistema(sistema)==='infinity' ? 'TZPR' : 'TZPR04';
+  if(v.startsWith('471')) return 'UPR04';
   return null;
 }
+const MATERIAIS_SERIAL_VALIDOS = ['TZPR04','TZPR','UPR04'];
 router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, material, status, q, limit } = req.query;
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
@@ -194,10 +212,10 @@ router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(a
   if(unidade) opts.unidade = String(unidade).trim();
   if(status) opts.status = String(status).trim();
   let list = await shared.store.estoqueSerial.all(opts);
-  list = list.map(s => ({ ...s, material: serialMaterial(s.serial) }));
+  list = list.map(s => ({ ...s, material: serialMaterial(s.serial, s.sistema || sistema) }));
   const matFiltro = material ? String(material).toUpperCase().trim() : null;
   if(matFiltro){
-    if(!['TZPR04','UPR04'].includes(matFiltro)) return res.status(400).json({ error: 'Material inválido (TZPR04/UPR04)' });
+    if(!MATERIAIS_SERIAL_VALIDOS.includes(matFiltro)) return res.status(400).json({ error: 'Material inválido (TZPR04/TZPR/UPR04)' });
     list = list.filter(s => s.material === matFiltro);
   }
   const busca = q ? String(q).replace(/\D/g, '') : '';
@@ -221,11 +239,13 @@ router.get('/api/estoque/seriais/resumo', shared.auth(['tecnico','admin']), shar
   if(c) opts.contrato = c;
   if(unidade) opts.unidade = String(unidade).trim();
   const all = await shared.store.estoqueSerial.all(opts);
-  const porMaterial = { TZPR04: { disponivel: 0, em_uso: 0, total: 0 }, UPR04: { disponivel: 0, em_uso: 0, total: 0 } };
+  const porMaterial = {};
+  const bump = mat => { porMaterial[mat] = porMaterial[mat] || { disponivel: 0, em_uso: 0, total: 0 }; return porMaterial[mat]; };
   const porUnidade = {};
   for(const s of all){
-    const mat = serialMaterial(s.serial) || 'OUTROS';
-    if(porMaterial[mat]){ porMaterial[mat].total++; if(s.status==='disponivel') porMaterial[mat].disponivel++; else if(s.status==='em_uso') porMaterial[mat].em_uso++; }
+    const mat = serialMaterial(s.serial, s.sistema || sistema) || 'OUTROS';
+    const pm = bump(mat);
+    pm.total++; if(s.status==='disponivel') pm.disponivel++; else if(s.status==='em_uso') pm.em_uso++;
     const u = String(s.unidade || '?');
     porUnidade[u] = porUnidade[u] || { disponivel: 0, em_uso: 0, total: 0 };
     porUnidade[u].total++; if(s.status==='disponivel') porUnidade[u].disponivel++; else if(s.status==='em_uso') porUnidade[u].em_uso++;

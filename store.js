@@ -16,8 +16,25 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const DEFAULT_UNIDADE = 'UMEPE Juazeiro';
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-const MATERIAIS_COM_SERIAL = ['TZPR04','UPR04'];
-const ESTOQUE_LIMITES = { TZPR04: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+// Materiais por sistema: Infinity trabalha só com TZPR (sem "04") + insumos —
+// UPR04 não existe no Infinity. Spacecom mantém os 5 códigos originais.
+const MATERIAIS_SPACECOM = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_INFINITY = ['TZPR','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_COM_SERIAL = ['TZPR04','UPR04','TZPR'];
+const ESTOQUE_LIMITES = { TZPR04: 5, TZPR: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
+function materiaisDoSistema(sistema){
+  const s = normalizeSistema(sistema);
+  if(s==='infinity') return [...MATERIAIS_INFINITY];
+  if(s==='spacecom') return [...MATERIAIS_SPACECOM];
+  return [...new Set([...MATERIAIS_SPACECOM, ...MATERIAIS_INFINITY])];
+}
+// Serial 431xxx é TZPR04 no Spacecom e TZPR no Infinity; 471xxx é UPR04.
+function materialDoSerial(serial, sistema){
+  const v = String(serial || '');
+  if(v.startsWith('431')) return normalizeSistema(sistema)==='infinity' ? 'TZPR' : 'TZPR04';
+  if(v.startsWith('471')) return 'UPR04';
+  return null;
+}
 const ESTOQUE_CONTRATOS = ['CE01','CE02'];
 const CONTRATO_INFINITY = 'INF';
 const CONTRATOS_SPACECOM = ['CE01','CE02'];
@@ -86,6 +103,33 @@ function normalizeUnidade(u){
   return found||s;
 }
 function isValidUnidade(u){ return UNIDADES.some(x=> x.toLowerCase()===String(u||'').trim().toLowerCase()); }
+// Migração Infinity (TZPR): renomeia TZPR04→TZPR com merge de saldos e exclui
+// UPR04 em definitivo (estoque + movimentações + seriais 471). Idempotente.
+function migrarInfinityMateriais(){
+  if(!mem || !Array.isArray(mem.estoque)) return false;
+  if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
+  if(!Array.isArray(mem.estoqueSerial)) mem.estoqueSerial = [];
+  let changed = false;
+  const isInf = r => normalizeSistema(r.sistema || DEFAULT_SISTEMA)==='infinity';
+  // 1. histórico: TZPR04 do infinity vira TZPR
+  for(const m of mem.estoqueMov){
+    if(isInf(m) && String(m.material).toUpperCase()==='TZPR04'){ m.material='TZPR'; changed=true; }
+  }
+  // 2. saldos: TZPR04 do infinity vira TZPR (soma se a linha TZPR já existir)
+  for(const e of mem.estoque.filter(e=> isInf(e) && String(e.material).toUpperCase()==='TZPR04')){
+    const exist = mem.estoque.find(x=> x!==e && isInf(x) && String(x.contrato).toUpperCase()===String(e.contrato).toUpperCase() && String(x.material).toUpperCase()==='TZPR' && x.unidade===e.unidade);
+    if(exist){ exist.saldo=Number(exist.saldo||0)+Number(e.saldo||0); exist.updatedAt=new Date().toISOString(); mem.estoque.splice(mem.estoque.indexOf(e),1); }
+    else { e.material='TZPR'; e.updatedAt=new Date().toISOString(); }
+    changed=true;
+  }
+  // 3. UPR04 do infinity: exclusão definitiva
+  const nE=mem.estoque.length, nM=mem.estoqueMov.length, nS=mem.estoqueSerial.length;
+  mem.estoque=mem.estoque.filter(e=> !(isInf(e) && String(e.material).toUpperCase()==='UPR04'));
+  mem.estoqueMov=mem.estoqueMov.filter(m=> !(isInf(m) && String(m.material).toUpperCase()==='UPR04'));
+  mem.estoqueSerial=mem.estoqueSerial.filter(s=> !(isInf(s) && String(s.serial).startsWith('471')));
+  if(mem.estoque.length!==nE || mem.estoqueMov.length!==nM || mem.estoqueSerial.length!==nS) changed=true;
+  return changed;
+}
 function normalizeUser(u) {
   return String(u || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '');
 }
@@ -189,7 +233,9 @@ function loadFile() {
       mem.estoqueSerial.forEach(s=>{ if(normalizeSistema(s.sistema||DEFAULT_SISTEMA)==='infinity' && String(s.contrato).toUpperCase()!=='INF'){ s.contrato='INF'; changedSer=true; } });
       if(changedMov||changedSer) needSave=true;
     }
-    const matsAll=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+    // migração Infinity: TZPR04→TZPR (merge) + exclusão definitiva da UPR04
+    if(migrarInfinityMateriais()) needSave=true;
+    const matsPorSistema = { spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
     const unidadesAll=UNIDADES;
     // deduplica estoque por (sistema,contrato,material,unidade) somando saldo
     const dedup=new Map();
@@ -207,28 +253,30 @@ function loadFile() {
       ...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})),
       {sis:'infinity', c:CONTRATO_INFINITY}
     ];
-    ensureCombos.forEach(({sis, c})=> matsAll.forEach(m=> unidadesAll.forEach(u=>{
+    ensureCombos.forEach(({sis, c})=> matsPorSistema[sis].forEach(m=> unidadesAll.forEach(u=>{
       if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
         mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
         added++; needSave=true;
       }
     })));
     // remove combinações obsoletas: infinity CE01/CE02 zeradas (caso sobrem)
+    // + UPR04/TZPR04 residuais zeradas no infinity (caso sobrem)
     {
       const before=mem.estoque.length;
       mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+      mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && ['UPR04','TZPR04'].includes(String(e.material).toUpperCase()) && Number(e.saldo||0)===0));
       if(mem.estoque.length!==before) needSave=true;
     }
     if(!mem.estoque.length){
-      ensureCombos.forEach(({sis, c})=> matsAll.forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
+      ensureCombos.forEach(({sis, c})=> matsPorSistema[sis].forEach(m=> unidadesAll.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
       needSave=true;
     }
     if(needSave||added) saveFile();
     return mem;
   } catch {
     mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1 };
-    const mats2=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
-    [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> mats2.forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
+    const matsInit={ spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
+    [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> matsInit[sis].forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
     return mem;
   }
 }
@@ -276,19 +324,22 @@ if(!mem.seqEstoqueSerial) mem.seqEstoqueSerial = mem.estoqueSerial.length ? Math
   }
   mem.estoqueMov.forEach(m=>{ if(normalizeSistema(m.sistema||DEFAULT_SISTEMA)==='infinity' && String(m.contrato).toUpperCase()!=='INF'){ m.contrato='INF'; need=true; } });
   mem.estoqueSerial.forEach(s=>{ if(normalizeSistema(s.sistema||DEFAULT_SISTEMA)==='infinity' && String(s.contrato).toUpperCase()!=='INF'){ s.contrato='INF'; need=true; } });
-  const mats=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+  // migração Infinity: TZPR04→TZPR (merge) + exclusão definitiva da UPR04
+  if(migrarInfinityMateriais()) need=true;
+  const matsPorSis={ spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
   let added=0;
   const combos=[...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}];
-  combos.forEach(({sis, c})=> mats.forEach(m=> UNIDADES.forEach(u=>{
+  combos.forEach(({sis, c})=> matsPorSis[sis].forEach(m=> UNIDADES.forEach(u=>{
     if(!mem.estoque.some(e=> e.sistema===sis && e.contrato===c && e.material===m && e.unidade===u)){
       mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() });
       added++; need=true;
     }
   })));
-  // remove obsoletos infinity CE01/CE02
+  // remove obsoletos infinity CE01/CE02 + UPR04/TZPR04 residuais zeradas
   {
     const before=mem.estoque.length;
     mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && String(e.contrato).toUpperCase()!=='INF'));
+    mem.estoque=mem.estoque.filter(e=> !(e.sistema==='infinity' && ['UPR04','TZPR04'].includes(String(e.material).toUpperCase()) && Number(e.saldo||0)===0));
     if(mem.estoque.length!==before) need=true;
   }
   if(need) saveFile();
@@ -950,7 +1001,8 @@ const store = {
       } else {
         if(!CONTRATOS_SPACECOM.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
       }
-      if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido: '+MATERIAIS.join(', ')),{status:400});
+      const matsValidos = materiaisDoSistema(sistema);
+      if(!matsValidos.includes(material)) throw Object.assign(new Error('Material inválido para '+sistema+': '+matsValidos.join(', ')),{status:400});
       if(!UNIDADES.includes(unidade)) throw Object.assign(new Error('Unidade inválida: '+UNIDADES.join(', ')),{status:400});
       qtd=Number(qtd); if(!Number.isFinite(qtd) || qtd===0) throw Object.assign(new Error('Quantidade deve ser diferente de zero'),{status:400});
       if(Math.abs(qtd)>500) throw Object.assign(new Error('Lote máximo 500 unidades por movimentação'),{status:400});
@@ -1110,7 +1162,8 @@ const store = {
       } else {
         if(!CONTRATOS_SPACECOM.includes(contrato)) throw Object.assign(new Error('Contrato inválido (CE01/CE02)'),{status:400});
       }
-      if(!MATERIAIS.includes(material)) throw Object.assign(new Error('Material inválido'),{status:400});
+      const matsValidosTransf = materiaisDoSistema(sistema);
+      if(!matsValidosTransf.includes(material)) throw Object.assign(new Error('Material inválido para '+sistema),{status:400});
       if(!UNIDADES.includes(unidadeOrigem)) throw Object.assign(new Error('Unidade origem inválida'),{status:400});
       if(!UNIDADES.includes(unidadeDestino)) throw Object.assign(new Error('Unidade destino inválida'),{status:400});
       qtd=Math.abs(Number(qtd));
@@ -1192,7 +1245,7 @@ const store = {
       if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
       // aplica filtros de data: ignora movimentos futuros já filtrado, mas garante ordenação cronológica
       const unidadeFiltro = unidade ? normalizeUnidade(unidade) : null;
-      const mats=MATERIAIS;
+      const mats=materiaisDoSistema(sistema);
       if(unidadeFiltro){
         const result=[];
         for(const mat of mats){
@@ -1241,7 +1294,7 @@ const store = {
       const allMov = await store.estoqueMov.all({ sistema: sistema || undefined, limit: 'all' });
       let filtered = allMov.filter(m=> String(m.contrato).toUpperCase()===c && new Date(m.createdAt) <= target);
       if(sistema){ const sis=normalizeSistema(sistema); filtered=filtered.filter(m=> normalizeSistema(m.sistema||DEFAULT_SISTEMA)===sis); }
-      const mats=MATERIAIS;
+      const mats=materiaisDoSistema(sistema);
       const porUnidade=[];
       for(const u of UNIDADES){
         for(const mat of mats){
@@ -1718,3 +1771,8 @@ module.exports.SISTEMAS = SISTEMAS;
 module.exports.CONTRATO_INFINITY = CONTRATO_INFINITY;
 module.exports.CONTRATOS_SPACECOM = CONTRATOS_SPACECOM;
 module.exports.MATERIAIS = MATERIAIS;
+module.exports.MATERIAIS_SPACECOM = MATERIAIS_SPACECOM;
+module.exports.MATERIAIS_INFINITY = MATERIAIS_INFINITY;
+module.exports.MATERIAIS_COM_SERIAL = MATERIAIS_COM_SERIAL;
+module.exports.materiaisDoSistema = materiaisDoSistema;
+module.exports.materialDoSerial = materialDoSerial;
