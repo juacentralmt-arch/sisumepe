@@ -171,16 +171,68 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
   res.json(r);
 }));
 
-// Seriais TZPR04/UPR04 disponíveis por contrato/unidade (10 dígitos)
+// Seriais TZPR04/UPR04 cadastrados (10 dígitos), com material derivado do
+// prefixo (431→TZPR04, 471→UPR04).
+// Filtros: ?contrato=CE01|CE02|INF & ?unidade= & ?sistema= & ?material=TZPR04|UPR04
+//   & ?status=disponivel|em_uso & ?q=trecho-do-serial & ?limit=500|all
+// Resposta: array [{ sistema, contrato, serial, unidade, status, material, ... }]
+// (limit padrão 500, máx 2000 — use limit=all para a base inteira).
+const SERIAL_MATERIAL_PREFIX = { TZPR04: '431', UPR04: '471' };
+function serialMaterial(serial){
+  const v = String(serial || '');
+  for (const [mat, prefixo] of Object.entries(SERIAL_MATERIAL_PREFIX)) {
+    if (v.startsWith(prefixo)) return mat;
+  }
+  return null;
+}
 router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade } = req.query;
+  const { contrato, unidade, material, status, q, limit } = req.query;
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const opts = sistema ? { sistema } : {};
   const c = contrato ? resolveContrato(contrato, sistema) : null;
-  if(c && unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato: c, unidade }));
-  if(c) return res.json(await shared.store.estoqueSerial.all({ ...opts, contrato: c }));
-  if(unidade) return res.json(await shared.store.estoqueSerial.all({ ...opts, unidade }));
-  res.json(await shared.store.estoqueSerial.all(opts));
+  if(c) opts.contrato = c;
+  if(unidade) opts.unidade = String(unidade).trim();
+  if(status) opts.status = String(status).trim();
+  let list = await shared.store.estoqueSerial.all(opts);
+  list = list.map(s => ({ ...s, material: serialMaterial(s.serial) }));
+  const matFiltro = material ? String(material).toUpperCase().trim() : null;
+  if(matFiltro){
+    if(!['TZPR04','UPR04'].includes(matFiltro)) return res.status(400).json({ error: 'Material inválido (TZPR04/UPR04)' });
+    list = list.filter(s => s.material === matFiltro);
+  }
+  const busca = q ? String(q).replace(/\D/g, '') : '';
+  if(busca) list = list.filter(s => String(s.serial).includes(busca));
+  list.sort((a,b)=> String(a.unidade).localeCompare(String(b.unidade)) || String(a.serial).localeCompare(String(b.serial)));
+  const limRaw = limit==null || limit==='' ? '500' : String(limit).toLowerCase();
+  if(limRaw !== 'all'){
+    const n = Math.min(Math.max(Number(limRaw)||500, 1), 2000);
+    list = list.slice(0, n);
+  }
+  res.json(list);
+}));
+
+// Resumo de seriais cadastrados: totais por material × status × unidade.
+// Útil para o painel sem transferir milhares de linhas.
+router.get('/api/estoque/seriais/resumo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, unidade } = req.query;
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const opts = sistema ? { sistema, limit: 'all' } : { limit: 'all' };
+  const c = contrato ? resolveContrato(contrato, sistema) : null;
+  if(c) opts.contrato = c;
+  if(unidade) opts.unidade = String(unidade).trim();
+  const all = await shared.store.estoqueSerial.all(opts);
+  const porMaterial = { TZPR04: { disponivel: 0, em_uso: 0, total: 0 }, UPR04: { disponivel: 0, em_uso: 0, total: 0 } };
+  const porUnidade = {};
+  for(const s of all){
+    const mat = serialMaterial(s.serial) || 'OUTROS';
+    if(porMaterial[mat]){ porMaterial[mat].total++; if(s.status==='disponivel') porMaterial[mat].disponivel++; else if(s.status==='em_uso') porMaterial[mat].em_uso++; }
+    const u = String(s.unidade || '?');
+    porUnidade[u] = porUnidade[u] || { disponivel: 0, em_uso: 0, total: 0 };
+    porUnidade[u].total++; if(s.status==='disponivel') porUnidade[u].disponivel++; else if(s.status==='em_uso') porUnidade[u].em_uso++;
+  }
+  const total = all.length;
+  const disponiveis = all.filter(s=> String(s.status)==='disponivel').length;
+  res.json({ total, disponiveis, emUso: total - disponiveis, porMaterial, porUnidade, sistema: sistema||null, contrato: c||null });
 }));
 
 // Histórico: estoque como estava em determinada data (suporta unidade e sistema; infinity = Estoque Infinity único)

@@ -1199,6 +1199,7 @@
           <option value="Fórum de Jardim">Fórum de Jardim</option>
         </select>
         <button onclick="loadEstoque()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
+        <button onclick="toggleEstSeriaisPanel(true)" class="btn btn-ghost text-xs px-3 py-2">🔢 Seriais</button>
         <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
         <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
         <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
@@ -1207,6 +1208,40 @@
       <div id="estoqueAlertas" class="mb-3"></div>
       <div id="estoqueCards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
       <div id="estoquePorUnidade" class="hidden card p-4 mb-4"></div>
+      <div id="estSeriaisPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">🔢 Seriais cadastrados — TZPR04 / UPR04</h3>
+          <button onclick="toggleEstSeriaisPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Lista os seriais de 10 dígitos cadastrados no contrato/sistema ativo, com unidade e situação. <span id="estSeriaisResumo" class="font-semibold text-slate-600"></span></p>
+        <div class="flex flex-wrap gap-2 mb-2">
+          <select id="estSerMat" class="inp !w-auto text-xs" onchange="loadEstSeriais()">
+            <option value="">TZPR04 + UPR04</option>
+            <option value="TZPR04">TZPR04</option>
+            <option value="UPR04">UPR04</option>
+          </select>
+          <select id="estSerUnd" class="inp !w-auto text-xs" onchange="loadEstSeriais()">
+            <option value="">Todas as unidades</option>
+            <option>UMEPE Juazeiro</option>
+            <option>UP-Juazeiro</option>
+            <option>UP-Cariri</option>
+            <option>UP-Crato</option>
+            <option>Fórum de Crato</option>
+            <option>Fórum de Jardim</option>
+          </select>
+          <select id="estSerStatus" class="inp !w-auto text-xs" onchange="loadEstSeriais()">
+            <option value="">Disponíveis + em uso</option>
+            <option value="disponivel" selected>Somente disponíveis</option>
+            <option value="em_uso">Somente em uso</option>
+          </select>
+          <input id="estSerBusca" placeholder="Buscar serial (ex: 4315023...)" class="inp !w-auto text-xs font-mono" onkeydown="if(event.key==='Enter') loadEstSeriais()">
+          <button onclick="loadEstSeriais()" class="btn btn-primary text-xs px-4 py-2">🔍 Listar</button>
+          <button onclick="estSeriaisCopy()" class="btn btn-ghost text-xs px-3 py-2">📋 Copiar</button>
+          <button onclick="estSeriaisCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <p id="estSerCount" class="text-[11px] font-bold text-slate-500 mb-2"></p>
+        <div id="estSerList" class="max-h-[320px] overflow-y-auto border border-slate-100 rounded-xl"></div>
+      </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR/UPR</h3>
@@ -6534,7 +6569,7 @@ function renderEstoque(){
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?' 🔴 ZERADO':' ⚠️ BAIXO') : '';
       const labelC = isInfinitySistema() ? 'Estoque Infinity' : getEstoqueContratoEfetivo();
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinitySistema()?'Estoque Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p></div>`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinitySistema()?'Estoque Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p>${(m==='TZPR04'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
     }).join('');
     if(resumo) resumo.classList.add('hidden');
     // tabela por unidade
@@ -6561,7 +6596,7 @@ function renderEstoque(){
       const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div></div>`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div>${(m==='TZPR04'||m==='UPR04')?`<button onclick="verSeriaisCadastrados('${m}')" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
     }).join('');
     if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); const lab=isInfinitySistema()?'Estoque Infinity':estoqueContratoAtivo; resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${esc(lab)}</span>`; }
     if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
@@ -6588,6 +6623,55 @@ async function loadEstoqueMov(){
       return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('estMovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
+}
+let estSeriaisCache=[];
+function toggleEstSeriaisPanel(abrir){
+  const p=document.getElementById('estSeriaisPanel'); if(!p) return;
+  const show = abrir==null ? p.classList.contains('hidden') : !!abrir;
+  p.classList.toggle('hidden', !show);
+  if(show){ loadEstSeriais(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+function verSeriaisCadastrados(material){
+  const m=document.getElementById('estSerMat'); if(m) m.value=material||'';
+  const u=document.getElementById('estSerUnd'); if(u && estoqueUnidadeAtiva) u.value=estoqueUnidadeAtiva;
+  const b=document.getElementById('estSerBusca'); if(b) b.value='';
+  toggleEstSeriaisPanel(true);
+}
+async function loadEstSeriais(){
+  const listEl=document.getElementById('estSerList'); const cntEl=document.getElementById('estSerCount');
+  try{
+    const mat=document.getElementById('estSerMat')?.value||'';
+    const und=document.getElementById('estSerUnd')?.value||'';
+    const st=document.getElementById('estSerStatus')?.value||'';
+    const q=document.getElementById('estSerBusca')?.value.trim()||'';
+    let url='/api/estoque/seriais?limit=2000&sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo());
+    if(mat) url+='&material='+encodeURIComponent(mat);
+    if(und) url+='&unidade='+encodeURIComponent(und);
+    if(st) url+='&status='+encodeURIComponent(st);
+    if(q) url+='&q='+encodeURIComponent(q);
+    const list=await api(url);
+    estSeriaisCache=Array.isArray(list)?list:[];
+    if(cntEl) cntEl.textContent=`${estSeriaisCache.length} seriais${estSeriaisCache.length>=2000?' (limite de 2000 — refine material/unidade/busca)':''}`;
+    listEl.innerHTML = estSeriaisCache.length ? `<table class="min-w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="text-left py-2 px-3">Serial</th><th class="text-left py-2 px-3">Material</th><th class="text-left py-2 px-3">Unidade</th><th class="text-left py-2 px-3">Situação</th></tr></thead><tbody>${estSeriaisCache.map(s=>{
+      const stBadge=String(s.status)==='disponivel' ? '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">disponível</span>' : '<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">em uso</span>';
+      return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-3 font-mono font-bold">${esc(s.serial)}</td><td class="py-1.5 px-3">${esc(s.material||'')}</td><td class="py-1.5 px-3">${esc(s.unidade||'')}</td><td class="py-1.5 px-3">${stBadge}</td></tr>`;
+    }).join('')}</tbody></table>` : '<p class="text-xs text-slate-400 text-center py-4">Nenhum serial encontrado para este filtro</p>';
+    try{
+      const r=await api('/api/estoque/seriais/resumo?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo()));
+      const el=document.getElementById('estSeriaisResumo');
+      if(el && r && r.porMaterial) el.textContent=`TZPR04: ${r.porMaterial.TZPR04.disponivel} disp. • UPR04: ${r.porMaterial.UPR04.disponivel} disp. (total ${r.total})`;
+    }catch(e){}
+  }catch(e){ if(listEl) listEl.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar seriais</p>'; }
+}
+function estSeriaisCopy(){
+  if(!estSeriaisCache.length) return toast('⚠️ Liste os seriais primeiro');
+  const txt=estSeriaisCache.map(s=>s.serial).join('\n');
+  (navigator.clipboard?.writeText(txt)||Promise.reject()).then(()=>toast(`✅ ${estSeriaisCache.length} seriais copiados`)).catch(()=>toast('⚠️ Não foi possível copiar'));
+}
+function estSeriaisCSV(){
+  if(!estSeriaisCache.length) return toast('⚠️ Liste os seriais primeiro');
+  const csv='serial;material;unidade;contrato;sistema;status\n'+estSeriaisCache.map(s=>[s.serial,s.material,s.unidade,s.contrato,s.sistema,s.status].map(v=>String(v??'')).join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='seriais-estoque.csv'; a.click();
 }
 async function estornarMov(id){
   const motivo=prompt('Motivo do estorno (mín. 3 caracteres):');
