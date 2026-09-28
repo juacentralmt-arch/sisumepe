@@ -64,21 +64,33 @@ function tituloProprio(s) {
     .join(' ');
 }
 
+// Inícios que nunca são nome (evita "Monitorado desde 01/02/2020" → "desde")
+const STOP_INICIO_NOME = /^(desde|at[ée]|ao|aos|de|do|da|para|com|por|em|no|na|e|ou)\b/i;
 function extrairNome(texto) {
   const t = String(texto || '').slice(0, 8000);
-  // nome capturado só até o fim da linha (evita vazar para cidade/data da linha seguinte)
-  // separadores flexíveis ([espaço : -]*) para tolerar ruído de OCR
-  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[\\s:\\-–]*([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'i');
-  const m = t.match(padrao);
-  if (m) {
-    const nome = tituloProprio(limparNome(m[1]));
-    if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length >= 3) return nome;
+  // cópia com confusão clássica de OCR normalizada (0→O, ex: MONITORAD0):
+  // troca 1:1, então as posições são idênticas às do original
+  const tOcr = t.replace(/0/g, 'O');
+  // após o rótulo, pula até 12 chars não-nome ("(A): ", "(A); ", ": ") — tolera OCR
+  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'gi');
+  const cands = [];
+  for (const src of [t, tOcr]) {
+    for (const m of src.matchAll(padrao)) cands.push({ idx: m.index, cap: m[1] });
+  }
+  cands.sort((a, b) => a.idx - b.idx);
+  for (const c of cands) {
+    const nome = tituloProprio(limparNome(c.cap));
+    if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length < 3) continue;
+    if (STOP_INICIO_NOME.test(nome)) continue;
+    return nome;
   }
   // fallback: "Eu, NOME COMPLETO," (comum em declarações)
-  const m2 = t.match(/\beu\s*,?\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9'´`. \t]{2,80}?)\s*[,.;]/i);
-  if (m2) {
-    const nome = tituloProprio(limparNome(m2[1]));
-    if (nome.split(/\s+/).length >= 2) return nome;
+  for (const src of [t, tOcr]) {
+    const m2 = src.match(/\beu\s*,?\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9'´`. \t]{2,80}?)\s*[,.;]/i);
+    if (m2) {
+      const nome = tituloProprio(limparNome(m2[1]));
+      if (nome.split(/\s+/).length >= 2) return nome;
+    }
   }
   return '';
 }

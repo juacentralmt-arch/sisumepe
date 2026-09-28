@@ -279,7 +279,7 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
       continue;
     }
     const r = sugerirNome(texto.slice(0, 8000), original);
-    out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 300) });
+    out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
   }
   res.json({ total: out.length, itens: out });
 }));
@@ -291,7 +291,7 @@ router.post('/api/termos/autorenomear-texto', auth(['tecnico', 'psico', 'admin']
   if(t.length < 10) return res.status(400).json({ error: 'Texto muito curto para analisar (mín. 10 caracteres)' });
   const { sugerirNome } = require('../lib/autoRenomear');
   const r = sugerirNome(t.slice(0, 8000), arquivo || 'documento.pdf');
-  res.json({ arquivo: arquivo || 'texto', ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 300) });
+  res.json({ arquivo: arquivo || 'texto', ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 1500) });
 }));
 
 router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
