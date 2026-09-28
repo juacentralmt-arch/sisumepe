@@ -1987,8 +1987,8 @@ function paintCallNext(){
 }
 async function callNext(){
   if(Date.now() < callCooldownUntil) return;
-  const next = sortQueueJS(tickets.filter(t => t.status === 'aguardando' && podeAssumir(t)))[0];
-  if(!next) return toast('Nenhum ticket disponível para você (Infinity é do Júlio)');
+  const next = sortQueueJS(tickets.filter(t => t.status === 'aguardando' && podeAssumir(t) && filaVisivel(t)))[0];
+  if(!next) return toast('Nenhum ticket disponível na sua fila');
   callCooldownUntil = Date.now() + 3000;
   paintCallNext();
   try{
@@ -2261,11 +2261,33 @@ function authFetch(url, opt){
   return fetch(url, opt);
 }
 
+// Filas separadas Spacecom x Infinity: tecnico só vê/alerta a sua fila
+function meuSistema(){
+  if(!session) return null;
+  if(session.role === 'admin') return null;
+  const s = String(session.sistema || '').toLowerCase().trim();
+  if(s === 'infinity' || s === 'inf') return 'infinity';
+  if(s === 'spacecom' || s === 'space') return 'spacecom';
+  const u = String(session.user || '').toLowerCase().trim();
+  if(['julio', 'marcelo'].includes(u)) return 'infinity';
+  if(['joanderson', 'adailton', 'secretaria'].includes(u)) return 'spacecom';
+  return 'spacecom';
+}
+function isInfinityTicketJS(t){ return !!t && String(t.modeloTornozeleira || '').toLowerCase() === 'infinity'; }
+function filaVisivel(t){
+  if(!t || !session) return true;
+  if(session.role === 'admin' || session.role === 'recepcao') return true;
+  if(session.role !== 'tecnico') return true;
+  const sis = meuSistema();
+  if(isInfinityTicketJS(t)) return sis === 'infinity';
+  return sis !== 'infinity';
+}
 // Alerta direcionado: só quem pode assumir o ticket é avisado
 function deveAlertar(t){
   if(!session || !t || t.status !== 'aguardando') return false;
   if(session.role === 'recepcao') return false;
-  if(t.modeloTornozeleira === 'Infinity') return session.user === 'julio' || session.role === 'admin';
+  if(!filaVisivel(t)) return false;
+  if(isInfinityTicketJS(t)) return session.role === 'admin' || meuSistema() === 'infinity';
   return session.role === 'tecnico' || session.role === 'admin';
 }
 let lastTicketsHash = null, lastFullRenderAt = 0;
@@ -2408,7 +2430,7 @@ function filaActions(t){
   </div>`;
 }
 function renderFila(){
-  const all = tickets.filter(t=>t.status==='aguardando'||t.status==='em_atendimento');
+  const all = tickets.filter(t=>(t.status==='aguardando'||t.status==='em_atendimento') && filaVisivel(t));
   const called = all.filter(t=>t.called).sort((a,b)=>new Date(b.calledAt||0)-new Date(a.calledAt||0))[0];
   const banner = document.getElementById('callBanner');
   const key = called ? called.id + '|' + called.calledAt : '';
@@ -3671,7 +3693,7 @@ async function restoreBackup(){
 function atendBtn(t){
   if(session && session.role==='psico') return `<p class="mt-2 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-2.5 text-center">🧠 Acompanhamento no módulo Psicossocial</p>`;
   const owner = ticketOwner(t);
-  if(t.modeloTornozeleira === 'Infinity' && session && session.user !== 'julio' && session.role !== 'admin') return lockInfinity();
+  if(!filaVisivel(t) && session && session.role === 'tecnico') return isInfinityTicketJS(t) ? lockInfinity() : lockSpacecom();
   const mine = session && owner && owner.toLowerCase() === String(session.user).toLowerCase();
   if (mine || !owner) return `<button onclick="openModal(${t.id},'${esc(t.code)}')" class="btn btn-green mt-2 w-full py-2.5 text-xs">✔ Finalizar com relatório</button>
     <div class="grid grid-cols-2 gap-2 mt-2">
@@ -3701,8 +3723,10 @@ function openTransfer(id){
   document.getElementById('trCode').textContent = t.code + ' • ' + ((t.person && t.person.nome) || '');
   const sel = document.getElementById('trSelect');
   const opts = allUsers.filter(u => u.role === 'tecnico' && u.active !== false && u.user !== session.user);
-  // Infinity só pode ir para Júlio
-  const filtered = t.modeloTornozeleira === 'Infinity' ? opts.filter(u => u.user === 'julio') : opts;
+  // Repasse respeita a fila: Infinity só circula na equipe Infinity, Spacecom só na Spacecom
+  const filtered = isInfinityTicketJS(t)
+    ? opts.filter(u => String(u.sistema || '').toLowerCase() === 'infinity' || ['julio', 'marcelo'].includes(String(u.user || '').toLowerCase()))
+    : opts.filter(u => String(u.sistema || '').toLowerCase() !== 'infinity' && !['julio', 'marcelo'].includes(String(u.user || '').toLowerCase()));
   if(!filtered.length){
     sel.innerHTML = '<option value="">Nenhum técnico disponível</option>';
   } else {
@@ -3727,7 +3751,8 @@ async function returnQueue(id, code){
   catch(e){ toast('⚠️ ' + e.message); }
 }
 function renderTec(){
-  const ag=tickets.filter(t=>t.status==='aguardando'), at=tickets.filter(t=>t.status==='em_atendimento'), fi=tickets.filter(t=>t.status==='finalizado').slice(0,6);
+  const vis = tickets.filter(filaVisivel);
+  const ag=vis.filter(t=>t.status==='aguardando'), at=vis.filter(t=>t.status==='em_atendimento'), fi=vis.filter(t=>t.status==='finalizado').slice(0,6);
   const mini=(t,btn)=>`<div class="card card-hover p-4 text-sm ${t.prioridadeLegal?'prio-glow':''}">
     <div class="flex gap-2 items-center flex-wrap"><b class="text-indigo-600 text-xs tracking-wide">${esc(t.code)}</b>${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE</span>':''}${modeloBadge(t.modeloTornozeleira)}<span class="ml-auto text-[11px] font-semibold text-slate-400">${tempo(t.createdAt)}</span></div>
     <div class="flex items-center gap-2.5 mt-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(t.person?.nome)}</span>
@@ -6345,18 +6370,22 @@ async function loadPsiPainel(){
     document.getElementById('psiAlertsList').querySelectorAll('.psi-oficio-btn').forEach(b=> b.addEventListener('click', ()=> psiOficioIrregularidade(b.dataset.pid2, b.dataset.pname2)));
   }catch(e){ toast('⚠️ ' + e.message); }
 }
-// Regra Infinity: só o Júlio (ou admin) assume
+// Regra de filas: Spacecom (joanderson/adailton) x Infinity (julio/marcelo) — admin vê tudo
 function podeAssumir(t){
-  if(!t || t.modeloTornozeleira !== 'Infinity') return true;
-  if(!session) return false;
-  return session.user === 'julio' || session.role === 'admin';
+  if(!t || !session) return false;
+  if(session.role === 'admin') return true;
+  if(session.role !== 'tecnico') return session.role === 'tecnico';
+  return filaVisivel(t);
 }
 function lockInfinity(){
-  return `<p class="mt-2 text-[11px] font-bold text-fuchsia-800 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Infinity • exclusivo Júlio Cesar</p>`;
+  return `<p class="mt-2 text-[11px] font-bold text-fuchsia-800 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Infinity • fila exclusiva da equipe Infinity</p>`;
+}
+function lockSpacecom(){
+  return `<p class="mt-2 text-[11px] font-bold text-cyan-800 bg-cyan-50 border border-cyan-200 rounded-lg px-2.5 py-2.5 text-center">🔒 Spacecom • fila exclusiva da equipe Spacecom</p>`;
 }
 function startBtn(t){
   if(session && session.role==='psico') return `<p class="mt-2 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-2.5 text-center">🧠 Acompanhamento no módulo Psicossocial</p>`;
-  if(!podeAssumir(t)) return lockInfinity();
+  if(!podeAssumir(t)) return isInfinityTicketJS(t) ? lockInfinity() : lockSpacecom();
   return `<button onclick="startTicket(${t.id})" class="btn btn-primary mt-3 w-full py-2.5 text-xs">▶ Iniciar atendimento</button>`;
 }
 let startId = null;
@@ -6371,7 +6400,7 @@ function startTicket(id){
   if(session.role!=='tecnico') return toast('🔒 Só o Setor Técnico pode iniciar atendimentos');
   const t = tickets.find(x => x.id === id);
   startId = id;
-  if(!podeAssumir(t)){ toast('🔒 Ticket Infinity: somente Júlio Cesar pode assumir'); startId = null; return; }
+  if(!podeAssumir(t)){ toast(isInfinityTicketJS(t) ? '🔒 Ticket Infinity: fila exclusiva da equipe Infinity' : '🔒 Este atendimento é da fila Spacecom'); startId = null; return; }
   document.getElementById('sCode').textContent = t ? t.code + ' • ' + ((t.person && t.person.nome) || '') : '';
   document.getElementById('sTecName').textContent = session.name + ' (' + session.user + ')';
   document.getElementById('sErr').classList.add('hidden');
