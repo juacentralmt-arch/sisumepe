@@ -263,7 +263,7 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
     if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
     if(!isPdf){
       out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-        avisos: ['Imagem sem texto extraível — preencha o nome manualmente'], trecho: '' });
+        avisos: ['Imagem sem texto extraível — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
       continue;
     }
     let texto = '';
@@ -275,7 +275,7 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
     }
     if(texto.replace(/\s/g, '').length < 20){
       out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-        avisos: ['PDF escaneado (sem texto selecionável) — preencha o nome manualmente'], trecho: '' });
+        avisos: ['PDF escaneado (sem texto selecionável) — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
       continue;
     }
     const r = sugerirNome(texto.slice(0, 8000), original);
