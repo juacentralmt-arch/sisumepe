@@ -403,31 +403,171 @@ router.get('/api/psi/alerts', gatePSI(false), ah(async (req, res) => {
   res.json(out);
 }));
 
-// ---- Ficha 360 do monitorado (item 1): tudo da pessoa em um só lugar ----
+// ============================================================================
+// FICHA 360 — VERSÃO 2.0 (otimizada, paginada, com score de risco)
+// ============================================================================
+function buildRiskScore(personId, mine, now) {
+  const today = now.toISOString().slice(0, 10);
+  const in30 = new Date(now.getTime() + 30 * 864e5).toISOString().slice(0, 10);
+  const d15 = new Date(now.getTime() - 15 * 864e5).toISOString().slice(0, 10);
+  const d30 = new Date(now.getTime() - 30 * 864e5).toISOString().slice(0, 10);
+
+  const at = mine.filter(x => x.kind === 'atendimento');
+  const ev = mine.filter(x => x.kind === 'evolucao');
+  const enc = mine.filter(x => x.kind === 'encaminhamento');
+  const med = mine.filter(x => x.kind === 'medida');
+  const vincs = mine.filter(x => x.kind === 'psc_vinculo' && ((x.dados || {}).status || 'ativo') === 'ativo');
+  const pront = mine.filter(x => x.kind === 'prontuario')[0] || null;
+
+  const fc = faltasConsecutivas(at);
+  const faltasMes = at.filter(a => ((a.dados || {}).status || '') === 'falta' && (a.data || '') >= d30).length;
+  const totalAt = at.length;
+  const taxaFalta = totalAt ? (faltasMes / totalAt) * 100 : 0;
+
+  const medVencendo = med.filter(m => { const dd = m.dados || {}; return (dd.status || 'ativa') === 'ativa' && dd.fim && dd.fim <= in30; }).length;
+  const medVencidas = med.filter(m => { const dd = m.dados || {}; return (dd.status || 'ativa') === 'ativa' && dd.fim && dd.fim < today; }).length;
+  const encPend = enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente').length;
+  const encSemRetorno30 = enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente' && (e.data || '') <= d30).length;
+
+  const pscSemHoras = vincs.filter(v => {
+    const horas = mine.filter(x => x.kind === 'psc_hora' && String((x.dados || {}).vinculoId) === String(v.id))
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+    return !horas.length || (horas[0].data || '') <= d15;
+  }).length;
+
+  const prontIncompleto = pront ? (
+    !pront.dados.processo || !pront.dados.vara || !pront.dados.medidaTipo || !pront.dados.periodicidade
+  ) : true;
+
+  const proximoEnvioVencido = pront && pront.dados && pront.dados.proximoEnvio && pront.dados.proximoEnvio < today;
+
+  // Pesos (soma = 100)
+  const weights = {
+    faltasConsecutivas: 25,   // 2+ faltas = crítico
+    taxaFalta: 15,            // % faltas no mês
+    medVencendo: 15,          // medidas vencendo em 30d
+    medVencidas: 10,          // medidas já vencidas
+    encPendentes: 10,         // encaminhamentos pendentes
+    encSemRetorno: 10,        // encaminhamentos sem retorno 30d
+    pscSemHoras: 10,          // PSC sem registro 15d
+    prontIncompleto: 5        // prontuário sem dados obrigatórios
+  };
+
+  let score = 0;
+  const fatores = [];
+
+  if (fc >= 2) { score += weights.faltasConsecutivas; fatores.push({ tipo: 'falta_critica', peso: weights.faltasConsecutivas, desc: `${fc} faltas consecutivas sem justificativa` }); }
+  else if (fc === 1) { score += Math.round(weights.faltasConsecutivas * 0.4); fatores.push({ tipo: 'falta_simples', peso: Math.round(weights.faltasConsecutivas * 0.4), desc: '1 falta consecutiva' }); }
+
+  if (taxaFalta > 30) { score += weights.taxaFalta; fatores.push({ tipo: 'taxa_falta_alta', peso: weights.taxaFalta, desc: `Taxa de falta ${taxaFalta.toFixed(0)}% no mês` }); }
+  else if (taxaFalta > 15) { score += Math.round(weights.taxaFalta * 0.5); fatores.push({ tipo: 'taxa_falta_media', peso: Math.round(weights.taxaFalta * 0.5), desc: `Taxa de falta ${taxaFalta.toFixed(0)}% no mês` }); }
+
+  if (medVencidas > 0) { score += weights.medVencidas; fatores.push({ tipo: 'medida_vencida', peso: weights.medVencidas, desc: `${medVencidas} medida(s) vencida(s)` }); }
+  if (medVencendo > 0) { score += weights.medVencendo; fatores.push({ tipo: 'medida_vencendo', peso: weights.medVencendo, desc: `${medVencendo} medida(s) vencendo em 30 dias` }); }
+
+  if (encSemRetorno30 > 0) { score += weights.encSemRetorno; fatores.push({ tipo: 'enc_sem_retorno', peso: weights.encSemRetorno, desc: `${encSemRetorno30} encaminhamento(s) sem contra-referência 30+ dias` }); }
+  else if (encPend > 0) { score += weights.encPendentes; fatores.push({ tipo: 'enc_pendente', peso: weights.encPendentes, desc: `${encPend} encaminhamento(s) pendente(s)` }); }
+
+  if (pscSemHoras > 0) { score += weights.pscSemHoras; fatores.push({ tipo: 'psc_sem_horas', peso: weights.pscSemHoras, desc: `${pscSemHoras} vínculo(s) PSC sem horas 15+ dias` }); }
+
+  if (prontIncompleto) { score += weights.prontIncompleto; fatores.push({ tipo: 'pront_incompleto', peso: weights.prontIncompleto, desc: 'Prontuário sem processo/vara/medida/periodicidade' }); }
+
+  score = Math.min(100, Math.max(0, score));
+  let nivel = 'baixo';
+  if (score >= 70) nivel = 'critico';
+  else if (score >= 45) nivel = 'alto';
+  else if (score >= 25) nivel = 'medio';
+
+  return { valor: score, nivel, fatores };
+}
+
+function buildTimeline(mine, opts = {}) {
+  const { limit = 100, cursor, kinds } = opts;
+  const allowedKinds = kinds || ['evolucao', 'atendimento', 'encaminhamento', 'medida', 'psc_hora'];
+  const desc = (a, b) => String(b.data || '').localeCompare(String(a.data || ''));
+  let events = mine
+    .filter(x => allowedKinds.includes(x.kind))
+    .map(x => {
+      const d = x.dados || {};
+      let titulo = '', resumo = '';
+      switch (x.kind) {
+        case 'evolucao':
+          titulo = 'Evolução ' + (d.tipo || '');
+          resumo = ['S', 'O', 'A', 'P'].map(k => d[k] ? k.toUpperCase() + ': ' + d[k] : '').filter(Boolean).join(' | ').slice(0, 300);
+          break;
+        case 'atendimento':
+          titulo = 'Atendimento (' + (d.status || 'presente') + ')';
+          resumo = (d.tipo || '') + ' • ' + (d.local || 'UMEPE') + (d.obs ? ' — ' + d.obs : '');
+          break;
+        case 'encaminhamento':
+          titulo = 'Encaminhamento → ' + (d.destino || '?');
+          resumo = (d.status || 'pendente') + (d.contraref ? ' | Contra-ref.: ' + d.contraref : '');
+          break;
+        case 'medida':
+          titulo = 'Medida ' + (d.tipo || '');
+          resumo = (d.status || 'ativa') + ' • término ' + (d.fim || '?');
+          break;
+        case 'psc_hora':
+          titulo = 'Horas PSC';
+          resumo = (d.horas || 0) + 'h • ' + (d.localNome || '') + (d.obs ? ' — ' + d.obs : '');
+          break;
+      }
+      return { id: x.id, kind: x.kind, data: x.data, titulo, resumo, dados: x.dados };
+    })
+    .sort(desc);
+
+  if (cursor) {
+    events = events.filter(e => String(e.data) > String(cursor));
+  }
+  const hasMore = events.length > limit;
+  return { events: events.slice(0, limit), nextCursor: hasMore ? events[limit - 1].data : null, hasMore };
+}
+
+// ---- Ficha 360 completa (com paginação na timeline) ----
 router.get('/api/psi/ficha/:personId(\\d+)', gatePSI(false), ah(async (req, res) => {
   const person = await store.persons.byId(req.params.personId);
   if (!person) return res.status(404).json({ error: 'Pessoa não encontrada' });
-  const all = visible(await store.psi.all());
-  const mine = all.filter(x => String(x.personId) === String(person.id));
-  const desc = (a, b) => String(b.data || '').localeCompare(String(a.data || ''));
-  const byK = k => mine.filter(x => x.kind === k).sort(desc);
-  const prontuario = byK('prontuario')[0] || null;
-  const tags = [...new Set(mine.flatMap(x => ((x.dados || {}).tags) || []))].slice(0, 30);
-  const grupos = all
-    .filter(x => x.kind === 'grupo' && ((x.dados || {}).integrantes || []).some(m => String((m && m.id) || m) === String(person.id)))
+
+  const personId = String(person.id);
+  const { cursor, limit = 100, kinds } = req.query;
+
+  // Busca otimizada: só registros da pessoa
+  const mine = await store.psi.byPerson(personId, { limit: 2000 });
+  const visibleMine = mine.filter(r => !r.dados?._arquivado);
+
+  // Prontuário (upsert garante 1 por pessoa)
+  const prontuario = visibleMine.find(x => x.kind === 'prontuario') || null;
+
+  // Tags únicas
+  const tags = [...new Set(visibleMine.flatMap(x => ((x.dados || {}).tags) || []))].slice(0, 30);
+
+  // Atendimentos
+  const at = visibleMine.filter(x => x.kind === 'atendimento').sort((a,b) => String(b.data).localeCompare(String(a.data)));
+  const presentes = at.filter(a => ((a.dados || {}).status || 'presente') === 'presente').length;
+  const faltas = at.filter(a => ((a.dados || {}).status) === 'falta').length;
+
+  // Grupos da pessoa
+  const allPsi = visible(await store.psi.all());
+  const grupos = allPsi
+    .filter(x => x.kind === 'grupo' && ((x.dados || {}).integrantes || []).some(m => String((m && m.id) || m) === personId))
     .map(g => {
       const dd = g.dados || {};
-      const me = (dd.integrantes || []).find(m => String((m && m.id) || m) === String(person.id)) || {};
-      const encs = all.filter(e => e.kind === 'encontro' && String(e.grupoId) === String(g.id));
-      const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === String(person.id))).length;
+      const me = (dd.integrantes || []).find(m => String((m && m.id) || m) === personId) || {};
+      const encs = allPsi.filter(e => e.kind === 'encontro' && String(e.grupoId) === String(g.id));
+      const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === personId)).length;
       return { id: g.id, nome: dd.nome, tipo: dd.tipo, dia: dd.dia, status: me.status || 'ativo', encontros: encs.length, presencas: pres };
     });
-  const vincs = byK('psc_vinculo').map(v => {
-    const horas = pscHorasDoVinculo(all, v.id).sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+
+  // PSC
+  const vincs = visibleMine.filter(x => x.kind === 'psc_vinculo').map(v => {
+    const horas = visibleMine.filter(x => x.kind === 'psc_hora' && String((x.dados || {}).vinculoId) === String(v.id))
+      .sort((a, b) => String(a.data).localeCompare(String(b.data)));
     const s = pscSaldo(v, horas);
     return { id: v.id, dados: v.dados, data: v.data, total: s.total, feitas: s.feitas, saldo: s.saldo, horas: horas.map(h => ({ id: h.id, data: h.data, dados: h.dados })) };
   });
-  const locais = all.filter(x => x.kind === 'psc_local').map(l => ({ id: l.id, dados: l.dados }));
+  const locais = visibleMine.filter(x => x.kind === 'psc_local').map(l => ({ id: l.id, dados: l.dados }));
+
+  // Documentos (termos)
   let documentos = [];
   try {
     const termos = await store.termos.all();
@@ -435,47 +575,142 @@ router.get('/api/psi/ficha/:personId(\\d+)', gatePSI(false), ah(async (req, res)
     documentos = (termos || []).filter(t => t && t.dados && String(t.dados.nome || '').trim().toLowerCase() === nm)
       .map(t => ({ id: t.id, tipo: t.tipo, dataEnvio: t.dataEnvio, destinatario: t.destinatario })).slice(0, 100);
   } catch (e) {}
-  const at = byK('atendimento');
-  const fc = faltasConsecutivas(at);
+
+  // Timeline paginada
+  const timeline = buildTimeline(visibleMine, { limit: Number(limit), cursor, kinds: kinds ? String(kinds).split(',') : undefined });
+
+  // Pendências
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const in30 = new Date(now.getTime() + 30 * 864e5).toISOString().slice(0, 10);
   const d15 = new Date(now.getTime() - 15 * 864e5).toISOString().slice(0, 10);
-  const tl = [
-    ...byK('evolucao').map(e => ({ id: e.id, kind: 'evolucao', data: e.data, titulo: 'Evolução ' + (((e.dados || {}).tipo) || ''), resumo: ['S', 'O', 'A', 'P'].map(k => (e.dados || {})[k] ? k.toUpperCase() + ': ' + (e.dados || {})[k] : '').filter(Boolean).join(' | ').slice(0, 300) })),
-    ...at.map(a => ({ id: a.id, kind: 'atendimento', data: a.data, titulo: 'Atendimento (' + (((a.dados || {}).status) || 'presente') + ')', resumo: (((a.dados || {}).tipo) || '') + ' • ' + (((a.dados || {}).local) || 'UMEPE') + ((((a.dados || {}).obs)) ? ' — ' + ((a.dados || {}).obs) : '') })),
-    ...byK('encaminhamento').map(e => ({ id: e.id, kind: 'encaminhamento', data: e.data, titulo: 'Encaminhamento → ' + (((e.dados || {}).destino) || '?'), resumo: (((e.dados || {}).status) || 'pendente') + (((e.dados || {}).contraref) ? ' | Contra-ref.: ' + ((e.dados || {}).contraref) : '') })),
-    ...byK('medida').map(m => ({ id: m.id, kind: 'medida', data: (m.dados || {}).inicio || m.data, titulo: 'Medida ' + (((m.dados || {}).tipo) || ''), resumo: (((m.dados || {}).status) || 'ativa') + ' • término ' + (((m.dados || {}).fim) || '?') }))
-  ].sort(desc).slice(0, 100);
+
   const pendencias = {
-    faltasConsecutivas: fc,
-    medidasVencendo: byK('medida').filter(m => { const dd = m.dados || {}; return (dd.status || 'ativa') === 'ativa' && dd.fim && dd.fim <= in30; }).map(m => ({ id: m.id, tipo: (m.dados || {}).tipo, fim: (m.dados || {}).fim })),
-    encPendentes: byK('encaminhamento').filter(e => ((e.dados || {}).status || 'pendente') === 'pendente').map(e => ({ id: e.id, destino: (e.dados || {}).destino, data: e.data })),
+    faltasConsecutivas: faltasConsecutivas(at),
+    medidasVencendo: visibleMine.filter(x => { if (x.kind !== 'medida') return false; const dd = x.dados || {}; return (dd.status || 'ativa') === 'ativa' && dd.fim && dd.fim <= in30; }).map(m => ({ id: m.id, tipo: (m.dados || {}).tipo, fim: (m.dados || {}).fim })),
+    encPendentes: visibleMine.filter(x => x.kind === 'encaminhamento' && ((x.dados || {}).status || 'pendente') === 'pendente').map(e => ({ id: e.id, destino: (e.dados || {}).destino, data: e.data })),
     proximoEnvio: (prontuario && prontuario.dados && prontuario.dados.proximoEnvio) || null,
     pscSemHoras: vincs.filter(v => ((v.dados || {}).status || 'ativo') === 'ativo' && ((!v.horas.length && true) || (v.horas.length && v.horas[v.horas.length - 1].data <= d15))).map(v => ({ id: v.id, local: (v.dados || {}).localNome }))
   };
+
+  // Score de risco
+  const riskScore = buildRiskScore(personId, visibleMine, now);
+
+  // Alertas estruturados
+  const alertas = {
+    criticos: [],
+    atencao: [],
+    info: []
+  };
+  if (riskScore.fatores.some(f => f.tipo === 'falta_critica' || f.tipo === 'medida_vencida')) alertas.criticos.push(...riskScore.fatores.filter(f => f.tipo === 'falta_critica' || f.tipo === 'medida_vencida'));
+  if (riskScore.fatores.some(f => f.tipo === 'medida_vencendo' || f.tipo === 'enc_sem_retorno' || f.tipo === 'taxa_falta_alta')) alertas.atencao.push(...riskScore.fatores.filter(f => f.tipo === 'medida_vencendo' || f.tipo === 'enc_sem_retorno' || f.tipo === 'taxa_falta_alta'));
+  if (riskScore.fatores.some(f => f.tipo === 'psc_sem_horas' || f.tipo === 'pront_incompleto' || f.tipo === 'enc_pendente')) alertas.info.push(...riskScore.fatores.filter(f => f.tipo === 'psc_sem_horas' || f.tipo === 'pront_incompleto' || f.tipo === 'enc_pendente'));
+
   await logBreakglass(req, 'ficha ' + person.nome, null);
-  res.json({ person, prontuario, tags, evolucoes: byK('evolucao'), atendimentos: at, encaminhamentos: byK('encaminhamento'), medidas: byK('medida'), grupos, vincs, locais, documentos, timeline: tl, pendencias, stats: { totalAt: at.length, presentes: at.filter(a => ((a.dados || {}).status || 'presente') === 'presente').length, faltas: at.filter(a => ((a.dados || {}).status) === 'falta').length, evolucoes: byK('evolucao').length } });
+
+  // ETag para cache
+  const lastUpdate = visibleMine.reduce((max, r) => Math.max(max, new Date(r.updatedAt || r.createdAt).getTime()), 0);
+  const etag = `"psi-ficha-${personId}-${lastUpdate}"`;
+  res.setHeader('ETag', etag);
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+  res.json({
+    meta: { versao: '2.0', geradoEm: new Date().toISOString(), usuario: req.auth.name, etag },
+    person: { id: person.id, nome: person.nome, cpf: person.cpf, cpfn: person.cpfn, rg: person.rg, nomeMae: person.nomeMae, dataNascimento: person.dataNascimento, modeloTornozeleira: person.modeloTornozeleira },
+    prontuario,
+    tags,
+    evolucoes: visibleMine.filter(x => x.kind === 'evolucao').sort((a,b) => String(a.data).localeCompare(String(b.data))),
+    atendimentos: { resumo: { total: at.length, presentes, faltas, taxaFalta: at.length ? ((faltas/at.length)*100).toFixed(1) : 0 }, ultimos: at.slice(0, 20), serieMensal: buildSerieMensal(at) },
+    grupos,
+    psc: { vinculos: vincs, locais, totalHoras: vincs.reduce((s,v) => s + (v.feitas || 0), 0), saldoTotal: vincs.reduce((s,v) => s + (v.saldo || 0), 0) },
+    encaminhamentos: { pendentes: visibleMine.filter(x => x.kind === 'encaminhamento' && ((x.dados || {}).status || 'pendente') === 'pendente'), efetivados: visibleMine.filter(x => x.kind === 'encaminhamento' && ((x.dados || {}).status || 'pendente') === 'efetivado'), semRetorno: visibleMine.filter(x => x.kind === 'encaminhamento' && ((x.dados || {}).status || 'pendente') === 'pendente' && (x.data || '') <= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)) },
+    medidas: { ativas: visibleMine.filter(x => x.kind === 'medida' && ((x.dados || {}).status || 'ativa') === 'ativa'), vencidas: visibleMine.filter(x => x.kind === 'medida' && ((x.dados || {}).status || 'ativa') === 'ativa' && (x.dados || {}).fim && (x.dados || {}).fim < today), vencendo: visibleMine.filter(x => x.kind === 'medida' && ((x.dados || {}).status || 'ativa') === 'ativa' && (x.dados || {}).fim && (x.dados || {}).fim <= in30) },
+    documentos,
+    timeline,
+    pendencias,
+    alertas,
+    riskScore,
+    stats: { totalAt: at.length, presentes, faltas, evolucoes: visibleMine.filter(x => x.kind === 'evolucao').length, grupos: grupos.length, vinculosPSC: vincs.length }
+  });
 }));
 
-// ---- Relatório judicial compilado (item 9): evoluções SOAP + histórico em PDF ----
-router.get('/api/psi/judicial/:personId(\\d+)', gatePSI(false), ah(async (req, res) => {
+// Helper para série mensal de atendimentos
+function buildSerieMensal(atendimentos) {
+  const now = new Date();
+  const serie = [];
+  for (let i = 5; i >= 0; i--) {
+    const m = new Date(now.getFullYear(), now.getMonth() - i, 1).toISOString().slice(0, 7);
+    const atM = atendimentos.filter(a => (a.data || '').slice(0, 7) === m);
+    serie.push({
+      mes: m,
+      atendimentos: atM.length,
+      presentes: atM.filter(a => ((a.dados || {}).status || 'presente') === 'presente').length,
+      faltas: atM.filter(a => ((a.dados || {}).status || '') === 'falta').length,
+      faltasJustificadas: atM.filter(a => ((a.dados || {}).status || '') === 'falta_justificada').length
+    });
+  }
+  return serie;
+}
+
+// ---- Ficha 360 Resumo (KPIs leves, sem timeline) ----
+router.get('/api/psi/ficha/:personId(\\d+)/resumo', gatePSI(false), ah(async (req, res) => {
   const person = await store.persons.byId(req.params.personId);
   if (!person) return res.status(404).json({ error: 'Pessoa não encontrada' });
-  const all = visible(await store.psi.all());
-  const mine = all.filter(x => String(x.personId) === String(person.id));
-  const desc = (a, b) => String(b.data || '').localeCompare(String(a.data || ''));
-  const pront = mine.filter(x => x.kind === 'prontuario').sort(desc)[0];
-  const evol = mine.filter(x => x.kind === 'evolucao').sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
-  const at = mine.filter(x => x.kind === 'atendimento').sort(desc);
-  const enc = mine.filter(x => x.kind === 'encaminhamento').sort(desc);
-  const pd = (pront && pront.dados) || {};
+  const personId = String(person.id);
+  const mine = await store.psi.byPerson(personId, { limit: 2000 });
+  const visibleMine = mine.filter(r => !r.dados?._arquivado);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const in30 = new Date(now.getTime() + 30 * 864e5).toISOString().slice(0, 10);
+
+  const at = visibleMine.filter(x => x.kind === 'atendimento');
+  const ev = visibleMine.filter(x => x.kind === 'evolucao');
+  const enc = visibleMine.filter(x => x.kind === 'encaminhamento');
+  const med = visibleMine.filter(x => x.kind === 'medida');
+  const vincs = visibleMine.filter(x => x.kind === 'psc_vinculo' && ((x.dados || {}).status || 'ativo') === 'ativo');
+  const pront = visibleMine.find(x => x.kind === 'prontuario') || null;
+  const fc = faltasConsecutivas(at);
+
+  const riskScore = buildRiskScore(personId, visibleMine, now);
+
+  res.json({
+    meta: { versao: '2.0', geradoEm: new Date().toISOString() },
+    person: { id: person.id, nome: person.nome, cpf: person.cpf, dataNascimento: person.dataNascimento },
+    prontuario: pront ? { status: pront.dados?.status, periodicidade: pront.dados?.periodicidade, processo: pront.dados?.processo, vara: pront.dados?.vara, medidaTipo: pront.dados?.medidaTipo, proximoEnvio: pront.dados?.proximoEnvio } : null,
+    kpis: {
+      acompanhamento: { status: pront?.dados?.status || 'sem_prontuario', totalAtendimentos: at.length, faltasConsecutivas: fc, taxaFaltaMes: at.length ? ((at.filter(a => ((a.dados || {}).status || '') === 'falta').length / at.length) * 100).toFixed(1) : 0 },
+      evolucoes: ev.length,
+      grupos: visibleMine.filter(x => x.kind === 'grupo' && ((x.dados || {}).integrantes || []).some(m => String((m && m.id) || m) === personId)).length,
+      psc: { vinculosAtivos: vincs.length, totalHoras: vincs.reduce((s,v) => s + (v.dados?.cargaTotal || 0), 0), horasCumpridas: vincs.reduce((s,v) => s + (visibleMine.filter(x => x.kind === 'psc_hora' && String((x.dados || {}).vinculoId) === String(v.id)).reduce((s,h) => s + (h.dados?.horas || 0), 0)), 0) },
+      encaminhamentos: { pendentes: enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente').length, efetivados: enc.filter(e => ((e.dados || {}).status || 'pendente') === 'efetivado').length, semRetorno30d: enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente' && (e.data || '') <= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).length },
+      medidas: { ativas: med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa').length, vencidas: med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa' && (m.dados || {}).fim && (m.dados || {}).fim < today).length, vencendo30d: med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa' && (m.dados || {}).fim && (m.dados || {}).fim <= in30).length },
+      documentos: 0 // termos serão contados se necessário
+    },
+    riskScore,
+    alertas: {
+      criticos: riskScore.fatores.filter(f => f.tipo === 'falta_critica' || f.tipo === 'medida_vencida').map(f => f.desc),
+      atencao: riskScore.fatores.filter(f => f.tipo === 'medida_vencendo' || f.tipo === 'enc_sem_retorno' || f.tipo === 'taxa_falta_alta').map(f => f.desc),
+      info: riskScore.fatores.filter(f => f.tipo === 'psc_sem_horas' || f.tipo === 'pront_incompleto' || f.tipo === 'enc_pendente').map(f => f.desc)
+    }
+  });
+}));
+
+// ---- Ficha 360 Export PDF (completa, para anexar ao processo) ----
+router.get('/api/psi/ficha/:personId(\\d+)/export-pdf', gatePSI(false), ah(async (req, res) => {
+  const person = await store.persons.byId(req.params.personId);
+  if (!person) return res.status(404).json({ error: 'Pessoa não encontrada' });
+  const personId = String(person.id);
+  const mine = await store.psi.byPerson(personId, { limit: 5000 });
+  const visibleMine = mine.filter(r => !r.dados?._arquivado);
+
+  const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const W = 595.28, H = 841.89, M = 42;
   let page = pdf.addPage([W, H]);
   let y = H - M;
+
   const line = (text, size, f, color, gap) => {
     const words = String(text || '').split(/\s+/).filter(Boolean);
     const maxW = W - 2 * M;
@@ -496,37 +731,364 @@ router.get('/api/psi/judicial/:personId(\\d+)', gatePSI(false), ah(async (req, r
   const h1 = t => { line(t, 16, bold, rgb(0.05, 0.3, 0.3), 22); };
   const h2 = t => { y -= 4; line(t, 12, bold, rgb(0.1, 0.35, 0.55), 17); };
   const kv = (k, v) => line('• ' + k + ': ' + (v || '—'), 10, font, rgb(0.15, 0.15, 0.15), 13);
-  h1('Relatório Psicossocial — ' + person.nome);
-  line('SISUMEPE Juazeiro • gerado em ' + new Date().toLocaleString('pt-BR') + ' por ' + (req.auth.name || req.auth.user), 9, font, rgb(0.4, 0.4, 0.4), 18);
-  h2('1. Identificação');
-  kv('Nome', person.nome); kv('CPF/RG', [person.cpf, person.rg].filter(Boolean).join(' / '));
-  kv('Nascimento', person.dataNascimento); kv('Processo', pd.processo); kv('Vara', pd.vara);
-  kv('Medida', pd.medidaTipo || pd.tipoMedida); kv('Período', [pd.medidaInicio, pd.medidaFim].filter(Boolean).join(' a '));
-  h2('2. Acompanhamento');
-  kv('Periodicidade', pd.periodicidade); kv('Status', pd.status); kv('Queixa inicial', pd.queixa); kv('Metas', pd.metas);
-  kv('Atendimentos', at.length + ' (' + at.filter(a => ((a.dados || {}).status || 'presente') === 'presente').length + ' presentes, ' + at.filter(a => ((a.dados || {}).status) === 'falta').length + ' faltas)');
-  h2('3. Evoluções (' + evol.length + ')');
-  evol.forEach(e => {
+  const section = (title, items) => {
+    if (!items || !items.length) return;
+    h2(title);
+    items.forEach(i => line('  - ' + i, 9, font, rgb(0.2, 0.2, 0.2), 12));
+    y -= 4;
+  };
+
+  const at = visibleMine.filter(x => x.kind === 'atendimento');
+  const ev = visibleMine.filter(x => x.kind === 'evolucao');
+  const enc = visibleMine.filter(x => x.kind === 'encaminhamento');
+  const med = visibleMine.filter(x => x.kind === 'medida');
+  const vincs = visibleMine.filter(x => x.kind === 'psc_vinculo');
+  const pront = visibleMine.find(x => x.kind === 'prontuario') || null;
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const riskScore = buildRiskScore(personId, visibleMine, now);
+
+  // Watermark confidencial
+  page.drawText('CONFIDENCIAL — DADOS SENSÍVEIS DE SAÚDE — LGPD Art. 11', { x: M, y: H - 20, size: 8, font, color: rgb(0.8, 0.2, 0.2), opacity: 0.5 });
+
+  h1('FICHA 360 — ACOMPANHAMENTO PSICOSSOCIAL');
+  line('SISUMEPE Juazeiro • ' + new Date().toLocaleString('pt-BR') + ' • Gerado por ' + (req.auth.name || req.auth.user), 9, font, rgb(0.4, 0.4, 0.4), 20);
+  y -= 6;
+
+  h2('1. IDENTIFICAÇÃO');
+  kv('Nome', person.nome); kv('CPF', person.cpf); kv('RG', person.rg);
+  kv('Nascimento', person.dataNascimento); kv('Nome da Mãe', person.nomeMae);
+  if (pront) {
+    const pd = pront.dados || {};
+    kv('Processo', pd.processo); kv('Vara', pd.vara);
+    kv('Medida', pd.medidaTipo || pd.tipoMedida); kv('Período', [pd.medidaInicio, pd.medidaFim].filter(Boolean).join(' a '));
+    kv('Periodicidade', pd.periodicidade); kv('Status', pd.status);
+  }
+
+  h2('2. SCORE DE RISCO');
+  const riskColor = riskScore.nivel === 'critico' ? rgb(0.8, 0.1, 0.1) : riskScore.nivel === 'alto' ? rgb(0.9, 0.5, 0.1) : riskScore.nivel === 'medio' ? rgb(0.9, 0.7, 0.1) : rgb(0.1, 0.6, 0.2);
+  line('NÍVEL: ' + riskScore.nivel.toUpperCase() + ' (' + riskScore.valor + '/100)', 12, bold, riskColor, 18);
+  riskScore.fatores.forEach(f => line('  • [' + f.peso + 'pts] ' + f.desc, 9, font, rgb(0.25, 0.25, 0.25), 12));
+
+  h2('3. ATENDIMENTOS (Últimos 6 meses)');
+  const serie = buildSerieMensal(at);
+  serie.forEach(s => line(`  ${s.mes.slice(5)}: ${s.atendimentos} total (${s.presentes} P, ${s.faltas} F, ${s.faltasJustificadas} FJ)`, 9, font, rgb(0.2, 0.2, 0.2), 12));
+
+  h2('4. EVOLUÇÕES SOAP (' + ev.length + ')');
+  ev.sort((a,b) => String(a.data).localeCompare(String(b.data))).slice(-10).forEach(e => {
     const ed = e.dados || {};
     line((e.data || '') + ' — ' + (ed.tipo || 'individual'), 10, bold, rgb(0.2, 0.2, 0.2), 13);
     ['s', 'o', 'a', 'p'].forEach(k => { if (ed[k]) line(k.toUpperCase() + ': ' + ed[k], 9, font, rgb(0.25, 0.25, 0.25), 12); });
     y -= 3;
   });
-  if (!evol.length) line('Sem evoluções registradas.', 9, font, rgb(0.4, 0.4, 0.4), 12);
-  h2('4. Encaminhamentos');
-  enc.slice(0, 20).forEach(e => line((e.data || '') + ' → ' + ((e.dados || {}).destino || '?') + ' (' + (((e.dados || {}).status) || 'pendente') + ')' + (((e.dados || {}).contraref) ? ' — contra-ref.: ' + ((e.dados || {}).contraref) : ''), 9, font, rgb(0.2, 0.2, 0.2), 12));
-  if (!enc.length) line('Nenhum encaminhamento.', 9, font, rgb(0.4, 0.4, 0.4), 12);
-  h2('5. Parecer');
-  const lastP = evol.length ? ((evol[evol.length - 1].dados || {}).p || '') : '';
-  line(lastP || (pd.obs || 'Em acompanhamento.'), 10, font, rgb(0.15, 0.15, 0.15), 14);
-  await logBreakglass(req, 'relatório judicial ' + person.nome, null);
+  if (!ev.length) line('  Sem evoluções registradas.', 9, font, rgb(0.4, 0.4, 0.4), 12);
+
+  h2('5. ENCAMINHAMENTOS');
+  section('Pendentes', enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente').map(e => (e.data || '') + ' → ' + ((e.dados || {}).destino || '?') + ' (' + ((e.dados || {}).status || 'pendente') + ')'));
+  section('Efetivados', enc.filter(e => ((e.dados || {}).status || 'pendente') === 'efetivado').map(e => (e.data || '') + ' → ' + ((e.dados || {}).destino || '?') + (e.dados?.contraref ? ' | CR: ' + e.dados.contraref : '')));
+  section('Sem retorno 30+ dias', enc.filter(e => ((e.dados || {}).status || 'pendente') === 'pendente' && (e.data || '') <= new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)).map(e => (e.data || '') + ' → ' + ((e.dados || {}).destino || '?')));
+
+  h2('6. MEDIDAS');
+  section('Ativas', med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa').map(m => (m.dados?.tipo || '') + ' — fim ' + (m.dados?.fim || '?') + ' (' + (m.dados?.status || 'ativa') + ')'));
+  section('Vencendo 30d', med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa' && (m.dados || {}).fim && (m.dados || {}).fim <= in30).map(m => (m.dados?.tipo || '') + ' — vence ' + m.dados.fim));
+  section('Vencidas', med.filter(m => ((m.dados || {}).status || 'ativa') === 'ativa' && (m.dados || {}).fim && (m.dados || {}).fim < today).map(m => (m.dados?.tipo || '') + ' — venceu ' + m.dados.fim));
+
+  h2('7. PSC (PRESTAÇÃO DE SERVIÇOS À COMUNIDADE)');
+  vincs.forEach(v => {
+    const horas = visibleMine.filter(x => x.kind === 'psc_hora' && String((x.dados || {}).vinculoId) === String(v.id));
+    const s = pscSaldo(v, horas);
+    line('  ' + (v.dados?.localNome || 'Local?') + ' — ' + s.feitas + '/' + s.total + 'h (saldo: ' + s.saldo + 'h)', 10, font, rgb(0.15, 0.15, 0.15), 13);
+    horas.sort((a,b) => String(a.data).localeCompare(String(b.data))).forEach(h => line('    ' + (h.data || '') + ': ' + (h.dados?.horas || 0) + 'h — ' + (h.dados?.obs || ''), 9, font, rgb(0.3, 0.3, 0.3), 11));
+  });
+  if (!vincs.length) line('  Nenhum vínculo PSC.', 9, font, rgb(0.4, 0.4, 0.4), 12);
+
+  h2('8. GRUPOS REFLEXIVOS');
+  const grupos = visibleMine.filter(x => x.kind === 'grupo' && ((x.dados || {}).integrantes || []).some(m => String((m && m.id) || m) === personId));
+  grupos.forEach(g => {
+    const dd = g.dados || {};
+    line('  ' + (dd.nome || '') + ' (' + (dd.tipo || '') + ', ' + (dd.dia || '') + ') — ' + (dd.ativo !== false ? 'Ativo' : 'Inativo'), 10, font, rgb(0.15, 0.15, 0.15), 13);
+  });
+  if (!grupos.length) line('  Nenhum grupo.', 9, font, rgb(0.4, 0.4, 0.4), 12);
+
+  h2('9. DOCUMENTOS (TERMOS)');
+  let documentos = [];
+  try {
+    const termos = await store.termos.all();
+    const nm = String(person.nome || '').trim().toLowerCase();
+    documentos = (termos || []).filter(t => t && t.dados && String(t.dados.nome || '').trim().toLowerCase() === nm);
+  } catch (e) {}
+  section('Termos', documentos.map(t => (t.tipo || '') + ' — ' + (t.dataEnvio || '') + ' → ' + (t.destinatario || '')));
+  if (!documentos.length) line('  Nenhum termo localizado.', 9, font, rgb(0.4, 0.4, 0.4), 12);
+
+  await logBreakglass(req, 'export-pdf ficha ' + person.nome, null);
   const bytes = await pdf.save();
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'attachment; filename="relatorio-judicial-' + person.id + '.pdf"');
+  res.setHeader('Content-Disposition', 'attachment; filename="ficha-360-' + person.id + '-' + today + '.pdf"');
   res.send(Buffer.from(bytes));
 }));
 
-// ---- Certificado de PSC (item 4) ----
+// ---- Relatório judicial compilado (item 9): evoluções SOAP + histórico em PDF ----
+router.get('/api/psi/judicial/:personId(\\d+)', gatePSI(false), ah(async (req, res) => {
+  const person = await store.persons.byId(req.params.personId);
+  if (!person) return res.status(404).json({ error: 'Pessoa não encontrada' });
+  const all = visible(await store.psi.all());
+  const mine = all.filter(x => String(x.personId) === String(person.id));
+  const desc = (a, b) => String(b.data || '').localeCompare(String(a.data || ''));
+  const pront = mine.filter(x => x.kind === 'prontuario').sort(desc)[0];
+  const evol = mine.filter(x => x.kind === 'evolucao').sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  const at = mine.filter(x => x.kind === 'atendimento').sort(desc);
+  const enc = mine.filter(x => x.kind === 'encaminhamento').sort(desc);
+  const med = mine.filter(x => x.kind === 'medida');
+  const vincs = mine.filter(x => x.kind === 'psc_vinculo');
+  const grupos = all.filter(x => x.kind === 'grupo' && ((x.dados || {}).integrantes || []).some(m => String((m && m.id) || m) === String(person.id)));
+  const pd = (pront && pront.dados) || {};
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28, H = 841.89, M = 42;
+  let page = pdf.addPage([W, H]);
+  let y = H - M;
+
+  // Cores institucionais
+  const COR_PRIMARIA = rgb(0.05, 0.35, 0.3);
+  const COR_SECUNDARIA = rgb(0.1, 0.4, 0.55);
+  const COR_TEXTO = rgb(0.15, 0.15, 0.15);
+  const COR_SUAVE = rgb(0.4, 0.4, 0.4);
+  const COR_LINHA = rgb(0.85, 0.85, 0.85);
+  const COR_DESTAQUE = rgb(0.8, 0.2, 0.1);
+  const COR_VERDE = rgb(0.1, 0.6, 0.2);
+  const COR_AMARELO = rgb(0.9, 0.7, 0.1);
+
+  const line = (text, size, f, color, gap) => {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const maxW = W - 2 * M;
+    const meas = f || font;
+    let cur = '';
+    const flush = t => {
+      if (y < M + 20) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+      page.drawText(t.slice(0, 130), { x: M, y, size: size || 10, font: meas, color: color || COR_TEXTO });
+      y -= (gap || 14);
+    };
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w;
+      if (meas.widthOfTextAtSize(t, size || 10) > maxW && cur) { flush(cur); cur = w; }
+      else cur = t;
+    }
+    if (cur) flush(cur); else y -= 2;
+  };
+
+  const drawHeader = () => {
+    // Linha superior decorativa
+    page.drawRectangle({ x: M, y: H - 30, width: W - 2 * M, height: 4, color: COR_PRIMARIA });
+    // Marca d'água confidencial
+    page.drawText('CONFIDENCIAL — DADOS SENSÍVEIS DE SAÚDE — LGPD Art. 11', { x: M, y: H - 18, size: 7, font, color: rgb(0.8, 0.2, 0.2), opacity: 0.4 });
+  };
+  drawHeader();
+
+  const h1 = t => {
+    line(t, 18, bold, COR_PRIMARIA, 24);
+    // Linha separadora
+    page.drawLine({ start: { x: M, y: y + 8 }, end: { x: W - M, y: y + 8 }, thickness: 1.5, color: COR_PRIMARIA });
+    y -= 6;
+  };
+  const h2 = t => {
+    y -= 6;
+    line(t, 13, bold, COR_SECUNDARIA, 19);
+    page.drawLine({ start: { x: M, y: y + 5 }, end: { x: W - M, y: y + 5 }, thickness: 0.8, color: COR_LINHA });
+    y -= 4;
+  };
+  const h3 = t => { line(t, 11, bold, COR_TEXTO, 15); };
+  const kv = (k, v) => line('  ' + k + ': ' + (v || '—'), 10, font, COR_TEXTO, 13);
+  const bullet = (text, indent = 15) => line('  • ' + text, 9, font, COR_TEXTO, 12);
+  const soapField = (label, value) => line('    ' + label + ': ' + value, 9, font, rgb(0.25, 0.25, 0.25), 11);
+  const tableRow = (cells, widths, isHeader = false) => {
+    if (y < M + 30) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+    let x = M;
+    const rowH = 18;
+    cells.forEach((cell, i) => {
+      const w = widths[i];
+      const bgColor = isHeader ? COR_PRIMARIA : (y % 36 < 18 ? rgb(0.97, 0.97, 0.97) : rgb(1, 1, 1));
+      page.drawRectangle({ x, y: y - rowH, width: w, height: rowH, color: bgColor });
+      page.drawRectangle({ x, y: y - rowH, width: w, height: rowH, borderColor: COR_LINHA, borderWidth: 0.5 });
+      const txt = String(cell || '').slice(0, Math.max(5, Math.floor(w / 5.5)));
+      page.drawText(txt, { x: x + 3, y: y - rowH + 4, size: isHeader ? 9 : 8, font: isHeader ? bold : font, color: isHeader ? rgb(1, 1, 1) : COR_TEXTO });
+      x += w;
+    });
+    y -= rowH;
+  };
+
+  // ===== CAPA =====
+  h1('RELATÓRIO PSICOSSOCIAL PARA FINS JUDICIAIS');
+  line('SISUMEPE Juazeiro — Sistema de Monitoramento de Pessoas com Uso de Pulseiras Eletrônicas', 10, font, COR_SECUNDARIA, 20);
+  line('Gerado em ' + now.toLocaleString('pt-BR') + ' por ' + (req.auth.name || req.auth.user) + ' (' + req.auth.role + ')', 9, font, COR_SUAVE, 18);
+  y -= 10;
+
+  // ===== 1. IDENTIFICAÇÃO =====
+  h2('1. IDENTIFICAÇÃO DO MONITORADO');
+  const idWidths = [140, W - 2 * M - 140];
+  tableRow(['CAMPO', 'INFORMAÇÃO'], idWidths, true);
+  tableRow(['Nome completo', person.nome], idWidths);
+  tableRow(['CPF', person.cpf || '—'], idWidths);
+  tableRow(['RG', person.rg || '—'], idWidths);
+  tableRow(['Data de nascimento', person.dataNascimento || '—'], idWidths);
+  tableRow(['Nome da mãe', person.nomeMae || '—'], idWidths);
+  if (pd.processo) tableRow(['Processo', pd.processo], idWidths);
+  if (pd.vara) tableRow(['Vara', pd.vara], idWidths);
+  if (pd.medidaTipo || pd.tipoMedida) tableRow(['Medida', pd.medidaTipo || pd.tipoMedida], idWidths);
+  if (pd.medidaInicio || pd.medidaFim) tableRow(['Período da medida', [pd.medidaInicio, pd.medidaFim].filter(Boolean).join(' a ')], idWidths);
+  y -= 8;
+
+  // ===== 2. ACOMPANHAMENTO =====
+  h2('2. DADOS DO ACOMPANHAMENTO');
+  const acompWidths = [140, W - 2 * M - 140];
+  tableRow(['CAMPO', 'INFORMAÇÃO'], acompWidths, true);
+  tableRow(['Status do acompanhamento', pd.status || 'Não informado'], acompWidths);
+  tableRow(['Periodicidade', pd.periodicidade || 'Não definida'], acompWidths);
+  tableRow(['Queixa inicial / Motivo', pd.queixa || 'Não registrada'], acompWidths);
+  tableRow(['Metas terapêuticas', pd.metas || 'Não definidas'], acompWidths);
+  const atPresentes = at.filter(a => ((a.dados || {}).status || 'presente') === 'presente').length;
+  const atFaltas = at.filter(a => ((a.dados || {}).status) === 'falta').length;
+  tableRow(['Total de atendimentos', at.length + ' (' + atPresentes + ' presentes, ' + atFaltas + ' faltas)'], acompWidths);
+  tableRow(['Faltas consecutivas (atuais)', faltasConsecutivas(at) + (faltasConsecutivas(at) >= 2 ? ' ⚠️ GERAR OFÍCIO' : '')], acompWidths);
+  y -= 8;
+
+  // Série mensal em mini-tabela
+  h3('Evolução mensal de comparecimento (últimos 6 meses)');
+  const serie = buildSerieMensal(at);
+  const serieWidths = [80, 70, 70, 70, 70, W - 2 * M - 290];
+  tableRow(['Mês', 'Total', 'Presentes', 'Faltas', 'F. Just.', '% Presença'], serieWidths, true);
+  serie.forEach(s => {
+    const pct = s.atendimentos ? Math.round((s.presentes / s.atendimentos) * 100) : 0;
+    tableRow([s.mes.slice(5), s.atendimentos, s.presentes, s.faltas, s.faltasJustificadas, pct + '%'], serieWidths);
+  });
+  y -= 8;
+
+  // ===== 3. EVOLUÇÕES SOAP =====
+  h2('3. EVOLUÇÕES CLÍNICAS — FORMATO SOAP (' + evol.length + ')');
+  if (!evol.length) {
+    bullet('Sem evoluções registradas no período.');
+  } else {
+    evol.slice(-15).forEach(e => {
+      if (y < M + 80) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+      const ed = e.dados || {};
+      // Cabeçalho da evolução
+      page.drawRectangle({ x: M, y: y - 18, width: W - 2 * M, height: 18, color: rgb(0.95, 0.97, 0.97), borderColor: COR_LINHA, borderWidth: 0.5 });
+      page.drawText((e.data || '') + ' — ' + (ed.tipo || 'individual'), { x: M + 5, y: y - 15, size: 10, font: bold, color: COR_SECUNDARIA });
+      y -= 20;
+      ['s', 'o', 'a', 'p'].forEach(k => {
+        if (ed[k]) {
+          line('  ' + k.toUpperCase() + ':', 9, bold, COR_TEXTO, 11);
+          line('    ' + ed[k], 9, font, rgb(0.25, 0.25, 0.25), 11);
+        }
+      });
+      y -= 4;
+    });
+  }
+  y -= 6;
+
+  // ===== 4. ENCAMINHAMENTOS =====
+  h2('4. ENCAMINHAMENTOS E CONTRA-REFERÊNCIA');
+  const encWidths = [60, 180, 70, 90, W - 2 * M - 400];
+  tableRow(['Data', 'Destino', 'Status', 'Contra-ref.', 'Observação'], encWidths, true);
+  enc.slice(0, 30).forEach(e => {
+    const ed = e.dados || {};
+    const statusColor = ed.status === 'efetivado' ? COR_VERDE : ed.status === 'nao_efetivado' ? COR_DESTAQUE : COR_AMARELO;
+    const rowY = y;
+    tableRow([e.data || '', ed.destino || '?', ed.status || 'pendente', ed.contraref || '—', ed.obs || ''], encWidths);
+    // Colorir status
+    const statusX = M + 60 + 180 + 70;
+    page.drawRectangle({ x: statusX, y: rowY - 18, width: 90, height: 18, color: statusColor, opacity: 0.15 });
+  });
+  if (!enc.length) bullet('Nenhum encaminhamento registrado.');
+  y -= 6;
+
+  // ===== 5. MEDIDAS =====
+  h2('5. MEDIDAS JUDICIAIS');
+  const medWidths = [60, 120, 70, 80, W - 2 * M - 330];
+  tableRow(['Início', 'Tipo', 'Status', 'Término', 'Observação'], medWidths, true);
+  med.forEach(m => {
+    const md = m.dados || {};
+    const statusColor = md.status === 'vencida' ? COR_DESTAQUE : md.fim && md.fim < today ? COR_DESTAQUE : md.fim && md.fim <= new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10) ? COR_AMARELO : COR_VERDE;
+    const rowY = y;
+    tableRow([md.inicio || m.data || '', md.tipo || '', md.status || 'ativa', md.fim || '—', md.obs || ''], medWidths);
+    const statusX = M + 60 + 120;
+    page.drawRectangle({ x: statusX, y: rowY - 18, width: 70, height: 18, color: statusColor, opacity: 0.15 });
+  });
+  if (!med.length) bullet('Nenhuma medida registrada.');
+  y -= 6;
+
+  // ===== 6. PSC =====
+  h2('6. PRESTAÇÃO DE SERVIÇOS À COMUNIDADE (PSC)');
+  if (!vincs.length) {
+    bullet('Nenhum vínculo PSC registrado.');
+  } else {
+    const pscWidths = [60, 150, 60, 60, 70, W - 2 * M - 400];
+    tableRow(['Início', 'Local', 'Carga (h)', 'Cumpridas (h)', 'Saldo (h)', 'Status'], pscWidths, true);
+    vincs.forEach(v => {
+      const horas = mine.filter(x => x.kind === 'psc_hora' && String((x.dados || {}).vinculoId) === String(v.id));
+      const s = pscSaldo(v, horas);
+      const statusColor = s.saldo <= 0 && s.total > 0 ? COR_VERDE : s.saldo > s.total * 0.5 ? COR_AMARELO : COR_DESTAQUE;
+      const rowY = y;
+      tableRow([v.dados?.inicio || '', v.dados?.localNome || '—', s.total, s.feitas, s.saldo, v.dados?.status || 'ativo'], pscWidths);
+      const statusX = M + 60 + 150 + 60 + 60 + 70;
+      page.drawRectangle({ x: statusX, y: rowY - 18, width: W - 2 * M - 400, height: 18, color: statusColor, opacity: 0.15 });
+      horas.sort((a,b) => String(a.data).localeCompare(String(b.data))).forEach(h => {
+        if (y < M + 30) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+        line('    ' + (h.data || '') + ': ' + (h.dados?.horas || 0) + 'h — ' + (h.dados?.obs || ''), 8, font, rgb(0.3, 0.3, 0.3), 10);
+      });
+    });
+  }
+  y -= 6;
+
+  // ===== 7. GRUPOS REFLEXIVOS =====
+  h2('7. GRUPOS REFLEXIVOS');
+  if (!grupos.length) {
+    bullet('Nenhum grupo reflexivo vinculado.');
+  } else {
+    grupos.forEach(g => {
+      const dd = g.dados || {};
+      const encs = all.filter(e => e.kind === 'encontro' && String(e.grupoId) === String(g.id));
+      const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === String(person.id))).length;
+      bullet(dd.nome + ' (' + (dd.tipo || '') + ', ' + (dd.dia || '') + ') — ' + (dd.ativo !== false ? 'Ativo' : 'Inativo') + ' — ' + pres + '/' + encs.length + ' presenças');
+      encs.slice(-5).forEach(e => {
+        line('    ' + (e.data || '') + ' — ' + (e.dados?.tema || 'Sem tema') + ' (' + (e.dados?.presentes?.length || 0) + ' presentes)', 8, font, rgb(0.3, 0.3, 0.3), 10);
+      });
+    });
+  }
+  y -= 6;
+
+  // ===== 8. PARECER TÉCNICO =====
+  h2('8. PARECER TÉCNICO CONCLUSIVO');
+  const lastP = evol.length ? ((evol[evol.length - 1].dados || {}).p || '') : '';
+  const parecer = lastP || pd.obs || 'Em acompanhamento. Continuidade do tratamento recomendada.';
+  const words = parecer.split(/\s+/);
+  let cur = '';
+  words.forEach(w => {
+    const t = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(t, 10) > W - 2 * M && cur) { line(cur, 10, font, COR_TEXTO, 14); cur = w; } else cur = t;
+  });
+  if (cur) line(cur, 10, font, COR_TEXTO, 14);
+
+  // Rodapé com assinatura
+  y = Math.max(y, M + 80);
+  if (y < M + 80) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+  y -= 30;
+  page.drawLine({ start: { x: M + 200, y }, end: { x: W - M - 200, y }, thickness: 1, color: COR_LINHA });
+  y -= 12;
+  line(req.auth.name + ' — Psicólogo(a) — CRP: [informar]', 10, bold, COR_TEXTO, 13);
+  line('SISUMEPE Juazeiro — ' + now.toLocaleDateString('pt-BR'), 9, font, COR_SUAVE, 12);
+
+  await logBreakglass(req, 'relatório judicial ' + person.nome, null);
+  const bytes = await pdf.save();
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="relatorio-judicial-' + person.id + '-' + today + '.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
+// ---- Certificado de PSC (item 4) - Visual profissional ----
 router.get('/api/psi/psc/certificado/:id(\\d+)', gatePSI(false), ah(async (req, res) => {
   const v = await store.psi.byId(req.params.id);
   if (!v || v.kind !== 'psc_vinculo') return res.status(404).json({ error: 'Vínculo de PSC não encontrado' });
@@ -534,34 +1096,118 @@ router.get('/api/psi/psc/certificado/:id(\\d+)', gatePSI(false), ah(async (req, 
   const horas = pscHorasDoVinculo(all, v.id).sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
   const s = pscSaldo(v, horas);
   const dd = v.dados || {};
+  const person = await store.persons.byId(v.personId);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const concluido = s.saldo <= 0 && s.total > 0;
+
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const page = pdf.addPage([595.28, 420]);
-  const cx = t => { const w = bold.widthOfTextAtSize(t, 13); return (595.28 - w) / 2; };
-  let y = 370;
-  page.drawText('CERTIFICADO DE PRESTAÇÃO DE SERVIÇOS À COMUNIDADE', { x: cx('CERTIFICADO DE PRESTAÇÃO DE SERVIÇOS À COMUNIDADE'), y, size: 13, font: bold, color: rgb(0.05, 0.3, 0.25) });
-  y -= 34;
-  const ln = t => { page.drawText(String(t).slice(0, 110), { x: 50, y, size: 10, font, color: rgb(0.15, 0.15, 0.15) }); y -= 17; };
-  ln('Monitorado(a): ' + (v.personName || ('ID ' + v.personId)));
-  ln('Local: ' + (dd.localNome || '—') + (dd.localEndereco ? ' — ' + dd.localEndereco : ''));
-  ln('Período: ' + (dd.inicio || '?') + ' a ' + (dd.previsaoFim || '?'));
-  ln('Carga determinada: ' + s.total + 'h   •   Cumpridas: ' + s.feitas + 'h   •   Saldo: ' + s.saldo + 'h');
-  ln('Situação: ' + (s.saldo <= 0 && s.total > 0 ? 'CONCLUÍDA' : ((dd.status || 'ativo').toUpperCase())));
-  y -= 8;
-  ln('Juazeiro do Norte, ' + new Date().toLocaleDateString('pt-BR') + '.');
+  const W = 595.28, H = 841.89, M = 60;
+  const page = pdf.addPage([W, H]);
+
+  // Cores
+  const COR_AZUL = rgb(0.05, 0.25, 0.45);
+  const COR_DOURADO = rgb(0.75, 0.6, 0.15);
+  const COR_TEXTO = rgb(0.1, 0.1, 0.1);
+  const COR_SUAVE = rgb(0.4, 0.4, 0.4);
+
+  const cx = t => { const w = bold.widthOfTextAtSize(t, 13); return (W - w) / 2; };
+  let y = H - 80;
+
+  // Borda decorativa
+  page.drawRectangle({ x: 30, y: 30, width: W - 60, height: H - 60, borderColor: COR_DOURADO, borderWidth: 2 });
+  page.drawRectangle({ x: 40, y: 40, width: W - 80, height: H - 80, borderColor: COR_DOURADO, borderWidth: 0.5 });
+
+  // Brasão / Logo (placeholder)
+  page.drawText('SISUMEPE JUAZEIRO', { x: cx('SISUMEPE JUAZEIRO'), y, size: 11, font: bold, color: COR_AZUL });
+  y -= 18;
+  page.drawText('SECRETARIA DA ADMINISTRAÇÃO PENITENCIÁRIA', { x: cx('SECRETARIA DA ADMINISTRAÇÃO PENITENCIÁRIA'), y, size: 9, font, color: COR_SUAVE });
   y -= 30;
-  page.drawText('___________________________________', { x: 180, y, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
-  y -= 15;
-  page.drawText((req.auth.name || req.auth.user) + ' — Psicólogo(a)', { x: 200, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+
+  // Título
+  page.drawLine({ start: { x: 100, y }, end: { x: W - 100, y }, thickness: 1.5, color: COR_DOURADO });
+  y -= 20;
+  page.drawText('CERTIFICADO DE PRESTAÇÃO DE SERVIÇOS À COMUNIDADE', { x: cx('CERTIFICADO DE PRESTAÇÃO DE SERVIÇOS À COMUNIDADE'), y, size: 18, font: bold, color: COR_AZUL });
+  y -= 10;
+  page.drawLine({ start: { x: 100, y }, end: { x: W - 100, y }, thickness: 1.5, color: COR_DOURADO });
+  y -= 30;
+
+  // Texto introdutório
+  const intro = 'Certificamos que o(a) monitorado(a) abaixo identificado(a) cumpriu as horas de Prestação de Serviços à Comunidade (PSC) conforme determinado judicialmente, nos termos da Lei de Execução Penal (Lei nº 7.210/84) e resoluções do CNJ.';
+  const words = intro.split(/\s+/);
+  let cur = '';
+  words.forEach(w => {
+    const t = cur ? cur + ' ' + w : w;
+    if (font.widthOfTextAtSize(t, 11) > W - 2 * M && cur) { page.drawText(cur, { x: M, y, size: 11, font, color: COR_TEXTO }); y -= 16; cur = w; } else cur = t;
+  });
+  if (cur) { page.drawText(cur, { x: M, y, size: 11, font, color: COR_TEXTO }); y -= 16; }
+  y -= 20;
+
+  // Dados do monitorado em tabela
+  const drawField = (label, value) => {
+    page.drawText(label, { x: M + 20, y, size: 11, font: bold, color: COR_AZUL });
+    page.drawText(String(value || '—'), { x: M + 220, y, size: 11, font, color: COR_TEXTO });
+    y -= 22;
+  };
+
+  drawField('Monitorado(a):', person?.nome || v.personName || ('ID ' + v.personId));
+  if (person?.cpf) drawField('CPF:', person.cpf);
+  if (person?.rg) drawField('RG:', person.rg);
+  drawField('Local de execução:', dd.localNome + (dd.localEndereco ? ' — ' + dd.localEndereco : '') || 'Não informado');
+  drawField('Período determinado:', (dd.inicio || '?') + ' a ' + (dd.previsaoFim || '?'));
+  drawField('Carga horária total:', s.total + ' horas');
+  drawField('Horas cumpridas:', s.feitas + ' horas');
+  drawField('Saldo restante:', s.saldo + ' horas');
+
+  // Status destacado
+  y -= 10;
+  const statusText = concluido ? 'CONCLUÍDA COM ÊXITO ✓' : ((dd.status || 'ativo').toUpperCase());
+  const statusColor = concluido ? COR_VERDE : rgb(0.8, 0.2, 0.1);
+  page.drawRectangle({ x: M + 20, y: y - 30, width: W - 2 * M - 40, height: 38, color: statusColor, opacity: 0.12, borderColor: statusColor, borderWidth: 1.5 });
+  page.drawText('SITUAÇÃO: ' + statusText, { x: M + 40, y: y - 10, size: 14, font: bold, color: statusColor });
+  y -= 45;
+
+  // Detalhamento de horas (mini tabela)
+  if (horas.length) {
+    page.drawText('DETALHAMENTO DAS HORAS CUMPRIDAS', { x: M + 20, y, size: 11, font: bold, color: COR_AZUL });
+    y -= 18;
+    const colW = [80, 180, 80, W - 2 * M - 360];
+    const drawRow = (cells, isHeader) => {
+      let x = M + 20;
+      cells.forEach((cell, i) => {
+        page.drawRectangle({ x, y: y - 20, width: colW[i], height: 22, color: isHeader ? COR_AZUL : (y % 44 < 22 ? rgb(0.97, 0.97, 0.97) : rgb(1, 1, 1)), borderColor: COR_SUAVE, borderWidth: 0.5 });
+        page.drawText(String(cell).slice(0, Math.floor(colW[i] / 5)), { x: x + 5, y: y - 15, size: 9, font: isHeader ? bold : font, color: isHeader ? rgb(1, 1, 1) : COR_TEXTO });
+        x += colW[i];
+      });
+      y -= 22;
+    };
+    drawRow(['Data', 'Descrição / Local', 'Horas', 'Observação'], true);
+    horas.forEach(h => drawRow([h.data || '', h.dados?.localNome || (h.dados?.obs || '').slice(0, 30), h.dados?.horas || 0, (h.dados?.obs || '').slice(0, 40)], false));
+    y -= 10;
+  }
+
+  // Rodapé com assinatura
+  y = Math.max(y, 150);
+  page.drawLine({ start: { x: M + 150, y: 130 }, end: { x: W - M - 150, y: 130 }, thickness: 1, color: COR_TEXTO });
+  page.drawText('Juazeiro do Norte, ' + now.toLocaleDateString('pt-BR'), { x: M + 20, y: 115, size: 11, font, color: COR_TEXTO });
+  page.drawText((req.auth.name || req.auth.user) + ' — Psicólogo(a)', { x: M + 20, y: 100, size: 11, font: bold, color: COR_TEXTO });
+  page.drawText('CRP: [informar]  |  SISUMEPE Juazeiro', { x: M + 20, y: 85, size: 9, font, color: COR_SUAVE });
+
+  // QR Code placeholder para validação (opcional)
+  page.drawRectangle({ x: W - M - 80, y: 70, width: 60, height: 60, borderColor: COR_SUAVE, borderWidth: 1 });
+  page.drawText('QR Code', { x: W - M - 70, y: 95, size: 8, font, color: COR_SUAVE });
+  page.drawText('Validação', { x: W - M - 70, y: 85, size: 8, font, color: COR_SUAVE });
+
   await logBreakglass(req, 'certificado PSC ' + (v.personName || v.id), v);
   const bytes = await pdf.save();
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'attachment; filename="certificado-psc-' + v.id + '.pdf"');
+  res.setHeader('Content-Disposition', 'attachment; filename="certificado-psc-' + v.id + '-' + today + '.pdf"');
   res.send(Buffer.from(bytes));
 }));
 
-// ---- Relatório de frequência do grupo (item 5) ----
+// ---- Relatório de frequência do grupo (item 5) - Visual profissional ----
 router.get('/api/psi/grupo/:id(\\d+)/relatorio', gatePSI(false), ah(async (req, res) => {
   const g = await store.psi.byId(req.params.id);
   if (!g || g.kind !== 'grupo') return res.status(404).json({ error: 'Grupo não encontrado' });
@@ -570,37 +1216,153 @@ router.get('/api/psi/grupo/:id(\\d+)/relatorio', gatePSI(false), ah(async (req, 
   const ints = dd.integrantes || [];
   const encs = all.filter(e => e.kind === 'encontro' && String(e.grupoId) === String(g.id))
     .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const W = 595.28, H = 841.89, M = 42;
   let page = pdf.addPage([W, H]);
   let y = H - M;
+
+  const COR_PRIMARIA = rgb(0.05, 0.3, 0.25);
+  const COR_SECUNDARIA = rgb(0.1, 0.4, 0.55);
+  const COR_TEXTO = rgb(0.15, 0.15, 0.15);
+  const COR_SUAVE = rgb(0.4, 0.4, 0.4);
+  const COR_LINHA = rgb(0.85, 0.85, 0.85);
+  const COR_VERDE = rgb(0.1, 0.6, 0.2);
+  const COR_AMARELO = rgb(0.9, 0.7, 0.1);
+  const COR_VERMELHO = rgb(0.8, 0.2, 0.1);
+
   const line = (text, size, f, color, gap) => {
-    if (y < M + 20) { page = pdf.addPage([W, H]); y = H - M; }
-    page.drawText(String(text || '').slice(0, 130), { x: M, y, size: size || 10, font: f || font, color: color || rgb(0.15, 0.15, 0.15) });
+    if (y < M + 20) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+    page.drawText(String(text || '').slice(0, 130), { x: M, y, size: size || 10, font: f || font, color: color || COR_TEXTO });
     y -= (gap || 14);
   };
-  line('Relatório de Frequência — ' + (dd.nome || ('Grupo #' + g.id)), 15, bold, rgb(0.05, 0.3, 0.25), 20);
-  line((dd.tipo || '') + ' • ' + (dd.dia || '') + ' • gerado em ' + new Date().toLocaleString('pt-BR'), 9, font, rgb(0.4, 0.4, 0.4), 18);
-  line('Participantes e frequência (' + encs.length + ' encontros)', 12, bold, rgb(0.1, 0.35, 0.55), 17);
-  ints.forEach(m => {
+  const drawHeader = () => {
+    page.drawRectangle({ x: M, y: H - 30, width: W - 2 * M, height: 4, color: COR_PRIMARIA });
+    page.drawText('CONFIDENCIAL — DADOS SENSÍVEIS — LGPD Art. 11', { x: M, y: H - 18, size: 7, font, color: rgb(0.8, 0.2, 0.2), opacity: 0.4 });
+  };
+  drawHeader();
+
+  const h1 = t => {
+    line(t, 18, bold, COR_PRIMARIA, 24);
+    page.drawLine({ start: { x: M, y: y + 8 }, end: { x: W - M, y: y + 8 }, thickness: 1.5, color: COR_PRIMARIA });
+    y -= 6;
+  };
+  const h2 = t => {
+    y -= 6;
+    line(t, 13, bold, COR_SECUNDARIA, 19);
+    page.drawLine({ start: { x: M, y: y + 5 }, end: { x: W - M, y: y + 5 }, thickness: 0.8, color: COR_LINHA });
+    y -= 4;
+  };
+  const tableRow = (cells, widths, isHeader = false) => {
+    if (y < M + 30) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+    let x = M;
+    const rowH = 20;
+    cells.forEach((cell, i) => {
+      const w = widths[i];
+      const bgColor = isHeader ? COR_PRIMARIA : (y % 40 < 20 ? rgb(0.97, 0.97, 0.97) : rgb(1, 1, 1));
+      page.drawRectangle({ x, y: y - rowH, width: w, height: rowH, color: bgColor, borderColor: COR_LINHA, borderWidth: 0.5 });
+      const txt = String(cell || '').slice(0, Math.max(5, Math.floor(w / 5.5)));
+      page.drawText(txt, { x: x + 3, y: y - rowH + 5, size: isHeader ? 9 : 8, font: isHeader ? bold : font, color: isHeader ? rgb(1, 1, 1) : COR_TEXTO });
+      x += w;
+    });
+    y -= rowH;
+  };
+
+  h1('RELATÓRIO DE FREQUÊNCIA — GRUPO REFLEXIVO');
+  line('SISUMEPE Juazeiro • ' + now.toLocaleString('pt-BR') + ' • Gerado por ' + (req.auth.name || req.auth.user), 9, font, COR_SUAVE, 20);
+  y -= 6;
+
+  h2('1. DADOS DO GRUPO');
+  const gWidths = [140, W - 2 * M - 140];
+  tableRow(['CAMPO', 'INFORMAÇÃO'], gWidths, true);
+  tableRow(['Nome', dd.nome || ('Grupo #' + g.id)], gWidths);
+  tableRow(['Tipo / Temática', dd.tipo || 'Não informado'], gWidths);
+  tableRow(['Dia / Periodicidade', dd.dia || 'Não definido'], gWidths);
+  tableRow(['Status', dd.ativo !== false ? 'Ativo' : 'Inativo'], gWidths);
+  tableRow(['Total de encontros realizados', encs.length], gWidths);
+  tableRow(['Responsável técnico', req.auth.name || req.auth.user], gWidths);
+  y -= 10;
+
+  // Tabela de participantes
+  h2('2. PARTICIPANTES E FREQUÊNCIA CONSOLIDADA');
+  const pWidths = [30, 180, 70, 70, 70, 70, W - 2 * M - 470];
+  tableRow(['#', 'Nome', 'Status', 'Presenças', 'Total', 'Faltas', '% Frequência'], pWidths, true);
+  ints.forEach((m, idx) => {
     const mid = String((m && m.id) || m);
     const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === mid)).length;
-    const pct = encs.length ? Math.round(pres / encs.length * 100) : 0;
-    line('• ' + (m.nome || ('ID ' + mid)) + ' — ' + (m.status || 'ativo') + ': ' + pres + '/' + encs.length + ' (' + pct + '%)', 10, font, rgb(0.15, 0.15, 0.15), 13);
+    const faltas = encs.length - pres;
+    const pct = encs.length ? Math.round((pres / encs.length) * 100) : 0;
+    const statusColor = pct >= 75 ? COR_VERDE : pct >= 50 ? COR_AMARELO : COR_VERMELHO;
+    const rowY = y;
+    tableRow([idx + 1, m.nome || ('ID ' + mid), m.status || 'ativo', pres, encs.length, faltas, pct + '%'], pWidths);
+    // Colorir % frequência
+    const pctX = M + 30 + 180 + 70 + 70 + 70;
+    page.drawRectangle({ x: pctX, y: rowY - 20, width: 70, height: 20, color: statusColor, opacity: 0.15 });
   });
-  y -= 4;
-  line('Encontros', 12, bold, rgb(0.1, 0.35, 0.55), 17);
+  if (!ints.length) {
+    bullet('Nenhum participante cadastrado no grupo.');
+  }
+  y -= 10;
+
+  // Tabela de encontros
+  h2('3. ENCONTROS REALIZADOS (' + encs.length + ')');
+  const eWidths = [80, 200, 70, W - 2 * M - 350];
+  tableRow(['Data', 'Tema', 'Presentes', 'Observações'], eWidths, true);
   encs.forEach(e => {
     const ed = e.dados || {};
-    line((e.data || '') + ' — ' + (ed.tema || 'Sem tema') + ' (' + ((ed.presentes || []).length) + ' presentes)', 10, bold, rgb(0.2, 0.2, 0.2), 13);
-    line('  ' + ((ed.presentes || []).map(p => p.nome || p.id).join(', ') || '—'), 9, font, rgb(0.3, 0.3, 0.3), 12);
+    const presentesNomes = (ed.presentes || []).map(p => p.nome || p.id).join(', ').slice(0, 80);
+    tableRow([e.data || '', ed.tema || 'Sem tema', ed.presentes?.length || 0, presentesNomes || ed.obs || ''], eWidths);
   });
+  if (!encs.length) {
+    bullet('Nenhum encontro registrado para este grupo.');
+  }
+  y -= 10;
+
+  // Resumo estatístico
+  h2('4. RESUMO ESTATÍSTICO');
+  const mediaPresenca = ints.length ? Math.round(ints.reduce((s, m) => {
+    const mid = String((m && m.id) || m);
+    const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === mid)).length;
+    return s + (encs.length ? pres / encs.length : 0);
+  }, 0) / ints.length * 100) : 0;
+  const assiduidade75 = ints.filter(m => {
+    const mid = String((m && m.id) || m);
+    const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === mid)).length;
+    return encs.length && (pres / encs.length) >= 0.75;
+  }).length;
+  const stats = [
+    ['Média de frequência do grupo', mediaPresenca + '%'],
+    ['Participantes com ≥ 75% frequência', assiduidade75 + ' de ' + ints.length],
+    ['Participantes com < 50% frequência', ints.filter(m => {
+      const mid = String((m && m.id) || m);
+      const pres = encs.filter(e => ((e.dados || {}).presentes || []).some(p => String((p && p.id) || p) === mid)).length;
+      return encs.length && (pres / encs.length) < 0.5;
+    }).length],
+    ['Total de encontros no período', encs.length],
+    ['Período coberto', encs.length ? (encs[0].data || '') + ' a ' + (encs[encs.length - 1].data || '') : '—']
+  ];
+  const sWidths = [250, W - 2 * M - 250];
+  tableRow(['INDICADOR', 'VALOR'], sWidths, true);
+  stats.forEach(row => tableRow(row, sWidths));
+  y -= 10;
+
+  // Assinatura
+  y = Math.max(y, M + 80);
+  if (y < M + 80) { page = pdf.addPage([W, H]); y = H - M; drawHeader(); }
+  y -= 30;
+  page.drawLine({ start: { x: M + 200, y }, end: { x: W - M - 200, y }, thickness: 1, color: COR_LINHA });
+  y -= 12;
+  line(req.auth.name + ' — Psicólogo(a) Responsável', 10, bold, COR_TEXTO, 13);
+  line('SISUMEPE Juazeiro — ' + now.toLocaleDateString('pt-BR'), 9, font, COR_SUAVE, 12);
+
   await logBreakglass(req, 'relatório grupo ' + (dd.nome || g.id), g);
   const bytes = await pdf.save();
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'attachment; filename="grupo-' + g.id + '-frequencia.pdf"');
+  res.setHeader('Content-Disposition', 'attachment; filename="grupo-' + g.id + '-frequencia-' + today + '.pdf"');
   res.send(Buffer.from(bytes));
 }));
 

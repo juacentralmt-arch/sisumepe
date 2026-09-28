@@ -380,7 +380,10 @@ const A = {
 };
 const AG = {
   id: 'id', user: 'user', title: 'title', description: 'description', start: 'start', end: 'end',
-  personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', calendlyUri: 'calendlyuri', origem: 'origem', createdAt: 'createdat', updatedAt: 'updatedat'
+  personId: 'personid', ticketId: 'ticketid', googleEventId: 'googleeventid', calendlyUri: 'calendlyuri', origem: 'origem',
+  category: 'category', color: 'color', allDay: 'allday', recurrence: 'recurrence', recurrenceEnd: 'recurrenceend',
+  reminderMinutes: 'reminderminutes', location: 'location', attendees: 'attendees', status: 'status',
+  createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const TM = {
   id: 'id', user: 'user', tipo: 'tipo', dataEnvio: 'dataenvio', destinatario: 'destinatario', equipamentos: 'equipamentos', respEntrega: 'respentrega', respRecebimento: 'resprecebimento', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
@@ -748,13 +751,51 @@ const store = {
   },
 
   agenda: {
-    async allByUser(user){
-      if(MODE==='file') return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start));
-      try{ return must(await supa.from('agenda').select('*').eq('user', user).order('start'), 'agenda.allByUser').map(appAG); }catch(e){ console.warn('agenda.allByUser fallback (tabela não existe?)', e.message); return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start)); }
+    async allByUser(user, opts = {}){
+      const { from, to, category, status, q, limit = 500 } = opts;
+      if(MODE==='file'){
+        let arr = mem.agenda.filter(x=>x.user===user);
+        if(from) arr = arr.filter(x=> new Date(x.end) >= new Date(from));
+        if(to) arr = arr.filter(x=> new Date(x.start) <= new Date(to));
+        if(category) arr = arr.filter(x=> x.category === category);
+        if(status) arr = arr.filter(x=> x.status === status);
+        if(q){
+          const ql = String(q).toLowerCase();
+          arr = arr.filter(x=> (x.title||'').toLowerCase().includes(ql) || (x.description||'').toLowerCase().includes(ql) || (x.location||'').toLowerCase().includes(ql));
+        }
+        arr.sort((a,b)=> new Date(a.start)-new Date(b.start));
+        return arr.slice(0, limit);
+      }
+      try{
+        let query = supa.from('agenda').select('*').eq('user', user).order('start').limit(limit);
+        if(from) query = query.gte('end', from);
+        if(to) query = query.lte('start', to);
+        if(category) query = query.eq('category', category);
+        if(status) query = query.eq('status', status);
+        if(q){
+          const esc = String(q).replace(/[%_]/g, m=>`\\${m}`);
+          query = query.or(`title.ilike.%${esc}%,description.ilike.%${esc}%,location.ilike.%${esc}%`);
+        }
+        return must(await query, 'agenda.allByUser').map(appAG);
+      }catch(e){ console.warn('agenda.allByUser fallback', e.message); return mem.agenda.filter(x=>x.user===user).sort((a,b)=> new Date(a.start)-new Date(b.start)).slice(0, limit); }
     },
-    async all(){
-      if(MODE==='file') return mem.agenda;
-      try{ return must(await supa.from('agenda').select('*').order('start'), 'agenda.all').map(appAG); }catch(e){ console.warn('agenda.all fallback', e.message); return mem.agenda; }
+    async all(opts = {}){
+      const { from, to, user, limit = 500 } = opts;
+      if(MODE==='file'){
+        let arr = [...mem.agenda];
+        if(user) arr = arr.filter(x=>x.user===user);
+        if(from) arr = arr.filter(x=> new Date(x.end) >= new Date(from));
+        if(to) arr = arr.filter(x=> new Date(x.start) <= new Date(to));
+        arr.sort((a,b)=> new Date(a.start)-new Date(b.start));
+        return arr.slice(0, limit);
+      }
+      try{
+        let query = supa.from('agenda').select('*').order('start').limit(limit);
+        if(user) query = query.eq('user', user);
+        if(from) query = query.gte('end', from);
+        if(to) query = query.lte('start', to);
+        return must(await query, 'agenda.all').map(appAG);
+      }catch(e){ console.warn('agenda.all fallback', e.message); return mem.agenda.slice(0, limit); }
     },
     async byId(id){
       if(MODE==='file') return mem.agenda.find(x=>eqi(x.id,id))||null;
@@ -791,6 +832,29 @@ const store = {
     async remove(id){
       if(MODE==='file'){ mem.agenda=mem.agenda.filter(x=>!eqi(x.id,id)); saveFile(); return; }
       try{ must(await supa.from('agenda').delete().eq('id', Number(id)),'agenda.remove'); }catch(e){ console.warn('agenda.remove fallback', e.message); mem.agenda=mem.agenda.filter(x=>!eqi(x.id,id)); }
+    },
+    // Conflitos: verifica se há evento no mesmo horário para o usuário
+    async checkConflict(user, start, end, excludeId = null){
+      const evs = await this.allByUser(user, { from: start, to: end });
+      return evs.filter(ev => {
+        if(excludeId && String(ev.id) === String(excludeId)) return false;
+        return new Date(ev.start) < new Date(end) && new Date(ev.end) > new Date(start);
+      });
+    },
+    // Estatísticas da semana
+    async statsByWeek(user, weekStart){
+      const ws = new Date(weekStart);
+      const we = new Date(ws.getTime() + 7*864e5);
+      const evs = await this.allByUser(user, { from: ws.toISOString(), to: we.toISOString() });
+      const byDay = {};
+      let totalMin = 0;
+      evs.forEach(ev => {
+        const d = new Date(ev.start).toISOString().slice(0,10);
+        byDay[d] = (byDay[d] || 0) + 1;
+        const diff = (new Date(ev.end) - new Date(ev.start)) / 6e4;
+        totalMin += diff;
+      });
+      return { total: evs.length, totalMinutes: totalMin, byDay, weekStart: ws.toISOString().slice(0,10) };
     }
   },
 
@@ -872,9 +936,21 @@ const store = {
       if(MODE==='file') return mem.psi;
       try{ return must(await supa.from('psi_records').select('*').order('id', {ascending:false}).limit(2000), 'psi.all').map(r=>toApp(r, PSI)); }catch(e){ console.warn('psi.all fallback', e.message); return mem.psi; }
     },
-    async byPerson(personId){
-      const all = await store.psi.all();
-      return all.filter(x=>String(x.personId)===String(personId)).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+    async byPerson(personId, opts = {}){
+      const { limit = 2000, cursor, kind } = opts;
+      if(MODE==='file'){
+        let all = mem.psi.filter(x=>String(x.personId)===String(personId));
+        if(kind) all = all.filter(x=>x.kind===kind);
+        all.sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
+        if(cursor) all = all.filter(x=> new Date(x.createdAt) > new Date(cursor));
+        return all.slice(0, limit);
+      }
+      try{
+        let query = supa.from('psi_records').select('*').eq('personid', Number(personId)).order('createdat', {ascending:true}).limit(limit);
+        if(kind) query = query.eq('kind', kind);
+        if(cursor) query = query.gt('createdat', cursor);
+        return must(await query, 'psi.byPerson').map(r=>toApp(r, PSI));
+      }catch(e){ console.warn('psi.byPerson fallback', e.message); return mem.psi.filter(x=>String(x.personId)===String(personId)).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt)).slice(0, limit); }
     },
     async byKind(kind){
       const all = await store.psi.all();

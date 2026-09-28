@@ -462,6 +462,27 @@
         <p class="text-[11px] text-slate-500 mb-2">Agendamentos marcados no Calendly. Importar traz para a agenda local (roxo no calendário).</p>
         <div id="calendlyList" class="space-y-1.5 max-h-[260px] overflow-y-auto text-xs"></div>
       </div>
+      <!-- Filtros -->
+      <div class="card p-3 mb-4 flex flex-wrap items-center gap-2 text-[11px]">
+        <span class="text-slate-500">Filtros:</span>
+        <select id="agendaFilterCategory" class="inp text-xs px-2 py-1.5" onchange="applyAgendaFilters()">
+          <option value="all">Todas categorias</option>
+          <option value="reuniao">🤝 Reunião</option>
+          <option value="atendimento">👤 Atendimento</option>
+          <option value="auditoria">📋 Auditoria</option>
+          <option value="treinamento">🎓 Treinamento</option>
+          <option value="feriado">🎌 Feriado</option>
+          <option value="pessoal">🔒 Pessoal</option>
+          <option value="outro">📌 Outro</option>
+        </select>
+        <select id="agendaFilterStatus" class="inp text-xs px-2 py-1.5" onchange="applyAgendaFilters()">
+          <option value="all">Todos status</option>
+          <option value="confirmado">✅ Confirmado</option>
+          <option value="tentativo">⏳ Tentativo</option>
+          <option value="cancelado">❌ Cancelado</option>
+          <option value="concluido">✔️ Concluído</option>
+        </select>
+      </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="lg:col-span-2 card p-4">
           <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px] font-bold">
@@ -470,9 +491,13 @@
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-indigo-500"></span> Agendamento</span>
             <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded bg-violet-600"></span> Calendly</span>
           </div>
-          <div id="agendaCalendar" class="min-h-[420px]"></div>
+          <div id="agendaCalendar" class="min-h-[460px]"></div>
         </div>
         <div class="space-y-4">
+          <div class="card p-4" id="agendaWeekStatsBox">
+            <h3 class="font-display font-bold text-sm mb-3">📊 Semana atual</h3>
+            <div id="agendaWeekStats" class="text-center text-slate-400 text-xs">Carregando…</div>
+          </div>
           <div class="card p-4">
             <h3 class="font-display font-bold text-sm mb-3">📋 Próximos agendamentos</h3>
             <div id="agendaList" class="space-y-2 max-h-[300px] overflow-y-auto"></div>
@@ -1691,13 +1716,86 @@
       <div><label class="lbl">FIM *</label><input id="agEnd" type="datetime-local" class="inp mt-1 mb-2.5"></div>
     </div>
     <div id="agFeriadoWarn" class="hidden rounded-xl p-2.5 mb-2.5 text-xs font-bold border"></div>
-    <label class="lbl">ATENDIDO (opcional)</label>
+
+    <div class="grid grid-cols-2 gap-2.5 mt-2">
+      <div>
+        <label class="lbl">CATEGORIA</label>
+        <select id="agCategory" class="inp mt-1 mb-2.5">
+          <option value="reuniao">🤝 Reunião</option>
+          <option value="atendimento">👤 Atendimento</option>
+          <option value="auditoria">📋 Auditoria</option>
+          <option value="treinamento">🎓 Treinamento</option>
+          <option value="feriado">🎌 Feriado</option>
+          <option value="pessoal">🔒 Pessoal</option>
+          <option value="outro">📌 Outro</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">COR</label>
+        <select id="agColor" class="inp mt-1 mb-2.5">
+          <option value="#3b82f6">🔵 Azul</option>
+          <option value="#10b981">🟢 Verde</option>
+          <option value="#f59e0b">🟠 Âmbar</option>
+          <option value="#ef4444">🔴 Vermelho</option>
+          <option value="#8b5cf6">🟣 Roxo</option>
+          <option value="#ec4899">🩷 Rosa</option>
+          <option value="#06b6d4">🔷 Ciano</option>
+          <option value="#84cc16">🟢 Lima</option>
+          <option value="#f97316">🟠 Laranja</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2.5 mt-2">
+      <div>
+        <label class="lbl">LEMBRETE (min antes)</label>
+        <input id="agReminder" type="number" min="0" max="10080" value="15" class="inp mt-1 mb-2.5" placeholder="15">
+      </div>
+      <div>
+        <label class="lbl">STATUS</label>
+        <select id="agStatus" class="inp mt-1 mb-2.5">
+          <option value="confirmado">✅ Confirmado</option>
+          <option value="tentativo">⏳ Tentativo</option>
+          <option value="cancelado">❌ Cancelado</option>
+          <option value="concluido">✔️ Concluído</option>
+        </select>
+      </div>
+    </div>
+
+    <label class="lbl mt-2">LOCAL</label>
+    <input id="agLocation" placeholder="Ex: UMEPE Juazeiro, Sala 2" class="inp mt-1 mb-2.5">
+
+    <label class="lbl mt-2">PARTICIPANTES (um por linha)</label>
+    <textarea id="agAttendees" rows="2" placeholder="João Silva&#10;Maria Santos&#10;equipe@email.com" class="inp mt-1 mb-2.5"></textarea>
+
+    <div class="flex items-center gap-2.5 mt-2">
+      <input id="agAllDay" type="checkbox" class="w-5 h-5 accent-sky-600" onchange="toggleAllDay(this)">
+      <label class="lbl text-sm cursor-pointer flex-1">☀️ Dia todo</label>
+    </div>
+
+    <div id="agRecurrenceRow" class="hidden mt-2">
+      <label class="lbl">RECORRÊNCIA</label>
+      <select id="agRecurrence" class="inp mt-1 mb-2.5" onchange="toggleRecurrenceEnd(this)">
+        <option value="">Não repetir</option>
+        <option value="daily">Diária</option>
+        <option value="weekly">Semanal</option>
+        <option value="monthly">Mensal</option>
+        <option value="yearly">Anual</option>
+      </select>
+      <div id="agRecurrenceEndRow" class="hidden">
+        <label class="lbl">ATÉ (data fim da recorrência)</label>
+        <input id="agRecurrenceEnd" type="date" class="inp mt-1 mb-2.5">
+      </div>
+    </div>
+
+    <label class="lbl mt-2">ATENDIDO (opcional)</label>
     <div class="flex gap-2 mt-1 mb-2.5">
       <input id="agPersonQ" placeholder="Buscar por nome/CPF..." class="inp flex-1" onkeydown="if(event.key==='Enter')searchAgPerson()">
       <button type="button" onclick="searchAgPerson()" class="btn btn-ghost text-xs px-3">Buscar</button>
     </div>
     <div id="agPersonRes" class="space-y-1 mb-2.5 max-h-28 overflow-y-auto"></div>
     <div id="agPersonSel" class="hidden rounded-xl p-2.5 bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 mb-2.5"></div>
+
     <p id="agErr" class="hidden text-xs text-rose-600 font-semibold"></p>
     <div class="flex gap-2.5 mt-4">
       <button onclick="closeAgendaModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
@@ -3780,11 +3878,20 @@ async function loadAgenda(){
     if(role === 'admin') await updateGoogleStatus().catch(()=>{});
     const list = await api('/api/agenda');
     agendaEvents = list;
+    // Inicializar filtros se não existirem
+    if(!window.agendaFilterCategory) window.agendaFilterCategory = 'all';
+    if(!window.agendaFilterStatus) window.agendaFilterStatus = 'all';
     renderAgendaList();
     renderFeriadosList();
     await renderAgendaCalendar();
     loadCalendlyEventos(false).catch(()=>{});
   }catch(e){ toast('⚠️ ' + e.message); }
+}
+function applyAgendaFilters(){
+  window.agendaFilterCategory = document.getElementById('agendaFilterCategory').value;
+  window.agendaFilterStatus = document.getElementById('agendaFilterStatus').value;
+  renderAgendaList();
+  renderAgendaCalendar();
 }
 let calendlyEventosCache=[];
 async function loadCalendlyEventos(manual){
@@ -3831,16 +3938,21 @@ async function renderAgendaCalendar(){
   const el = document.getElementById('agendaCalendar');
   if(!el) return;
   try{ await ensureFullCalendar(); }catch(e){ el.innerHTML = '<p class="text-xs text-slate-500">Calendário não carregado (sem internet)</p>'; return; }
+
   const events = agendaEvents.map(ev => ({
     id: String(ev.id),
-    title: (ev.origem === 'calendly' || ev.calendlyUri ? '📅 ' : '') + ev.title,
+    title: ev.title,
     start: ev.start,
     end: ev.end,
+    allDay: !!ev.allDay,
     extendedProps: ev,
-    backgroundColor: (ev.origem === 'calendly' || ev.calendlyUri) ? '#7c3aed' : '#0ea5e9',
-    borderColor: (ev.origem === 'calendly' || ev.calendlyUri) ? '#7c3aed' : '#0ea5e9'
+    backgroundColor: ev.color || (ev.origem === 'calendly' || ev.calendlyUri ? '#7c3aed' : '#0ea5e9'),
+    borderColor: ev.color || (ev.origem === 'calendly' || ev.calendlyUri ? '#7c3aed' : '#0ea5e9'),
+    textColor: '#ffffff',
+    display: ev.status === 'cancelado' ? 'auto' : 'block'
   }));
-  // Feriados visíveis como eventos com destaque (vermelho = feriado não trabalhamos, âmbar = facultativo)
+
+  // Feriados
   try{
     const anoAtual = new Date().getFullYear();
     [anoAtual-1, anoAtual, anoAtual+1, anoAtual+2].forEach(a=>{
@@ -3859,16 +3971,30 @@ async function renderAgendaCalendar(){
       });
     });
   }catch(e){}
+
   if(agendaCalendar){ agendaCalendar.destroy(); agendaCalendar = null; }
+
+  // Filtros atuais
+  const activeCategory = window.agendaFilterCategory || 'all';
+  const activeStatus = window.agendaFilterStatus || 'all';
+
   setTimeout(()=>{
     agendaCalendar = new FullCalendar.Calendar(el, {
       initialView: 'dayGridMonth',
       locale: 'pt-br',
-      headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
-      height: 520,
-      events,
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+      },
+      height: 560,
+      events: events.filter(ev => {
+        if(activeCategory !== 'all' && ev.extendedProps?.category !== activeCategory) return false;
+        if(activeStatus !== 'all' && ev.extendedProps?.status !== activeStatus) return false;
+        return true;
+      }),
       eventClick: info => {
-        if(info.event.extendedProps && info.event.extendedProps.feriado){
+        if(info.event.extendedProps?.feriado){
           const f = info.event.extendedProps.feriado;
           const isFac = f.tipo === 'facultativo';
           toast((isFac ? '☆ ' : '★ ') + f.nome + ' — ' + (isFac ? 'Ponto facultativo' : 'Feriado: Não trabalhamos!'));
@@ -3879,6 +4005,42 @@ async function renderAgendaCalendar(){
       dateClick: info => openAgendaModal(null, info.dateStr),
       selectable: true,
       select: info => openAgendaModal(null, info.startStr, info.endStr),
+      eventDrop: async info => {
+        const evId = Number(info.event.id);
+        const ev = agendaEvents.find(x => x.id === evId);
+        if(!ev) return;
+        try{
+          await api('/api/agenda/'+evId, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ start: info.event.start.toISOString(), end: info.event.end.toISOString() })
+          });
+          ev.start = info.event.start.toISOString();
+          ev.end = info.event.end.toISOString();
+          toast('📅 Movido para ' + info.event.start.toLocaleString('pt-BR'));
+        }catch(e){
+          info.revert();
+          toast('⚠️ ' + e.message);
+        }
+      },
+      eventResize: async info => {
+        const evId = Number(info.event.id);
+        const ev = agendaEvents.find(x => x.id === evId);
+        if(!ev) return;
+        try{
+          await api('/api/agenda/'+evId, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ start: info.event.start.toISOString(), end: info.event.end.toISOString() })
+          });
+          ev.start = info.event.start.toISOString();
+          ev.end = info.event.end.toISOString();
+          toast('⏱️ Redimensionado');
+        }catch(e){
+          info.revert();
+          toast('⚠️ ' + e.message);
+        }
+      },
       buttonText: { today: 'hoje', month: 'mês', week: 'semana', day: 'dia', list: 'lista' },
       dayCellDidMount: function(info){
         const dateStr = info.dateStr || (info.date.getFullYear() + '-' + String(info.date.getMonth()+1).padStart(2,'0') + '-' + String(info.date.getDate()).padStart(2,'0'));
@@ -3906,6 +4068,10 @@ async function renderAgendaCalendar(){
           info.el.style.position = 'relative';
           info.el.appendChild(badge);
         }
+      },
+      viewDidMount: function(info){
+        // Atualizar estatísticas da semana na sidebar
+        updateAgendaWeekStats(info.view.currentStart);
       }
     });
     agendaCalendar.render();
@@ -3915,18 +4081,69 @@ function renderAgendaList(){
   const box = document.getElementById('agendaList');
   if(!box) return;
   if(!agendaEvents.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Nenhum agendamento.<br>Crie o primeiro! 📅</p>'; return; }
+
   const now = new Date();
-  const upcoming = [...agendaEvents].sort((a,b)=> new Date(a.start)-new Date(b.start)).slice(0,20);
-  box.innerHTML = upcoming.map(ev=>{
-    const s = new Date(ev.start), e = new Date(ev.end);
-    const isPast = e < now;
-    const isCal = ev.origem === 'calendly' || ev.calendlyUri;
-    const gBadge = isCal ? '<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Calendly</span>' : '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>';
-    return `<div class="border ${isPast?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPast?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})">
-      <div class="flex items-center gap-2"><b class="text-xs flex-1 truncate">${esc(ev.title)}</b>${gBadge}</div>
-      <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleString('pt-BR')} → ${e.toLocaleString('pt-BR')}</p>
-      ${ev.description?`<p class="text-xs mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1.5">${esc(ev.description)}</p>`:''}
-    </div>`;
+  const sorted = [...agendaEvents].sort((a,b)=> new Date(a.start)-new Date(b.start));
+
+  // Agrupar por dia
+  const byDay = {};
+  sorted.forEach(ev => {
+    const dayKey = new Date(ev.start).toISOString().slice(0,10);
+    if(!byDay[dayKey]) byDay[dayKey] = [];
+    byDay[dayKey].push(ev);
+  });
+
+  const categoryFilter = window.agendaFilterCategory || 'all';
+  const statusFilter = window.agendaFilterStatus || 'all';
+
+  box.innerHTML = Object.entries(byDay).slice(0, 14).map(([day, evs]) => {
+    const dayDate = new Date(day + 'T12:00:00');
+    const isToday = day === now.toISOString().slice(0,10);
+    const isPast = dayDate < new Date(now.toISOString().slice(0,10) + 'T12:00:00');
+
+    const filtered = evs.filter(ev => {
+      if(categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
+      if(statusFilter !== 'all' && ev.status !== statusFilter) return false;
+      return true;
+    });
+
+    if(!filtered.length) return '';
+
+    return `
+      <div class="mb-3">
+        <div class="flex items-center gap-2 mb-2 ${isPast ? 'opacity-50' : ''}">
+          <span class="font-bold text-sm text-slate-700 ${isToday ? 'text-sky-600' : ''}">${dayDate.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}${isToday ? ' (hoje)' : ''}</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${filtered.length} agendamento${filtered.length>1?'s':''}</span>
+        </div>
+        <div class="space-y-2">
+          ${filtered.map(ev => {
+            const s = new Date(ev.start), e = new Date(ev.end);
+            const isPastEv = e < now;
+            const isCal = ev.origem === 'calendly' || ev.calendlyUri;
+            const catLabel = ev.category ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:${(ev.color||'#3b82f6') + '20'}; color:${ev.color||'#3b82f6'}">${ev.category}</span>` : '';
+            const statusBadge = ev.status && ev.status !== 'confirmado' ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${ev.status==='cancelado'?'bg-rose-100 text-rose-700':ev.status==='tentativo'?'bg-amber-100 text-amber-700':ev.status==='concluido'?'bg-emerald-100 text-emerald-700':''}">${ev.status}</span>` : '';
+            return `
+              <div class="border ${isPastEv?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPastEv?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})" style="border-left: 3px solid ${ev.color || '#3b82f6'}">
+                <div class="flex items-start gap-2">
+                  <div class="w-2 h-2 mt-2 rounded-full" style="background:${ev.color || '#3b82f6'}"></div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <b class="text-xs truncate flex-1">${esc(ev.title)}</b>
+                      ${catLabel}
+                      ${statusBadge}
+                      ${isCal ? '<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Calendly</span>' : '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>'}
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} → ${e.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}${ev.location ? ' • 📍 ' + esc(ev.location) : ''}</p>
+                    ${ev.description ? `<p class="text-xs mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1.5">${esc(ev.description)}</p>` : ''}
+                    ${ev.attendees && ev.attendees.length ? `<p class="text-[10px] text-slate-500 mt-1.5">👥 ${ev.attendees.map(a => esc(a)).join(', ')}</p>` : ''}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }).join('');
 }
 function openAgendaModal(id, dateStr, endStr){
@@ -3935,6 +4152,18 @@ function openAgendaModal(id, dateStr, endStr){
   document.getElementById('agPersonRes').innerHTML = '';
   document.getElementById('agPersonSel').classList.add('hidden');
   document.getElementById('agErr').classList.add('hidden');
+  document.getElementById('agRecurrenceRow').classList.add('hidden');
+  document.getElementById('agRecurrenceEndRow').classList.add('hidden');
+  document.getElementById('agRecurrence').value = '';
+  document.getElementById('agRecurrenceEnd').value = '';
+  document.getElementById('agAllDay').checked = false;
+  document.getElementById('agCategory').value = 'reuniao';
+  document.getElementById('agColor').value = '#3b82f6';
+  document.getElementById('agReminder').value = '15';
+  document.getElementById('agStatus').value = 'confirmado';
+  document.getElementById('agLocation').value = '';
+  document.getElementById('agAttendees').value = '';
+
   const delBtn = document.getElementById('agDeleteBtn');
   if(id){
     const ev = agendaEvents.find(x=>x.id===id);
@@ -3945,6 +4174,25 @@ function openAgendaModal(id, dateStr, endStr){
     document.getElementById('agDesc').value = ev.description || '';
     document.getElementById('agStart').value = toLocalDT(ev.start);
     document.getElementById('agEnd').value = toLocalDT(ev.end);
+    document.getElementById('agCategory').value = ev.category || 'reuniao';
+    document.getElementById('agColor').value = ev.color || '#3b82f6';
+    document.getElementById('agReminder').value = ev.reminderMinutes || 15;
+    document.getElementById('agStatus').value = ev.status || 'confirmado';
+    document.getElementById('agLocation').value = ev.location || '';
+    document.getElementById('agAttendees').value = (ev.attendees || []).join('\n');
+    document.getElementById('agAllDay').checked = !!ev.allDay;
+    if(ev.allDay){
+      document.getElementById('agStart').type = 'date';
+      document.getElementById('agEnd').type = 'date';
+    }
+    if(ev.recurrence){
+      document.getElementById('agRecurrenceRow').classList.remove('hidden');
+      document.getElementById('agRecurrence').value = ev.recurrence;
+      if(ev.recurrenceEnd){
+        document.getElementById('agRecurrenceEndRow').classList.remove('hidden');
+        document.getElementById('agRecurrenceEnd').value = ev.recurrenceEnd.slice(0,10);
+      }
+    }
     if(ev.personId) { agPersonSel = { id: ev.personId }; document.getElementById('agPersonSel').textContent = 'Atendido ID ' + ev.personId + ' vinculado'; document.getElementById('agPersonSel').classList.remove('hidden'); }
     delBtn.classList.remove('hidden');
   } else {
@@ -3952,6 +4200,10 @@ function openAgendaModal(id, dateStr, endStr){
     document.getElementById('agendaModalId').textContent = '';
     document.getElementById('agTitle').value = '';
     document.getElementById('agDesc').value = '';
+    document.getElementById('agLocation').value = '';
+    document.getElementById('agAttendees').value = '';
+    document.getElementById('agStart').type = 'datetime-local';
+    document.getElementById('agEnd').type = 'datetime-local';
     let s = dateStr ? new Date(dateStr) : new Date();
     if(dateStr && !endStr){ s.setHours(9,0,0,0); endStr = new Date(s.getTime()+60*60*1000).toISOString(); dateStr = s.toISOString(); }
     document.getElementById('agStart').value = toLocalDT(dateStr || new Date().toISOString());
@@ -3971,6 +4223,62 @@ function checkAgFeriado(){
   box.className = 'rounded-xl p-2.5 mb-2.5 text-xs font-bold border ' + (isFac ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-rose-50 border-rose-300 text-rose-800');
   box.textContent = (isFac ? '☆ Ponto facultativo: ' : '★ Feriado (não trabalhamos): ') + f.nome + ' — ' + new Date(f.data+'T12:00:00').toLocaleDateString('pt-BR');
 }
+function toggleAllDay(cb){
+  const start = document.getElementById('agStart');
+  const end = document.getElementById('agEnd');
+  if(cb.checked){
+    start.type = 'date';
+    end.type = 'date';
+    // Ajustar para 00:00 e 23:59 se era datetime-local
+    if(start.value.includes('T')){
+      start.value = start.value.split('T')[0];
+      end.value = end.value.split('T')[0];
+    }
+  }else{
+    start.type = 'datetime-local';
+    end.type = 'datetime-local';
+    // Adicionar hora padrão se era date
+    if(!start.value.includes('T')){
+      const sd = new Date(start.value + 'T09:00:00');
+      const ed = new Date(end.value + 'T10:00:00');
+      start.value = toLocalDT(sd.toISOString());
+      end.value = toLocalDT(ed.toISOString());
+    }
+  }
+}
+function toggleRecurrenceEnd(sel){
+  const row = document.getElementById('agRecurrenceEndRow');
+  if(sel.value){ row.classList.remove('hidden'); } else { row.classList.add('hidden'); }
+}
+async function updateAgendaWeekStats(weekStart){
+  try{
+    const ws = weekStart ? weekStart.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    const stats = await api('/api/agenda/stats/week?weekStart=' + ws);
+    const box = document.getElementById('agendaWeekStats');
+    if(box){
+      box.innerHTML = `
+        <div class="grid grid-cols-2 gap-2 text-center">
+          <div class="bg-sky-50 border border-sky-200 rounded-xl p-2">
+            <div class="text-2xl font-bold text-sky-600">${stats.total}</div>
+            <div class="text-[10px] text-sky-500">Agendamentos</div>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2">
+            <div class="text-2xl font-bold text-emerald-600">${Math.round(stats.totalMinutes/60)}h ${stats.totalMinutes%60}min</div>
+            <div class="text-[10px] text-emerald-500">Tempo total</div>
+          </div>
+        </div>
+        <div class="mt-2 flex gap-1 overflow-x-auto text-[10px]">
+          ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i) => {
+            const dayKey = new Date(stats.weekStart).getTime() + i*864e5;
+            const dayStr = new Date(dayKey).toISOString().slice(0,10);
+            const count = stats.byDay[dayStr] || 0;
+            return `<div class="flex-1 text-center px-1 py-1.5 rounded-lg ${count? 'bg-sky-50 text-sky-700 font-bold' : 'bg-slate-50 text-slate-400'}">${d}<br>${count}</div>`;
+          }).join('')}
+        </div>
+      `;
+    }
+  }catch(e){}
+}
 function toLocalDT(iso){
   const d = new Date(iso);
   const pad = n => String(n).padStart(2,'0');
@@ -3984,9 +4292,24 @@ async function saveAgenda(){
   const description = document.getElementById('agDesc').value.trim();
   const start = document.getElementById('agStart').value;
   const end = document.getElementById('agEnd').value;
+  const category = document.getElementById('agCategory').value;
+  const color = document.getElementById('agColor').value;
+  const reminderMinutes = Number(document.getElementById('agReminder').value) || 0;
+  const status = document.getElementById('agStatus').value;
+  const location = document.getElementById('agLocation').value.trim();
+  const attendees = document.getElementById('agAttendees').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const allDay = document.getElementById('agAllDay').checked;
+  const recurrence = document.getElementById('agRecurrence').value || null;
+  const recurrenceEnd = document.getElementById('agRecurrenceEnd').value || null;
+
   if(!title) { err.textContent='⚠️ Título é obrigatório'; err.classList.remove('hidden'); return; }
   if(!start || !end) { err.textContent='⚠️ Início e fim são obrigatórios'; err.classList.remove('hidden'); return; }
-  const body = { title, description, start: new Date(start).toISOString(), end: new Date(end).toISOString(), personId: agPersonSel ? agPersonSel.id : null };
+
+  const body = {
+    title, description, start: new Date(start).toISOString(), end: new Date(end).toISOString(),
+    personId: agPersonSel ? agPersonSel.id : null,
+    category, color, reminderMinutes, status, location, attendees, allDay, recurrence, recurrenceEnd
+  };
   try{
     if(editingAgendaId){
       await api('/api/agenda/'+editingAgendaId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
