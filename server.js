@@ -137,7 +137,9 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 20 por vez).' });
   if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.too.large'))
     return res.status(400).json({ error: 'Corpo da requisição inválido ou grande demais.' });
-  next(err);
+  console.error(JSON.stringify({ level: 'error', requestId: req.requestId || null, method: req.method, path: req.path, status: err && err.status || 500, message: err && err.message || 'internal_error', at: new Date().toISOString() }));
+  if (res.headersSent) return next(err);
+  res.status(err && err.status || 500).json({ error: 'Erro interno. Tente de novo.', requestId: req.requestId || null });
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));
