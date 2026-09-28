@@ -39,6 +39,14 @@ if (process.env.FORCE_HTTPS === '1') {
 }
 
 app.use(express.json({ limit: '2mb' }));
+// CORS: permite frontend local (SPA) acessar API
+const cors = require('cors');
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Session','X-Request-Id']
+}));
 app.use('/api', shared.apiRateLimit);
 // Compressão gzip para respostas HTTP (o SSE fica de fora: buffer interferiria no stream)
 const { compression } = (() => { try { return { compression: require('compression') }; } catch { return { compression: null }; } })();
