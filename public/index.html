@@ -4959,33 +4959,41 @@ function renderRenomearPick(){
   document.getElementById('renomearPick').textContent = n ? n + ' arquivo' + (n > 1 ? 's' : '') + ' selecionado' + (n > 1 ? 's' : '') + ' — toque em Analisar.' : 'Nenhum arquivo selecionado.';
 }
 const RENOMEAR_LOTE = 20, RENOMEAR_MAX = 200;
+let renomearAnalisando = false;
 async function analisarRenomear(){
+  if(renomearAnalisando) return toast('⏳ Análise em andamento — aguarde');
   const err = document.getElementById('renomearErr');
   err.classList.add('hidden');
   const inp = document.getElementById('renomearFiles');
   const files = inp.files ? [...inp.files] : [];
   if(!files.length) return (err.textContent = '⚠️ Selecione ao menos 1 arquivo (PDF, JPG ou PNG)', err.classList.remove('hidden'));
   if(files.length > RENOMEAR_MAX) return (err.textContent = '⚠️ Máximo ' + RENOMEAR_MAX + ' arquivos por vez', err.classList.remove('hidden'));
-  renomearCache = [];
-  renderRenomear();
-  const pick = document.getElementById('renomearPick');
-  for(let ini = 0; ini < files.length; ini += RENOMEAR_LOTE){
-    const lote = files.slice(ini, ini + RENOMEAR_LOTE);
-    pick.textContent = `🔍 Analisando ${Math.min(ini + RENOMEAR_LOTE, files.length)}/${files.length}...`;
-    const fd = new FormData();
-    for(const f of lote) fd.append('arquivos', f);
-    try{
-      const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
-      const j = await r.json().catch(() => ({}));
-      if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
-      (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, nome: it.sugestao || (it.arquivo || 'arquivo'), ...it }));
-    }catch(e){
-      lote.forEach(f => renomearCache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
-    }
+  renomearAnalisando = true;
+  renomearPararOcr = true;
+  try{
+    renomearCache = [];
     renderRenomear();
+    const pick = document.getElementById('renomearPick');
+    for(let ini = 0; ini < files.length; ini += RENOMEAR_LOTE){
+      const lote = files.slice(ini, ini + RENOMEAR_LOTE);
+      pick.textContent = `🔍 Analisando ${Math.min(ini + RENOMEAR_LOTE, files.length)}/${files.length}...`;
+      const fd = new FormData();
+      for(const f of lote) fd.append('arquivos', f);
+      try{
+        const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
+        const j = await r.json().catch(() => ({}));
+        if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
+        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, nome: it.sugestao || (it.arquivo || 'arquivo'), ...it }));
+      }catch(e){
+        lote.forEach(f => renomearCache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
+      }
+      renderRenomear();
+    }
+    pick.textContent = `${renomearCache.length} arquivo${renomearCache.length > 1 ? 's' : ''} analisado${renomearCache.length > 1 ? 's' : ''}.`;
+    toast(`✅ ${renomearCache.length} arquivos analisados`);
+  }finally{
+    renomearAnalisando = false;
   }
-  pick.textContent = `${renomearCache.length} arquivo${renomearCache.length > 1 ? 's' : ''} analisado${renomearCache.length > 1 ? 's' : ''}.`;
-  toast(`✅ ${renomearCache.length} arquivos analisados`);
   // OCR local por padrão: processa automaticamente os que ficaram manuais
   ocrFilaAutomatica();
 }
@@ -5200,6 +5208,8 @@ function paintOcrPendentes(){
 }
 function pararOcrFila(){ renomearPararOcr = true; }
 async function ocrFilaAutomatica(){
+  let espera = 0;
+  while(renomearFilaOcr && espera < 40){ await new Promise(r => setTimeout(r, 500)); espera++; }
   if(renomearFilaOcr) return;
   syncRenomearInputs();
   let fila = pendentesOcr();
