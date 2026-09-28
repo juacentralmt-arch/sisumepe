@@ -222,6 +222,68 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   broadcast();
   res.status(201).json(termo);
 }));
+// Extração de texto on-prem: pdf-parse primeiro, pdfjs-dist como fallback
+// (mesmo padrão de /api/ativacoes/auto-preencher).
+async function extractTextAutoRenomear(buffer){
+  try{
+    const pdfParse = require('pdf-parse');
+    const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+    const data = await pdfParse(buf);
+    if(data.text && data.text.trim().length > 20) return data.text;
+  }catch(e){ /* tenta pdfjs */ }
+  let pdfjs;
+  try{ pdfjs = require('pdfjs-dist/legacy/build/pdf.js'); }catch{
+    const m = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    pdfjs = m.default || m;
+  }
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf), disableWorker: true, disableFontFace: true, isEvalSupported: false, useWorkerFetch: false });
+  const pdf = await loadingTask.promise;
+  let fullText = '';
+  const maxPages = Math.min(pdf.numPages, 5);
+  for(let i = 1; i <= maxPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += '\n' + content.items.map(it => it.str || '').join(' ');
+  }
+  return fullText;
+}
+
+// AutoRenomear: recebe arquivos (PDF com texto ou imagem) e sugere
+// "<Tipo> - <Nome da pessoa> - <Data do documento>" a partir do conteúdo.
+// Sem persistência — só análise (o rename final é feito no navegador).
+router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), shared.upload.array('arquivos', 20), ah(async (req,res)=>{
+  if(!req.files || !req.files.length) return res.status(400).json({ error: 'Selecione ao menos 1 arquivo (PDF, JPG ou PNG)' });
+  const { sugerirNome } = require('../lib/autoRenomear');
+  const out = [];
+  for(const f of req.files){
+    const original = f.originalname || 'arquivo';
+    const isPdf = /\.pdf$/i.test(original) || f.mimetype === 'application/pdf';
+    const isImg = /\.(jpe?g|png)$/i.test(original) || /^image\/(jpeg|png)$/.test(f.mimetype || '');
+    if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
+    if(!isPdf){
+      out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
+        avisos: ['Imagem sem texto extraível — preencha o nome manualmente'], trecho: '' });
+      continue;
+    }
+    let texto = '';
+    try{
+      texto = await extractTextAutoRenomear(f.buffer);
+    }catch(e){
+      out.push({ arquivo: original, erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido') });
+      continue;
+    }
+    if(texto.replace(/\s/g, '').length < 20){
+      out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
+        avisos: ['PDF escaneado (sem texto selecionável) — preencha o nome manualmente'], trecho: '' });
+      continue;
+    }
+    const r = sugerirNome(texto.slice(0, 8000), original);
+    out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 300) });
+  }
+  res.json({ total: out.length, itens: out });
+}));
+
 router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
