@@ -7160,15 +7160,44 @@ async function loadEstoqueAudit(){
     }).join('') : '<p class="text-xs text-slate-400">Sem auditoria</p>';
   }catch(e){ document.getElementById('estAuditList').innerHTML=''; }
 }
-function quickEstoque(material, delta){
-  document.getElementById('estContrato').value=getEstoqueContratoEfetivo();
-  const uSel=document.getElementById('estUnidade'); if(uSel && estoqueUnidadeAtiva) uSel.value=estoqueUnidadeAtiva;
-  document.getElementById('estMaterial').value=material;
-  toggleEstSeriais();
-  document.getElementById('estTipo').value= delta>0?'entrada':'saida';
-  document.getElementById('estQtd').value=Math.abs(delta);
-  document.getElementById('estMotivo').focus();
-  const pr=document.getElementById('tab-estoque'); if(pr) pr.scrollIntoView({behavior:'smooth'});
+async function quickEstoque(material, delta){
+  const mat = String(material || '').toUpperCase();
+  const unidade = estoqueUnidadeAtiva || document.getElementById('estUnidade')?.value || 'UMEPE Juazeiro';
+  const contrato = getEstoqueContratoEfetivo();
+  // Materiais com serial (TZPR04/TZPR/UPR04) exigem lote de 10 dígitos: só preenche o form
+  if(temSerialEst(mat)){
+    document.getElementById('estContrato').value = contrato;
+    const uSel = document.getElementById('estUnidade'); if(uSel && estoqueUnidadeAtiva) uSel.value = estoqueUnidadeAtiva;
+    document.getElementById('estMaterial').value = material;
+    toggleEstSeriais();
+    document.getElementById('estTipo').value = delta > 0 ? 'entrada' : 'saida';
+    document.getElementById('estQtd').value = Math.abs(delta);
+    toast('⌨️ ' + mat + ' exige serial: informe o lote abaixo e confirme');
+    document.getElementById('estSeriais')?.focus();
+    return;
+  }
+  // FONTE04/CINTA/TRAVAS: ajuste imediato + atualização automática do contador
+  const qtd = delta > 0 ? Math.abs(delta) : -Math.abs(delta);
+  // Otimista: atualiza o contador na hora
+  try{
+    const row = estoqueCache.find(e => String(e.contrato).toUpperCase() === String(contrato).toUpperCase() && String(e.material).toUpperCase() === mat && String(e.unidade) === String(unidade));
+    if(row) row.saldo = Number(row.saldo || 0) + qtd;
+    renderEstoque();
+  }catch(e){}
+  try{
+    await api('/api/estoque/movimentar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, material: mat, qtd, motivo: 'Ajuste rápido ' + (qtd > 0 ? '+' : '') + qtd + ' via card', seriais: [] }) });
+    toast('✅ ' + unidade + ': ' + mat + ' ' + (qtd > 0 ? '+' : '') + qtd);
+  }catch(e){
+    toast('⚠️ ' + e.message);
+    // Reverte o otimista em caso de erro
+    try{
+      const row = estoqueCache.find(e => String(e.contrato).toUpperCase() === String(contrato).toUpperCase() && String(e.material).toUpperCase() === mat && String(e.unidade) === String(unidade));
+      if(row) row.saldo = Number(row.saldo || 0) - qtd;
+      renderEstoque();
+    }catch(_){}
+    return;
+  }
+  await loadEstoque();
 }
 async function movimentarEstoque(){
   const err=document.getElementById('estErr');
