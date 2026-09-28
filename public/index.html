@@ -127,9 +127,6 @@
     <button data-tab="termos" onclick="go('termos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Termos <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
-    <button data-tab="scanner" onclick="go('scanner')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      Scanner <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
     <button data-tab="visao" onclick="go('visao')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
       Visão 360° <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">RESTRITO</span></button>
@@ -178,7 +175,6 @@
       <button data-tab="tecnico" onclick="go('tecnico')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">🛠️ Técnico</button>
       <button data-tab="agenda" onclick="go('agenda')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📅 Agenda</button>
       <button data-tab="termos" onclick="go('termos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 Termos</button>
-      <button data-tab="scanner" onclick="go('scanner')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📷 Scanner</button>
       <button data-tab="visao" onclick="go('visao')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👁️ 360°</button>
       <button data-tab="dash" onclick="go('dash')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📊 Painel</button>
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
@@ -387,32 +383,6 @@
       </div>
     </section>
 
-    <!-- SCANNER -->
-    <section id="tab-scanner" class="hidden fade">
-      <div class="mb-4">
-        <h2 class="font-display font-bold text-xl">📷 Scanner</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Digitalize páginas e gere um PDF único — como no CamScanner</p>
-      </div>
-      <div class="card p-5 sm:p-6 max-w-3xl">
-        <div class="flex gap-2">
-          <button type="button" onclick="openScan(true,'scanner')" class="btn btn-ghost flex-1 py-2.5 text-xs">📷 Fotografar página</button>
-          <button type="button" onclick="openScan(false,'scanner')" class="btn btn-primary flex-1 py-2.5 text-xs">📄 Digitalizar documento</button>
-        </div>
-        <button type="button" onclick="document.getElementById('scannerPick').click()" class="btn btn-ghost w-full py-2.5 text-xs mt-2">🖼️ Escolher da galeria</button>
-        <input id="scannerPick" type="file" accept="image/*" multiple class="hidden" onchange="scannerPickChanged(this)">
-        <p class="text-[11px] text-slate-400 mt-2">Na digitalização use os filtros (Doc. P&amp;B), recorte e giro. Toque nas setas para reordenar as páginas.</p>
-        <div id="scannerGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3"></div>
-        <label class="lbl mt-4 block">ANEXAR AO MEU TICKET (opcional)</label>
-        <select id="scannerTicket" class="inp mt-1 mb-3"><option value="">Só gerar o PDF (sem anexar)</option></select>
-        <div id="scannerResult" class="hidden mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm"></div>
-        <p id="scannerErr" class="hidden text-xs text-rose-600 font-semibold mt-1.5"></p>
-        <div class="flex gap-2.5 mt-4">
-          <button onclick="scannerClear()" class="btn btn-ghost flex-1 py-3 text-sm">Limpar</button>
-          <button id="scannerGoBtn" onclick="scannerGenerate()" class="btn btn-green flex-1 py-3 text-sm">📄 Gerar PDF</button>
-        </div>
-      </div>
-    </section>
-
     <!-- TECNICO -->
     <section id="tab-tecnico" class="hidden fade">
       <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
@@ -525,6 +495,7 @@
           <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
           <button id="termoTipoPdf" onclick="setTermoTipo('pdf')" class="btn text-xs px-4 py-2">📄 PDF</button>
+          <button id="termoTipoRenomear" onclick="setTermoTipo('renomear')" class="btn text-xs px-4 py-2">🏷️ AutoRenomear</button>
         </div>
         <div class="flex gap-2">
           <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
@@ -846,6 +817,19 @@
           </div>
           <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
           <p id="pdfToolMsg" class="hidden text-xs font-semibold mt-2"></p>
+        </div>
+        <div id="termoFormRenomear" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-1">🏷️ AutoRenomear</h3>
+          <p class="text-xs text-slate-500 mb-4">Envie arquivos com nomes aleatórios e receba sugestões no padrão <b>Tipo - Nome da pessoa - Data do documento</b>. Ex.: <i>Termo de recolhimento - João Silva - 28-09-2026.pdf</i>. 100% on-prem, sem envio externo.</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="btn btn-ghost text-xs px-4 py-2.5 cursor-pointer">📎 Selecionar arquivos (PDF/JPG/PNG, até 20) <input id="renomearFiles" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple class="hidden" onchange="renderRenomearPick()"></label>
+            <button onclick="analisarRenomear()" class="btn btn-primary text-xs px-4 py-2.5">🔍 Analisar e sugerir nomes</button>
+            <button onclick="limparRenomear()" class="btn btn-ghost text-xs px-3.5 py-2.5">🗑 Limpar</button>
+          </div>
+          <p id="renomearPick" class="text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado.</p>
+          <p id="renomearErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
+          <div id="renomearList" class="mt-3 space-y-2.5"></div>
+          <button id="renomearDlAll" onclick="baixarTodosRenomeados()" class="hidden btn btn-green w-full py-2.5 text-xs mt-3">⬇ Baixar todos renomeados</button>
         </div>
         <div class="space-y-4">
           <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
@@ -1286,10 +1270,11 @@
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
             <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
-            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
+            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT">🎁 KIT COMPLETO</option></select></div>
             <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select></div>
             <div class="col-span-2"><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEstSeriaisQtd()"></div>
           </div>
+          <p id="estKitHint" class="hidden mt-2 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-2"></p>
           <div id="estSeriaisWrap" class="mt-2.5">
             <label class="lbl flex items-center justify-between"><span id="estSeriaisLabel">SERIAIS TZPR04/UPR04 (lote — 10 dígitos, um por linha / vírgula) *</span> <span id="estSeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
             <textarea id="estSeriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD — deixe QTD vazio para auto-preencher)" class="inp mt-1 font-mono text-xs" oninput="syncEstSeriaisQtd()"></textarea>
@@ -2061,7 +2046,6 @@ async function finishLogout(silent){
   lastTicketsHash = null; lastFullRenderAt = 0;
   try{ chatCache = []; chatMaxId = 0; oldestChatId = null; hasMoreChat = true; }catch(e){}
   try{ if(typeof endCall === 'function') endCall(true); }catch(e){}
-  try{ scannerFiles = []; if(typeof renderScanner === 'function') renderScanner(); }catch(e){}
   localStorage.removeItem('te_session');
   try{ if(es) es.close(); }catch(e){}
   es = null;
@@ -2122,10 +2106,10 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin: Dashboard no topo)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'scanner', 'visao', 'usuarios', 'auditoria', 'estoque'],
+  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios', 'auditoria', 'estoque'],
   psico: ['fila', 'checkin', 'psico', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'scanner', 'estoque', 'visao', 'dash'],
-  recepcao: ['fila', 'checkin', 'agenda', 'tecnico', 'termos', 'scanner', 'visao', 'dash', 'usuarios']
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'visao', 'dash'],
+  recepcao: ['fila', 'checkin', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function applyNavOrder(){
   const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
@@ -2220,11 +2204,10 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','scanner','visao','dash','usuarios','psico','auditoria','estoque'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
-  if(tab==='scanner') loadScannerTickets();
   if(tab==='dash') loadDash();
   if(tab==='agenda') loadAgenda();
   if(tab==='termos') loadTermos();
@@ -2864,7 +2847,6 @@ function attachScan(){
     canvas.toBlob(blob => {
       if(!blob) return toast('⚠️ Falha ao processar imagem');
       const f = new File([blob], 'digitalizacao-' + Date.now() + '.jpg', { type: 'image/jpeg' });
-      if(scanTarget === 'scanner'){ scannerAddFiles([f]); closeScan(); toast('📄 Página adicionada ao Scanner!'); return; }
       const cur = document.getElementById('tFiles');
       if(cur.files.length >= 20) return toast('⚠️ Máximo de 20 anexos por ticket');
       const dt = new DataTransfer();
@@ -3761,94 +3743,6 @@ function renderTec(){
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
 }
-// --- SCANNER (digitalizar páginas → PDF único) ---
-let scannerFiles = [];
-function scannerAddFiles(list){
-  const imgs = [...(list || [])].filter(f => ((f.type || '').startsWith('image/')));
-  if(!imgs.length) return toast('⚠️ Selecione imagens');
-  const room = 20 - scannerFiles.length;
-  if(room <= 0) return toast('⚠️ Máximo de 20 páginas');
-  scannerFiles = scannerFiles.concat(imgs.slice(0, room));
-  if(imgs.length > room) toast('⚠️ Máximo de 20 páginas — excedentes ignorados');
-  renderScanner();
-}
-function scannerPickChanged(inp){
-  scannerAddFiles(inp.files);
-  inp.value = '';
-}
-function scannerRemove(i){
-  scannerFiles = scannerFiles.filter((_, j) => j !== i);
-  renderScanner();
-}
-function scannerMove(i, dir){
-  const j = i + dir;
-  if(j < 0 || j >= scannerFiles.length) return;
-  const tmp = scannerFiles[i];
-  scannerFiles[i] = scannerFiles[j];
-  scannerFiles[j] = tmp;
-  renderScanner();
-}
-function scannerClear(){
-  scannerFiles = [];
-  document.getElementById('scannerResult').classList.add('hidden');
-  document.getElementById('scannerErr').classList.add('hidden');
-  renderScanner();
-}
-function renderScanner(){
-  const box = document.getElementById('scannerGrid');
-  if(!box) return;
-  box.innerHTML = scannerFiles.length ? scannerFiles.map((f, i) => `
-    <div class="relative rounded-xl overflow-hidden border border-slate-200 bg-white">
-      <img src="${URL.createObjectURL(f)}" loading="lazy" class="w-full h-28 object-cover block">
-      <span class="absolute top-1 left-1 text-[10px] font-extrabold bg-slate-900/70 text-white px-1.5 py-0.5 rounded-md">${i + 1}</span>
-      <button onclick="scannerRemove(${i})" title="Remover" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-rose-600 text-white text-[11px] font-bold">✕</button>
-      <div class="flex">
-        <button onclick="scannerMove(${i},-1)" class="flex-1 text-xs py-1 bg-slate-50 hover:bg-slate-100 border-t border-slate-200">◀</button>
-        <button onclick="scannerMove(${i},1)" class="flex-1 text-xs py-1 bg-slate-50 hover:bg-slate-100 border-t border-l border-slate-200">▶</button>
-      </div>
-    </div>`).join('')
-    : '<p class="col-span-full text-xs text-slate-400 text-center border border-dashed border-slate-300 rounded-xl p-4">Nenhuma página. Fotografe, digitalize ou escolha da galeria. ⬆️</p>';
-  const btn = document.getElementById('scannerGoBtn');
-  if(btn){ btn.disabled = !scannerFiles.length; btn.classList.toggle('opacity-60', !scannerFiles.length); }
-}
-async function loadScannerTickets(){
-  const sel = document.getElementById('scannerTicket');
-  if(!sel || !session) return;
-  const mine = (tickets || []).filter(t => t.status === 'em_atendimento' && String(ticketOwner(t) || '').toLowerCase() === String(session.user).toLowerCase());
-  sel.innerHTML = '<option value="">Só gerar o PDF (sem anexar)</option>' + mine.map(t =>
-    `<option value="${t.id}">${esc(t.code)} • ${esc((t.person && t.person.nome) || '')} • ${esc(t.motivo || '')}</option>`).join('');
-}
-async function scannerGenerate(){
-  const err = document.getElementById('scannerErr');
-  const box = document.getElementById('scannerResult');
-  err.classList.add('hidden'); box.classList.add('hidden');
-  if(!scannerFiles.length) return toast('⚠️ Adicione ao menos 1 página');
-  const btn = document.getElementById('scannerGoBtn');
-  const orig = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '⏳ Gerando PDF...';
-  try{
-    const fd = new FormData();
-    scannerFiles.forEach(f => fd.append('pages', f));
-    const tid = document.getElementById('scannerTicket').value;
-    if(tid) fd.append('ticketId', tid);
-    const r = await authFetch('/api/scanner/pdf', { method: 'POST', body: fd });
-    const j = await r.json().catch(() => ({}));
-    if(!r.ok) throw new Error(j.error || 'Erro ao gerar PDF');
-    box.innerHTML = `<p class="font-bold text-emerald-800">✅ PDF gerado (${scannerFiles.length} ${scannerFiles.length > 1 ? 'páginas' : 'página'})</p>
-      <p class="text-xs text-slate-600 mt-1 truncate">📄 ${esc(j.pdf.name)}</p>
-      <div class="flex gap-2 mt-2">
-        <a href="${esc(j.pdf.url)}" target="_blank" class="btn btn-primary flex-1 py-2 text-xs text-center">Abrir PDF</a>
-        <a href="${esc(j.pdf.url)}" download="${esc(j.pdf.name)}" class="btn btn-ghost flex-1 py-2 text-xs text-center">⬇️ Baixar</a>
-      </div>
-      ${j.attachedTo ? `<p class="text-xs font-bold text-emerald-700 mt-2">📎 Anexado ao ticket ${esc(j.attachedTo)}</p>` : ''}`;
-    box.classList.remove('hidden');
-    scannerFiles = [];
-    renderScanner();
-    loadAll();
-    toast('📄 PDF gerado com sucesso!');
-  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
-  finally{ btn.disabled = !scannerFiles.length; btn.innerHTML = orig; }
-}
 // --- FERIADOS (Nacionais + CE + Juazeiro do Norte-CE) ---
 // Fontes: Portaria MGI 11.460/2025 + Circular CDL Juazeiro 01/2026
 function pascoa(ano){
@@ -4738,7 +4632,7 @@ function setTermoTipo(t){
   termoTipoAtivo = t;
   try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer);}catch(e){}
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf']].forEach(([id, k])=>{
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
     const b = document.getElementById(id);
     if(!b) return;
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
@@ -4750,19 +4644,21 @@ function setTermoTipo(t){
   document.getElementById('termoFormEndereco').classList.toggle('hidden', t!=='endereco');
   const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl) ativEl.classList.toggle('hidden', t!=='ativacao');
   const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl) pdfEl.classList.toggle('hidden', t!=='pdf');
+  const renEl=document.getElementById('termoFormRenomear'); if(renEl) renEl.classList.toggle('hidden', t!=='renomear');
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
   if(recEqEl) recEqEl.classList.toggle('lg:col-span-2', t==='recEquip');
   document.getElementById('termoFormEndereco').classList.toggle('lg:col-span-2', t==='endereco');
   if(ativEl) ativEl.classList.toggle('lg:col-span-2', t==='ativacao');
   if(pdfEl) pdfEl.classList.toggle('lg:col-span-2', t==='pdf');
+  if(renEl) renEl.classList.toggle('lg:col-span-2', t==='renomear');
   renderTermos();
   if(t === 'listagem') scheduleListagemPreview(true);
   else if(t === 'recolhimento') scheduleRecPreview(true);
   else if(t === 'recEquip') scheduleRecEqPreview(true);
   else if(t === 'endereco') scheduleEnderecoPreview(true);
   else if(t==='ativacao') scheduleAtivPreview(true);
-  else if(t==='pdf') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); }
+  else if(t==='pdf' || t==='renomear') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); }
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -4874,6 +4770,8 @@ function renderTermos(){
   }).join('');
 }
 async function saveTermo(){
+  if(termoTipoAtivo === 'renomear') return toast('🏷️ AutoRenomear não salva termos — use ⬇ Baixar para obter os arquivos renomeados');
+  if(termoTipoAtivo === 'pdf') return toast('📄 Ferramentas PDF não salvam termos');
   if(termoTipoAtivo === 'ativacao') return saveAtivacao();
   if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
   if(termoTipoAtivo === 'recEquip') return saveTermoRecEquip();
@@ -4925,6 +4823,7 @@ async function saveTermoRec(){
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function previewTermoPDF(){
+  if(termoTipoAtivo === 'renomear' || termoTipoAtivo === 'pdf') return toast('👁️ Este submodule não tem pré-visualização de termo');
   if(termoTipoAtivo === 'ativacao') return previewAtivacaoPDF(false);
   if(termoTipoAtivo === 'recolhimento') return previewTermoRecPDF(false);
   if(termoTipoAtivo === 'recEquip') return previewRecEqPDF(false);
@@ -5047,6 +4946,92 @@ async function pdfExtract(){
   const fd=new FormData(); fd.append('file',f); fd.append('pages',pages);
   try{ const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
 }
+// --- AUTORENOMEAR: upload em lote → "Tipo - Nome - Data" pelo conteúdo ---
+let renomearCache = [];
+function renderRenomearPick(){
+  const inp = document.getElementById('renomearFiles');
+  const n = inp && inp.files ? inp.files.length : 0;
+  document.getElementById('renomearPick').textContent = n ? n + ' arquivo' + (n > 1 ? 's' : '') + ' selecionado' + (n > 1 ? 's' : '') + ' — toque em Analisar.' : 'Nenhum arquivo selecionado.';
+}
+async function analisarRenomear(){
+  const err = document.getElementById('renomearErr');
+  err.classList.add('hidden');
+  const inp = document.getElementById('renomearFiles');
+  if(!inp.files.length) return (err.textContent = '⚠️ Selecione ao menos 1 arquivo (PDF, JPG ou PNG)', err.classList.remove('hidden'));
+  if(inp.files.length > 20) return (err.textContent = '⚠️ Máximo 20 arquivos por vez', err.classList.remove('hidden'));
+  document.getElementById('renomearList').innerHTML = '<p class="text-xs text-slate-500 text-center py-4">🔍 Analisando conteúdo...</p>';
+  const fd = new FormData();
+  for(const f of inp.files) fd.append('arquivos', f);
+  try{
+    const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
+    renomearCache = (j.itens || []).map((it, i) => ({ file: inp.files[i] || null, nome: it.sugestao || (it.arquivo || 'arquivo'), ...it }));
+    renderRenomear();
+    toast('✅ ' + renomearCache.length + ' arquivo' + (renomearCache.length > 1 ? 's' : '') + ' analisado' + (renomearCache.length > 1 ? 's' : ''));
+  }catch(e){ document.getElementById('renomearList').innerHTML = ''; err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+}
+function confBadge(c){
+  if(c === 'alta') return '<span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ALTA</span>';
+  if(c === 'média') return '<span class="text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">MÉDIA</span>';
+  if(c === 'manual') return '<span class="text-[10px] font-extrabold bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">MANUAL</span>';
+  return '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">BAIXA</span>';
+}
+function renderRenomear(){
+  const box = document.getElementById('renomearList');
+  document.getElementById('renomearDlAll').classList.toggle('hidden', !renomearCache.length);
+  if(!renomearCache.length){ box.innerHTML = ''; return; }
+  box.innerHTML = renomearCache.map((it, i) => {
+    const det = [it.tipo, it.nome, it.data].filter(Boolean).join(' • ');
+    const avisos = (it.avisos || []).map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
+    const trecho = it.trecho ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400 underline">Ver trecho lido</summary><p class="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 leading-relaxed">${esc(it.trecho)}</p></details>` : '';
+    return `<div class="border border-slate-200 rounded-2xl p-3.5 bg-white">
+      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span>${confBadge(it.confianca)}${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
+      ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>` : `
+      ${det ? `<p class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
+      ${avisos}
+      <label class="lbl mt-2 block">NOVO NOME *</label>
+      <div class="flex gap-2 mt-1">
+        <input id="renomearNome${i}" value="${esc(it.nome)}" class="inp flex-1 font-mono text-xs">
+        <button onclick="baixarRenomeado(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
+      </div>${trecho}`}
+    </div>`;
+  }).join('');
+}
+function baixarRenomeado(i){
+  const it = renomearCache[i];
+  if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
+  const inp = document.getElementById('renomearNome' + i);
+  let nome = inp ? inp.value.trim() : it.nome;
+  if(!nome) return toast('⚠️ Informe o novo nome');
+  nome = nome.replace(/[\\/:*?"<>|]/g, '').trim() || 'documento';
+  const url = URL.createObjectURL(it.file);
+  const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('⬇ Baixado: ' + nome);
+}
+async function baixarTodosRenomeados(){
+  if(!renomearCache.length) return;
+  for(let i = 0; i < renomearCache.length; i++){
+    const it = renomearCache[i];
+    if(!it || !it.file || it.erro) continue;
+    const inp = document.getElementById('renomearNome' + i);
+    let nome = (inp ? inp.value.trim() : it.nome).replace(/[\\/:*?"<>|]/g, '').trim() || 'documento';
+    const url = URL.createObjectURL(it.file);
+    const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    await new Promise(r => setTimeout(r, 450));
+  }
+  toast('⬇ Downloads iniciados (' + renomearCache.length + ' arquivos)');
+}
+function limparRenomear(){
+  renomearCache = [];
+  const inp = document.getElementById('renomearFiles'); if(inp) inp.value = '';
+  document.getElementById('renomearPick').textContent = 'Nenhum arquivo selecionado.';
+  document.getElementById('renomearList').innerHTML = '';
+  document.getElementById('renomearDlAll').classList.add('hidden');
+  document.getElementById('renomearErr').classList.add('hidden');
+}
 function scheduleEnderecoPreview(now){
   const tgl = document.getElementById('endAutoPreview');
   if(tgl && !tgl.checked) return;
@@ -5102,7 +5087,7 @@ function toggleTermoPreviewExpand(){
   const grid = document.getElementById('termosGrid');
   const btn = document.getElementById('termoPreviewExpandBtn');
   const frame = document.getElementById('termoPreviewFrameSide');
-  const forms = ['termoFormListagem', 'termoFormRecolhimento', 'termoFormRecEquip', 'termoFormEndereco','termoFormAtivacao'];
+  const forms = ['termoFormListagem', 'termoFormRecolhimento', 'termoFormRecEquip', 'termoFormEndereco','termoFormAtivacao','termoFormPdf','termoFormRenomear'];
   if(termoPreviewExpand){
     forms.forEach(id=>{ const el = document.getElementById(id); if(el) el.classList.add('hidden'); });
     if(grid){ grid.classList.remove('lg:grid-cols-3'); grid.classList.add('lg:grid-cols-1'); }
@@ -5114,7 +5099,7 @@ function toggleTermoPreviewExpand(){
     if(grid){ grid.classList.add('lg:grid-cols-3'); grid.classList.remove('lg:grid-cols-1'); }
     if(frame) frame.style.height = '';
     if(btn){ btn.textContent = '⛶'; btn.title = 'Expandir pré-visualização'; }
-    const forms = { listagem:'termoFormListagem', recolhimento:'termoFormRecolhimento', recEquip:'termoFormRecEquip', endereco:'termoFormEndereco', ativacao:'termoFormAtivacao' };
+    const forms = { listagem:'termoFormListagem', recolhimento:'termoFormRecolhimento', recEquip:'termoFormRecEquip', endereco:'termoFormEndereco', ativacao:'termoFormAtivacao', pdf:'termoFormPdf', renomear:'termoFormRenomear' };
     Object.keys(forms).forEach(k=>{
       const el = document.getElementById(forms[k]);
       if(!el) return;
@@ -5381,7 +5366,7 @@ async function ativTentarOcr(){
     if(txt) txt.textContent='Erro OCR: '+e.message;
     if(bar) bar.style.width='100%';
     resBox.className='mt-3 rounded-xl border p-3 text-xs bg-rose-50 border-rose-200 text-rose-700';
-    resBox.innerHTML='⚠️ OCR falhou: '+esc(e.message)+'<br><span class="text-[11px]">Tente um PDF com texto selecionável ou digite manualmente. Dica: use o app CamScanner/Office Lens para gerar PDF pesquisável.</span>';
+    resBox.innerHTML='⚠️ OCR falhou: '+esc(e.message)+'<br><span class="text-[11px]">Tente um PDF com texto selecionável ou digite manualmente. Dica: use o app Office Lens para gerar PDF pesquisável.</span>';
     resBox.classList.remove('hidden');
     toast('⚠️ OCR: '+e.message);
   }
@@ -6852,6 +6837,7 @@ const MATERIAIS_EST_INFINITY=['TZPR','FONTE04','CINTA','TRAVAS'];
 function matsEstoqueAtivo(){ return isInfinitySistema()?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM; }
 function temSerialEst(m){ return MATERIAIS_SERIAL_EST.includes(String(m||'').toUpperCase()); }
 // Mantém os selects de material coerentes com o sistema (Infinity: sem UPR04, TZPR no lugar de TZPR04)
+function kitComposicaoTxt(){ return isInfinitySistema() ? '1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04' : '1 kit = 1×TZPR04 + 1×CINTA + 2×TRAVAS + 1×FONTE04'; }
 function syncEstMaterialOptions(){
   const inf=isInfinitySistema();
   const mapa={ estMaterial: inf?'TZPR':'TZPR04', estTransMaterial: inf?'TZPR':'TZPR04' };
@@ -6859,8 +6845,13 @@ function syncEstMaterialOptions(){
     const sel=document.getElementById(id); if(!sel) continue;
     const atual=sel.value;
     const lista=inf?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM;
-    sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('');
-    sel.value=lista.includes(atual)?atual:padrao;
+    if(id==='estMaterial'){
+      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('')+'<option value="KIT">🎁 KIT COMPLETO</option>';
+      sel.value=(atual==='KIT'||lista.includes(atual))?atual:padrao;
+    } else {
+      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('');
+      sel.value=lista.includes(atual)?atual:padrao;
+    }
   }
   const serM=document.getElementById('estSerMat'); if(serM){
     const atual=serM.value;
@@ -6871,10 +6862,16 @@ function syncEstMaterialOptions(){
 }
 function toggleEstSeriais(){
   const mat=document.getElementById('estMaterial')?.value||'';
+  const isKit=String(mat).toUpperCase()==='KIT';
   const wrap=document.getElementById('estSeriaisWrap');
-  if(wrap) wrap.classList.toggle('hidden', !temSerialEst(mat));
+  if(wrap) wrap.classList.toggle('hidden', !(temSerialEst(mat) || isKit));
   const lbl=document.getElementById('estSeriaisLabel');
-  if(lbl) lbl.textContent = temSerialEst(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *';
+  if(lbl) lbl.textContent = isKit ? `SERIAIS TZPR DO KIT (1 por kit — QTD = nº de kits) *` : (temSerialEst(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *');
+  const hint=document.getElementById('estKitHint');
+  if(hint){
+    if(isKit){ hint.textContent='🎁 '+kitComposicaoTxt()+' — QTD = nº de kits (máx 250). Seriais: 1 TZPR por kit.'; hint.classList.remove('hidden'); }
+    else hint.classList.add('hidden');
+  }
   syncEstSeriaisQtd();
 }
 function toggleTransSeriais(){
@@ -6902,11 +6899,12 @@ function syncEstSeriaisQtd(){
   if(cnt) cnt.textContent=list.length+' seriais';
   const qtdEl=document.getElementById('estQtd');
   const mat=document.getElementById('estMaterial')?.value||'';
-  if(temSerialEst(mat) && list.length && !qtdEl.value){
+  const isKit=String(mat).toUpperCase()==='KIT';
+  if((temSerialEst(mat) || isKit) && list.length && !qtdEl.value){
     qtdEl.value=list.length;
   }
   // se já tem QTD e lote tem tamanho diferente, apenas avisa visualmente (sem confirm)
-  if(temSerialEst(mat) && list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
+  if((temSerialEst(mat) || isKit) && list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
     if(cnt) cnt.textContent=list.length+' seriais ⚠️ diverge de QTD='+qtdEl.value;
     cnt?.classList.add('text-amber-600');
   } else {
@@ -7211,10 +7209,26 @@ async function movimentarEstoque(){
   const qtd=Number(document.getElementById('estQtd').value);
   const motivo=document.getElementById('estMotivo').value.trim();
   if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (lote até 500)', err.classList.remove('hidden'));
-  if(qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (String(material).toUpperCase()==='KIT' ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
+  if(String(material).toUpperCase()==='KIT' && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
+  if(String(material).toUpperCase()!=='KIT' && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
   if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
   if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  // KIT completo: 1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04 (+ serial por kit)
+  if(String(material).toUpperCase()==='KIT'){
+    const txt=document.getElementById('estSeriais')?.value||'';
+    const seriaisKit=parseSeriais(txt);
+    if(seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> TZPR (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length) return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    try{
+      const r=await api('/api/estoque/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, kits: Math.abs(qtd), tipo, motivo, seriais: seriaisKit }) });
+      const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
+      toast(`✅ ${unidade}: ${r.kits} KIT${r.kits>1?'s':''} (${detalhe})`);
+      document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const stk=document.getElementById('estSeriais'); if(stk) stk.value=''; document.getElementById('estSeriaisList').innerHTML='';
+      loadEstoque();
+    }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+    return;
+  }
   const delta = tipo==='saida' ? -Math.abs(qtd) : Math.abs(qtd);
   let seriais=[];
   if(temSerialEst(material)){

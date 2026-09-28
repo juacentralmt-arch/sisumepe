@@ -159,6 +159,70 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   res.json(r);
 }));
 
+// KIT completo por unidade: 1 kit = 1×TZPR04 (spacecom) ou 1×TZPR (infinity) + 1×CINTA + 2×TRAVAS + 1×FONTE04.
+// Aplica os 4 itens em sequência (com rollback automático se algum falhar) e exige
+// 1 serial TZPR por kit (mesma regra do lote avulso).
+const KIT_POR_SISTEMA = {
+  spacecom: [
+    { material: 'TZPR04', porKit: 1, comSerial: true },
+    { material: 'CINTA', porKit: 1 },
+    { material: 'TRAVAS', porKit: 2 },
+    { material: 'FONTE04', porKit: 1 }
+  ],
+  infinity: [
+    { material: 'TZPR', porKit: 1, comSerial: true },
+    { material: 'CINTA', porKit: 1 },
+    { material: 'TRAVAS', porKit: 2 },
+    { material: 'FONTE04', porKit: 1 }
+  ]
+};
+router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, unidade, kits, tipo, motivo, seriais, sistema } = req.body||{};
+  const n = Math.floor(Number(kits));
+  if(!Number.isFinite(n) || n < 1) return res.status(400).json({ error: 'Informe a quantidade de kits (mín. 1)' });
+  if(n > 250) return res.status(400).json({ error: 'Máximo 250 kits por movimentação (limite do lote)' });
+  if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  const sinal = (tipo && String(tipo).toLowerCase()==='saida') ? -1 : 1;
+  const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = sis || getSistema(req) || 'spacecom';
+  const contratoNorm = resolveContrato(contrato, effectiveSistema);
+  if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
+  if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
+  if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
+  const composicao = effectiveSistema==='infinity' ? KIT_POR_SISTEMA.infinity : KIT_POR_SISTEMA.spacecom;
+  const motivoKit = String(motivo).trim() + ' [KIT x' + n + ']';
+  const feitos = [];
+  try{
+    for(const item of composicao){
+      const qtdItem = sinal * item.porKit * n;
+      const r = await shared.store.estoque.adjust({
+        sistema: effectiveSistema, contrato: contratoNorm, material: item.material, unidade,
+        qtd: qtdItem, motivo: motivoKit + ' • ' + item.material,
+        seriais: item.comSerial ? seriais : [],
+        user: req.auth.user, userName: req.auth.name
+      });
+      feitos.push({ material: item.material, qtd: qtdItem, mov: r.mov });
+    }
+  }catch(e){
+    // Rollback: reverte os itens já aplicados (auditoria registra o estorno)
+    for(let i = feitos.length - 1; i >= 0; i--){
+      const f = feitos[i];
+      const comp = composicao.find(c => c.material === f.material);
+      try{
+        await shared.store.estoque.adjust({
+          sistema: effectiveSistema, contrato: contratoNorm, material: f.material, unidade,
+          qtd: -f.qtd, motivo: 'Estorno automático de KIT (falha parcial)',
+          seriais: comp && comp.comSerial ? seriais : [],
+          user: req.auth.user, userName: req.auth.name
+        });
+      }catch(_){}
+    }
+    return res.status(e.status || 400).json({ error: e.message || 'Falha ao movimentar KIT', revertidos: feitos.length });
+  }
+  shared.broadcast();
+  res.json({ ok: true, kits: n, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
+}));
+
 // Estorno de movimentação (inverte operação)
 router.post('/api/estoque/estornar', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { movId, id, motivo } = req.body||{};
