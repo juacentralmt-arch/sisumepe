@@ -36,7 +36,7 @@ function detectarTipo(texto) {
 
 // Rótulos que antecedem o nome da pessoa nos documentos oficiais
 const ROTULOS_NOME = [
-  'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'nome completo',
+  'nome do monitorado', 'monitorado\\s*\\(?\\s*a?\\s*\\)?', 'monitorado', 'nome completo',
   'nome do assistido', 'assistido', 'nome do reeducando', 'reeducando',
   'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
   'nome do requerente', 'requerente', '\\bnome\\b'
@@ -50,6 +50,8 @@ function limparNome(s) {
   v = v.split(/\b(data|cpf|cnpj|r\.?g\.?\b|orgao\s+expedidor|endereco|telefone|celular|processo|vara|nascimento|nome\s+da\s+m[ãa]e|nome\s+do\s+pai|estado\s+civil|naturalidade|profiss[ãa]o|assinatura)\b/i)[0].trim();
   // corta em CPF, RG, vírgula, ponto-e-vírgula, parêntese ou "nascid"
   v = v.split(/,|;|\(|cpf|r\.?g\.?\b|nascid|brasileir|casad|solteir|residente|\d{3}\.?\d{3}\.?/i)[0].trim();
+  // corta dígitos residuais do fim (ruído de data colada: "Silva 28")
+  v = v.replace(/\s+\d[\d\s/.\-]*$/, '').trim();
   // remove pontuação residual nas bordas
   v = v.replace(/^[.\-–:]+|[.\-–:]+$/g, '').trim();
   return v;
@@ -65,7 +67,8 @@ function tituloProprio(s) {
 function extrairNome(texto) {
   const t = String(texto || '').slice(0, 8000);
   // nome capturado só até o fim da linha (evita vazar para cidade/data da linha seguinte)
-  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')\\s*[:\\-–]?\\s*([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'i');
+  // separadores flexíveis ([espaço : -]*) para tolerar ruído de OCR
+  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[\\s:\\-–]*([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'i');
   const m = t.match(padrao);
   if (m) {
     const nome = tituloProprio(limparNome(m[1]));
@@ -87,10 +90,10 @@ const MESES_PT = {
 
 function extrairDataISO(texto) {
   const t = String(texto || '').slice(0, 8000);
-  // 1) data rotulada: "Data: 28/09/2026", "Datado em 28-09-2026"
-  let m = t.match(/(?:\bdata\b|datado|emitido\s+em|lavrado\s+em|aos?)\s*:?\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/i);
-  // 2) qualquer DD/MM/AAAA (ou - .)
-  if (!m) m = t.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/);
+  // 1) data rotulada: "Data: 28/09/2026", "Data/Hora: 28/08/2026" (espaços do OCR tolerados)
+  let m = t.match(/(?:\bdata\b|datado|emitido\s+em|lavrado\s+em|aos?)[\s/:.\-]*(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})/i);
+  // 2) qualquer DD/MM/AAAA (ou - .), com espaços eventuais do OCR
+  if (!m) m = t.match(/(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})/);
   if (m) {
     const dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0'), aa = m[3];
     if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) return aa + '-' + mm + '-' + dd;
