@@ -6955,7 +6955,7 @@ function switchEstoqueContrato(c){
   document.getElementById('estoqueBtnCE02')?.classList.toggle('btn-primary', estoqueContratoAtivo==='CE02');
   const sel=document.getElementById('estContrato'); if(sel) sel.value=estoqueContratoAtivo;
   renderEstoque();
-  loadEstoqueMov();
+  loadEstoque();
 }
 function switchEstoqueSistema(s){
   const v=String(s||'').toLowerCase();
@@ -7025,6 +7025,8 @@ function renderEstoque(){
   const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=7" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=9" alt="FONTE04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
   const contratoFiltro = getEstoqueContratoEfetivo();
   let list=estoqueCache.filter(e=> String(e.contrato).toUpperCase()===contratoFiltro);
+  // Visão por unidade: restringe às linhas da unidade ativa (antes pegava a 1ª unidade da lista)
+  if(estoqueUnidadeAtiva) list=list.filter(e=> String(e.unidade)===String(estoqueUnidadeAtiva));
   // se filtro Todas, mostrar agregado por material (soma unidades)
   let agg=[];
   if(!estoqueUnidadeAtiva){
