@@ -287,13 +287,56 @@ function ticketOwnerOf(t) {
   const m = String(t.tecnico || '').match(/\(\s*([^)]+?)\s*\)\s*$/);
   return m ? m[1] : '';
 }
-// Regra Infinity: só o Júlio (ou admin) assume tickets de tornozeleira Infinity
-function infinityBlocked(ticket, actor) {
-  if (!ticket || ticket.modeloTornozeleira !== 'Infinity') return null;
-  const u = actor && actor.user ? actor.user : '';
+// Filas separadas por sistema (Spacecom x Infinity):
+// - ticket Infinity: só técnico do sistema infinity (julio, marcelo) ou admin
+// - ticket Spacecom/Sem/outros: só técnico do sistema spacecom (joanderson, adailton) ou admin
+// - recepcao/admin enxergam tudo (triagem); tecnico só vê a sua fila.
+function actorSistema(actor) {
+  if (!actor) return null;
+  if (actor.sistema) {
+    const v = String(actor.sistema).toLowerCase().trim();
+    if (v === 'infinity' || v === 'inf') return 'infinity';
+    if (v === 'spacecom' || v === 'space') return 'spacecom';
+  }
+  try {
+    const gs = require('../../store').getUserSistema;
+    if (gs) return gs(actor) || null;
+  } catch (e) {}
+  const u = String(actor.user || actor.tecnicoUser || '').toLowerCase().trim();
+  if (['julio', 'marcelo'].includes(u)) return 'infinity';
+  if (['joanderson', 'adailton', 'secretaria'].includes(u)) return 'spacecom';
+  return null;
+}
+function isInfinityTicket(ticket) {
+  return !!ticket && String(ticket.modeloTornozeleira || '').toLowerCase() === 'infinity';
+}
+// Bloqueio de fila oposta (usado nas ações: iniciar/chamar/finalizar/repassar/devolver/reabrir)
+function ticketSistemaBlocked(ticket, actor) {
+  if (!ticket) return null;
   const role = actor && actor.role ? actor.role : '';
-  if (u === 'julio' || role === 'admin') return null;
-  return 'Ticket de tornozeleira Infinity: somente o técnico Júlio Cesar pode assumir.';
+  if (role === 'admin' || role === 'recepcao') return null;
+  if (role !== 'tecnico') return null;
+  const sis = actorSistema(actor);
+  if (isInfinityTicket(ticket)) {
+    if (sis === 'infinity') return null;
+    return 'Ticket de tornozeleira Infinity: fila exclusiva da equipe Infinity.';
+  }
+  // ticket Spacecom / Sem tornozeleira / outros: exclusivo da equipe Spacecom
+  if (sis === 'spacecom' || !sis) return null;
+  return 'Este atendimento é da fila Spacecom: fila exclusiva da equipe Spacecom.';
+}
+// Regra Infinity (compat: mantido o nome usado nas rotas)
+function infinityBlocked(ticket, actor) {
+  return ticketSistemaBlocked(ticket, actor);
+}
+// Filtro de visibilidade: tecnico só lista a sua fila; admin/recepcao veem tudo
+function ticketVisivelPara(ticket, auth) {
+  if (!ticket || !auth) return true;
+  if (auth.role === 'admin' || auth.role === 'recepcao') return true;
+  if (auth.role !== 'tecnico') return true;
+  const sis = actorSistema(auth);
+  if (isInfinityTicket(ticket)) return sis === 'infinity';
+  return sis !== 'infinity';
 }
 const PERSON_LABELS = { nome: 'Nome', cpf: 'CPF', rg: 'RG', nomeMae: 'Nome da mãe', dataNascimento: 'Data de nascimento', modeloTornozeleira: 'Modelo da tornozeleira' };
 const MOTIVOS_OK = ['Botão do Pânico', 'Instalação de Tornozeleira', 'Retirada de Tornozeleira', 'Manutenção', 'Atendimento Psicológico', 'Outros'];
@@ -380,7 +423,7 @@ module.exports = {
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
   loginRateLimit, apiRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
   upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
-  sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked,
+  sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
   pendingGoogleStates

@@ -1,12 +1,15 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
-// Tickets - recepcao só vê aguardando/em_atendimento (não finalizados com PII)
+// Tickets - filas separadas por sistema (Spacecom x Infinity).
+// Tecnico só vê a sua fila; recepcao vê aguardando/em_atendimento; admin vê tudo.
 router.get('/api/tickets', auth(), ah(async (req, res) => {
   const status = req.query.status;
   let list = await enrichAll(await store.tickets.all());
+  // Filtro de fila por sistema (tecnico): joanderson/adailton não veem Infinity e vice-versa
+  if (req.auth.role === 'tecnico') list = list.filter(t => ticketVisivelPara(t, req.auth));
   if (req.auth.role === 'recepcao' && (!status || status==='todos')) {
     list = list.filter(t => t.status === 'aguardando' || t.status === 'em_atendimento');
   } else if (status && status !== 'todos') list = list.filter(t => t.status === status);
@@ -16,7 +19,8 @@ router.get('/api/tickets', auth(), ah(async (req, res) => {
 }));
 
 router.get('/api/stats', auth(), ah(async (req, res) => {
-  const all = await store.tickets.all();
+  let all = await store.tickets.all();
+  if (req.auth.role === 'tecnico') all = all.filter(t => ticketVisivelPara(t, req.auth));
   const persons = await store.persons.all();
   res.json({
     aguardando: all.filter(t => t.status === 'aguardando').length,
@@ -255,6 +259,9 @@ router.patch('/api/tickets/:id/reopen', auth(['tecnico']), ah(async (req, res) =
   const by = req.auth.user;
   const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado pode reabrir este atendimento.' });
+  const actorReopen = await store.users.byName(req.auth.user);
+  const blockReopen = (ticketSistemaBlocked || infinityBlocked)(t, actorReopen || req.auth);
+  if (blockReopen) return res.status(403).json({ error: blockReopen });
   const upd = await store.tickets.patch(t.id, { status: 'em_atendimento', finishedAt: null, reopenedAt: new Date().toISOString() });
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
@@ -348,6 +355,8 @@ router.patch('/api/tickets/:id/return', auth(['tecnico']), ah(async (req, res) =
   if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode devolver este atendimento.' });
   const actor = await store.users.byName(req.auth.user);
   if (actor && actor.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
+  const blockReturn = (ticketSistemaBlocked || infinityBlocked)(t, actor || req.auth);
+  if (blockReturn) return res.status(403).json({ error: blockReturn });
   let upd;
   try {
     upd = await store.tickets.patch(t.id, {
