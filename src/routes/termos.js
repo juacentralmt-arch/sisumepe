@@ -284,6 +284,16 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
   res.json({ total: out.length, itens: out });
 }));
 
+// AutoRenomear via texto: usado após OCR local no navegador (PDF escaneado/foto).
+router.post('/api/termos/autorenomear-texto', auth(['tecnico', 'psico', 'admin']), ah(async (req,res)=>{
+  const { texto, arquivo } = req.body || {};
+  const t = String(texto || '').trim();
+  if(t.length < 10) return res.status(400).json({ error: 'Texto muito curto para analisar (mín. 10 caracteres)' });
+  const { sugerirNome } = require('../lib/autoRenomear');
+  const r = sugerirNome(t.slice(0, 8000), arquivo || 'documento.pdf');
+  res.json({ arquivo: arquivo || 'texto', ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 300) });
+}));
+
 router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
