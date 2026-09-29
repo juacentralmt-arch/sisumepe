@@ -496,7 +496,6 @@
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
           <button id="termoTipoPdf" onclick="setTermoTipo('pdf')" class="btn text-xs px-4 py-2">📄 PDF</button>
           <button id="termoTipoRenomear" onclick="setTermoTipo('renomear')" class="btn text-xs px-4 py-2">🏷️ AutoRenomear</button>
-          <button id="termoTipoRenomear2" onclick="setTermoTipo('renomear2')" class="btn text-xs px-4 py-2">☁️ AutoRenomear 2</button>
         </div>
         <div class="flex gap-2">
           <button onclick="clearTermoForm()" class="btn btn-ghost text-xs px-3.5 py-2">↺ Limpar</button>
@@ -836,25 +835,6 @@
           <div id="renomearList" class="mt-3 space-y-2.5"></div>
           <button id="renomearOcrAll" onclick="ocrFilaAutomatica()" class="hidden btn btn-ghost w-full py-2.5 text-xs mt-3 border">📷 Rodar OCR nos pendentes</button>
           <button id="renomearDlAll" onclick="baixarTodosRenomeados()" class="hidden btn btn-green w-full py-2.5 text-xs mt-3">⬇ Baixar todos renomeados (ZIP)</button>
-        </div>
-        <div id="termoFormRenomear2" class="hidden lg:col-span-2 card p-5">
-          <h3 class="font-display font-bold text-sm mb-1">☁️ AutoRenomear 2 — OCR em nuvem</h3>
-          <p class="text-xs text-slate-500 mb-4">O mesmo padrão <b>Tipo - Nome da pessoa - Data do documento</b>, mas lendo escaneados com <b>IA gratuita de nuvem (OCR.space)</b> em vez do OCR do aparelho. Exige a chave gratuita <b>OCRSPACE_KEY</b> no servidor (https://ocr.space/ocrapi) — sem ela, o botão de nuvem avisa e nada é enviado.</p>
-          <p id="renomear2NuvemCfg" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3"></p>
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="btn btn-ghost text-xs px-4 py-2.5 cursor-pointer">📎 Selecionar arquivos (PDF/JPG/PNG, até 200) <input id="renomear2Files" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple class="hidden" onchange="renderRenomearPick2()"></label>
-            <button id="renomear2BtnAnalisar" onclick="analisarRenomear2()" class="btn btn-primary text-xs px-4 py-2.5">🔍 Analisar e sugerir nomes</button>
-            <button onclick="limparRenomear2()" class="btn btn-ghost text-xs px-3.5 py-2.5">🗑 Limpar</button>
-          </div>
-          <p id="renomear2Pick" class="text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado.</p>
-          <div id="renomear2FilaWrap" class="hidden mt-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
-            <p id="renomear2FilaTxt" class="text-[11px] font-bold text-indigo-700 flex-1"></p>
-            <button onclick="pararOcrNuvemFila()" class="btn btn-ghost text-xs px-3 py-1.5">⏹ Parar</button>
-          </div>
-          <p id="renomear2Err" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
-          <div id="renomear2List" class="mt-3 space-y-2.5"></div>
-          <button id="renomear2NuvemAll" onclick="ocrNuvemFila()" class="hidden btn btn-ghost w-full py-2.5 text-xs mt-3 border">☁️ OCR em nuvem nos pendentes</button>
-          <button id="renomear2DlAll" onclick="baixarTodosRenomeados2()" class="hidden btn btn-green w-full py-2.5 text-xs mt-3">⬇ Baixar todos renomeados (ZIP)</button>
         </div>
         <div class="space-y-4">
           <div id="termoPreviewWrapSide" class="hidden card p-4 lg:sticky lg:top-24">
@@ -4676,7 +4656,7 @@ function setTermoTipo(t){
   termoTipoAtivo = t;
   try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer);}catch(e){}
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear'], ['termoTipoRenomear2','renomear2']].forEach(([id, k])=>{
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
     const b = document.getElementById(id);
     if(!b) return;
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
@@ -4689,7 +4669,6 @@ function setTermoTipo(t){
   const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl) ativEl.classList.toggle('hidden', t!=='ativacao');
   const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl) pdfEl.classList.toggle('hidden', t!=='pdf');
   const renEl=document.getElementById('termoFormRenomear'); if(renEl) renEl.classList.toggle('hidden', t!=='renomear');
-  const ren2El=document.getElementById('termoFormRenomear2'); if(ren2El) ren2El.classList.toggle('hidden', t!=='renomear2');
   document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
   document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
   if(recEqEl) recEqEl.classList.toggle('lg:col-span-2', t==='recEquip');
@@ -4697,14 +4676,13 @@ function setTermoTipo(t){
   if(ativEl) ativEl.classList.toggle('lg:col-span-2', t==='ativacao');
   if(pdfEl) pdfEl.classList.toggle('lg:col-span-2', t==='pdf');
   if(renEl) renEl.classList.toggle('lg:col-span-2', t==='renomear');
-  if(ren2El) ren2El.classList.toggle('lg:col-span-2', t==='renomear2');
   renderTermos();
   if(t === 'listagem') scheduleListagemPreview(true);
   else if(t === 'recolhimento') scheduleRecPreview(true);
   else if(t === 'recEquip') scheduleRecEqPreview(true);
   else if(t === 'endereco') scheduleEnderecoPreview(true);
   else if(t==='ativacao') scheduleAtivPreview(true);
-  else if(t==='pdf' || t==='renomear' || t==='renomear2') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); if(t==='renomear2') checarNuvemCfg(); }
+  else if(t==='pdf' || t==='renomear') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); }
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
@@ -4816,7 +4794,7 @@ function renderTermos(){
   }).join('');
 }
 async function saveTermo(){
-  if(termoTipoAtivo === 'renomear' || termoTipoAtivo === 'renomear2') return toast('🏷️ AutoRenomear não salva termos — use ⬇ Baixar para obter os arquivos renomeados');
+  if(termoTipoAtivo === 'renomear') return toast('🏷️ AutoRenomear não salva termos — use ⬇ Baixar para obter os arquivos renomeados');
   if(termoTipoAtivo === 'pdf') return toast('📄 Ferramentas PDF não salvam termos');
   if(termoTipoAtivo === 'ativacao') return saveAtivacao();
   if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
@@ -5436,381 +5414,6 @@ async function ocrFilaAutomatica(){
     paintOcrPendentes();
   }
   toast(renomearPararOcr ? `⏹ OCR parado (${feitos}/${fila.length})` : `✅ OCR automático concluído (${feitos}/${fila.length})`);
-}
-// ==================== AUTORENOMEAR 2 (OCR em nuvem) ====================
-// Mesmo fluxo do AutoRenomear 1, mas escaneados são lidos por IA gratuita de
-// nuvem (OCR.space) em vez do Tesseract local. Estado 100% separado (ids/caches `renomear2*`).
-let renomear2Cache = [];
-let renomear2FilaNuvem = false, renomear2PararNuvem = false;
-const RENOMEAR2_LOTE = 20;
-let renomear2Analisando = false;
-function renderRenomearPick2(){
-  const inp = document.getElementById('renomear2Files');
-  const n = inp && inp.files ? inp.files.length : 0;
-  document.getElementById('renomear2Pick').textContent = n ? n + ' arquivo' + (n > 1 ? 's' : '') + ' selecionado' + (n > 1 ? 's' : '') + ' — toque em Analisar.' : 'Nenhum arquivo selecionado.';
-}
-async function analisarRenomear2(){
-  if(renomear2Analisando) return toast('⏳ Análise em andamento — aguarde');
-  const err = document.getElementById('renomear2Err');
-  err.classList.add('hidden');
-  const inp = document.getElementById('renomear2Files');
-  const files = inp.files ? [...inp.files] : [];
-  if(!files.length) return (err.textContent = '⚠️ Selecione ao menos 1 arquivo (PDF, JPG ou PNG)', err.classList.remove('hidden'));
-  if(files.length > RENOMEAR_MAX) return (err.textContent = '⚠️ Máximo ' + RENOMEAR_MAX + ' arquivos por vez', err.classList.remove('hidden'));
-  renomear2Analisando = true;
-  renomear2PararNuvem = true;
-  setBtnLoading(document.getElementById('renomear2BtnAnalisar'), true, 'Analisando...');
-  try{
-    renomear2Cache = [];
-    renderRenomear2();
-    const pick = document.getElementById('renomear2Pick');
-    for(let ini = 0; ini < files.length; ini += RENOMEAR2_LOTE){
-      const lote = files.slice(ini, ini + RENOMEAR2_LOTE);
-      pick.textContent = `🔍 Analisando ${Math.min(ini + RENOMEAR2_LOTE, files.length)}/${files.length}...`;
-      const fd = new FormData();
-      for(const f of lote) fd.append('arquivos', f);
-      try{
-        const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
-        const j = await r.json().catch(() => ({}));
-        if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
-        (j.itens || []).forEach((it, k) => renomear2Cache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: (it && it.sugestao) || sugestaoLocal(it) || (it.arquivo || 'arquivo'), motor: (it && it.motor) || '', dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), nuvemMsg: '' }));
-      }catch(e){
-        lote.forEach(f => renomear2Cache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
-      }
-      renderRenomear2();
-    }
-    const motorShow = renomear2Cache.map(x => x.motor).find(Boolean) || '?';
-    pick.textContent = `${renomear2Cache.length} arquivo${renomear2Cache.length > 1 ? 's' : ''} analisado${renomear2Cache.length > 1 ? 's' : ''} [motor ${motorShow}].`;
-    toast(`✅ ${renomear2Cache.length} arquivos analisados`);
-  }finally{
-    renomear2Analisando = false;
-    setBtnLoading(document.getElementById('renomear2BtnAnalisar'), false);
-    // OCR em nuvem por padrão nos que ficaram manuais (sequencial: respeita o limite da cota gratuita)
-    ocrNuvemFila();
-  }
-}
-function renderRenomear2(){
-  const box = document.getElementById('renomear2List');
-  document.getElementById('renomear2DlAll').classList.toggle('hidden', !renomear2Cache.length);
-  if(!renomear2Cache.length){ box.innerHTML = ''; paintNuvemPendentes(); return; }
-  paintNuvemPendentes();
-  box.innerHTML = renomear2Cache.map((it, i) => {
-    const detBase = [it.tipo, it.nome, it.data].filter(Boolean);
-    if(it.motor) detBase.push('motor ' + it.motor); else detBase.push('motor ?');
-    const det = detBase.join(' • ');
-    const avisos = (it.avisos || []).map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
-    const trecho = it.trecho ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400 underline">Ver trecho lido</summary><p class="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 leading-relaxed">${esc(it.trecho)}</p></details>` : '';
-    const podeNuvem = it.file && /\.(pdf|jpe?g|png)$/i.test(it.arquivo || '');
-    const nuvemBtn = (podeNuvem && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrNuvem(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">☁️ OCR em nuvem (IA gratuita)</button><p id="renomear2Nuvem${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.nuvemMsg || '')}</p>` : '';
-    return `<div class="border border-slate-200 rounded-2xl p-3.5 bg-white">
-      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span><span id="renomear2Conf${i}">${confBadge(it.confianca)}</span>${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
-      ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>${nuvemBtn}` : `
-      ${det ? `<p id="renomear2Det${i}" class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
-      <div id="renomear2Av${i}">${avisos}</div>
-      <div class="grid grid-cols-2 gap-2 mt-2">
-        <div>
-          <label class="lbl">Nome da pessoa</label>
-          <input id="renomear2Pessoa${i}" value="${esc(it.nome || '')}" oninput="recompSugestao2(${i},'pessoa')" placeholder="Não detectado — digite aqui" class="inp w-full text-xs mt-1">
-        </div>
-        <div>
-          <label class="lbl">Data do documento</label>
-          <input id="renomear2Data${i}" type="date" value="${esc(it.dataISO || '')}" oninput="recompSugestao2(${i},'data')" class="inp w-full text-xs mt-1">
-        </div>
-      </div>
-      <label class="lbl mt-2 block">NOVO NOME *</label>
-      <div class="flex gap-2 mt-1">
-        <input id="renomear2Nome${i}" value="${esc(it.sugestao || '')}" class="inp flex-1 font-mono text-xs">
-        <button onclick="baixarRenomeado2(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
-      </div>
-      ${podeNuvem ? `<button onclick="togglePreviewRenomear2(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">👁 Ver documento</button><div id="renomear2Prev${i}" class="hidden mt-2 text-center"></div>` : ''}${nuvemBtn}${trecho}`}
-    </div>`;
-  }).join('');
-}
-// Preview editável do AutoRenomear 2 (igual ao 1, no estado `renomear2*`).
-function recompSugestao2(i, src){
-  const it = renomear2Cache[i]; if(!it || it.erro) return;
-  const pInp = document.getElementById('renomear2Pessoa' + i);
-  const dInp = document.getElementById('renomear2Data' + i);
-  const nInp = document.getElementById('renomear2Nome' + i);
-  const detEl = document.getElementById('renomear2Det' + i);
-  const avEl = document.getElementById('renomear2Av' + i);
-  const confEl = document.getElementById('renomear2Conf' + i);
-  const pessoa = (pInp ? pInp.value : (it.nome || '')).trim();
-  const dataISO = (dInp ? dInp.value : (it.dataISO || '')).trim();
-  if(src === 'data' && dataISO) it.dataManual = true;
-  it.nome = pessoa;
-  it.dataISO = dataISO;
-  it.data = dataISO ? dataISO.slice(8,10) + '-' + dataISO.slice(5,7) + '-' + dataISO.slice(0,4) : 'SEM DATA';
-  const mExt = String(it.sugestao || it.arquivo || '.pdf').match(/\.(pdf|jpe?g|png)$/i);
-  const ext = (mExt ? mExt[0] : '.pdf').toLowerCase().replace('jpeg', 'jpg');
-  const pessoaOk = pessoa.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
-  const base = (it.tipo || 'Documento') + (pessoaOk ? ' - ' + pessoaOk : '') + ' - ' + it.data;
-  it.sugestao = base.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) + ext;
-  const nomeOk = it.tipoId === 'recolhimento' || !!pessoaOk;
-  const dataOk = !!dataISO;
-  const av = [];
-  if(it.tipoId === 'documento') av.push('Tipo não identificado — verifique o título do documento');
-  if(!nomeOk) av.push('Nome não encontrado — complete manualmente');
-  if(!dataOk) av.push('Data não encontrada — complete manualmente');
-  else if(it.dataDoArquivo && !it.dataManual) av.push('Data extraída do nome do arquivo — confira no documento');
-  it.avisos = av;
-  it.confianca = (nomeOk && dataOk) ? 'alta' : ((nomeOk || dataOk) ? 'média' : 'baixa');
-  if(nInp) nInp.value = it.sugestao;
-  const detParts = [it.tipo, pessoa, it.data].filter(Boolean);
-  detParts.push('motor ' + (it.motor || '?'));
-  if(detEl) detEl.textContent = detParts.join(' • ');
-  if(avEl) avEl.innerHTML = av.map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
-  if(confEl) confEl.innerHTML = confBadge(it.confianca);
-}
-async function togglePreviewRenomear2(i, btn){
-  const it = renomear2Cache[i];
-  if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
-  const box = document.getElementById('renomear2Prev' + i);
-  if(!box) return;
-  const setLabel = (t) => { if(btn){ btn.disabled = false; btn.classList.remove('opacity-70', 'pointer-events-none'); btn.textContent = t; } };
-  if(!box.classList.contains('hidden')){ box.classList.add('hidden'); setLabel('👁 Ver documento'); return; }
-  box.classList.remove('hidden');
-  if(box.dataset.ready){ setLabel('🙈 Ocultar documento'); return; }
-  if(btn && !setBtnLoading(btn, true, 'Carregando preview...')) return;
-  box.innerHTML = '<p class="text-[11px] text-slate-400"><span class="inline-flex items-center gap-2"><span class="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin"></span>Carregando preview...</span></p>';
-  try{
-    const isImg = /^image\//.test(it.file.type || '') || /\.(jpe?g|png)$/i.test(it.file.name || '');
-    if(isImg){
-      const url = URL.createObjectURL(it.file);
-      const img = document.createElement('img');
-      img.src = url;
-      img.alt = it.arquivo || 'documento';
-      img.className = 'max-w-full rounded-xl border border-slate-200 mx-auto';
-      img.style.maxHeight = '480px';
-      img.onload = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
-      box.innerHTML = '';
-      box.appendChild(img);
-    } else {
-      await ensurePdfJsAtiv();
-      const buf = await it.file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 1.2 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width; canvas.height = viewport.height;
-      canvas.className = 'max-w-full rounded-xl border border-slate-200 mx-auto';
-      canvas.style.height = 'auto';
-      box.innerHTML = '';
-      box.appendChild(canvas);
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      if(pdf.numPages > 1){
-        const more = document.createElement('p');
-        more.className = 'text-[11px] text-slate-400 mt-1';
-        more.textContent = 'Página 1 de ' + pdf.numPages + ' — use ⬇ Baixar para ver o arquivo completo';
-        box.appendChild(more);
-      }
-    }
-    box.dataset.ready = '1';
-    if(btn){ setBtnLoading(btn, false); btn.textContent = '🙈 Ocultar documento'; }
-  }catch(e){ if(btn) setBtnLoading(btn, false); box.innerHTML = '<p class="text-[11px] text-rose-600">⚠️ Não foi possível gerar o preview: ' + esc(e.message || 'erro') + '</p>'; }
-}
-function baixarRenomeado2(i){
-  const it = renomear2Cache[i];
-  if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
-  const inp = document.getElementById('renomear2Nome' + i);
-  let nome = inp ? inp.value.trim() : (it.sugestao || it.nome);
-  if(!nome) return toast('⚠️ Informe o novo nome');
-  nome = nome.replace(/[\\/:*?"<>|]/g, '').trim() || 'documento';
-  const url = URL.createObjectURL(it.file);
-  const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  toast('⬇ Baixado: ' + nome);
-}
-async function baixarTodosRenomeados2(){
-  if(!renomear2Cache.length) return;
-  syncRenomearInputs2();
-  const btnZip = document.getElementById('renomear2DlAll');
-  setBtnLoading(btnZip, true, 'Montando ZIP...');
-  toast('⏳ Montando ZIP com os arquivos renomeados...');
-  try{
-    const usados = new Set(), arqs = [];
-    for(let i = 0; i < renomear2Cache.length; i++){
-      const it = renomear2Cache[i];
-      if(!it || !it.file || it.erro) continue;
-      const inp = document.getElementById('renomear2Nome' + i);
-      const base = ((inp ? inp.value.trim() : (it.sugestao || it.nome)) || '').replace(/[\\/:*?"<>|]/g, '').trim() || ('documento-' + (i + 1));
-      const buf = new Uint8Array(await it.file.arrayBuffer());
-      arqs.push({ nome: nomeDownloadUnico(base, usados), dados: buf });
-    }
-    if(!arqs.length) return toast('⚠️ Nada para baixar (só há linhas com erro)');
-    const blob = zipMontar(arqs);
-    const d = new Date(), p = (n) => String(n).padStart(2, '0');
-    const zipNome = `renomeados2-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.zip`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = zipNome; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(`⬇ ZIP baixado: ${arqs.length} arquivos (${zipNome})`);
-  }catch(e){ toast('⚠️ Falha ao montar ZIP: ' + e.message); }
-  finally{ setBtnLoading(document.getElementById('renomear2DlAll'), false); }
-}
-function limparRenomear2(){
-  renomear2PararNuvem = true; renomear2FilaNuvem = false;
-  renomear2Cache = [];
-  const inp = document.getElementById('renomear2Files'); if(inp) inp.value = '';
-  document.getElementById('renomear2Pick').textContent = 'Nenhum arquivo selecionado.';
-  document.getElementById('renomear2List').innerHTML = '';
-  document.getElementById('renomear2DlAll').classList.add('hidden');
-  const nuvemAll = document.getElementById('renomear2NuvemAll'); if(nuvemAll) nuvemAll.classList.add('hidden');
-  paintNuvemPendentes();
-  document.getElementById('renomear2Err').classList.add('hidden');
-}
-function syncRenomearInputs2(){
-  (renomear2Cache || []).forEach((it, idx) => {
-    const sInp = document.getElementById('renomear2Nome' + idx);
-    if(sInp) it.sugestao = sInp.value;
-    const pInp = document.getElementById('renomear2Pessoa' + idx);
-    if(pInp) it.nome = pInp.value.trim();
-    const dInp = document.getElementById('renomear2Data' + idx);
-    if(dInp){
-      it.dataISO = dInp.value.trim();
-      it.data = it.dataISO ? it.dataISO.slice(8,10) + '-' + it.dataISO.slice(5,7) + '-' + it.dataISO.slice(0,4) : 'SEM DATA';
-      if(dInp.value.trim()) it.dataManual = true;
-    }
-  });
-}
-// Renderiza até 2 páginas em JPEG leve (para caber no limite gratuito da nuvem).
-async function paginaParaJPEG(page, maxW, quality){
-  const v0 = page.getViewport({ scale: 1.6 });
-  const sc = Math.min(1, maxW / v0.width);
-  const viewport = page.getViewport({ scale: 1.6 * sc });
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
-}
-// OCR em nuvem de UM item: páginas/imagem -> POST /api/termos/autorenomear2-nuvem.
-async function ocrNuvemItem(i, setStatus){
-  const it = renomear2Cache[i];
-  if(!it || !it.file) throw new Error('Arquivo original não está mais disponível — analise novamente');
-  const imgs = [];
-  if(/\.pdf$/i.test(it.file.name || '')){
-    setStatus('⏳ Abrindo PDF...');
-    await ensurePdfJsAtiv();
-    const buf = await it.file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-    const n = Math.min(pdf.numPages, 2);
-    for(let p = 1; p <= n; p++){
-      setStatus(`☁️ Preparando página ${p}/${n}...`);
-      const page = await pdf.getPage(p);
-      let blob = await paginaParaJPEG(page, 2000, 0.85);
-      if(blob && blob.size > 950 * 1024) blob = (await paginaParaJPEG(page, 1400, 0.7)) || blob;
-      if(blob) imgs.push(blob);
-    }
-  } else {
-    setStatus('☁️ Preparando imagem...');
-    const url = URL.createObjectURL(it.file);
-    try{
-      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
-      const sc = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.naturalWidth * sc); canvas.height = Math.round(img.naturalHeight * sc);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
-      if(blob) imgs.push(blob);
-    } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
-  }
-  if(!imgs.length) throw new Error('Não foi possível preparar as páginas para a nuvem');
-  setStatus('☁️ Lendo na nuvem... (pode levar ~30s)');
-  const fd = new FormData();
-  fd.append('arquivo', it.arquivo || 'documento');
-  imgs.forEach((b, k) => fd.append('imagens', b, 'pagina' + (k + 1) + '.jpg'));
-  const r = await authFetch('/api/termos/autorenomear2-nuvem', { method: 'POST', body: fd });
-  const j = await r.json().catch(() => ({}));
-  if(!r.ok) throw new Error(j.error || 'OCR em nuvem falhou');
-  renomear2Cache[i] = { ...renomear2Cache[i], ...j, nome: j.nome || '', dataDoArquivo: !!((j.avisos || []).some(a => /nome do arquivo/i.test(a))), erro: undefined, nuvemMsg: '' };
-  return true;
-}
-// Checa se o SERVIDOR tem a chave de OCR em nuvem (sem expor a chave).
-// Mostra aviso na seção quando ausente. Retorna true se configurado.
-async function checarNuvemCfg(){
-  const el = document.getElementById('renomear2NuvemCfg');
-  const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || '';
-  const local = host === 'localhost' || host === '127.0.0.1';
-  const instrucao = local
-    ? 'Reinicie o servidor local (Ctrl+C no terminal e rode node server.js de novo) com OCRSPACE_KEY no arquivo .env.'
-    : 'Cadastre OCRSPACE_KEY no Environment do serviço sisumepe no Render e aguarde o redeploy ficar Live.';
-  try{
-    const r = await api('/api/termos/autorenomear2-status');
-    if(r && r.configurado){ if(el) el.classList.add('hidden'); return true; }
-  }catch(e){}
-  if(el){
-    el.textContent = '⚠️ OCR em nuvem NÃO configurado neste servidor — ' + instrucao;
-    el.classList.remove('hidden');
-  }
-  return false;
-}
-async function ocrNuvem(i, btn){
-  if(renomear2FilaNuvem) return toast('⏳ OCR em nuvem em lote em andamento — toque em ⏹ Parar para fazer manual');
-  if(!(await checarNuvemCfg())) return toast('⚠️ OCR em nuvem não configurado — cadastre OCRSPACE_KEY no servidor');
-  if(btn && !setBtnLoading(btn, true, 'Lendo na nuvem...')) return;
-  syncRenomearInputs2();
-  const setStatus = (t) => { const el = document.getElementById('renomear2Nuvem' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
-  try{
-    await ocrNuvemItem(i, setStatus);
-    renderRenomear2();
-    toast('✅ OCR em nuvem concluído — revise o nome sugerido');
-  }catch(e){ const msg = '⚠️ Nuvem: ' + e.message; if(renomear2Cache[i]) renomear2Cache[i].nuvemMsg = msg; setStatus(msg); toast(msg); if(btn) setBtnLoading(btn, false); }
-}
-// Fila automática de OCR em nuvem (sequencial: respeita a cota gratuita).
-function pendentesNuvem(){
-  return renomear2Cache.map((it, i) => i).filter(i => {
-    const it = renomear2Cache[i];
-    return it && it.file && (it.confianca === 'manual' || it.erro) && /\.(pdf|jpe?g|png)$/i.test(it.arquivo || '');
-  });
-}
-function paintNuvemFila(txt){
-  const wrap = document.getElementById('renomear2FilaWrap');
-  const el = document.getElementById('renomear2FilaTxt');
-  if(!wrap || !el) return;
-  if(!renomear2FilaNuvem){ wrap.classList.add('hidden'); el.textContent = ''; return; }
-  wrap.classList.remove('hidden');
-  el.innerHTML = '<span class="inline-flex items-center gap-2"><span class="w-4 h-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin"></span>' + esc(txt || 'Processando...') + '</span>';
-}
-function paintNuvemPendentes(){
-  const btn = document.getElementById('renomear2NuvemAll');
-  if(!btn) return;
-  const n = renomear2FilaNuvem ? 0 : pendentesNuvem().length;
-  btn.classList.toggle('hidden', !n);
-  if(n) btn.textContent = `☁️ OCR em nuvem nos pendentes (${n})`;
-}
-function pararOcrNuvemFila(){ renomear2PararNuvem = true; }
-async function ocrNuvemFila(){
-  let espera = 0;
-  while(renomear2FilaNuvem && espera < 40){ await new Promise(r => setTimeout(r, 500)); espera++; }
-  if(renomear2FilaNuvem) return;
-  syncRenomearInputs2();
-  let fila = pendentesNuvem();
-  if(!fila.length){ paintNuvemPendentes(); return; }
-  renomear2FilaNuvem = true; renomear2PararNuvem = false;
-  paintNuvemPendentes();
-  if(!(await checarNuvemCfg())){ renomear2FilaNuvem = false; paintNuvemFila(); paintNuvemPendentes(); return toast('⚠️ OCR em nuvem não configurado — cadastre OCRSPACE_KEY no servidor'); }
-  let feitos = 0;
-  try{
-    for(const i of fila){
-      if(renomear2PararNuvem) break;
-      const it = renomear2Cache[i];
-      if(!it || (it.confianca !== 'manual' && !it.erro)) continue;
-      paintNuvemFila(`☁️ OCR em nuvem ${feitos + 1}/${fila.length}: ${it.arquivo}`);
-      const setStatus = (t) => { const el = document.getElementById('renomear2Nuvem' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
-      try{ await ocrNuvemItem(i, setStatus); feitos++; }
-      catch(e){ const msg = '⚠️ ' + e.message; if(renomear2Cache[i]) renomear2Cache[i].nuvemMsg = msg; setStatus(msg); }
-      syncRenomearInputs2();
-      renderRenomear2();
-      paintNuvemFila(`☁️ OCR em nuvem ${feitos}/${fila.length} concluídos...`);
-    }
-  }catch(e){ toast('⚠️ OCR em nuvem: ' + e.message); }
-  finally{
-    renomear2FilaNuvem = false;
-    paintNuvemFila();
-    renderRenomear2();
-    paintNuvemPendentes();
-  }
-  toast(renomear2PararNuvem ? `⏹ Nuvem parada (${feitos}/${fila.length})` : `✅ OCR em nuvem concluído (${feitos}/${fila.length})`);
 }
 function scheduleEnderecoPreview(now){
   const tgl = document.getElementById('endAutoPreview');
