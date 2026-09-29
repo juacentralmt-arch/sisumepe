@@ -13,11 +13,15 @@ function norm(s) {
     .trim();
 }
 
-// Tipos na ordem de prioridade (o primeiro que casar vence)
+// Tipos na ordem de prioridade (o primeiro que casar vence).
+// ATENÇÃO: 'recolhimento' é SÓ o layout de cartões das unidades penais (sem
+// campo de monitorado) — por isso casa apenas com chaves específicas desse
+// layout. O formulário de equipamento do núcleo (COM "MONITORADO(A): ...")
+// cai em 'recEquip', que extrai o nome.
 const TIPOS = [
   { id: 'dae', label: 'DAE', chaves: ['documento de arrecadacao', 'arrecadacao estadual', 'funpen', 'dae - documento'] },
-  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['auto de recolhimento', 'entregues pelas unidades penais', 'nucleo juazeiro', 'unidade de monitoramento eletronico de pessoas'], semNome: true },
-  { id: 'recEquip', label: 'Termo de recolhimento equipamento', chaves: ['termo de recolhimento', 'recolhimento de equipamento', 'monitorado(a):'], semNome: false },
+  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['entregues pelas unidades penais', 'itens rebidos', 'itens recebidos', 'descricao do equipamentos', 'descricao dos equipamentos', 'auto de recolhimento'], semNome: true },
+  { id: 'recEquip', label: 'Termo de recolhimento equipamento', chaves: ['monitorado(a', 'recolhimento de equipamento', 'termo de recolhimento'], semNome: false },
   { id: 'manutencao', label: 'Termo de manutenção', chaves: ['termo de manutencao', 'manutencao de tornozeleira', 'manutencao preventiva', 'manutencao corretiva'] },
   { id: 'ativacao', label: 'Termo de ativação', chaves: ['termo de ativacao', 'ativacao de tornozeleira', 'instalacao de tornozeleira', 'termo de instalacao'] },
   { id: 'retirada', label: 'Termo de retirada', chaves: ['termo de retirada', 'retirada de tornozeleira', 'desativacao de tornozeleira'] },
@@ -107,7 +111,7 @@ const MESES_PT = {
   julho: '07', agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12'
 };
 
-function extrairDataISO(texto, nomeOriginal) {
+function extrairDataConteudo(texto) {
   const t = String(texto || '').slice(0, 8000);
   // 1) data rotulada: "Data: 28/09/2026", "Data/Hora: 28/08/2026" (espaços do OCR tolerados)
   let m = t.match(/(?:\bdata\b|datado|emitido\s+em|lavrado\s+em|aos?)[\s/:.\-]*(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})/i);
@@ -123,15 +127,24 @@ function extrairDataISO(texto, nomeOriginal) {
   // 4) por extenso: "28 de setembro de 2026"
   m = norm(t).match(/(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})/);
   if (m && MESES_PT[m[2]]) return m[3] + '-' + MESES_PT[m[2]] + '-' + String(m[1]).padStart(2, '0');
-  // 5) tentar extrair do nome do arquivo: victor_260925_133554.pdf -> 26/09/2025
-  if (nomeOriginal) {
-    const fnMatch = nomeOriginal.match(/(\d{2})(\d{2})(\d{2})/);
-    if (fnMatch) {
-      const dd = fnMatch[1], mm = fnMatch[2], aa = '20' + fnMatch[3];
-      if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) return aa + '-' + mm + '-' + dd;
-    }
+  return '';
+}
+
+// Fallback: data embutida no nome do arquivo (ex: victor_260925_133554.pdf -> 26/09/2025).
+// Quebra-galho para a sugestão inicial — NÃO conta como achado de confiança,
+// pois pode divergir da data real do documento.
+function extrairDataArquivo(nomeOriginal) {
+  if (!nomeOriginal) return '';
+  const fnMatch = String(nomeOriginal).match(/(\d{2})(\d{2})(\d{2})/);
+  if (fnMatch) {
+    const dd = fnMatch[1], mm = fnMatch[2], aa = '20' + fnMatch[3];
+    if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) return aa + '-' + mm + '-' + dd;
   }
   return '';
+}
+
+function extrairDataISO(texto, nomeOriginal) {
+  return extrairDataConteudo(texto) || extrairDataArquivo(nomeOriginal);
 }
 
 function isoParaNome(iso) {
@@ -157,15 +170,23 @@ function sugerirNome(texto, nomeOriginal) {
   const tipo = detectarTipo(texto);
   const skipNome = tipo.semNome === true;
   const nome = skipNome ? '' : extrairNome(texto);
-  const dataISO = extrairDataISO(texto, nomeOriginal);
+  const dataConteudo = extrairDataConteudo(texto);
+  const dataISO = dataConteudo || extrairDataArquivo(nomeOriginal);
+  const dataDoArquivo = !dataConteudo && !!dataISO;
   const nomeParte = (skipNome || nome) ? sanitizar(nome, 60) : 'SEM NOME';
   const dataParte = dataISO ? isoParaNome(dataISO) : 'SEM DATA';
   const sugestao = sanitizar(tipo.label + (skipNome ? '' : ' - ' + nomeParte) + ' - ' + dataParte, 120) + extensaoDe(nomeOriginal);
-  const achados = (tipo.id !== 'documento' ? 1 : 0) + (skipNome ? 1 : (nome ? 1 : 0)) + (dataISO ? 1 : 0);
+  // Só conta o que saiu DO CONTEÚDO (data do nome do arquivo não vale ponto).
+  const achados = (tipo.id !== 'documento' ? 1 : 0) + (skipNome ? 1 : (nome ? 1 : 0)) + (dataConteudo ? 1 : 0);
   const avisos = [];
   if (tipo.id === 'documento') avisos.push('Tipo não identificado — verifique o título do documento');
   if (!skipNome && !nome) avisos.push('Nome não encontrado — complete manualmente');
   if (!dataISO) avisos.push('Data não encontrada — complete manualmente');
+  else if (dataDoArquivo) avisos.push('Data extraída do nome do arquivo — confira no documento');
+  let confianca = achados === 3 ? 'alta' : (achados === 2 ? 'média' : 'baixa');
+  // Tipo com nome esperado mas nada legível no conteúdo: provavelmente PDF
+  // escaneado com extração ruim — 'manual' aciona o OCR local no navegador.
+  if (!skipNome && !nome && !dataConteudo) confianca = 'manual';
   return {
     sugestao,
     tipo: tipo.label,
@@ -173,9 +194,9 @@ function sugerirNome(texto, nomeOriginal) {
     nome: skipNome ? undefined : nome,
     data: dataParte,
     dataISO,
-    confianca: achados === 3 ? 'alta' : (achados === 2 ? 'média' : 'baixa'),
+    confianca,
     avisos
   };
 }
 
-module.exports = { TIPOS, detectarTipo, extrairNome, extrairDataISO, sanitizar, sugerirNome };
+module.exports = { TIPOS, detectarTipo, extrairNome, extrairDataISO, extrairDataConteudo, extrairDataArquivo, sanitizar, sugerirNome };
