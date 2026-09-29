@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const { saveDeterministico } = require('./pdfDeterministico');
 const ROOT = path.join(__dirname, '..', '..');
 
 // PDF Termos
@@ -345,7 +346,7 @@ async function gerarTermoPDF(termo){
   if(sigY < 150){ pg = pdfDoc.addPage([595.32, 841.92]); sigY = 730; }
   drawSigBlock(pg, sigY);
   }
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await saveDeterministico(pdfDoc);
   return pdfBytes;
 }
 
@@ -506,7 +507,7 @@ async function gerarTermoRecolhimentoPDF(termo){
       pg.drawText(foot, { x: Math.max(M, (PW - footW)/2), y: Math.max(28, y), size: 5.5, font: fontBold, color: rgb(0,0,0) });
     }
   }
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await saveDeterministico(pdfDoc);
   return pdfBytes;
 }
 // PDF Termo de Recolhimento de Equipamento (UNEPE Juazeiro do Norte)
@@ -812,7 +813,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   pg.drawText(foot, { x: (PW - fontBold.widthOfTextAtSize(foot, 8))/2, y: fy, size: 8, font: fontBold, color: BLACK });
   pg.drawText(foot2, { x: (PW - font.widthOfTextAtSize(foot2, 8))/2, y: fy - 10.5, size: 8, font, color: BLACK });
   pg.drawText(foot3, { x: (PW - font.widthOfTextAtSize(foot3, 8))/2, y: fy - 21, size: 8, font, color: BLACK });
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await saveDeterministico(pdfDoc);
   return pdfBytes;
 }
 
@@ -976,7 +977,9 @@ async function gerarTermoEnderecoPDF(termo){
   foot('Rua Tenente Benévolo, 1055 – Meireles, CEP: 60.160-040 - Fortaleza–CE', 66, false);
   foot('Contatos: (85) 98139-5024 - (85) 99191-8937', 52, false);
   foot('Email: comep@sap.ce.gov.br', 38, false);
-  const pdfBytes = await pdfDoc.save();
+  // Datas de criação/modificação determinísticas: sem elas, cada geração
+  // embute o timestamp do momento e o preview nunca é byte-idêntico ao PDF final.
+  const pdfBytes = await saveDeterministico(pdfDoc);
   return pdfBytes;
 }
 
@@ -1121,7 +1124,7 @@ async function gerarDeclaracaoPDF(termo) {
   st.y -= 8;
   psiLocalData(st, d.cidade, d.dataDoc || d.data);
   psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
-  return st.pdfDoc.save();
+  return saveDeterministico(st.pdfDoc);
 }
 
 // 2. Relatório de frequência
@@ -1180,7 +1183,7 @@ async function gerarRelFrequenciaPDF(termo) {
   st.y -= 6;
   psiLocalData(st, d.cidade, d.dataDoc);
   psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
-  return st.pdfDoc.save();
+  return saveDeterministico(st.pdfDoc);
 }
 
 // 3. Relatório técnico psicológico
@@ -1206,7 +1209,7 @@ async function gerarRelTecnicoPDF(termo) {
   st.y -= 8;
   psiLocalData(st, d.cidade, d.dataDoc);
   psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
-  return st.pdfDoc.save();
+  return saveDeterministico(st.pdfDoc);
 }
 
 // 4. Ofício de encaminhamento à rede de apoio
@@ -1233,5 +1236,5 @@ async function gerarOficioEncaminhamentoPDF(termo) {
   st.y -= 8;
   psiLocalData(st, d.cidade, d.dataDoc);
   psiAssinatura(st, d.psicologo, `Psicólogo(a)${d.crp ? ' – CRP ' + d.crp : ''} – UMEPE Juazeiro do Norte/CE`);
-  return st.pdfDoc.save();
+  return saveDeterministico(st.pdfDoc);
 }
