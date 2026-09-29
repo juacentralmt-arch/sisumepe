@@ -15,7 +15,9 @@ function norm(s) {
 
 // Tipos na ordem de prioridade (o primeiro que casar vence)
 const TIPOS = [
-  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['termo de recolhimento', 'recolhimento de equipamento', 'auto de recolhimento'] },
+  { id: 'dae', label: 'DAE', chaves: ['documento de arrecadacao', 'arrecadacao estadual', 'funpen', 'dae - documento'] },
+  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['auto de recolhimento', 'entregues pelas unidades penais', 'nucleo juazeiro', 'unidade de monitoramento eletronico de pessoas'], semNome: true },
+  { id: 'recEquip', label: 'Termo de recolhimento equipamento', chaves: ['termo de recolhimento', 'recolhimento de equipamento', 'monitorado(a):'], semNome: false },
   { id: 'manutencao', label: 'Termo de manutenção', chaves: ['termo de manutencao', 'manutencao de tornozeleira', 'manutencao preventiva', 'manutencao corretiva'] },
   { id: 'ativacao', label: 'Termo de ativação', chaves: ['termo de ativacao', 'ativacao de tornozeleira', 'instalacao de tornozeleira', 'termo de instalacao'] },
   { id: 'retirada', label: 'Termo de retirada', chaves: ['termo de retirada', 'retirada de tornozeleira', 'desativacao de tornozeleira'] },
@@ -29,17 +31,20 @@ const TIPOS = [
 function detectarTipo(texto) {
   const n = norm(texto).slice(0, 4000);
   for (const t of TIPOS) {
-    if (t.chaves.some(k => n.includes(k))) return { id: t.id, label: t.label };
+    if (t.chaves.some(k => n.includes(k))) return t;
   }
   return { id: 'documento', label: 'Documento' };
 }
 
 // Rótulos que antecedem o nome da pessoa nos documentos oficiais
 const ROTULOS_NOME = [
-  'nome do monitorado', 'monitorado\\s*\\(?\\s*a?\\s*\\)?', 'monitorado', 'nome completo',
+  'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'nome completo',
   'nome do assistido', 'assistido', 'nome do reeducando', 'reeducando',
   'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
-  'nome do requerente', 'requerente', '\\bnome\\b'
+  'nome do requerente', 'requerente',
+  'nome\\s+depositante', 'nome\\s+da\\s+m[ãa]e', 'nome\\s+do\\s+pai',
+  // "nome" genérico NÃO pode casar rótulos compostos (ex: NOME DEPOSITANTE, NOME DA MÃE)
+  '\\bnome\\b(?!\\s+(?:depositante|da\\s+m[ãa]e|do\\s+pai|completo))'
 ];
 
 function limparNome(s) {
@@ -52,6 +57,8 @@ function limparNome(s) {
   v = v.split(/,|;|\(|cpf|r\.?g\.?\b|nascid|brasileir|casad|solteir|residente|\d{3}\.?\d{3}\.?/i)[0].trim();
   // corta dígitos residuais do fim (ruído de data colada: "Silva 28")
   v = v.replace(/\s+\d[\d\s/.\-]*$/, '').trim();
+  // corta letra solta do fim (ruído de "R$" colado: "Chagas R")
+  v = v.replace(/\s+[A-Za-z]$/, '').trim();
   // remove pontuação residual nas bordas
   v = v.replace(/^[.\-–:]+|[.\-–:]+$/g, '').trim();
   return v;
@@ -100,7 +107,7 @@ const MESES_PT = {
   julho: '07', agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12'
 };
 
-function extrairDataISO(texto) {
+function extrairDataISO(texto, nomeOriginal) {
   const t = String(texto || '').slice(0, 8000);
   // 1) data rotulada: "Data: 28/09/2026", "Data/Hora: 28/08/2026" (espaços do OCR tolerados)
   let m = t.match(/(?:\bdata\b|datado|emitido\s+em|lavrado\s+em|aos?)[\s/:.\-]*(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})/i);
@@ -116,6 +123,14 @@ function extrairDataISO(texto) {
   // 4) por extenso: "28 de setembro de 2026"
   m = norm(t).match(/(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})/);
   if (m && MESES_PT[m[2]]) return m[3] + '-' + MESES_PT[m[2]] + '-' + String(m[1]).padStart(2, '0');
+  // 5) tentar extrair do nome do arquivo: victor_260925_133554.pdf -> 26/09/2025
+  if (nomeOriginal) {
+    const fnMatch = nomeOriginal.match(/(\d{2})(\d{2})(\d{2})/);
+    if (fnMatch) {
+      const dd = fnMatch[1], mm = fnMatch[2], aa = '20' + fnMatch[3];
+      if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) return aa + '-' + mm + '-' + dd;
+    }
+  }
   return '';
 }
 
@@ -140,21 +155,22 @@ function extensaoDe(nomeOriginal) {
 
 function sugerirNome(texto, nomeOriginal) {
   const tipo = detectarTipo(texto);
-  const nome = extrairNome(texto);
-  const dataISO = extrairDataISO(texto);
-  const nomeParte = nome ? sanitizar(nome, 60) : 'SEM NOME';
+  const skipNome = tipo.semNome === true;
+  const nome = skipNome ? '' : extrairNome(texto);
+  const dataISO = extrairDataISO(texto, nomeOriginal);
+  const nomeParte = (skipNome || nome) ? sanitizar(nome, 60) : 'SEM NOME';
   const dataParte = dataISO ? isoParaNome(dataISO) : 'SEM DATA';
-  const sugestao = sanitizar(tipo.label + ' - ' + nomeParte + ' - ' + dataParte, 120) + extensaoDe(nomeOriginal);
-  const achados = (tipo.id !== 'documento' ? 1 : 0) + (nome ? 1 : 0) + (dataISO ? 1 : 0);
+  const sugestao = sanitizar(tipo.label + (skipNome ? '' : ' - ' + nomeParte) + ' - ' + dataParte, 120) + extensaoDe(nomeOriginal);
+  const achados = (tipo.id !== 'documento' ? 1 : 0) + (skipNome ? 1 : (nome ? 1 : 0)) + (dataISO ? 1 : 0);
   const avisos = [];
   if (tipo.id === 'documento') avisos.push('Tipo não identificado — verifique o título do documento');
-  if (!nome) avisos.push('Nome não encontrado — complete manualmente');
+  if (!skipNome && !nome) avisos.push('Nome não encontrado — complete manualmente');
   if (!dataISO) avisos.push('Data não encontrada — complete manualmente');
   return {
     sugestao,
     tipo: tipo.label,
     tipoId: tipo.id,
-    nome,
+    nome: skipNome ? undefined : nome,
     data: dataParte,
     dataISO,
     confianca: achados === 3 ? 'alta' : (achados === 2 ? 'média' : 'baixa'),
