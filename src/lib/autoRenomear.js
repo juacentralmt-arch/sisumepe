@@ -198,7 +198,11 @@ function sugerirNome(texto, nomeOriginal) {
     data: dataParte,
     dataISO,
     confianca,
-    avisos
+    avisos,
+    // Marcador de versão do motor (diagnóstico: prova qual código gerou a resposta).
+    // BUMP a cada mudança de lógica: rn1 = tipos semNome+fallback arquivo,
+    // rn2 = recEquip priorizado + OCR-manual, rn3 = sobrenome Nascimento preservado.
+    motor: 'rn3'
   };
 }
 

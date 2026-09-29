@@ -4960,6 +4960,18 @@ function renderRenomearPick(){
 }
 const RENOMEAR_LOTE = 20, RENOMEAR_MAX = 200;
 let renomearAnalisando = false;
+// Fallback 100% local: se o servidor devolver sugestão vazia, monta uma com
+// os campos detectados (nunca exibe o nome original como sugestão).
+function sugestaoLocal(it){
+  const mExt = String((it && it.arquivo) || '').toLowerCase().match(/\.(pdf|jpe?g|png)$/);
+  const ext = (mExt ? mExt[0] : '.pdf').replace('jpeg', 'jpg');
+  const tp = ((it && it.tipo) || 'Documento').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Documento';
+  const skip = it && it.tipoId === 'recolhimento';
+  const nm = String((it && it.nome) || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+  const dt = String((it && it.data) || '').trim() || 'SEM DATA';
+  const base = tp + (skip ? '' : ' - ' + (nm || 'SEM NOME')) + ' - ' + dt;
+  return base.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) + ext;
+}
 // Spinner reutilizável em botões: troca o conteúdo por animação + texto,
 // desabilita contra duplo clique e restaura ao final.
 function setBtnLoading(btn, loading, txt){
@@ -5012,13 +5024,13 @@ async function analisarRenomear(){
         const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
         const j = await r.json().catch(() => ({}));
         if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
-        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: it.sugestao || (it.arquivo || 'arquivo'), dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), ocrMsg: '' }));
+        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: (it && it.sugestao) || sugestaoLocal(it) || (it.arquivo || 'arquivo'), motor: (it && it.motor) || '', dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), ocrMsg: '' }));
       }catch(e){
         lote.forEach(f => renomearCache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
       }
       renderRenomear();
     }
-    pick.textContent = `${renomearCache.length} arquivo${renomearCache.length > 1 ? 's' : ''} analisado${renomearCache.length > 1 ? 's' : ''}.`;
+    pick.textContent = `${renomearCache.length} arquivo${renomearCache.length > 1 ? 's' : ''} analisado${renomearCache.length > 1 ? 's' : ''} [motor ${renomearCache.map(x => x.motor).find(Boolean) || '?'}].`;
     toast(`✅ ${renomearCache.length} arquivos analisados`);
   }finally{
     renomearAnalisando = false;
