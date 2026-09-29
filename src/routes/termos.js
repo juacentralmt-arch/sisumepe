@@ -42,6 +42,32 @@ function normRecEquip(src){
   return nd;
 }
 
+// Normalização do Termo de Recolhimento (unidades penais) — COMPARTILHADA por
+// POST, PATCH e preview: os três caminhos produzem exatamente o mesmo registro,
+// logo o preview é byte-idêntico ao PDF final.
+function normRecolhimentoDados(src){
+  const d = (src && typeof src === 'object') ? src : {};
+  const eq = Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : [];
+  const normEq = eq.map(r=>{
+    const checks = {};
+    ['ladoExterno','cinta','travas','ladoInterno','abaDireita','abaEsquerda'].forEach(k=>{
+      const v = r.checks ? r.checks[k] : null;
+      checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
+    });
+    return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
+  }).filter(r=> r.numero);
+  return {
+    itensRecebidos: String(d.itensRecebidos||'').trim().slice(0,200),
+    dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
+    equipamentos: normEq,
+    descricao: String(d.descricao||'').trim().slice(0,2000),
+    policialNome: String(d.policialNome||'').trim().slice(0,80),
+    policialMat: String(d.policialMat||'').trim().slice(0,30),
+    tecnicoNome: String(d.tecnicoNome||'').trim().slice(0,80),
+    tecnicoMat: String(d.tecnicoMat||'').trim().slice(0,30)
+  };
+}
+
 // Termos - Listagem de Equipamentos
 router.get('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const list = await store.termos.allByUser(req.auth.user);
@@ -164,32 +190,17 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
     return res.status(201).json(termo);
   }
   if(t === 'recolhimento'){
-    const d = (dados && typeof dados === 'object') ? dados : {};
-    const eq = Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : [];
-    const normEq = eq.map(r=>{
-      const checks = {};
-      ['ladoExterno','cinta','travas','ladoInterno','abaDireita','abaEsquerda'].forEach(k=>{
-        const v = r.checks ? r.checks[k] : null;
-        checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
-      });
-      return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
-    }).filter(r=> r.numero);
-    if(!normEq.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
+    const nd = normRecolhimentoDados(dados);
+    if(!nd.equipamentos.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
     const termo = await store.termos.insert({
       user: req.auth.user, tipo: 'recolhimento',
-      dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+      // dataEnvio espelha dados.dataHora (a data do documento); se o cliente
+      // mandar dataEnvio explícita, ela vence — consistente com o PATCH.
+      dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10)
+        : (nd.dataHora ? nd.dataHora.slice(0,10) : new Date().toISOString().slice(0,10)),
       destinatario: '', equipamentos: [],
       respEntrega: '', respRecebimento: '',
-      dados: {
-        itensRecebidos: String(d.itensRecebidos||'').trim().slice(0,200),
-        dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
-        equipamentos: normEq,
-        descricao: String(d.descricao||'').trim().slice(0,2000),
-        policialNome: String(d.policialNome||'').trim().slice(0,80),
-        policialMat: String(d.policialMat||'').trim().slice(0,30),
-        tecnicoNome: String(d.tecnicoNome||'').trim().slice(0,80),
-        tecnicoMat: String(d.tecnicoMat||'').trim().slice(0,30)
-      }
+      dados: nd
     });
     broadcast();
     return res.status(201).json(termo);
@@ -315,26 +326,23 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
     if(nd.estabelecimento != null) patch.destinatario = nd.estabelecimento;
   }
   if(t.tipo === 'recolhimento' && dados && typeof dados === 'object'){
+    // Mescla parcial: campos ausentes no PATCH preservam o valor salvo, depois
+    // tudo passa pelo MESMO normalizador do POST (checks, cortes, dataHora).
+    const base = Object.assign({}, t.dados||{});
     const d = dados;
-    const nd = Object.assign({}, t.dados||{});
-    if(d.itensRecebidos!=null) nd.itensRecebidos = String(d.itensRecebidos).trim().slice(0,200);
-    if(d.dataHora) nd.dataHora = new Date(d.dataHora).toISOString();
-    if(Array.isArray(d.equipamentos)){
-      nd.equipamentos = d.equipamentos.slice(0,60).map(r=>{
-        const checks = {};
-        ['ladoExterno','cinta','travas','ladoInterno','abaDireita','abaEsquerda'].forEach(k=>{
-          const v = r.checks ? r.checks[k] : null;
-          checks[k] = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
-        });
-        return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
-      }).filter(r=> r.numero);
-    }
-    if(d.descricao!=null) nd.descricao = String(d.descricao).trim().slice(0,2000);
-    if(d.policialNome!=null) nd.policialNome = String(d.policialNome).trim().slice(0,80);
-    if(d.policialMat!=null) nd.policialMat = String(d.policialMat).trim().slice(0,30);
-    if(d.tecnicoNome!=null) nd.tecnicoNome = String(d.tecnicoNome).trim().slice(0,80);
-    if(d.tecnicoMat!=null) nd.tecnicoMat = String(d.tecnicoMat).trim().slice(0,30);
+    if(d.itensRecebidos!=null) base.itensRecebidos = d.itensRecebidos;
+    if(d.dataHora!=null) base.dataHora = d.dataHora;
+    if(Array.isArray(d.equipamentos)) base.equipamentos = d.equipamentos;
+    if(d.descricao!=null) base.descricao = d.descricao;
+    if(d.policialNome!=null) base.policialNome = d.policialNome;
+    if(d.policialMat!=null) base.policialMat = d.policialMat;
+    if(d.tecnicoNome!=null) base.tecnicoNome = d.tecnicoNome;
+    if(d.tecnicoMat!=null) base.tecnicoMat = d.tecnicoMat;
+    const nd = normRecolhimentoDados(base);
     patch.dados = nd;
+    // dataEnvio espelha dados.dataHora (mesma regra do POST e do recEquip):
+    // editar o horário do documento atualiza a data exibida na listagem.
+    if(nd.dataHora) patch.dataEnvio = nd.dataHora.slice(0,10);
   }
   if(t.tipo === 'ativacao' && dados && typeof dados === 'object'){
     const nd = normAtivacao(Object.assign({}, t.dados||{}, dados));
@@ -430,30 +438,20 @@ router.get('/api/termos/:id/pdf', auth(['tecnico', 'psico']), ah(async (req,res)
 }));
 router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
-  if(tipo === 'recEquip'){
-    const nd = normRecEquip(dados);
-    const pdf = await gerarTermoRecolhimentoEquipamentoPDF({ dados: nd });
+  // Tipos com normalização dedicada montam o MESMO registro do POST e delegam
+  // ao termoPDFFromRecord — preview e PDF final passam pelo mesmo caminho, e
+  // qualquer mudança de layout aparece no preview automaticamente.
+  const enviarPdf = async (registro) => {
+    const pdf = await termoPDFFromRecord(registro);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
     return res.send(Buffer.from(pdf));
+  };
+  if(tipo === 'recEquip'){
+    return enviarPdf({ tipo: 'recEquip', dados: normRecEquip(dados) });
   }
   if(tipo === 'recolhimento'){
-    const d = (dados && typeof dados === 'object') ? dados : {};
-    const termo = {
-      tipo: 'recolhimento',
-      dados: {
-        itensRecebidos: String(d.itensRecebidos||'').trim(),
-        dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
-        equipamentos: (Array.isArray(d.equipamentos) ? d.equipamentos.slice(0,60) : []).map(r=>({ numero: String(r.numero||''), danificado: !!r.danificado, checks: (r.checks||{}) })),
-        descricao: String(d.descricao||'').trim(),
-        policialNome: String(d.policialNome||'').trim(), policialMat: String(d.policialMat||'').trim(),
-        tecnicoNome: String(d.tecnicoNome||'').trim(), tecnicoMat: String(d.tecnicoMat||'').trim()
-      }
-    };
-    const pdf = await gerarTermoRecolhimentoPDF(termo);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
-    return res.send(Buffer.from(pdf));
+    return enviarPdf({ tipo: 'recolhimento', dados: normRecolhimentoDados(dados) });
   }
   if(tipo === 'endereco'){
     const d = (dados && typeof dados === 'object') ? dados : {};
@@ -469,26 +467,16 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
         endereco: g('endereco'), contato: g('contato'), motivo: g('motivo')
       }
     };
-    const pdf = await gerarTermoEnderecoPDF(termo);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
-    return res.send(Buffer.from(pdf));
+    return enviarPdf(termo);
   }
   if(tipo === 'ativacao'){
-    const nd = normAtivacao(dados);
-    const pdf = await gerarAtivacaoPDF({ dados: nd });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
-    return res.send(Buffer.from(pdf));
+    return enviarPdf({ tipo: 'ativacao', dados: normAtivacao(dados) });
   }
   if(PSI_DOCS.includes(tipo)){
     if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
     const nd = normPsiDoc(dados);
     if(!nd.psicologo) nd.psicologo = (req.auth && req.auth.name) || '';
-    const pdf = await termoPDFFromRecord({ tipo, dados: nd });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
-    return res.send(Buffer.from(pdf));
+    return enviarPdf({ tipo, dados: nd });
   }
   const termo = {
     dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : '',

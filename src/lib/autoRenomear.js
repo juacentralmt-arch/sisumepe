@@ -34,8 +34,12 @@ const TIPOS = [
 
 function detectarTipo(texto) {
   const n = norm(texto).slice(0, 4000);
+  // OCR frequentemente lê O como 0 nos TÍTULOS ("TERM0 DE ATIVACA0", "T0RN0ZELEIRA",
+  // "REC0LHIMENTO"). Mesma confusão que extrairNome já normaliza para os rótulos:
+  // troca 1:1, então as posições são idênticas — basta buscar também na variante.
+  const nOcr = n.replace(/0/g, 'o');
   for (const t of TIPOS) {
-    if (t.chaves.some(k => n.includes(k))) return t;
+    if (t.chaves.some(k => n.includes(k) || nOcr.includes(k))) return t;
   }
   return { id: 'documento', label: 'Documento' };
 }
@@ -45,7 +49,7 @@ const ROTULOS_NOME = [
   'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'nome completo',
   'nome do assistido', 'assistido', 'nome do reeducando', 'reeducando',
   'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
-  'nome do requerente', 'requerente',
+  'nome do requerente', 'requerente', 'interessado\\(a\\)', 'interessados?',
   'nome\\s+depositante', 'nome\\s+da\\s+m[ãa]e', 'nome\\s+do\\s+pai',
   // "nome" genérico NÃO pode casar rótulos compostos (ex: NOME DEPOSITANTE, NOME DA MÃE)
   '\\bnome\\b(?!\\s+(?:depositante|da\\s+m[ãa]e|do\\s+pai|completo))'
@@ -201,8 +205,9 @@ function sugerirNome(texto, nomeOriginal) {
     avisos,
     // Marcador de versão do motor (diagnóstico: prova qual código gerou a resposta).
     // BUMP a cada mudança de lógica: rn1 = tipos semNome+fallback arquivo,
-    // rn2 = recEquip priorizado + OCR-manual, rn3 = sobrenome Nascimento preservado.
-    motor: 'rn3'
+    // rn2 = recEquip priorizado + OCR-manual, rn3 = sobrenome Nascimento preservado,
+    // rn4 = detectarTipo tolera 0/O + rótulo Interessado (ofícios).
+    motor: 'rn4'
   };
 }
 

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const { saveDeterministico } = require('./pdfDeterministico');
 const ROOT = path.join(__dirname, '..', '..');
 
 async function gerarAtivacaoPDF(termo){
@@ -182,7 +183,7 @@ async function gerarAtivacaoPDF(termo){
     p.drawText(t,{x:PW-M-tw,y:20,size:7,font:font,color:GRAY});
   });
 
-  return await pdfDoc.save();
+  return await saveDeterministico(pdfDoc);
 }
 
 module.exports = { gerarAtivacaoPDF };
