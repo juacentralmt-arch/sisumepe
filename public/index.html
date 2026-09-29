@@ -5035,9 +5035,10 @@ async function analisarRenomear(){
   }finally{
     renomearAnalisando = false;
     setBtnLoading(document.getElementById('renomearBtnAnalisar'), false);
+    // dentro do finally de propósito: a fila de OCR dispara mesmo se a
+    // renderização parcial acima lançar erro.
+    ocrFilaAutomatica();
   }
-  // OCR local por padrão: processa automaticamente os que ficaram manuais
-  ocrFilaAutomatica();
 }
 function confBadge(c){
   if(c === 'alta') return '<span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ALTA</span>';
@@ -5051,7 +5052,9 @@ function renderRenomear(){
   if(!renomearCache.length){ box.innerHTML = ''; paintOcrPendentes(); return; }
   paintOcrPendentes();
   box.innerHTML = renomearCache.map((it, i) => {
-    const det = [it.tipo, it.nome, it.data].filter(Boolean).join(' • ');
+    const detBase = [it.tipo, it.nome, it.data].filter(Boolean);
+    if(it.motor) detBase.push('motor ' + it.motor); else detBase.push('motor ?');
+    const det = detBase.join(' • ');
     const avisos = (it.avisos || []).map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
     const trecho = it.trecho ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400 underline">Ver trecho lido</summary><p class="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 leading-relaxed">${esc(it.trecho)}</p></details>` : '';
     const podeOcr = it.file && /\.(pdf|jpe?g|png)$/i.test(it.arquivo || '');
@@ -5111,7 +5114,9 @@ function recompSugestao(i, src){
   it.avisos = av;
   it.confianca = (nomeOk && dataOk) ? 'alta' : ((nomeOk || dataOk) ? 'média' : 'baixa');
   if(nInp) nInp.value = it.sugestao;
-  if(detEl) detEl.textContent = [it.tipo, pessoa, it.data].filter(Boolean).join(' • ');
+  const detParts = [it.tipo, pessoa, it.data].filter(Boolean);
+  detParts.push('motor ' + (it.motor || '?'));
+  if(detEl) detEl.textContent = detParts.join(' • ');
   if(avEl) avEl.innerHTML = av.map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
   if(confEl) confEl.innerHTML = confBadge(it.confianca);
 }
