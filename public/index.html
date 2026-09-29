@@ -5033,7 +5033,8 @@ function renderRenomear(){
       <div class="flex gap-2 mt-1">
         <input id="renomearNome${i}" value="${esc(it.sugestao || '')}" class="inp flex-1 font-mono text-xs">
         <button onclick="baixarRenomeado(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
-      </div>${ocrBtn}${trecho}`}
+      </div>
+      ${podeOcr ? `<button onclick="togglePreviewRenomear(${i})" class="btn btn-ghost w-full py-2 text-xs mt-2 border">👁 Ver documento</button><div id="renomearPrev${i}" class="hidden mt-2 text-center"></div>` : ''}${ocrBtn}${trecho}`}
     </div>`;
   }).join('');
 }
@@ -5071,6 +5072,53 @@ function recompSugestao(i, src){
   if(detEl) detEl.textContent = [it.tipo, pessoa, it.data].filter(Boolean).join(' • ');
   if(avEl) avEl.innerHTML = av.map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
   if(confEl) confEl.innerHTML = confBadge(it.confianca);
+}
+// Preview do documento no AutoRenomear: mostra a 1ª página do PDF (via PDF.js
+// já embutido) ou a imagem, sob demanda — para ler Nome/Data no próprio
+// documento e completar os campos manualmente.
+async function togglePreviewRenomear(i){
+  const it = renomearCache[i];
+  if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
+  const box = document.getElementById('renomearPrev' + i);
+  if(!box) return;
+  if(!box.classList.contains('hidden')){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  if(box.dataset.ready) return;
+  box.innerHTML = '<p class="text-[11px] text-slate-400">⏳ Carregando preview...</p>';
+  try{
+    const isImg = /^image\//.test(it.file.type || '') || /\.(jpe?g|png)$/i.test(it.file.name || '');
+    if(isImg){
+      const url = URL.createObjectURL(it.file);
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = it.arquivo || 'documento';
+      img.className = 'max-w-full rounded-xl border border-slate-200 mx-auto';
+      img.style.maxHeight = '480px';
+      img.onload = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
+      box.innerHTML = '';
+      box.appendChild(img);
+    } else {
+      await ensurePdfJsAtiv();
+      const buf = await it.file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      canvas.className = 'max-w-full rounded-xl border border-slate-200 mx-auto';
+      canvas.style.height = 'auto';
+      box.innerHTML = '';
+      box.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      if(pdf.numPages > 1){
+        const more = document.createElement('p');
+        more.className = 'text-[11px] text-slate-400 mt-1';
+        more.textContent = 'Página 1 de ' + pdf.numPages + ' — use ⬇ Baixar para ver o arquivo completo';
+        box.appendChild(more);
+      }
+    }
+    box.dataset.ready = '1';
+  }catch(e){ box.innerHTML = '<p class="text-[11px] text-rose-600">⚠️ Não foi possível gerar o preview: ' + esc(e.message || 'erro') + '</p>'; }
 }
 function baixarRenomeado(i){
   const it = renomearCache[i];
