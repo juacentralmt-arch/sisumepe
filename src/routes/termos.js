@@ -284,6 +284,12 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
   res.json({ total: out.length, itens: out });
 }));
 
+// AutoRenomear 2 — status: diz se a chave de OCR em nuvem está configurada
+// (sem expor a chave). A interface consulta antes de enviar.
+router.get('/api/termos/autorenomear2-status', auth(['tecnico', 'psico', 'admin']), ah(async (req,res)=>{
+  const { temNuvemOcr } = require('../lib/nuvemOcr');
+  res.json({ configurado: temNuvemOcr() });
+}));
 // AutoRenomear 2 via nuvem: recebe até 3 imagens (páginas renderizadas no
 // navegador) e extrai o texto com IA gratuita de nuvem (OCR.space), depois
 // sugere "<Tipo> - <Nome> - <Data>" com o mesmo motor do AutoRenomear 1.
