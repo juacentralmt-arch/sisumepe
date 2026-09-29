@@ -820,7 +820,7 @@
         </div>
         <div id="termoFormRenomear" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-1">🏷️ AutoRenomear</h3>
-          <p class="text-xs text-slate-500 mb-4">Envie arquivos com nomes aleatórios e receba sugestões no padrão <b>Tipo - Nome da pessoa - Data do documento</b>. Ex.: <i>Termo de recolhimento - João Silva - 28-09-2026.pdf</i>. 100% on-prem, sem envio externo. Arquivos <b>escaneados (foto)</b> passam por <b>📷 OCR local automático</b> após a análise.</p>
+          <p class="text-xs text-slate-500 mb-4">Envie arquivos com nomes aleatórios e receba sugestões no padrão <b>Tipo - Nome da pessoa - Data do documento</b>. Ex.: <i>Termo de recolhimento - João Silva - 28-09-2026.pdf</i>. 100% on-prem, sem envio externo. Arquivos <b>escaneados (foto)</b> passam por <b>📷 OCR local automático em paralelo</b> após a análise.</p>
           <div class="flex flex-wrap items-center gap-2">
             <label class="btn btn-ghost text-xs px-4 py-2.5 cursor-pointer">📎 Selecionar arquivos (PDF/JPG/PNG, até 200) <input id="renomearFiles" type="file" accept=".pdf,.jpg,.jpeg,.png" multiple class="hidden" onchange="renderRenomearPick()"></label>
             <button id="renomearBtnAnalisar" onclick="analisarRenomear()" class="btn btn-primary text-xs px-4 py-2.5">🔍 Analisar e sugerir nomes</button>
@@ -5265,12 +5265,12 @@ function syncRenomearInputs(){
 }
 // OCR 100% local (navegador): para PDF escaneado/foto — renderiza as 2 primeiras
 // páginas (ou a imagem) e lê com o Tesseract já embutido, depois interpreta o texto.
-async function executarOcrItem(i, setStatus){
+async function executarOcrItem(i, setStatus, workerExt){
   const it = renomearCache[i];
   if(!it || !it.file) throw new Error('Arquivo original não está mais disponível — analise novamente');
   setStatus('⏳ Carregando OCR...');
   await ensureTesseract();
-  const worker = await getDocWorker((m) => {
+  const worker = workerExt || await getDocWorker((m) => {
     if(m.status === 'recognizing text' && m.progress != null) setStatus(`📷 Lendo... ${Math.round(m.progress * 100)}%`);
   });
   let fullText = '';
@@ -5345,6 +5345,26 @@ function paintOcrPendentes(){
   if(n) btn.textContent = `📷 Rodar OCR nos pendentes (${n})`;
 }
 function pararOcrFila(){ renomearPararOcr = true; }
+// Pool de workers OCR: cada worker do Tesseract processa 1 job por vez, então
+// para ler vários arquivos EM PARALELO (e não um por um) mantemos N workers
+// em cache. O logger de cada slot é redirecionado ao item em leitura no momento.
+let ocrPool = [];
+function ocrPoolSize(){
+  const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+  return Math.min(4, Math.max(2, cores - 1));
+}
+async function ocrPoolEnsure(n){
+  await ensureTesseract();
+  for(let k = ocrPool.length; k < n; k++){
+    paintOcrFila(`⏳ Preparando OCR em paralelo (${k + 1}/${n})...`);
+    const slot = { worker: null, onLog: null };
+    const w = await Tesseract.createWorker('por', 1, { logger: (m) => { if(slot.onLog) slot.onLog(m); }, cacheMethod: 'refresh', gzip: true });
+    await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+    slot.worker = w;
+    ocrPool.push(slot);
+  }
+  return ocrPool.slice(0, n);
+}
 async function ocrFilaAutomatica(){
   let espera = 0;
   while(renomearFilaOcr && espera < 40){ await new Promise(r => setTimeout(r, 500)); espera++; }
@@ -5354,21 +5374,34 @@ async function ocrFilaAutomatica(){
   if(!fila.length){ paintOcrPendentes(); return; }
   renomearFilaOcr = true; renomearPararOcr = false;
   paintOcrPendentes();
-  let feitos = 0;
+  const NOCR = ocrPoolSize();
+  let feitos = 0, concluidos = 0;
   try{
-    await ensureTesseract().catch(() => {});
-    for(const i of fila){
-      if(renomearPararOcr) break;
-      const it = renomearCache[i];
-      if(!it || (it.confianca !== 'manual' && !it.erro)) continue;
-      paintOcrFila(`📷 OCR automático ${feitos + 1}/${fila.length}: ${it.arquivo}`);
-      const setStatus = (t) => { const el = document.getElementById('renomearOcr' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
-      try{ await executarOcrItem(i, setStatus); feitos++; }
-      catch(e){ const msg = '⚠️ ' + e.message; if(renomearCache[i]) renomearCache[i].ocrMsg = msg; setStatus(msg); }
-      renderRenomear();
-      paintOcrFila(`📷 OCR automático ${feitos}/${fila.length} concluídos...`);
-    }
-  }finally{
+    const slots = await ocrPoolEnsure(NOCR);
+    paintOcrFila(`📷 OCR automático 0/${fila.length} concluídos (${NOCR}x em paralelo)...`);
+    let cursor = 0;
+    const runSlot = async (slot) => {
+      while(true){
+        if(renomearPararOcr) return;
+        const idxPtr = cursor++;
+        if(idxPtr >= fila.length) return;
+        const i = fila[idxPtr];
+        const it = renomearCache[i];
+        if(!it || (it.confianca !== 'manual' && !it.erro)) continue;
+        const setStatus = (t) => { const el = document.getElementById('renomearOcr' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
+        slot.onLog = (m) => { if(m.status === 'recognizing text' && m.progress != null) setStatus(`📷 Lendo... ${Math.round(m.progress * 100)}%`); };
+        try{ await executarOcrItem(i, setStatus, slot.worker); feitos++; }
+        catch(e){ const msg = '⚠️ ' + e.message; if(renomearCache[i]) renomearCache[i].ocrMsg = msg; setStatus(msg); }
+        finally{ slot.onLog = null; }
+        concluidos++;
+        syncRenomearInputs();
+        renderRenomear();
+        paintOcrFila(`📷 OCR automático ${concluidos}/${fila.length} concluídos (${NOCR}x em paralelo)...`);
+      }
+    };
+    await Promise.all(slots.map(runSlot));
+  }catch(e){ toast('⚠️ OCR automático: ' + e.message); }
+  finally{
     renomearFilaOcr = false;
     paintOcrFila();
     renderRenomear();
