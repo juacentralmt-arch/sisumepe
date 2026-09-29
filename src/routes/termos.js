@@ -284,30 +284,6 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
   res.json({ total: out.length, itens: out });
 }));
 
-// AutoRenomear 2 — status: diz se a chave de OCR em nuvem está configurada
-// (sem expor a chave). A interface consulta antes de enviar.
-router.get('/api/termos/autorenomear2-status', auth(['tecnico', 'psico', 'admin']), ah(async (req,res)=>{
-  const { temNuvemOcr } = require('../lib/nuvemOcr');
-  res.json({ configurado: temNuvemOcr() });
-}));
-// AutoRenomear 2 via nuvem: recebe até 3 imagens (páginas renderizadas no
-// navegador) e extrai o texto com IA gratuita de nuvem (OCR.space), depois
-// sugere "<Tipo> - <Nome> - <Data>" com o mesmo motor do AutoRenomear 1.
-router.post('/api/termos/autorenomear2-nuvem', auth(['tecnico', 'psico', 'admin']), shared.upload.array('imagens', 6), ah(async (req,res)=>{
-  const arquivo = String((req.body && req.body.arquivo) || 'documento.pdf');
-  if(!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 imagem da página (JPG ou PNG)' });
-  const { ocrEspacoNuvem } = require('../lib/nuvemOcr');
-  let texto = '';
-  try{
-    texto = await ocrEspacoNuvem(req.files.slice(0, 3).map(f => f.buffer));
-  }catch(e){
-    return res.status(e.status || 502).json({ error: e.message || 'Falha no OCR em nuvem' });
-  }
-  if(texto.replace(/\s/g, '').length < 10) return res.status(502).json({ error: 'OCR em nuvem não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });
-  const { sugerirNome } = require('../lib/autoRenomear');
-  const r = sugerirNome(texto.slice(0, 8000), arquivo);
-  res.json({ arquivo, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500), nuvem: true });
-}));
 // AutoRenomear via texto: usado após OCR local no navegador (PDF escaneado/foto).
 router.post('/api/termos/autorenomear-texto', auth(['tecnico', 'psico', 'admin']), ah(async (req,res)=>{
   const { texto, arquivo } = req.body || {};

@@ -27,5 +27,3 @@ services:
         sync: false
       - key: CALENDLY_URL
         sync: false
-      - key: OCRSPACE_KEY
-        sync: false
