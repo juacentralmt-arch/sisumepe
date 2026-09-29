@@ -4983,7 +4983,7 @@ async function analisarRenomear(){
         const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
         const j = await r.json().catch(() => ({}));
         if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
-        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, nome: it.sugestao || (it.arquivo || 'arquivo'), ...it }));
+        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: it.sugestao || (it.arquivo || 'arquivo'), dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), ocrMsg: '' }));
       }catch(e){
         lote.forEach(f => renomearCache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
       }
@@ -5015,23 +5015,68 @@ function renderRenomear(){
     const podeOcr = it.file && /\.(pdf|jpe?g|png)$/i.test(it.arquivo || '');
     const ocrBtn = (podeOcr && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrRenomear(${i})" class="btn btn-ghost w-full py-2 text-xs mt-2 border">📷 Tentar OCR local (lê foto/escaneado)</button><p id="renomearOcr${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.ocrMsg || '')}</p>` : '';
     return `<div class="border border-slate-200 rounded-2xl p-3.5 bg-white">
-      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span>${confBadge(it.confianca)}${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
+      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span><span id="renomearConf${i}">${confBadge(it.confianca)}</span>${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
       ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>${ocrBtn}` : `
-      ${det ? `<p class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
-      ${avisos}
+      ${det ? `<p id="renomearDet${i}" class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
+      <div id="renomearAv${i}">${avisos}</div>
+      <div class="grid grid-cols-2 gap-2 mt-2">
+        <div>
+          <label class="lbl">Nome da pessoa</label>
+          <input id="renomearPessoa${i}" value="${esc(it.nome || '')}" oninput="recompSugestao(${i},'pessoa')" placeholder="Não detectado — digite aqui" class="inp w-full text-xs mt-1">
+        </div>
+        <div>
+          <label class="lbl">Data do documento</label>
+          <input id="renomearData${i}" type="date" value="${esc(it.dataISO || '')}" oninput="recompSugestao(${i},'data')" class="inp w-full text-xs mt-1">
+        </div>
+      </div>
       <label class="lbl mt-2 block">NOVO NOME *</label>
       <div class="flex gap-2 mt-1">
-        <input id="renomearNome${i}" value="${esc(it.nome)}" class="inp flex-1 font-mono text-xs">
+        <input id="renomearNome${i}" value="${esc(it.sugestao || '')}" class="inp flex-1 font-mono text-xs">
         <button onclick="baixarRenomeado(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
       </div>${ocrBtn}${trecho}`}
     </div>`;
   }).join('');
 }
+// Preview editável do AutoRenomear: Nome/Data digitados recompõem o NOVO NOME
+// ao vivo (atualização pontual por id, sem re-render para não perder o foco).
+function recompSugestao(i, src){
+  const it = renomearCache[i]; if(!it || it.erro) return;
+  const pInp = document.getElementById('renomearPessoa' + i);
+  const dInp = document.getElementById('renomearData' + i);
+  const nInp = document.getElementById('renomearNome' + i);
+  const detEl = document.getElementById('renomearDet' + i);
+  const avEl = document.getElementById('renomearAv' + i);
+  const confEl = document.getElementById('renomearConf' + i);
+  const pessoa = (pInp ? pInp.value : (it.nome || '')).trim();
+  const dataISO = (dInp ? dInp.value : (it.dataISO || '')).trim();
+  if(src === 'data' && dataISO) it.dataManual = true;
+  it.nome = pessoa;
+  it.dataISO = dataISO;
+  it.data = dataISO ? dataISO.slice(8,10) + '-' + dataISO.slice(5,7) + '-' + dataISO.slice(0,4) : 'SEM DATA';
+  const mExt = String(it.sugestao || it.arquivo || '.pdf').match(/\.(pdf|jpe?g|png)$/i);
+  const ext = (mExt ? mExt[0] : '.pdf').toLowerCase().replace('jpeg', 'jpg');
+  const pessoaOk = pessoa.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+  const base = (it.tipo || 'Documento') + (pessoaOk ? ' - ' + pessoaOk : '') + ' - ' + it.data;
+  it.sugestao = base.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) + ext;
+  const nomeOk = it.tipoId === 'recolhimento' || !!pessoaOk;
+  const dataOk = !!dataISO;
+  const av = [];
+  if(it.tipoId === 'documento') av.push('Tipo não identificado — verifique o título do documento');
+  if(!nomeOk) av.push('Nome não encontrado — complete manualmente');
+  if(!dataOk) av.push('Data não encontrada — complete manualmente');
+  else if(it.dataDoArquivo && !it.dataManual) av.push('Data extraída do nome do arquivo — confira no documento');
+  it.avisos = av;
+  it.confianca = (nomeOk && dataOk) ? 'alta' : ((nomeOk || dataOk) ? 'média' : 'baixa');
+  if(nInp) nInp.value = it.sugestao;
+  if(detEl) detEl.textContent = [it.tipo, pessoa, it.data].filter(Boolean).join(' • ');
+  if(avEl) avEl.innerHTML = av.map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
+  if(confEl) confEl.innerHTML = confBadge(it.confianca);
+}
 function baixarRenomeado(i){
   const it = renomearCache[i];
   if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
   const inp = document.getElementById('renomearNome' + i);
-  let nome = inp ? inp.value.trim() : it.nome;
+  let nome = inp ? inp.value.trim() : (it.sugestao || it.nome);
   if(!nome) return toast('⚠️ Informe o novo nome');
   nome = nome.replace(/[\\/:*?"<>|]/g, '').trim() || 'documento';
   const url = URL.createObjectURL(it.file);
@@ -5095,7 +5140,7 @@ async function baixarTodosRenomeados(){
       const it = renomearCache[i];
       if(!it || !it.file || it.erro) continue;
       const inp = document.getElementById('renomearNome' + i);
-      const base = ((inp ? inp.value.trim() : it.nome) || '').replace(/[\\/:*?"<>|]/g, '').trim() || ('documento-' + (i + 1));
+      const base = ((inp ? inp.value.trim() : (it.sugestao || it.nome)) || '').replace(/[\\/:*?"<>|]/g, '').trim() || ('documento-' + (i + 1));
       const buf = new Uint8Array(await it.file.arrayBuffer());
       arqs.push({ nome: nomeDownloadUnico(base, usados), dados: buf });
     }
@@ -5122,8 +5167,16 @@ function limparRenomear(){
 }
 function syncRenomearInputs(){
   (renomearCache || []).forEach((it, idx) => {
-    const inp = document.getElementById('renomearNome' + idx);
-    if(inp) it.nome = inp.value;
+    const sInp = document.getElementById('renomearNome' + idx);
+    if(sInp) it.sugestao = sInp.value;
+    const pInp = document.getElementById('renomearPessoa' + idx);
+    if(pInp) it.nome = pInp.value.trim();
+    const dInp = document.getElementById('renomearData' + idx);
+    if(dInp){
+      it.dataISO = dInp.value.trim();
+      it.data = it.dataISO ? it.dataISO.slice(8,10) + '-' + it.dataISO.slice(5,7) + '-' + it.dataISO.slice(0,4) : 'SEM DATA';
+      if(dInp.value.trim()) it.dataManual = true;
+    }
   });
 }
 // OCR 100% local (navegador): para PDF escaneado/foto — renderiza as 2 primeiras
@@ -5169,7 +5222,7 @@ async function executarOcrItem(i, setStatus){
   if(fullText.replace(/\s/g, '').length < 10) throw new Error('OCR não encontrou texto — confira a qualidade da imagem ou preencha manualmente');
   setStatus('⏳ Interpretando texto...');
   const r = await api('/api/termos/autorenomear-texto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: fullText.slice(0, 8000), arquivo: it.arquivo }) });
-  renomearCache[i] = { ...renomearCache[i], ...r, nome: r.sugestao, erro: undefined, ocrMsg: '' };
+  renomearCache[i] = { ...renomearCache[i], ...r, nome: r.nome || '', dataDoArquivo: !!((r.avisos || []).some(a => /nome do arquivo/i.test(a))), erro: undefined, ocrMsg: '' };
   return true;
 }
 async function ocrRenomear(i){
