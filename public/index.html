@@ -3109,6 +3109,25 @@ async function getDocWorker(logger){
   docWorker = w; docWorkerReady = true;
   return w;
 }
+// Se um reconhecimento travar (worker preso), descarta o worker para o próximo
+// uso criar um novo — sem isso a fila inteira emperra até recarregar a página.
+function resetDocWorker(){
+  try{ if(docWorker && docWorker.terminate) docWorker.terminate().catch(() => {}); }catch(e){}
+  docWorker = null; docWorkerReady = false;
+}
+// Executa o OCR com timeout: hung vira erro visível em vez de espera infinita.
+async function ocrComTimeout(promiseFn, ms){
+  let timer = null;
+  try{
+    return await Promise.race([
+      promiseFn(),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('OCR demorou demais (timeout) — verifique a internet e toque para tentar de novo')), ms); })
+    ]);
+  }catch(e){
+    if(e && /demorou demais/.test(e.message || '')) resetDocWorker();
+    throw e;
+  }finally{ if(timer) clearTimeout(timer); }
+}
 function preloadOCR(){
   // pré-carrega OCR em segundo plano (~2MB) para a 1ª leitura ser 3-4s mais rápida
   if(docWorkerReady || docTesseractLoading) return;
@@ -5332,7 +5351,7 @@ async function ocrRenomear(i, btn){
   syncRenomearInputs();
   const setStatus = (t) => { const el = document.getElementById('renomearOcr' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
   try{
-    await executarOcrItem(i, setStatus);
+    await ocrComTimeout(() => executarOcrItem(i, setStatus), 240000);
     renderRenomear();
     toast('✅ OCR concluído — revise o nome sugerido');
   }catch(e){ const msg = '⚠️ OCR: ' + e.message; if(renomearCache[i]) renomearCache[i].ocrMsg = msg; setStatus(msg); toast(msg); if(btn) setBtnLoading(btn, false); }
@@ -5371,6 +5390,7 @@ async function ocrFilaAutomatica(){
   if(!fila.length){ paintOcrPendentes(); return; }
   renomearFilaOcr = true; renomearPararOcr = false;
   paintOcrPendentes();
+  toast(`📷 OCR automático iniciado em ${fila.length} arquivo${fila.length > 1 ? 's' : ''} — mantenha a aba aberta`);
   let feitos = 0;
   try{
     await ensureTesseract().catch(() => {});
@@ -5380,7 +5400,7 @@ async function ocrFilaAutomatica(){
       if(!it || (it.confianca !== 'manual' && !it.erro)) continue;
       paintOcrFila(`📷 OCR automático ${feitos + 1}/${fila.length}: ${it.arquivo}`);
       const setStatus = (t) => { const el = document.getElementById('renomearOcr' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
-      try{ await executarOcrItem(i, setStatus); feitos++; }
+      try{ await ocrComTimeout(() => executarOcrItem(i, setStatus), 240000); feitos++; }
       catch(e){ const msg = '⚠️ ' + e.message; if(renomearCache[i]) renomearCache[i].ocrMsg = msg; setStatus(msg); }
       syncRenomearInputs();
       renderRenomear();
