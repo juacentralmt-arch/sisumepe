@@ -56,7 +56,10 @@ function limparNome(s) {
   // corta em localidade (quando o extrator junta linhas: "Fulano Juazeiro do Norte, 10 de...")
   v = v.split(/\b(juazeiro\s+do\s+norte|fortaleza|crat[oó]|cariri|jardim|cear[áa]|juizado|comarca|vara\s+[úu]nica)\b/i)[0].trim();
   // corta em rótulos de campo (quando o extrator junta linhas: "...Silva Data: 28/...")
-  v = v.split(/\b(data|cpf|cnpj|r\.?g\.?\b|orgao\s+expedidor|endereco|telefone|celular|processo|vara|nascimento|nome\s+da\s+m[ãa]e|nome\s+do\s+pai|estado\s+civil|naturalidade|profiss[ãa]o|assinatura)\b/i)[0].trim();
+  // ATENÇÃO: "nascimento" sozinho NÃO pode cortar — é sobrenome comum
+  // ("...do Nascimento Matos"). Só corta como rótulo com dois-pontos
+  // ("Nascimento: 22/06/2026"); "Data de Nascimento" já corta em "data".
+  v = v.split(/\b(data|cpf|cnpj|r\.?g\.?\b|orgao\s+expedidor|endereco|telefone|celular|processo|vara|nome\s+da\s+m[ãa]e|nome\s+do\s+pai|estado\s+civil|naturalidade|profiss[ãa]o|assinatura)\b|nascimento\s*:/i)[0].trim();
   // corta em CPF, RG, vírgula, ponto-e-vírgula, parêntese ou "nascid"
   v = v.split(/,|;|\(|cpf|r\.?g\.?\b|nascid|brasileir|casad|solteir|residente|\d{3}\.?\d{3}\.?/i)[0].trim();
   // corta dígitos residuais do fim (ruído de data colada: "Silva 28")
