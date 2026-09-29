@@ -5729,12 +5729,17 @@ async function ocrNuvemItem(i, setStatus){
 // Mostra aviso na seção quando ausente. Retorna true se configurado.
 async function checarNuvemCfg(){
   const el = document.getElementById('renomear2NuvemCfg');
+  const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || '';
+  const local = host === 'localhost' || host === '127.0.0.1';
+  const instrucao = local
+    ? 'Reinicie o servidor local (Ctrl+C no terminal e rode node server.js de novo) com OCRSPACE_KEY no arquivo .env.'
+    : 'Cadastre OCRSPACE_KEY no Environment do serviço sisumepe no Render e aguarde o redeploy ficar Live.';
   try{
     const r = await api('/api/termos/autorenomear2-status');
     if(r && r.configurado){ if(el) el.classList.add('hidden'); return true; }
   }catch(e){}
   if(el){
-    el.textContent = '⚠️ OCR em nuvem NÃO configurado neste servidor — cadastre OCRSPACE_KEY no Environment e aguarde o redeploy ficar Live.';
+    el.textContent = '⚠️ OCR em nuvem NÃO configurado neste servidor — ' + instrucao;
     el.classList.remove('hidden');
   }
   return false;
