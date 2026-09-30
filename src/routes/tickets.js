@@ -145,8 +145,8 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
   const t = await store.tickets.byId(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
   const { relatorio } = req.body || {};
-  if (!relatorio || !relatorio.trim() || relatorio.trim().length < 10)
-    return res.status(400).json({ error: 'Relatório da ação realizada é obrigatório (mín. 10 caracteres).' });
+  if (!relatorio || !relatorio.trim())
+    return res.status(400).json({ error: 'Relatório da ação realizada é obrigatório.' });
   let cl = req.body.checklist;
   if (typeof cl === 'string') { try { cl = JSON.parse(cl); } catch { cl = null; } }
   if (cl && (typeof cl !== 'object' || Array.isArray(cl))) cl = null;
