@@ -2,6 +2,7 @@ const express = require('express');
 const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoRecolhimentoEquipamentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
 const { gerarAtivacaoPDF } = require('../lib/ativacoesPdf');
 const shared = require('../lib/shared');
+const visaoService = require('../services/visaoComputacional');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
 
@@ -262,7 +263,7 @@ async function extractTextAutoRenomear(buffer){
 
 // AutoRenomear: recebe arquivos (PDF com texto ou imagem) e sugere
 // "<Tipo> - <Nome da pessoa> - <Data do documento>" a partir do conteúdo.
-// Sem persistência — só análise (o rename final é feito no navegador).
+// Usa Visão Computacional Multimodal (OCR/ICR/Layout Analysis) local.
 router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), shared.upload.array('arquivos', 20), ah(async (req,res)=>{
   if(!req.files || !req.files.length) return res.status(400).json({ error: 'Selecione ao menos 1 arquivo (PDF, JPG ou PNG)' });
   const { sugerirNome } = require('../lib/autoRenomear');
@@ -272,25 +273,141 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
     const isPdf = /\.pdf$/i.test(original) || f.mimetype === 'application/pdf';
     const isImg = /\.(jpe?g|png)$/i.test(original) || /^image\/(jpeg|png)$/.test(f.mimetype || '');
     if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
-    if(!isPdf){
-      out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-        avisos: ['Imagem sem texto extraível — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
-      continue;
-    }
+    
+    let visionResult = null;
     let texto = '';
-    try{
-      texto = await extractTextAutoRenomear(f.buffer);
-    }catch(e){
-      out.push({ arquivo: original, erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido') });
+    
+    try {
+      // Usar Visão Computacional Multimodal para extrair texto e campos estruturados
+      const visionResult = await visaoService.analyzeDocument(f.buffer, original);
+      
+      if (visionResult && visionResult.full_text) {
+        texto = visionResult.full_text;
+        
+        // Usar campos extraídos pela visão computacional para melhorar a sugestão
+        const fields = visionResult.fields_dict || {};
+        const visionFields = {
+          nome: fields['MONITORADO'] || fields['MONITORADO(A)'] || fields['NOME DO MONITORADO'] || fields['NOME COMPLETO'] || fields['NOME'] || fields['INTERRESSADO'] || fields['INTERRESSADO(A)'] || fields['NOME DO MONITORADO'],
+          data: fields['DATA'] || fields['DATA/HORA'] || fields['DATA/HORA:'] || fields['DATA:'],
+          dispositivo: fields['NÚMERO'] || fields['Nº'] || fields['Nº:'] || fields['DISPOSITIVO']
+        };
+        
+        // Gerar sugestão usando o motor existente + campos da visão
+        const r = sugerirNome(texto.slice(0, 8000), original);
+        
+        // Melhorar com campos da visão se disponíveis
+        let sugestaoFinal = r.sugestao;
+        let nomeFinal = r.nome;
+        let dataFinal = r.data;
+        let dataISOFinal = r.dataISO;
+        let confiancaFinal = r.confianca;
+        let avisosFinal = [...r.avisos];
+        
+        // Se a visão encontrou nome com alta confiança, usar
+        if (visionResult.fields_dict && visionResult.fields_dict['MONITORADO(A)']) {
+          nomeFinal = visionResult.fields_dict['MONITORADO(A)'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['MONITORADO']) {
+          nomeFinal = visionResult.fields_dict['MONITORADO'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['NOME DO MONITORADO']) {
+          nomeFinal = visionResult.fields_dict['NOME DO MONITORADO'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['NOME COMPLETO']) {
+          nomeFinal = visionResult.fields_dict['NOME COMPLETO'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['NOME']) {
+          nomeFinal = visionResult.fields_dict['NOME'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['INTERRESSADO(A)']) {
+          nomeFinal = visionResult.fields_dict['INTERRESSADO(A)'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['INTERRESSADO']) {
+          nomeFinal = visionResult.fields_dict['INTERRESSADO'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['NOME DO MONITORADO']) {
+          nomeFinal = visionResult.fields_dict['NOME DO MONITORADO'];
+        }
+        
+        // Se a visão encontrou data com alta confiança, usar
+        if (visionResult.fields_dict && visionResult.fields_dict['DATA/HORA']) {
+          dataISOFinal = visionResult.fields_dict['DATA/HORA'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['DATA/HORA:']) {
+          dataISOFinal = visionResult.fields_dict['DATA/HORA:'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['DATA']) {
+          dataISOFinal = visionResult.fields_dict['DATA'];
+        } else if (visionResult.fields_dict && visionResult.fields_dict['DATA:']) {
+          dataISOFinal = visionResult.fields_dict['DATA:'];
+        }
+        
+        // Recalcular sugestão com dados da visão
+        if (nomeFinal || dataISOFinal) {
+          const tipo = visionResult.document_type || 'documento';
+          const tipoLabel = {
+            'termo_recolhimento': 'Termo de recolhimento',
+            'termo_recolhimento_equipamento': 'Termo de recolhimento equipamento',
+            'termo_ativacao': 'Termo de ativação',
+            'termo_endereco': 'Ofício',
+            'declaracao': 'Declaração',
+            'relatorio': 'Relatório',
+            'ata': 'Ata',
+            'default': 'Documento'
+          }[visionResult.document_type] || 'Documento';
+          
+          const { sanitizar, isoParaNome, extensaoDe } = require('../lib/autoRenomear');
+          const nomeParte = nomeFinal ? sanitizar(nomeFinal, 60) : 'SEM NOME';
+          const dataParte = dataISOFinal ? isoParaNome(dataISOFinal) : 'SEM DATA';
+          sugestaoFinal = sanitizar(tipoLabel + ' - ' + nomeParte + ' - ' + dataParte, 120) + extensaoDe(original);
+          
+          // Confiança alta se visão encontrou ambos
+          if (nomeFinal && dataISOFinal) confiancaFinal = 'alta';
+          else if (nomeFinal || dataISOFinal) confiancaFinal = 'média';
+          
+          // Limpar avisos se visão encontrou os dados
+          if (nomeFinal) avisosFinal = avisosFinal.filter(a => !/Nome não encontrado/i.test(a));
+          if (dataISOFinal) avisosFinal = avisosFinal.filter(a => !/Data não encontrada/i.test(a));
+          
+          // Adicionar info de que visão foi usada
+          avisosFinal.unshift('Extraído com Visão Computacional Multimodal (OCR/ICR/Layout Analysis)');
+        }
+        
+        out.push({ 
+          arquivo: original, 
+          tamanho: f.size, 
+          sugestao: sugestaoFinal, 
+          tipo: visionResult.document_type || 'documento',
+          tipoId: visionResult.document_type || 'documento',
+          nome: nomeFinal,
+          data: dataISOFinal ? dataISOFinal.split('-').reverse().join('-') : r.data,
+          dataISO: dataISOFinal || r.dataISO,
+          confianca: confiancaFinal,
+          avisos: avisosFinal,
+          visao: true,
+          trecho: (visionResult.full_text || '').replace(/\s+/g, ' ').trim().slice(0, 1500)
+        });
+        continue;
+      }
+    } catch (visionError) {
+      console.warn('[AutoRenomear] Visão computacional falhou, fallback para método tradicional:', visionError.message);
+      // Fallback para método tradicional
+    }
+    
+    // Fallback: método tradicional (pdf-parse + pdfjs)
+    if (isPdf) {
+      try {
+        texto = await extractTextAutoRenomear(f.buffer);
+      } catch (e) {
+        out.push({ arquivo: original, erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido') });
+        continue;
+      }
+      
+      if (texto.replace(/\s/g, '').length < 20) {
+        out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
+          avisos: ['PDF escaneado (sem texto selecionável) — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
+        continue;
+      }
+      
+      const r = sugerirNome(texto.slice(0, 8000), original);
+      out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
       continue;
     }
-    if(texto.replace(/\s/g, '').length < 20){
-      out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-        avisos: ['PDF escaneado (sem texto selecionável) — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
-      continue;
-    }
-    const r = sugerirNome(texto.slice(0, 8000), original);
-    out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
+    
+    // Imagem sem OCR local - precisa de visão computacional
+    out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
+      avisos: ['Imagem sem texto extraível — use Visão Computacional (requer serviço Python OCR)'], trecho: '' });
   }
   res.json({ total: out.length, itens: out });
 }));
@@ -491,6 +608,95 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
   res.send(Buffer.from(pdf));
+}));
+
+// Visão Computacional Multimodal: endpoint direto para análise de documentos
+// usando OCR/ICR/Layout Analysis local (Python + PaddleOCR/EasyOCR/Tesseract + OpenCV)
+router.post('/api/termos/visao-analisar', auth(['tecnico', 'psico', 'admin']), shared.upload.array('arquivos', 10), ah(async (req,res)=>{
+  if(!req.files || !req.files.length) return res.status(400).json({ error: 'Selecione ao menos 1 arquivo (PDF, JPG ou PNG)' });
+  const out = [];
+  for(const f of req.files){
+    const original = f.originalname || 'arquivo';
+    const isPdf = /\.pdf$/i.test(original) || f.mimetype === 'application/pdf';
+    const isImg = /\.(jpe?g|png)$/i.test(original) || /^image\/(jpeg|png)$/.test(f.mimetype || '');
+    if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
+    
+    try {
+      let visionResult = null;
+      
+      if (isPdf) {
+        // Para PDF, converter páginas para imagens e processar
+        const pdfjs = require('pdfjs-dist/legacy/build/pdf.js');
+        const loadingTask = pdfjs.getDocument({ 
+          data: new Uint8Array(f.buffer),
+          disableWorker: true,
+          disableFontFace: true,
+          isEvalSupported: false,
+          useWorkerFetch: false
+        });
+        const pdf = await loadingTask.promise;
+        const maxPages = Math.min(pdf.numPages, 5);
+        
+        const pageResults = [];
+        for(let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 2.0 });
+          
+          // Criar canvas para renderizar
+          const { createCanvas } = require('canvas');
+          const canvas = createCanvas(viewport.width, viewport.height);
+          const context = canvas.getContext('2d');
+          
+          await page.render({ 
+            canvasContext: context, 
+            viewport 
+          }).promise;
+          
+          const imageBuffer = canvas.toBuffer('image/png');
+          const result = await visaoService.analyzeDocument(imageBuffer, `${original}_page${i}.png`);
+          pageResults.push(result);
+        }
+        
+        // Combinar resultados
+        if (pageResults.length > 0) {
+          visionResult = pageResults[0];
+          if (pageResults.length > 1) {
+            // Combinar campos de todas as páginas
+            for (const page of pageResults.slice(1)) {
+              for (const [key, value] of Object.entries(page.fields_dict || {})) {
+                if (value && !visionResult.fields_dict[key]) {
+                  visionResult.fields_dict[key] = value;
+                }
+              }
+              visionResult.full_text += '\n\n--- PAGE BREAK ---\n\n' + page.full_text;
+            }
+          }
+        }
+      } else {
+        // Imagem direta
+        visionResult = await visaoService.analyzeDocument(f.buffer, original);
+      }
+      
+      if (visionResult) {
+        out.push({ 
+          arquivo: original, 
+          tamanho: f.size,
+          document_type: visionResult.document_type,
+          full_text: visionResult.full_text,
+          confidence: visionResult.confidence,
+          fields: visionResult.fields,
+          fields_dict: visionResult.fields_dict,
+          raw_ocr_count: visionResult.raw_ocr_results?.length || 0,
+          trecho: visionResult.full_text?.replace(/\s+/g, ' ').trim().slice(0, 1500) || ''
+        });
+      } else {
+        out.push({ arquivo: original, erro: 'Falha na análise de visão' });
+      }
+    } catch (e) {
+      out.push({ arquivo: original, erro: 'Erro na visão computacional: ' + e.message });
+    }
+  }
+  res.json({ total: out.length, itens: out });
 }));
 
 module.exports = router;
