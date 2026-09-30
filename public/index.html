@@ -5230,14 +5230,15 @@ function openPdfTool(tool){
       <div id="pdfMergeGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="PDFs para mesclar"></div>
       <button id="pdfMergeBtn" onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>⧉ Mesclar PDFs</button>
     </div>`,
-    split: `<h4 class="font-bold text-sm mb-2">✂️ Dividir PDF</h4><p class="text-xs text-slate-500 mb-3">Extraia páginas específicas. Ex: 1,3,5-7</p><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfSplitInfo')"><div id="pdfSplitInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp mb-3"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button>`,
-    compress: `<h4 class="font-bold text-sm mb-2">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500 mb-3">Reduz tamanho removendo metadados</p><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfCompressInfo')"><div id="pdfCompressInfo" class="text-xs text-slate-500 mb-2 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button>`,
-    jpg2pdf: `<h4 class="font-bold text-sm mb-2">🖼️ JPG para PDF</h4><p class="text-xs text-slate-500 mb-3">Converta imagens JPG/PNG em PDF (até 20) — arraste para reordenar</p><input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="inp mb-3" onchange="renderPdfJpgList()"><div id="pdfJpgList" class="hidden space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button>`,
-    rotate: `<h4 class="font-bold text-sm mb-2">🔄 Girar PDF</h4><p class="text-xs text-slate-500 mb-3">Gire todas as páginas</p><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfRotateInfo')"><div id="pdfRotateInfo" class="text-xs text-slate-500 mb-2 hidden"></div><select id="pdfRotateAngle" class="inp mb-3"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button>`,
-    extract: `<h4 class="font-bold text-sm mb-2">📑 Extrair páginas</h4><p class="text-xs text-slate-500 mb-3">Salve páginas específicas como novo PDF</p><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfExtractInfo')"><div id="pdfExtractInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp mb-3"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button>`
+    split: `<div class="space-y-3"><h4 class="font-bold text-sm">✂️ Dividir PDF</h4><p class="text-xs text-slate-500">Extraia páginas específicas. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-violet-300 hover:bg-violet-50/50 cursor-pointer transition" for="pdfSplitFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfSplitInfo','pdfSplitPrev')"></label><div id="pdfSplitPrev"></div><div id="pdfSplitInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button></div>`,
+    compress: `<div class="space-y-3"><h4 class="font-bold text-sm">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500">Reduz tamanho removendo metadados</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50/50 cursor-pointer transition" for="pdfCompressFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfCompressInfo','pdfCompressPrev')"></label><div id="pdfCompressPrev"></div><div id="pdfCompressInfo" class="text-xs text-slate-500 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button></div>`,
+    jpg2pdf: `<div class="space-y-3"><div class="flex items-center justify-between"><h4 class="font-bold text-sm">🖼️ JPG para PDF</h4><div class="flex items-center gap-2"><span id="pdfJpgCount" class="text-xs text-slate-500">0 imagens</span><button id="pdfJpgSortBtn" onclick="pdfJpgSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button></div></div><p class="text-xs text-slate-500 mb-2">Arraste para reordenar — até 20 imagens</p><div id="pdfJpgGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="Imagens para converter"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button></div>`,
+    rotate: `<div class="space-y-3"><h4 class="font-bold text-sm">🔄 Girar PDF</h4><p class="text-xs text-slate-500">Gire todas as páginas</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-sky-300 hover:bg-sky-50/50 cursor-pointer transition" for="pdfRotateFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfRotateInfo','pdfRotatePrev')"></label><div id="pdfRotatePrev"></div><div id="pdfRotateInfo" class="text-xs text-slate-500 hidden"></div><select id="pdfRotateAngle" class="inp"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button></div>`,
+    extract: `<div class="space-y-3"><h4 class="font-bold text-sm">📑 Extrair páginas</h4><p class="text-xs text-slate-500">Salve páginas específicas como novo PDF</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-rose-300 hover:bg-rose-50/50 cursor-pointer transition" for="pdfExtractFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfExtractInfo','pdfExtractPrev')"></label><div id="pdfExtractPrev"></div><div id="pdfExtractInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button></div>`
   };
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
   if(tool === 'merge') renderPdfMergeGrid();
+  if(tool === 'jpg2pdf') renderPdfJpgGrid();
   area.scrollIntoView({behavior:'smooth',block:'center'});
 }
 async function pdfHandleResponse(res, filename){
@@ -5434,54 +5435,116 @@ async function pdfMerge(){
     setBtnLoading(document.getElementById('pdfMergeBtn'), false);
   }
 }
-async function pdfShowPageCount(inp, infoId){
+// Preview de arquivo único (split/compress/rotate/extract): card com
+// miniatura da 1ª página + nome + tamanho + nº de páginas.
+async function pdfSinglePreview(inp, infoId, prevId){
   const f = inp.files[0];
-  const el = document.getElementById(infoId);
-  if(!f){ el.classList.add('hidden'); return; }
-  el.textContent = `📄 Lendo PDF...`;
-  el.classList.remove('hidden');
+  const info = document.getElementById(infoId);
+  const prev = document.getElementById(prevId);
+  if(!f){ if(info) info.classList.add('hidden'); if(prev) prev.innerHTML=''; return; }
+  if(info){ info.textContent = '📄 Lendo PDF...'; info.classList.remove('hidden'); }
+  if(prev) prev.innerHTML = '<div class="max-w-[180px] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm"><div class="aspect-[3/4] bg-slate-50 flex items-center justify-center"><span class="w-6 h-6 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin"></span></div></div>';
   try{
-    const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+    await ensurePdfJsAtiv();
     const buf = await f.arrayBuffer();
-    const doc = await PDFDocument.load(buf);
-    const pages = doc.getPageCount();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 0.35 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    const total = pdf.numPages;
+    try{ await pdf.destroy(); }catch(_){}
     const kb = Math.round(f.size/1024);
-    el.textContent = `${pages} página${pages>1?'s':''} • ${kb} KB`;
+    if(info) info.textContent = `${total} página${total>1?'s':''} • ${kb} KB`;
+    if(prev) prev.innerHTML = `<div class="max-w-[180px] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm"><div class="aspect-[3/4] bg-slate-50"><img src="${canvas.toDataURL('image/jpeg', 0.7)}" alt="${esc(f.name)}" class="w-full h-full object-cover"></div><div class="p-2"><p class="text-xs font-mono truncate text-slate-700" title="${esc(f.name)}">${esc(f.name)}</p><p class="text-[10px] text-slate-400 mt-0.5">${kb} KB</p></div></div>`;
   }catch(e){
-    el.textContent = `⚠️ Não foi possível ler: ${e.message}`;
+    if(info) info.textContent = `⚠️ Não foi possível ler: ${e.message}`;
+    if(prev) prev.innerHTML = '';
   }
 }
 let pdfJpgFiles = [];
-function renderPdfJpgList(){
-  const inp = document.getElementById('pdfJpgFiles');
-  const list = document.getElementById('pdfJpgList');
+let pdfJpgUrls = new Map(); // fileKey -> objectURL
+let pdfJpgSortAsc = true;
+function pdfJpgKey(f){ return `${f.name}|${f.size}|${f.lastModified||0}`; }
+function pdfJpgUrl(f){
+  const k = pdfJpgKey(f);
+  if(!pdfJpgUrls.has(k)) pdfJpgUrls.set(k, URL.createObjectURL(f));
+  return pdfJpgUrls.get(k);
+}
+function renderPdfJpgGrid(){
+  const grid = document.getElementById('pdfJpgGrid');
   const btn = document.getElementById('pdfJpgBtn');
-  pdfJpgFiles = inp && inp.files ? [...inp.files] : [];
+  const count = document.getElementById('pdfJpgCount');
   if(!pdfJpgFiles.length){
-    list.classList.add('hidden');
+    grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+        <span class="text-4xl mb-2">🖼️</span>
+        <p class="text-slate-500 text-sm">Clique em <span class="font-semibold text-amber-600">+ Adicionar imagens</span></p>
+        <p class="text-xs text-slate-400 mt-1">JPG/PNG — até 20</p>
+      </div>
+      <div class="col-span-full flex justify-center">
+        <label class="btn btn-ghost border-dashed px-8 py-4 cursor-pointer" for="pdfJpgFiles">
+          <span class="flex items-center gap-2"><span class="text-2xl">+</span><span>Adicionar imagens</span></span>
+          <input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="hidden" onchange="addPdfJpgFiles(event)">
+        </label>
+      </div>
+    `;
     btn.disabled = true;
+    if(count) count.textContent = '0 imagens';
     return;
   }
-  list.classList.remove('hidden');
-  list.innerHTML = pdfJpgFiles.map((f, i) => `
-    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
+  grid.innerHTML = pdfJpgFiles.map((f, i) => `
+    <div class="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
       ondragstart="pdfJpgDragStart(event)"
       ondragend="pdfJpgDragEnd(event)">
-      <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
-      <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
-      <span class="text-[11px] text-slate-500">(${Math.round(f.size/1024)} KB)</span>
-      <button type="button" onclick="pdfJpgRemove(${i})" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Remover">✕</button>
+      <div class="aspect-[3/4] bg-slate-50 relative overflow-hidden">
+        <img src="${pdfJpgUrl(f)}" alt="${esc(f.name)}" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
+        <button type="button" onclick="event.stopPropagation(); pdfJpgRemove(${i})" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/90 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="Remover">✕</button>
+        <span class="absolute bottom-1 left-1 right-1 text-center text-[10px] font-bold text-white bg-black/50 px-1 rounded">${i+1}</span>
+      </div>
+      <div class="p-2.5">
+        <p class="text-xs font-mono truncate text-slate-700" title="${esc(f.name)}">${esc(f.name)}</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">${Math.round(f.size/1024)} KB</p>
+      </div>
     </div>
   `).join('');
+  const addBtn = document.createElement('div');
+  addBtn.className = 'col-span-full';
+  addBtn.innerHTML = `
+    <label class="btn btn-ghost border-dashed w-full py-4 cursor-pointer flex items-center justify-center gap-2 hover:bg-amber-50" for="pdfJpgFiles">
+      <span class="text-2xl">+</span><span>Adicionar mais imagens</span>
+      <input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="hidden" onchange="addPdfJpgFiles(event)">
+    </label>
+  `;
+  grid.appendChild(addBtn);
   btn.disabled = false;
-  list.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
-  list.ondrop = pdfJpgDrop;
+  if(count) count.textContent = `${pdfJpgFiles.length} imagen${pdfJpgFiles.length>1?'s':'m'}`;
+  grid.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  grid.ondrop = pdfJpgDrop;
+}
+function addPdfJpgFiles(e){
+  const news = e.target ? [...e.target.files] : [];
+  if(!news.length) return;
+  for(const f of news){
+    const ok = f.type === 'image/jpeg' || f.type === 'image/png' || /\.(jpe?g|png)$/i.test(f.name);
+    if(ok) pdfJpgFiles.push(f);
+  }
+  renderPdfJpgGrid();
+}
+function pdfJpgSort(){
+  pdfJpgSortAsc = !pdfJpgSortAsc;
+  pdfJpgFiles.sort((a,b) => pdfJpgSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+  renderPdfJpgGrid();
+  const btn = document.getElementById('pdfJpgSortBtn');
+  if(btn) btn.textContent = pdfJpgSortAsc ? '↑ A–Z' : '↓ Z–A';
 }
 function pdfJpgDragStart(e){
   e.dataTransfer.effectAllowed = 'move';
   const row = e.currentTarget;
   row.dataset.dragging = 'true';
-  row.classList.add('opacity-50', 'ring-2', 'ring-amber-300');
+  row.classList.add('opacity-40', 'ring-2', 'ring-amber-300');
 }
 function pdfJpgDrop(e){
   e.preventDefault();
@@ -5492,22 +5555,23 @@ function pdfJpgDrop(e){
   if(from >= 0 && to >= 0 && from !== to){
     const [moved] = pdfJpgFiles.splice(from, 1);
     pdfJpgFiles.splice(to, 0, moved);
-    renderPdfJpgList();
+    renderPdfJpgGrid();
   }
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-amber-50', 'border-amber-300'));
 }
 function pdfJpgDragEnd(e){
   const row = e.currentTarget;
-  row.classList.remove('opacity-50', 'ring-2', 'ring-amber-300');
+  row.classList.remove('opacity-40', 'ring-2', 'ring-amber-300');
   delete row.dataset.dragging;
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-amber-50', 'border-amber-300'));
 }
 function pdfJpgRemove(idx){
-  pdfJpgFiles.splice(idx, 1);
-  const dt = new DataTransfer();
-  pdfJpgFiles.forEach(f => dt.items.add(f));
-  document.getElementById('pdfJpgFiles').files = dt.files;
-  renderPdfJpgList();
+  const [gone] = pdfJpgFiles.splice(idx, 1);
+  if(gone){
+    const k = pdfJpgKey(gone);
+    if(pdfJpgUrls.has(k)){ try{ URL.revokeObjectURL(pdfJpgUrls.get(k)); }catch(_){} pdfJpgUrls.delete(k); }
+  }
+  renderPdfJpgGrid();
 }
 async function pdfJpgToPdf(){
   if(!pdfJpgFiles.length) return toast('⚠️ Selecione ao menos 1 imagem');
