@@ -800,30 +800,30 @@
         <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
           <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <button onclick="openPdfTool('merge')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-indigo-300 hover:bg-indigo-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl group-hover:bg-indigo-600 group-hover:text-white transition">⧉</div>
-              <p class="text-xs font-bold mt-2">Juntar PDF</p><p class="text-[11px] text-slate-500">Mesclar vários PDFs</p>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <button data-pdftool="merge" onclick="openPdfTool('merge')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📑</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Juntar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Mesclar vários PDFs</p>
             </button>
-            <button onclick="openPdfTool('split')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-violet-300 hover:bg-violet-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center text-xl group-hover:bg-violet-600 group-hover:text-white transition">✂️</div>
-              <p class="text-xs font-bold mt-2">Dividir PDF</p><p class="text-[11px] text-slate-500">Extrair páginas</p>
+            <button data-pdftool="split" onclick="openPdfTool('split')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-100 hover:border-violet-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-[26px] shadow-lg shadow-violet-200 group-hover:scale-105 transition-transform">✂️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Dividir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Extrair páginas</p>
             </button>
-            <button onclick="openPdfTool('compress')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-emerald-300 hover:bg-emerald-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl group-hover:bg-emerald-600 group-hover:text-white transition">🗜️</div>
-              <p class="text-xs font-bold mt-2">Comprimir PDF</p><p class="text-[11px] text-slate-500">Reduzir tamanho</p>
+            <button data-pdftool="compress" onclick="openPdfTool('compress')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-100 hover:border-emerald-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[26px] shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">🗜️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Comprimir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Reduzir tamanho</p>
             </button>
-            <button onclick="openPdfTool('jpg2pdf')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-amber-300 hover:bg-amber-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl group-hover:bg-amber-600 group-hover:text-white transition">🖼️→📄</div>
-              <p class="text-xs font-bold mt-2">JPG para PDF</p><p class="text-[11px] text-slate-500">Imagens → PDF</p>
+            <button data-pdftool="jpg2pdf" onclick="openPdfTool('jpg2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-100 hover:border-amber-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-[26px] shadow-lg shadow-amber-200 group-hover:scale-105 transition-transform">🖼️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">JPG para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Imagens → PDF</p>
             </button>
-            <button onclick="openPdfTool('rotate')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-sky-300 hover:bg-sky-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center text-xl group-hover:bg-sky-600 group-hover:text-white transition">🔄</div>
-              <p class="text-xs font-bold mt-2">Girar PDF</p><p class="text-[11px] text-slate-500">90° / 180°</p>
+            <button data-pdftool="rotate" onclick="openPdfTool('rotate')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-100 hover:border-sky-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-[26px] shadow-lg shadow-sky-200 group-hover:scale-105 transition-transform">🔄</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Girar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">90° / 180°</p>
             </button>
-            <button onclick="openPdfTool('extract')" class="group rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-rose-300 hover:bg-rose-50 transition">
-              <div class="w-10 h-10 mx-auto rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl group-hover:bg-rose-600 group-hover:text-white transition">📑</div>
-              <p class="text-xs font-bold mt-2">Extrair páginas</p><p class="text-[11px] text-slate-500">Salvar seleção</p>
+            <button data-pdftool="extract" onclick="openPdfTool('extract')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100 hover:border-rose-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-[26px] shadow-lg shadow-rose-200 group-hover:scale-105 transition-transform">📄</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Extrair páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Salvar seleção</p>
             </button>
           </div>
           <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
@@ -5210,11 +5210,38 @@ async function saveTermoEndereco(){
 }
 // --- PDF Tools (iLovePDF) ---
 let pdfToolActive=null;
+const PDF_TOOL_ACCENT={
+  merge:   {ring:'ring-indigo-500',  border:'!border-indigo-500',  bg:'!bg-indigo-50'},
+  split:   {ring:'ring-violet-500',  border:'!border-violet-500',  bg:'!bg-violet-50'},
+  compress:{ring:'ring-emerald-500', border:'!border-emerald-500', bg:'!bg-emerald-50'},
+  jpg2pdf: {ring:'ring-amber-500',   border:'!border-amber-500',   bg:'!bg-amber-50'},
+  rotate:  {ring:'ring-sky-500',     border:'!border-sky-500',     bg:'!bg-sky-50'},
+  extract: {ring:'ring-rose-500',    border:'!border-rose-500',    bg:'!bg-rose-50'}
+};
+function paintPdfToolActive(){
+  const area=document.getElementById('pdfToolArea');
+  const open = area && !area.classList.contains('hidden');
+  const allAccent=[];
+  Object.values(PDF_TOOL_ACCENT).forEach(a=>allAccent.push(a.ring,a.border,a.bg));
+  document.querySelectorAll('.pdf-tool-btn').forEach(b=>{
+    b.classList.remove('ring-2','ring-offset-2',...allAccent);
+    if(b.dataset.pdftool===pdfToolActive && open){
+      const a=PDF_TOOL_ACCENT[pdfToolActive]||{};
+      b.classList.add('ring-2','ring-offset-2',a.ring,a.border,a.bg);
+    }
+  });
+}
 function openPdfTool(tool){
-  pdfToolActive=tool;
   const area=document.getElementById('pdfToolArea');
   const msg=document.getElementById('pdfToolMsg');
   if(!area) return;
+  if(pdfToolActive===tool && !area.classList.contains('hidden')){
+    area.classList.add('hidden');
+    pdfToolActive=null;
+    paintPdfToolActive();
+    return;
+  }
+  pdfToolActive=tool;
   area.classList.remove('hidden');
   if(msg) msg.classList.add('hidden');
   const tools={
@@ -5239,6 +5266,7 @@ function openPdfTool(tool){
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
   if(tool === 'merge') renderPdfMergeGrid();
   if(tool === 'jpg2pdf') renderPdfJpgGrid();
+  paintPdfToolActive();
   area.scrollIntoView({behavior:'smooth',block:'center'});
 }
 async function pdfHandleResponse(res, filename){
