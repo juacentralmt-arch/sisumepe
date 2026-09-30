@@ -10,7 +10,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "check": "node --check server.js && node --check store.js && node --check src/lib/shared.js && node --check src/routes/auth.js && node --check src/routes/admin.js && echo OK",
-    "test": "node test/estoqueIA.test.js && node test/autoRenomear.test.js && node test/ocrServidor.test.js && node test/termos.routes.test.js && node test/tickets.audio.test.js",
+    "test": "node test/estoqueIA.test.js && node test/autoRenomear.test.js && node test/ocrServidor.test.js && node test/termos.routes.test.js && node test/tickets.audio.test.js && node test/pdfTools.test.js",
     "test:autorenomear": "node test/autoRenomear.test.js",
     "test:termos": "node test/termos.routes.test.js",
     "backup": "node -e \"require('./store').backup().then(b=>require('fs').writeFileSync('backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(b)))\"",

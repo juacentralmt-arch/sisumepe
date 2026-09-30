@@ -800,7 +800,7 @@
         <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
           <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <button data-pdftool="merge" onclick="openPdfTool('merge')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-400">
               <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📑</div>
               <p class="text-sm font-bold mt-3 text-slate-800">Juntar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Mesclar vários PDFs</p>
@@ -824,6 +824,22 @@
             <button data-pdftool="extract" onclick="openPdfTool('extract')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100 hover:border-rose-400">
               <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-[26px] shadow-lg shadow-rose-200 group-hover:scale-105 transition-transform">📄</div>
               <p class="text-sm font-bold mt-3 text-slate-800">Extrair páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Salvar seleção</p>
+            </button>
+            <button data-pdftool="pdf2jpg" onclick="openPdfTool('pdf2jpg')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-green-100 hover:border-green-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center text-[26px] shadow-lg shadow-green-200 group-hover:scale-105 transition-transform">📸</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">PDF para JPG</p><p class="text-[11px] text-slate-500 mt-0.5">Páginas → ZIP</p>
+            </button>
+            <button data-pdftool="watermark" onclick="openPdfTool('watermark')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-100 hover:border-cyan-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center text-[26px] shadow-lg shadow-cyan-200 group-hover:scale-105 transition-transform">💧</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Marca d'água</p><p class="text-[11px] text-slate-500 mt-0.5">Texto nas páginas</p>
+            </button>
+            <button data-pdftool="pagenumber" onclick="openPdfTool('pagenumber')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200 hover:border-slate-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[26px] shadow-lg shadow-slate-200 group-hover:scale-105 transition-transform">🔢</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Numerar páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Rodapé 1, 2, 3…</p>
+            </button>
+            <button data-pdftool="remove" onclick="openPdfTool('remove')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-red-100 hover:border-red-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-[26px] shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">🗑️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Remover páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Excluir seleção</p>
             </button>
           </div>
           <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
@@ -5217,7 +5233,11 @@ const PDF_TOOL_ACCENT={
   compress:{ring:'ring-emerald-500', border:'!border-emerald-500', bg:'!bg-emerald-50'},
   jpg2pdf: {ring:'ring-amber-500',   border:'!border-amber-500',   bg:'!bg-amber-50'},
   rotate:  {ring:'ring-sky-500',     border:'!border-sky-500',     bg:'!bg-sky-50'},
-  extract: {ring:'ring-rose-500',    border:'!border-rose-500',    bg:'!bg-rose-50'}
+  extract: {ring:'ring-rose-500',    border:'!border-rose-500',    bg:'!bg-rose-50'},
+  pdf2jpg: {ring:'ring-green-500',   border:'!border-green-500',   bg:'!bg-green-50'},
+  watermark:{ring:'ring-cyan-500',   border:'!border-cyan-500',    bg:'!bg-cyan-50'},
+  pagenumber:{ring:'ring-slate-500', border:'!border-slate-500',   bg:'!bg-slate-100'},
+  remove:  {ring:'ring-red-500',     border:'!border-red-500',     bg:'!bg-red-50'}
 };
 function paintPdfToolActive(){
   const area=document.getElementById('pdfToolArea');
@@ -5262,11 +5282,16 @@ function openPdfTool(tool){
     compress: `<div class="space-y-3"><h4 class="font-bold text-sm">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500">Reduz tamanho removendo metadados</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50/50 cursor-pointer transition" for="pdfCompressFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfCompressInfo','pdfCompressPrev')"></label><div id="pdfCompressPrev"></div><div id="pdfCompressInfo" class="text-xs text-slate-500 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button></div>`,
     jpg2pdf: `<div class="space-y-3"><div class="flex items-center justify-between"><h4 class="font-bold text-sm">🖼️ JPG para PDF</h4><div class="flex items-center gap-2"><span id="pdfJpgCount" class="text-xs text-slate-500">0 imagens</span><button id="pdfJpgSortBtn" onclick="pdfJpgSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button></div></div><p class="text-xs text-slate-500 mb-2">Arraste para reordenar — até 20 imagens</p><div id="pdfJpgGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="Imagens para converter"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button></div>`,
     rotate: `<div class="space-y-3"><h4 class="font-bold text-sm">🔄 Girar PDF</h4><p class="text-xs text-slate-500">Gire todas as páginas</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-sky-300 hover:bg-sky-50/50 cursor-pointer transition" for="pdfRotateFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfRotateInfo','pdfRotatePrev')"></label><div id="pdfRotatePrev"></div><div id="pdfRotateInfo" class="text-xs text-slate-500 hidden"></div><select id="pdfRotateAngle" class="inp"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button></div>`,
-    extract: `<div class="space-y-3"><h4 class="font-bold text-sm">📑 Extrair páginas</h4><p class="text-xs text-slate-500">Salve páginas específicas como novo PDF</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-rose-300 hover:bg-rose-50/50 cursor-pointer transition" for="pdfExtractFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfExtractInfo','pdfExtractPrev')"></label><div id="pdfExtractPrev"></div><div id="pdfExtractInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button></div>`
+    extract: `<div class="space-y-3"><h4 class="font-bold text-sm">📑 Extrair páginas</h4><p class="text-xs text-slate-500">Salve páginas específicas como novo PDF</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-rose-300 hover:bg-rose-50/50 cursor-pointer transition" for="pdfExtractFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfExtractInfo','pdfExtractPrev')"></label><div id="pdfExtractPrev"></div><div id="pdfExtractInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button></div>`,
+    pdf2jpg: `<div class="space-y-3"><div class="flex items-center justify-between"><h4 class="font-bold text-sm">📸 PDF para JPG</h4><div class="flex items-center gap-2"><span id="pdfToJpgCount" class="text-xs text-slate-500">0 arquivos</span><button id="pdfToJpgSortBtn" onclick="pdfToJpgSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button></div></div><p class="text-xs text-slate-500 mb-2">Cada página vira um JPG — download em ZIP</p><div id="pdfToJpgGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="PDFs para converter"></div><button id="pdfToJpgBtn" onclick="pdfToJpgConvert()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>📸 Converter em JPG</button></div>`,
+    watermark: `<div class="space-y-3"><h4 class="font-bold text-sm">💧 Marca d'água</h4><p class="text-xs text-slate-500">Texto em todas as páginas (centro diagonal ou rodapé)</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-cyan-300 hover:bg-cyan-50/50 cursor-pointer transition" for="pdfWmFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfWmFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfWmInfo','pdfWmPrev')"></label><div id="pdfWmPrev"></div><div id="pdfWmInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfWmText" placeholder="Ex: CONFIDENCIAL" maxlength="60" class="inp"><select id="pdfWmPos" class="inp"><option value="centro">Centro (diagonal)</option><option value="rodape">Rodapé</option></select><button onclick="pdfWatermark()" class="btn btn-primary w-full py-2.5 text-sm">💧 Aplicar marca</button></div>`,
+    pagenumber: `<div class="space-y-3"><h4 class="font-bold text-sm">🔢 Numerar páginas</h4><p class="text-xs text-slate-500">Numeração no rodapé de todas as páginas</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-slate-400 hover:bg-slate-50 cursor-pointer transition" for="pdfNumFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfNumFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfNumInfo','pdfNumPrev')"></label><div id="pdfNumPrev"></div><div id="pdfNumInfo" class="text-xs text-slate-500 hidden"></div><div class="grid grid-cols-2 gap-2"><input id="pdfNumInicio" type="number" min="1" value="1" title="Número inicial" class="inp"><select id="pdfNumPos" class="inp"><option value="centro">Inferior centro</option><option value="direita">Inferior direita</option></select></div><button onclick="pdfPageNumber()" class="btn btn-primary w-full py-2.5 text-sm">🔢 Numerar</button></div>`,
+    remove: `<div class="space-y-3"><h4 class="font-bold text-sm">🗑️ Remover páginas</h4><p class="text-xs text-slate-500">Exclua páginas e baixe o restante. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-red-300 hover:bg-red-50/50 cursor-pointer transition" for="pdfDelFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfDelFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfDelInfo','pdfDelPrev')"></label><div id="pdfDelPrev"></div><div id="pdfDelInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfDelPages" placeholder="Páginas a remover. Ex: 1,3,5-7" class="inp"><button onclick="pdfRemovePages()" class="btn btn-primary w-full py-2.5 text-sm">🗑️ Remover páginas</button></div>`
   };
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
   if(tool === 'merge') renderPdfMergeGrid();
   if(tool === 'jpg2pdf') renderPdfJpgGrid();
+  if(tool === 'pdf2jpg') renderPdfToJpgGrid();
   paintPdfToolActive();
   area.scrollIntoView({behavior:'smooth',block:'center'});
 }
@@ -5317,6 +5342,199 @@ async function pdfExtract(){
   if(!pages) return toast('⚠️ Informe as páginas. Ex: 1,3,5-7');
   const fd=new FormData(); fd.append('file',f); fd.append('pages',pages);
   try{ setBtnLoading(btn, true, 'Extraindo...'); const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+async function pdfWatermark(){
+  const btn = event?.target?.closest('button');
+  const f=document.getElementById('pdfWmFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const text=document.getElementById('pdfWmText').value.trim();
+  if(!text) return toast('⚠️ Informe o texto da marca d\'água');
+  const pos=document.getElementById('pdfWmPos').value;
+  const fd=new FormData(); fd.append('file',f); fd.append('text',text); fd.append('pos',pos);
+  try{ setBtnLoading(btn, true, 'Aplicando...'); const r=await authFetch('/api/pdf/watermark',{method:'POST',body:fd}); await pdfHandleResponse(r,'com-marca.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+async function pdfPageNumber(){
+  const btn = event?.target?.closest('button');
+  const f=document.getElementById('pdfNumFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const inicio=document.getElementById('pdfNumInicio').value||'1';
+  const pos=document.getElementById('pdfNumPos').value;
+  const fd=new FormData(); fd.append('file',f); fd.append('inicio',inicio); fd.append('pos',pos);
+  try{ setBtnLoading(btn, true, 'Numerando...'); const r=await authFetch('/api/pdf/pagenumber',{method:'POST',body:fd}); await pdfHandleResponse(r,'numerado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+async function pdfRemovePages(){
+  const btn = event?.target?.closest('button');
+  const f=document.getElementById('pdfDelFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const pages=document.getElementById('pdfDelPages').value;
+  if(!pages) return toast('⚠️ Informe as páginas a remover. Ex: 1,3,5-7');
+  if(!confirm(`Excluir as páginas "${pages}"?`)) return;
+  const fd=new FormData(); fd.append('file',f); fd.append('pages',pages);
+  try{ setBtnLoading(btn, true, 'Removendo...'); const r=await authFetch('/api/pdf/remove-pages',{method:'POST',body:fd}); await pdfHandleResponse(r,'sem-paginas.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+// --- PDF para JPG (100% local: PDF.js renderiza, ZIP monta o download) ---
+let pdfToJpgFiles = [];
+let pdfToJpgPages = new Map(); // fileKey -> numPages
+let pdfToJpgSortAsc = true;
+function pdfToJpgKey(f){ return `${f.name}|${f.size}|${f.lastModified||0}`; }
+function renderPdfToJpgGrid(){
+  const grid = document.getElementById('pdfToJpgGrid');
+  const btn = document.getElementById('pdfToJpgBtn');
+  const count = document.getElementById('pdfToJpgCount');
+  if(!pdfToJpgFiles.length){
+    grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+        <span class="text-4xl mb-2">📸</span>
+        <p class="text-slate-500 text-sm">Clique em <span class="font-semibold text-green-600">+ Adicionar PDFs</span></p>
+        <p class="text-xs text-slate-400 mt-1">Cada página vira um JPG (ZIP)</p>
+      </div>
+      <div class="col-span-full flex justify-center">
+        <label class="btn btn-ghost border-dashed px-8 py-4 cursor-pointer" for="pdfToJpgFiles">
+          <span class="flex items-center gap-2"><span class="text-2xl">+</span><span>Adicionar PDFs</span></span>
+          <input id="pdfToJpgFiles" type="file" accept=".pdf,application/pdf" multiple class="hidden" onchange="addPdfToJpgFiles(event)">
+        </label>
+      </div>
+    `;
+    btn.disabled = true;
+    if(count) count.textContent = '0 arquivos';
+    return;
+  }
+  grid.innerHTML = pdfToJpgFiles.map((f, i) => {
+    const k = pdfToJpgKey(f);
+    const pg = pdfToJpgPages.has(k) ? `${pdfToJpgPages.get(k)} página${pdfToJpgPages.get(k)>1?'s':''}` : 'lendo…';
+    return `
+    <div class="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
+      ondragstart="pdfToJpgDragStart(event)"
+      ondragend="pdfToJpgDragEnd(event)">
+      <div class="aspect-[3/4] bg-slate-50 relative overflow-hidden flex flex-col items-center justify-center gap-1">
+        <span class="text-3xl">📄</span>
+        <span class="text-[10px] font-bold text-slate-500">${pg}</span>
+        <button type="button" onclick="event.stopPropagation(); pdfToJpgRemove(${i})" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/90 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="Remover">✕</button>
+        <span class="absolute bottom-1 left-1 right-1 text-center text-[10px] font-bold text-white bg-black/50 px-1 rounded">${i+1}</span>
+      </div>
+      <div class="p-2.5">
+        <p class="text-xs font-mono truncate text-slate-700" title="${esc(f.name)}">${esc(f.name)}</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">${Math.round(f.size/1024)} KB</p>
+      </div>
+    </div>`;
+  }).join('');
+  const addBtn = document.createElement('div');
+  addBtn.className = 'col-span-full';
+  addBtn.innerHTML = `
+    <label class="btn btn-ghost border-dashed w-full py-4 cursor-pointer flex items-center justify-center gap-2 hover:bg-green-50" for="pdfToJpgFiles">
+      <span class="text-2xl">+</span><span>Adicionar mais PDFs</span>
+      <input id="pdfToJpgFiles" type="file" accept=".pdf,application/pdf" multiple class="hidden" onchange="addPdfToJpgFiles(event)">
+    </label>
+  `;
+  grid.appendChild(addBtn);
+  btn.disabled = false;
+  if(count){
+    const tot = [...pdfToJpgPages.values()].reduce((a,b)=>a+b,0);
+    count.textContent = `${pdfToJpgFiles.length} arquivo${pdfToJpgFiles.length>1?'s':''}${tot?` • ${tot} págs`:''}`;
+  }
+  grid.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  grid.ondrop = pdfToJpgDrop;
+}
+async function addPdfToJpgFiles(e){
+  const news = e.target ? [...e.target.files] : [];
+  if(!news.length) return;
+  for(const f of news){
+    if(!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') continue;
+    pdfToJpgFiles.push(f);
+  }
+  renderPdfToJpgGrid();
+  try{
+    await ensurePdfJsAtiv();
+    let dirty = false;
+    for(const f of pdfToJpgFiles){
+      const k = pdfToJpgKey(f);
+      if(pdfToJpgPages.has(k)) continue;
+      try{
+        const buf = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+        pdfToJpgPages.set(k, pdf.numPages);
+        try{ await pdf.destroy(); }catch(_){}
+        dirty = true;
+      }catch(err){ console.warn('Págs falhou:', f.name, err.message); }
+    }
+    if(dirty) renderPdfToJpgGrid();
+  }catch(e){ console.warn('pdf2jpg count failed:', e.message); }
+}
+function pdfToJpgSort(){
+  pdfToJpgSortAsc = !pdfToJpgSortAsc;
+  pdfToJpgFiles.sort((a,b) => pdfToJpgSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+  renderPdfToJpgGrid();
+  const btn = document.getElementById('pdfToJpgSortBtn');
+  if(btn) btn.textContent = pdfToJpgSortAsc ? '↑ A–Z' : '↓ Z–A';
+}
+function pdfToJpgDragStart(e){
+  e.dataTransfer.effectAllowed = 'move';
+  const row = e.currentTarget;
+  row.dataset.dragging = 'true';
+  row.classList.add('opacity-40', 'ring-2', 'ring-green-300');
+}
+function pdfToJpgDrop(e){
+  e.preventDefault();
+  const fromEl = document.querySelector('[data-dragging="true"]');
+  const from = fromEl ? parseInt(fromEl.dataset.idx, 10) : -1;
+  const toEl = e.target.closest('[data-idx]');
+  const to = toEl ? parseInt(toEl.dataset.idx, 10) : -1;
+  if(from >= 0 && to >= 0 && from !== to){
+    const [moved] = pdfToJpgFiles.splice(from, 1);
+    pdfToJpgFiles.splice(to, 0, moved);
+    renderPdfToJpgGrid();
+  }
+  document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-green-50', 'border-green-300'));
+}
+function pdfToJpgDragEnd(e){
+  const row = e.currentTarget;
+  row.classList.remove('opacity-40', 'ring-2', 'ring-green-300');
+  delete row.dataset.dragging;
+  document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-green-50', 'border-green-300'));
+}
+function pdfToJpgRemove(idx){
+  const [gone] = pdfToJpgFiles.splice(idx, 1);
+  if(gone) pdfToJpgPages.delete(pdfToJpgKey(gone));
+  renderPdfToJpgGrid();
+}
+async function pdfToJpgConvert(){
+  if(!pdfToJpgFiles.length) return toast('⚠️ Selecione ao menos 1 PDF');
+  const btn = document.getElementById('pdfToJpgBtn');
+  const msg = document.getElementById('pdfToolMsg');
+  if(!setBtnLoading(btn, true, 'Convertendo...')) return;
+  try{
+    await ensurePdfJsAtiv();
+    const arqs = []; const usados = new Set();
+    let feitas = 0;
+    for(const f of pdfToJpgFiles){
+      const base = f.name.replace(/\.pdf$/i,'');
+      const buf = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      for(let p=1; p<=pdf.numPages; p++){
+        if(msg){ msg.textContent = `📸 Convertendo página ${p}/${pdf.numPages} de ${f.name}…`; msg.className = 'text-xs font-bold text-indigo-600 mt-2'; msg.classList.remove('hidden'); }
+        const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 1.6 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+        const dados = new Uint8Array(await blob.arrayBuffer());
+        arqs.push({ nome: nomeDownloadUnico(`${base}-p${String(p).padStart(2,'0')}.jpg`, usados), dados });
+        feitas++;
+      }
+      try{ await pdf.destroy(); }catch(_){}
+    }
+    if(!arqs.length) throw new Error('Nenhuma página convertida');
+    const blob = zipMontar(arqs);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'paginas-jpg.zip'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    if(msg){ msg.textContent = `✅ Pronto! ${feitas} páginas em ZIP.`; msg.className = 'text-xs font-bold text-emerald-600 mt-2'; msg.classList.remove('hidden'); }
+  }catch(e){
+    if(msg){ msg.textContent = '⚠️ ' + e.message; msg.className = 'text-xs font-bold text-rose-600 mt-2'; msg.classList.remove('hidden'); }
+  }finally{
+    setBtnLoading(btn, false);
+  }
 }
 let pdfMergeFiles = [];
 let pdfMergeThumbs = new Map(); // idx -> dataURL

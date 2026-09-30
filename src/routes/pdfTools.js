@@ -137,4 +137,89 @@ router.post('/api/pdf/extract', shared.auth(['tecnico','psico','admin']), shared
   res.send(Buffer.from(bytes));
 }));
 
+// helper: "1,3,5-7" (1-based) -> índices 0-based válidos
+function parsePaginas(str, total){
+  const idx = new Set();
+  String(str||'').split(',').forEach(part=>{
+    const m = part.trim().match(/^(\d+)-(\d+)$/);
+    if(m){
+      const s = parseInt(m[1],10), e = parseInt(m[2],10);
+      const a = Math.min(s,e), b = Math.max(s,e);
+      for(let i=a;i<=b;i++) if(i>=1 && i<=total) idx.add(i-1);
+    } else {
+      const n = parseInt(part.trim(),10);
+      if(n>=1 && n<=total) idx.add(n-1);
+    }
+  });
+  return [...idx].sort((a,b)=>a-b);
+}
+
+// Marca d'água (texto em todas as páginas: centro diagonal ou rodapé)
+router.post('/api/pdf/watermark', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const text = String(req.body.text||'').trim().slice(0,60);
+  if(!text) return res.status(400).json({ error: 'Informe o texto da marca d\'água' });
+  const pos = req.body.pos === 'rodape' ? 'rodape' : 'centro';
+  const doc = await PDFDocument.load(req.file.buffer);
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  doc.getPages().forEach(p=>{
+    const { width, height } = p.getSize();
+    if(pos === 'rodape'){
+      const size = 10;
+      const w = font.widthOfTextAtSize(text, size);
+      p.drawText(text, { x: (width-w)/2, y: 24, size, font, color: rgb(0.45,0.45,0.45), opacity: 0.85 });
+    } else {
+      const size = Math.min(64, Math.max(28, Math.floor(width/9)));
+      const w = font.widthOfTextAtSize(text, size);
+      const h = font.heightAtSize(size);
+      p.drawText(text, { x: width/2 - w/2, y: height/2 - h/4, size, font, color: rgb(0.5,0.5,0.5), opacity: 0.28, rotate: degrees(45) });
+    }
+  });
+  const bytes = await doc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="com-marca.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
+// Numerar páginas (rodapé: centro ou direita, a partir de N)
+router.post('/api/pdf/pagenumber', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const pos = req.body.pos === 'direita' ? 'direita' : 'centro';
+  const inicio = Math.max(1, parseInt(req.body.inicio||'1',10) || 1);
+  const doc = await PDFDocument.load(req.file.buffer);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const size = 10;
+  doc.getPages().forEach((p,i)=>{
+    const { width } = p.getSize();
+    const label = String(inicio + i);
+    const w = font.widthOfTextAtSize(label, size);
+    const x = pos === 'direita' ? width - w - 36 : (width-w)/2;
+    p.drawText(label, { x, y: 28, size, font, color: rgb(0.4,0.4,0.4) });
+  });
+  const bytes = await doc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="numerado.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
+// Remover páginas ("1,3,5-7" = páginas a EXCLUIR)
+router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const pages = String(req.body.pages||'').trim();
+  if(!pages) return res.status(400).json({ error: 'Informe as páginas a remover. Ex: 1,3,5-7' });
+  const doc = await PDFDocument.load(req.file.buffer);
+  const total = doc.getPageCount();
+  const idx = parsePaginas(pages, total);
+  if(!idx.length) return res.status(400).json({ error: 'Nenhuma página válida. Ex: 1,3,5-7' });
+  if(idx.length >= total) return res.status(400).json({ error: 'Não é possível remover todas as páginas' });
+  for(const i of [...idx].sort((a,b)=>b-a)) doc.removePage(i);
+  const bytes = await doc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="sem-paginas.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
 module.exports = router;
