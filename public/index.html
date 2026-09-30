@@ -5391,7 +5391,10 @@ async function ocrServidorItem(i, btn){
   if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
   if(btn && !setBtnLoading(btn, true, 'Lendo no servidor...')) return;
   syncRenomearInputs();
-  const setStatus = (t) => { const el = document.getElementById('renomearSrv' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
+  const setStatus = (t) => {
+    const el = document.getElementById('renomearSrv' + i); if(el) el.innerHTML = ocrStatusHTML(t);
+    const ocrEl = document.getElementById('renomearOcr' + i); if(ocrEl) ocrEl.innerHTML = ocrStatusHTML(t);
+  };
   try{
     setStatus('⏳ Renderizando páginas...');
     const imgs = await paginasParaJPEG(it);
@@ -5453,7 +5456,7 @@ async function ocrFilaAutomatica(){
   if(!fila.length){ paintOcrPendentes(); return; }
   renomearFilaOcr = true; renomearPararOcr = false;
   paintOcrPendentes();
-  toast(`📷 OCR automático iniciado em ${fila.length} arquivo${fila.length > 1 ? 's' : ''} — mantenha a aba aberta`);
+  toast(`🖥️ OCR no servidor iniciado em ${fila.length} arquivo${fila.length > 1 ? 's' : ''} — mantenha a aba aberta`);
   let feitos = 0;
   try{
     await ensureTesseract().catch(() => {});
@@ -5461,13 +5464,12 @@ async function ocrFilaAutomatica(){
       if(renomearPararOcr) break;
       const it = renomearCache[i];
       if(!it || (it.confianca !== 'manual' && !it.erro)) continue;
-      paintOcrFila(`📷 OCR automático ${feitos + 1}/${fila.length}: ${it.arquivo}`);
-      const setStatus = (t) => { const el = document.getElementById('renomearOcr' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
-      try{ await ocrComTimeout(() => executarOcrItem(i, setStatus), 240000); feitos++; }
-      catch(e){ const msg = '⚠️ ' + e.message; if(renomearCache[i]) renomearCache[i].ocrMsg = msg; setStatus(msg); }
+      paintOcrFila(`🖥️ OCR servidor ${feitos + 1}/${fila.length}: ${it.arquivo}`);
+      try{ await ocrServidorItem(i); feitos++; }
+      catch(e){ const msg = '⚠️ ' + e.message; if(renomearCache[i]) renomearCache[i].srvMsg = msg; toast(msg); }
       syncRenomearInputs();
       renderRenomear();
-      paintOcrFila(`📷 OCR automático ${feitos}/${fila.length} concluídos...`);
+      paintOcrFila(`🖥️ OCR servidor ${feitos}/${fila.length} concluídos...`);
     }
   }catch(e){ toast('⚠️ OCR automático: ' + e.message); }
   finally{
@@ -5476,7 +5478,7 @@ async function ocrFilaAutomatica(){
     renderRenomear();
     paintOcrPendentes();
   }
-  toast(renomearPararOcr ? `⏹ OCR parado (${feitos}/${fila.length})` : `✅ OCR automático concluído (${feitos}/${fila.length})`);
+  toast(renomearPararOcr ? `⏹ OCR servidor parado (${feitos}/${fila.length})` : `✅ OCR servidor concluído (${feitos}/${fila.length})`);
 }
 function scheduleEnderecoPreview(now){
   const tgl = document.getElementById('endAutoPreview');
