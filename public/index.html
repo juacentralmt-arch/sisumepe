@@ -5318,7 +5318,7 @@ function renderPdfMergeGrid(){
       ondragstart="pdfMergeDragStart(event)"
       ondragend="pdfMergeDragEnd(event)">
       <div class="aspect-[3/4] bg-slate-50 relative overflow-hidden">
-        ${pdfMergeThumbs.has(i) ? `<img src="${pdfMergeThumbs.get(i)}" alt="${esc(f.name)}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center"><span class="text-3xl">📄</span></div>`}
+        ${pdfMergeThumbs.has(pdfMergeKey(f)) ? `<img src="${pdfMergeThumbs.get(pdfMergeKey(f))}" alt="${esc(f.name)}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center"><span class="text-3xl">📄</span></div>`}
         <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
         <button type="button" onclick="event.stopPropagation(); pdfMergeRemove(${i})" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/90 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="Remover">✕</button>
         <span class="absolute bottom-1 left-1 right-1 text-center text-[10px] font-bold text-white bg-black/50 px-1 rounded">${i+1}</span>
@@ -5352,31 +5352,38 @@ async function addPdfMergeFiles(e){
     if(!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') continue;
     pdfMergeFiles.push(f);
   }
-  await generateMergeThumbs();
   renderPdfMergeGrid();
+  generateMergeThumbs();
 }
+// Chave estável por arquivo: thumbs sobrevivem a reordenações/remoções
+function pdfMergeKey(f){ return `${f.name}|${f.size}|${f.lastModified||0}`; }
 async function generateMergeThumbs(){
-  pdfMergeThumbs.clear();
   if(!pdfMergeFiles.length) return;
   try{
     await ensurePdfJsAtiv();
-    for(let i=0;i<pdfMergeFiles.length;i++){
-      const f = pdfMergeFiles[i];
-      const buf = await f.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 0.35 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width; canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      pdfMergeThumbs.set(i, canvas.toDataURL('image/jpeg', 0.7));
+    let dirty = false;
+    for(const f of pdfMergeFiles){
+      const k = pdfMergeKey(f);
+      if(pdfMergeThumbs.has(k)) continue;
+      try{
+        const buf = await f.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 0.35 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        try{ await pdf.destroy(); }catch(_){}
+        pdfMergeThumbs.set(k, canvas.toDataURL('image/jpeg', 0.7));
+        dirty = true;
+      }catch(err){ console.warn('Thumb falhou:', f.name, err.message); }
     }
+    if(dirty) renderPdfMergeGrid();
   }catch(e){ console.warn('Thumb gen failed:', e.message); }
 }
-async function pdfMergeSort(){
+function pdfMergeSort(){
   pdfMergeSortAsc = !pdfMergeSortAsc;
   pdfMergeFiles.sort((a,b) => pdfMergeSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-  await generateMergeThumbs();
   renderPdfMergeGrid();
   const btn = document.getElementById('pdfMergeSortBtn');
   if(btn) btn.textContent = pdfMergeSortAsc ? '↑ A–Z' : '↓ Z–A';
@@ -5396,7 +5403,6 @@ async function pdfMergeDrop(e){
   if(from >= 0 && to >= 0 && from !== to){
     const [moved] = pdfMergeFiles.splice(from, 1);
     pdfMergeFiles.splice(to, 0, moved);
-    await generateMergeThumbs();
     renderPdfMergeGrid();
   }
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-indigo-50', 'border-indigo-300'));
@@ -5408,12 +5414,8 @@ function pdfMergeDragEnd(e){
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-indigo-50', 'border-indigo-300'));
 }
 function pdfMergeRemove(idx){
-  pdfMergeFiles.splice(idx, 1);
-  pdfMergeThumbs.delete(idx);
-  // reindex thumbs
-  const newThumbs = new Map();
-  pdfMergeThumbs.forEach((v,k) => newThumbs.set(k > idx ? k-1 : k, v));
-  pdfMergeThumbs = newThumbs;
+  const [gone] = pdfMergeFiles.splice(idx, 1);
+  if(gone) pdfMergeThumbs.delete(pdfMergeKey(gone));
   renderPdfMergeGrid();
 }
 async function pdfMerge(){
