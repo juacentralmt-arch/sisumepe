@@ -45,6 +45,13 @@
   .inp{border:1px solid #e2e8f0;border-radius:.75rem;padding:.65rem .8rem;font-size:.875rem;width:100%;background:#fff;outline:none;transition:box-shadow .15s,border-color .15s}
   .inp:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
   .lbl{font-size:.68rem;font-weight:700;letter-spacing:.06em;color:#64748b}
+  /* prévia Word->PDF */
+  #docxPrev .docx-page{font-family:Georgia,serif;font-size:.85rem;line-height:1.65;color:#111827;padding:1.25rem 1.5rem}
+  #docxPrev .docx-page h1,#docxPrev .docx-page h2,#docxPrev .docx-page h3{font-weight:800;margin:.6em 0 .4em;line-height:1.3}
+  #docxPrev .docx-page p{margin:.5em 0}
+  #docxPrev .docx-page table{border-collapse:collapse;width:100%;margin:.6em 0}
+  #docxPrev .docx-page td,#docxPrev .docx-page th{border:1px solid #cbd5e1;padding:.35rem .5rem}
+  #docxPrev .docx-page img{max-width:100%}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;font-weight:700;border-radius:.75rem;transition:filter .15s,transform .1s}
   .btn:active{transform:scale(.98)}
   .btn-primary{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;box-shadow:0 8px 18px -8px rgba(99,102,241,.7)}
@@ -800,7 +807,7 @@
         <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
           <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             <button data-pdftool="merge" onclick="openPdfTool('merge')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-400">
               <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📑</div>
               <p class="text-sm font-bold mt-3 text-slate-800">Juntar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Mesclar vários PDFs</p>
@@ -840,6 +847,14 @@
             <button data-pdftool="remove" onclick="openPdfTool('remove')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-red-100 hover:border-red-400">
               <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-[26px] shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">🗑️</div>
               <p class="text-sm font-bold mt-3 text-slate-800">Remover páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Excluir seleção</p>
+            </button>
+            <button data-pdftool="word2pdf" onclick="openPdfTool('word2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-100 hover:border-blue-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[26px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">📝</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Word para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">.docx → PDF</p>
+            </button>
+            <button data-pdftool="gettext" onclick="openPdfTool('gettext')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-stone-200 hover:border-stone-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-stone-500 to-stone-700 flex items-center justify-center text-[26px] shadow-lg shadow-stone-200 group-hover:scale-105 transition-transform">🔤</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Extrair texto</p><p class="text-[11px] text-slate-500 mt-0.5">PDF → .txt</p>
             </button>
           </div>
           <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
@@ -5237,7 +5252,9 @@ const PDF_TOOL_ACCENT={
   pdf2jpg: {ring:'ring-green-500',   border:'!border-green-500',   bg:'!bg-green-50'},
   watermark:{ring:'ring-cyan-500',   border:'!border-cyan-500',    bg:'!bg-cyan-50'},
   pagenumber:{ring:'ring-slate-500', border:'!border-slate-500',   bg:'!bg-slate-100'},
-  remove:  {ring:'ring-red-500',     border:'!border-red-500',     bg:'!bg-red-50'}
+  remove:  {ring:'ring-red-500',     border:'!border-red-500',     bg:'!bg-red-50'},
+  word2pdf:{ring:'ring-blue-500',    border:'!border-blue-500',    bg:'!bg-blue-50'},
+  gettext: {ring:'ring-stone-500',   border:'!border-stone-500',   bg:'!bg-stone-100'}
 };
 function paintPdfToolActive(){
   const area=document.getElementById('pdfToolArea');
@@ -5278,7 +5295,7 @@ function openPdfTool(tool){
       <div id="pdfMergeGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="PDFs para mesclar"></div>
       <button id="pdfMergeBtn" onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>⧉ Mesclar PDFs</button>
     </div>`,
-    split: `<div class="space-y-3"><h4 class="font-bold text-sm">✂️ Dividir PDF</h4><p class="text-xs text-slate-500">Extraia páginas específicas. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-violet-300 hover:bg-violet-50/50 cursor-pointer transition" for="pdfSplitFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfSplitInfo','pdfSplitPrev')"></label><div id="pdfSplitPrev"></div><div id="pdfSplitInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button></div>`,
+    split: `<div class="space-y-3"><h4 class="font-bold text-sm">✂️ Dividir PDF</h4><p class="text-xs text-slate-500">Extraia páginas específicas. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-violet-300 hover:bg-violet-50/50 cursor-pointer transition" for="pdfSplitFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfSplitInfo','pdfSplitPrev')"></label><div id="pdfSplitPrev"></div><div id="pdfSplitInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp"><label class="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer"><input id="pdfSplitZip" type="checkbox" class="w-4 h-4 accent-violet-600"> 📦 Uma página por arquivo (ZIP)</label><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button></div>`,
     compress: `<div class="space-y-3"><h4 class="font-bold text-sm">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500">Reduz tamanho removendo metadados</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50/50 cursor-pointer transition" for="pdfCompressFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfCompressInfo','pdfCompressPrev')"></label><div id="pdfCompressPrev"></div><div id="pdfCompressInfo" class="text-xs text-slate-500 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button></div>`,
     jpg2pdf: `<div class="space-y-3"><div class="flex items-center justify-between"><h4 class="font-bold text-sm">🖼️ JPG para PDF</h4><div class="flex items-center gap-2"><span id="pdfJpgCount" class="text-xs text-slate-500">0 imagens</span><button id="pdfJpgSortBtn" onclick="pdfJpgSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button></div></div><p class="text-xs text-slate-500 mb-2">Arraste para reordenar — até 20 imagens</p><div id="pdfJpgGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="Imagens para converter"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button></div>`,
     rotate: `<div class="space-y-3"><h4 class="font-bold text-sm">🔄 Girar PDF</h4><p class="text-xs text-slate-500">Gire todas as páginas</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-sky-300 hover:bg-sky-50/50 cursor-pointer transition" for="pdfRotateFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfRotateInfo','pdfRotatePrev')"></label><div id="pdfRotatePrev"></div><div id="pdfRotateInfo" class="text-xs text-slate-500 hidden"></div><select id="pdfRotateAngle" class="inp"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button></div>`,
@@ -5286,7 +5303,9 @@ function openPdfTool(tool){
     pdf2jpg: `<div class="space-y-3"><div class="flex items-center justify-between"><h4 class="font-bold text-sm">📸 PDF para JPG</h4><div class="flex items-center gap-2"><span id="pdfToJpgCount" class="text-xs text-slate-500">0 arquivos</span><button id="pdfToJpgSortBtn" onclick="pdfToJpgSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button></div></div><p class="text-xs text-slate-500 mb-2">Cada página vira um JPG — download em ZIP</p><div id="pdfToJpgGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="PDFs para converter"></div><button id="pdfToJpgBtn" onclick="pdfToJpgConvert()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>📸 Converter em JPG</button></div>`,
     watermark: `<div class="space-y-3"><h4 class="font-bold text-sm">💧 Marca d'água</h4><p class="text-xs text-slate-500">Texto em todas as páginas (centro diagonal ou rodapé)</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-cyan-300 hover:bg-cyan-50/50 cursor-pointer transition" for="pdfWmFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfWmFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfWmInfo','pdfWmPrev')"></label><div id="pdfWmPrev"></div><div id="pdfWmInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfWmText" placeholder="Ex: CONFIDENCIAL" maxlength="60" class="inp"><select id="pdfWmPos" class="inp"><option value="centro">Centro (diagonal)</option><option value="rodape">Rodapé</option></select><button onclick="pdfWatermark()" class="btn btn-primary w-full py-2.5 text-sm">💧 Aplicar marca</button></div>`,
     pagenumber: `<div class="space-y-3"><h4 class="font-bold text-sm">🔢 Numerar páginas</h4><p class="text-xs text-slate-500">Numeração no rodapé de todas as páginas</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-slate-400 hover:bg-slate-50 cursor-pointer transition" for="pdfNumFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfNumFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfNumInfo','pdfNumPrev')"></label><div id="pdfNumPrev"></div><div id="pdfNumInfo" class="text-xs text-slate-500 hidden"></div><div class="grid grid-cols-2 gap-2"><input id="pdfNumInicio" type="number" min="1" value="1" title="Número inicial" class="inp"><select id="pdfNumPos" class="inp"><option value="centro">Inferior centro</option><option value="direita">Inferior direita</option></select></div><button onclick="pdfPageNumber()" class="btn btn-primary w-full py-2.5 text-sm">🔢 Numerar</button></div>`,
-    remove: `<div class="space-y-3"><h4 class="font-bold text-sm">🗑️ Remover páginas</h4><p class="text-xs text-slate-500">Exclua páginas e baixe o restante. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-red-300 hover:bg-red-50/50 cursor-pointer transition" for="pdfDelFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfDelFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfDelInfo','pdfDelPrev')"></label><div id="pdfDelPrev"></div><div id="pdfDelInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfDelPages" placeholder="Páginas a remover. Ex: 1,3,5-7" class="inp"><button onclick="pdfRemovePages()" class="btn btn-primary w-full py-2.5 text-sm">🗑️ Remover páginas</button></div>`
+    remove: `<div class="space-y-3"><h4 class="font-bold text-sm">🗑️ Remover páginas</h4><p class="text-xs text-slate-500">Exclua páginas e baixe o restante. Ex: 1,3,5-7</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-red-300 hover:bg-red-50/50 cursor-pointer transition" for="pdfDelFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfDelFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfDelInfo','pdfDelPrev')"></label><div id="pdfDelPrev"></div><div id="pdfDelInfo" class="text-xs text-slate-500 hidden"></div><input id="pdfDelPages" placeholder="Páginas a remover. Ex: 1,3,5-7" class="inp"><button onclick="pdfRemovePages()" class="btn btn-primary w-full py-2.5 text-sm">🗑️ Remover páginas</button></div>`,
+    word2pdf: `<div class="space-y-3"><h4 class="font-bold text-sm">📝 Word para PDF</h4><p class="text-xs text-slate-500">.docx → prévia + impressão em PDF (100% local, sem envio)</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer transition" for="docxFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar .DOCX</span><input id="docxFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="hidden" onchange="docxPreview(this)"></label><div id="docxInfo" class="text-xs text-slate-500 hidden"></div><div id="docxPrev" class="hidden max-h-80 overflow-y-auto border border-slate-200 rounded-xl bg-white"></div><div id="docxBtns" class="hidden grid grid-cols-2 gap-2"><button onclick="docxPrint()" class="btn btn-primary py-2.5 text-sm">🖨️ Imprimir / PDF</button><button onclick="docxDownloadHtml()" class="btn btn-ghost py-2.5 text-sm border">⬇ HTML</button></div></div>`,
+    gettext: `<div class="space-y-3"><h4 class="font-bold text-sm">🔤 Extrair texto</h4><p class="text-xs text-slate-500">Texto do PDF → arquivo .txt (escaneados: use o OCR)</p><label class="flex flex-col items-center justify-center gap-1 py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:border-stone-400 hover:bg-stone-100/60 cursor-pointer transition" for="pdfTxtFile"><span class="text-2xl">📎</span><span class="text-xs font-bold text-slate-600">Selecionar PDF</span><input id="pdfTxtFile" type="file" accept=".pdf,application/pdf" class="hidden" onchange="pdfSinglePreview(this,'pdfTxtInfo','pdfTxtPrev')"></label><div id="pdfTxtPrev"></div><div id="pdfTxtInfo" class="text-xs text-slate-500 hidden"></div><button onclick="pdfExtractText()" class="btn btn-primary w-full py-2.5 text-sm">🔤 Extrair texto</button></div>`
   };
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
   if(tool === 'merge') renderPdfMergeGrid();
@@ -5309,8 +5328,98 @@ async function pdfSplit(){
   const f=document.getElementById('pdfSplitFile').files[0];
   if(!f) return toast('⚠️ Selecione um PDF');
   const pages=document.getElementById('pdfSplitPages').value;
-  const fd=new FormData(); fd.append('file',f); if(pages) fd.append('pages',pages);
-  try{ setBtnLoading(btn, true, 'Dividindo...'); const r=await authFetch('/api/pdf/split',{method:'POST',body:fd}); await pdfHandleResponse(r,'dividido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+  const zip=document.getElementById('pdfSplitZip')?.checked;
+  const fd=new FormData(); fd.append('file',f); if(pages && !zip) fd.append('pages',pages);
+  try{
+    setBtnLoading(btn, true, zip?'Gerando ZIP...':'Dividindo...');
+    const r=await authFetch(zip?'/api/pdf/split-zip':'/api/pdf/split',{method:'POST',body:fd});
+    await pdfHandleResponse(r, zip?'paginas.zip':'dividido.pdf');
+  }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+async function pdfExtractText(){
+  const btn = event?.target?.closest('button');
+  const f=document.getElementById('pdfTxtFile').files[0];
+  if(!f) return toast('⚠️ Selecione um PDF');
+  const fd=new FormData(); fd.append('file',f);
+  try{
+    setBtnLoading(btn, true, 'Extraindo...');
+    const r=await authFetch('/api/pdf/text',{method:'POST',body:fd});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'Erro ao extrair texto'); }
+    const blob=await r.blob();
+    const txt=await blob.text();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='texto.txt'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    const m=document.getElementById('pdfToolMsg');
+    if(m){ m.textContent=`✅ Pronto! ${txt.length} caracteres em texto.txt`; m.className='text-xs font-bold text-emerald-600 mt-2'; m.classList.remove('hidden'); }
+  }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+// --- Word para PDF (Mammoth via CDN: .docx -> prévia HTML -> impressão/PDF) ---
+let docxMammothReady=false, docxMammothLoading=false;
+function ensureMammoth(){
+  return new Promise((res,rej)=>{
+    if(docxMammothReady && typeof mammoth !== 'undefined') return res();
+    if(docxMammothLoading){
+      const iv=setInterval(()=>{ if(docxMammothReady){ clearInterval(iv); res(); } },250);
+      setTimeout(()=>{ clearInterval(iv); rej(new Error('timeout mammoth')); },20000);
+      return;
+    }
+    docxMammothLoading=true;
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/mammoth@1.9.1/mammoth.browser.min.js';
+    s.onload=()=>{
+      try{
+        if(typeof mammoth !== 'undefined'){ docxMammothReady=true; docxMammothLoading=false; res(); }
+        else { docxMammothLoading=false; rej(new Error('conversor falhou')); }
+      }catch(e){ docxMammothLoading=false; rej(e); }
+    };
+    s.onerror=()=>{ docxMammothLoading=false; rej(new Error('Falha ao carregar conversor (verifique a internet)')); };
+    document.head.appendChild(s);
+  });
+}
+async function docxPreview(inp){
+  const f = inp.files[0];
+  const info = document.getElementById('docxInfo');
+  const prev = document.getElementById('docxPrev');
+  const btns = document.getElementById('docxBtns');
+  if(!f){ if(info) info.classList.add('hidden'); if(prev){ prev.classList.add('hidden'); prev.innerHTML=''; } if(btns) btns.classList.add('hidden'); return; }
+  if(!/\.docx$/i.test(f.name)) return toast('⚠️ Apenas .docx (Word moderno)');
+  if(info){ info.textContent = '📝 Convertendo documento...'; info.classList.remove('hidden'); }
+  try{
+    await ensureMammoth();
+    const buf = await f.arrayBuffer();
+    const out = await mammoth.convertToHtml({ arrayBuffer: buf });
+    const tmp = document.createElement('div'); tmp.innerHTML = out.value || '';
+    const words = (tmp.textContent||'').trim().split(/\s+/).filter(Boolean).length;
+    if(info) info.textContent = `${Math.round(f.size/1024)} KB • ${words} palavras`;
+    if(prev){
+      prev.innerHTML = `<div id="docxPage" class="docx-page">${out.value || '<p class="text-xs text-slate-400">Documento vazio.</p>'}</div>`;
+      prev.classList.remove('hidden');
+    }
+    if(btns) btns.classList.remove('hidden');
+    if(out.messages && out.messages.length) toast('ℹ️ ' + out.messages.length + ' aviso(s) de formatação ignorados');
+  }catch(e){
+    if(info) info.textContent = '⚠️ Não foi possível ler: ' + e.message;
+  }
+}
+function docxPrint(){
+  const page = document.getElementById('docxPage');
+  if(!page) return toast('⚠️ Selecione um .docx primeiro');
+  const w = window.open('', '_blank');
+  if(!w) return toast('⚠️ Permita pop-ups para imprimir');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>documento</title><style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 20px;color:#111;line-height:1.6}img{max-width:100%}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:6px}h1,h2,h3{line-height:1.3}</style></head><body>' + page.innerHTML + '<scr'+'ipt>onload=()=>{print();}</scr'+'ipt></body></html>');
+  w.document.close();
+}
+function docxDownloadHtml(){
+  const page = document.getElementById('docxPage');
+  if(!page) return toast('⚠️ Selecione um .docx primeiro');
+  const inp = document.getElementById('docxFile');
+  const base = inp && inp.files[0] ? inp.files[0].name.replace(/\.docx$/i,'') : 'documento';
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(base) + '</title></head><body>' + page.innerHTML + '</body></html>';
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  const a = document.createElement('a'); a.href = url; a.download = base + '.html'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('⬇ HTML baixado');
 }
 async function pdfCompress(){
   const btn = event?.target?.closest('button');
