@@ -4962,7 +4962,8 @@ async function saveTermoRecEquip(){
 }
 function setTermoTipo(t){
   termoTipoAtivo = t;
-  try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer);}catch(e){}
+  try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer); clearTimeout(recEqPreviewTimer);}catch(e){}
+  if(termoPreviewExpand) toggleTermoPreviewExpand();
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
   [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
     const b = document.getElementById(id);
@@ -6178,6 +6179,8 @@ function setTermoPreview(url, title){
   const wrap = document.getElementById('termoPreviewWrapSide');
   const titleEl = document.getElementById('termoPreviewTitle');
   if(titleEl && title) titleEl.textContent = title;
+  // PDF e AutoRenomear não usam pré-visualização de termo: nunca reexibir aqui
+  if(typeof termoTipoAtivo !== 'undefined' && (termoTipoAtivo === 'pdf' || termoTipoAtivo === 'renomear')) return wrap;
   if(wrap) wrap.classList.remove('hidden');
   if(frame){
     if(termoPreviewURL) URL.revokeObjectURL(termoPreviewURL);
