@@ -5218,7 +5218,18 @@ function openPdfTool(tool){
   area.classList.remove('hidden');
   if(msg) msg.classList.add('hidden');
   const tools={
-    merge: `<h4 class="font-bold text-sm mb-2">⧉ Juntar PDFs</h4><p class="text-xs text-slate-500 mb-3">Selecione 2 a 10 PDFs — arraste para reordenar antes de mesclar</p><input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="inp mb-3" onchange="renderPdfMergeList()"><div id="pdfMergeList" class="hidden space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50"></div><button id="pdfMergeBtn" onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>⧉ Mesclar PDFs</button>`,
+    merge: `<div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="font-bold text-sm">⧉ Juntar PDFs</h4>
+        <div class="flex items-center gap-2">
+          <span id="pdfMergeCount" class="text-xs text-slate-500">0 arquivos</span>
+          <button id="pdfMergeSortBtn" onclick="pdfMergeSort()" class="btn btn-ghost text-xs px-2.5 py-1.5" title="Ordenar por nome">↑ A–Z</button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 mb-2">Arraste para reordenar — mínimo 2 arquivos</p>
+      <div id="pdfMergeGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1" role="list" aria-label="PDFs para mesclar"></div>
+      <button id="pdfMergeBtn" onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>⧉ Mesclar PDFs</button>
+    </div>`,
     split: `<h4 class="font-bold text-sm mb-2">✂️ Dividir PDF</h4><p class="text-xs text-slate-500 mb-3">Extraia páginas específicas. Ex: 1,3,5-7</p><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfSplitInfo')"><div id="pdfSplitInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp mb-3"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button>`,
     compress: `<h4 class="font-bold text-sm mb-2">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500 mb-3">Reduz tamanho removendo metadados</p><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfCompressInfo')"><div id="pdfCompressInfo" class="text-xs text-slate-500 mb-2 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button>`,
     jpg2pdf: `<h4 class="font-bold text-sm mb-2">🖼️ JPG para PDF</h4><p class="text-xs text-slate-500 mb-3">Converta imagens JPG/PNG em PDF (até 20) — arraste para reordenar</p><input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="inp mb-3" onchange="renderPdfJpgList()"><div id="pdfJpgList" class="hidden space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button>`,
@@ -5277,37 +5288,103 @@ async function pdfExtract(){
   try{ setBtnLoading(btn, true, 'Extraindo...'); const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
 }
 let pdfMergeFiles = [];
-function renderPdfMergeList(){
-  const inp = document.getElementById('pdfMergeFiles');
-  const list = document.getElementById('pdfMergeList');
+let pdfMergeThumbs = new Map(); // idx -> dataURL
+let pdfMergeSortAsc = true;
+function renderPdfMergeGrid(){
+  const grid = document.getElementById('pdfMergeGrid');
   const btn = document.getElementById('pdfMergeBtn');
-  pdfMergeFiles = inp && inp.files ? [...inp.files] : [];
+  const count = document.getElementById('pdfMergeCount');
   if(!pdfMergeFiles.length){
-    list.classList.add('hidden');
+    grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+        <span class="text-4xl mb-2">📄</span>
+        <p class="text-slate-500 text-sm">Arraste PDFs aqui ou clique em <span class="font-semibold text-indigo-600">+ Adicionar arquivos</span></p>
+        <p class="text-xs text-slate-400 mt-1">Mínimo 2 arquivos</p>
+      </div>
+      <div id="pdfMergeAddBtn" class="col-span-full flex justify-center">
+        <label class="btn btn-ghost border-dashed px-8 py-4 cursor-pointer" for="pdfMergeFiles">
+          <span class="flex items-center gap-2"><span class="text-2xl">+</span><span>Adicionar arquivos</span></span>
+          <input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="hidden" onchange="addPdfMergeFiles(event)">
+        </label>
+      </div>
+    `;
     btn.disabled = true;
+    if(count) count.textContent = '0 arquivos';
     return;
   }
-  list.classList.remove('hidden');
-  list.innerHTML = pdfMergeFiles.map((f, i) => `
-    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
+  grid.innerHTML = pdfMergeFiles.map((f, i) => `
+    <div class="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
       ondragstart="pdfMergeDragStart(event)"
       ondragend="pdfMergeDragEnd(event)">
-      <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
-      <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
-      <span class="text-[11px] text-slate-500">(${Math.round(f.size/1024)} KB)</span>
-      <button type="button" onclick="pdfMergeRemove(${i})" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Remover">✕</button>
+      <div class="aspect-[3/4] bg-slate-50 relative overflow-hidden">
+        ${pdfMergeThumbs.has(i) ? `<img src="${pdfMergeThumbs.get(i)}" alt="${esc(f.name)}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center"><span class="text-3xl">📄</span></div>`}
+        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
+        <button type="button" onclick="event.stopPropagation(); pdfMergeRemove(${i})" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/90 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="Remover">✕</button>
+        <span class="absolute bottom-1 left-1 right-1 text-center text-[10px] font-bold text-white bg-black/50 px-1 rounded">${i+1}</span>
+      </div>
+      <div class="p-2.5">
+        <p class="text-xs font-mono truncate text-slate-700" title="${esc(f.name)}">${esc(f.name)}</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">${Math.round(f.size/1024)} KB</p>
+      </div>
     </div>
   `).join('');
+  // botão + no final
+  const addBtn = document.createElement('div');
+  addBtn.className = 'col-span-full';
+  addBtn.innerHTML = `
+    <label class="btn btn-ghost border-dashed w-full py-4 cursor-pointer flex items-center justify-center gap-2 hover:bg-indigo-50" for="pdfMergeFiles">
+      <span class="text-2xl">+</span><span>Adicionar mais arquivos</span>
+      <input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="hidden" onchange="addPdfMergeFiles(event)">
+    </label>
+  `;
+  grid.appendChild(addBtn);
   btn.disabled = pdfMergeFiles.length < 2;
-  // container aceita drop entre itens
-  list.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
-  list.ondrop = pdfMergeDrop;
+  if(count) count.textContent = `${pdfMergeFiles.length} arquivo${pdfMergeFiles.length>1?'s':''}`;
+  // drag container
+  grid.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  grid.ondrop = pdfMergeDrop;
+}
+async function addPdfMergeFiles(e){
+  const newFiles = e.target ? [...e.target.files] : (e || []);
+  if(!newFiles.length) return;
+  for(const f of newFiles){
+    if(!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') continue;
+    pdfMergeFiles.push(f);
+  }
+  await generateMergeThumbs();
+  renderPdfMergeGrid();
+}
+async function generateMergeThumbs(){
+  pdfMergeThumbs.clear();
+  if(!pdfMergeFiles.length) return;
+  try{
+    await ensurePdfJsAtiv();
+    for(let i=0;i<pdfMergeFiles.length;i++){
+      const f = pdfMergeFiles[i];
+      const buf = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 0.35 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      pdfMergeThumbs.set(i, canvas.toDataURL('image/jpeg', 0.7));
+    }
+  }catch(e){ console.warn('Thumb gen failed:', e.message); }
+}
+function pdfMergeSort(){
+  pdfMergeSortAsc = !pdfMergeSortAsc;
+  pdfMergeFiles.sort((a,b) => pdfMergeSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+  await generateMergeThumbs();
+  renderPdfMergeGrid();
+  const btn = document.getElementById('pdfMergeSortBtn');
+  if(btn) btn.textContent = pdfMergeSortAsc ? '↑ A–Z' : '↓ Z–A';
 }
 function pdfMergeDragStart(e){
   e.dataTransfer.effectAllowed = 'move';
   const row = e.currentTarget;
   row.dataset.dragging = 'true';
-  row.classList.add('opacity-50', 'ring-2', 'ring-indigo-300');
+  row.classList.add('opacity-40', 'ring-2', 'ring-indigo-300');
 }
 function pdfMergeDrop(e){
   e.preventDefault();
@@ -5318,23 +5395,25 @@ function pdfMergeDrop(e){
   if(from >= 0 && to >= 0 && from !== to){
     const [moved] = pdfMergeFiles.splice(from, 1);
     pdfMergeFiles.splice(to, 0, moved);
-    renderPdfMergeList();
+    await generateMergeThumbs();
+    renderPdfMergeGrid();
   }
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-indigo-50', 'border-indigo-300'));
 }
 function pdfMergeDragEnd(e){
   const row = e.currentTarget;
-  row.classList.remove('opacity-50', 'ring-2', 'ring-indigo-300');
+  row.classList.remove('opacity-40', 'ring-2', 'ring-indigo-300');
   delete row.dataset.dragging;
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-indigo-50', 'border-indigo-300'));
 }
 function pdfMergeRemove(idx){
   pdfMergeFiles.splice(idx, 1);
-  // Recria DataTransfer para o input
-  const dt = new DataTransfer();
-  pdfMergeFiles.forEach(f => dt.items.add(f));
-  document.getElementById('pdfMergeFiles').files = dt.files;
-  renderPdfMergeList();
+  pdfMergeThumbs.delete(idx);
+  // reindex thumbs
+  const newThumbs = new Map();
+  pdfMergeThumbs.forEach((v,k) => newThumbs.set(k > idx ? k-1 : k, v));
+  pdfMergeThumbs = newThumbs;
+  renderPdfMergeGrid();
 }
 async function pdfMerge(){
   if(pdfMergeFiles.length < 2) return toast('⚠️ Selecione 2 ou mais PDFs');
