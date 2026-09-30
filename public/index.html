@@ -5059,7 +5059,8 @@ async function analisarRenomear(){
     ocrFilaAutomatica();
   }
 }
-function confBadge(c){
+function confBadge(c, processing){
+  if(processing) return '<span class="text-[10px] font-extrabold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full animate-pulse">OCR</span>';
   if(c === 'alta') return '<span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ALTA</span>';
   if(c === 'média') return '<span class="text-[10px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">MÉDIA</span>';
   if(c === 'manual') return '<span class="text-[10px] font-extrabold bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full">MANUAL</span>';
@@ -5080,7 +5081,7 @@ function renderRenomear(){
     const ocrBtn = (podeOcr && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrRenomear(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">📷 Tentar OCR local (lê foto/escaneado)</button><p id="renomearOcr${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.ocrMsg || '')}</p>` : '';
     const srvBtn = (podeOcr && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrServidorItem(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">🖥️ OCR no servidor (lê foto/escaneado)</button><p id="renomearSrv${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.srvMsg || '')}</p>` : '';
     return `<div class="border border-slate-200 rounded-2xl p-3.5 bg-white">
-      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span><span id="renomearConf${i}">${confBadge(it.confianca)}</span>${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
+      <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span><span id="renomearConf${i}">${confBadge(it.confianca, it.confianca === 'manual' && (it.ocrMsg || it.srvMsg))}</span>${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
       ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>${ocrBtn}${srvBtn}` : `
       ${det ? `<p id="renomearDet${i}" class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
       <div id="renomearAv${i}">${avisos}</div>
@@ -5094,10 +5095,10 @@ function renderRenomear(){
           <input id="renomearData${i}" type="date" value="${esc(it.dataISO || '')}" oninput="recompSugestao(${i},'data')" class="inp w-full text-xs mt-1">
         </div>
       </div>
-      <label class="lbl mt-2 block">NOVO NOME *</label>
+<label class="lbl mt-2 block">NOVO NOME *</label>
       <div class="flex gap-2 mt-1">
         <input id="renomearNome${i}" value="${esc(it.sugestao || '')}" class="inp flex-1 font-mono text-xs">
-        <button onclick="baixarRenomeado(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
+        <button onclick="baixarRenomeado(${i})" id="renomearBtnDl${i}" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap" ${it.confianca === 'manual' && (it.ocrMsg || it.srvMsg) ? 'disabled' : ''}>${it.confianca === 'manual' && (it.ocrMsg || it.srvMsg) ? '<span class="inline-flex items-center gap-1.5"><span class="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>OCR em andamento...</span>' : '\xe2\xac\x87 Baixar'}</button>
       </div>
       ${podeOcr ? `<button onclick="togglePreviewRenomear(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">👁 Ver documento</button><div id="renomearPrev${i}" class="hidden mt-2 text-center"></div>` : ''}${ocrBtn}${srvBtn}${trecho}`}
     </div>`;
@@ -5138,7 +5139,7 @@ function recompSugestao(i, src){
   detParts.push('motor ' + (it.motor || '?'));
   if(detEl) detEl.textContent = detParts.join(' • ');
   if(avEl) avEl.innerHTML = av.map(a => `<p class="text-[11px] text-amber-700">⚠️ ${esc(a)}</p>`).join('');
-  if(confEl) confEl.innerHTML = confBadge(it.confianca);
+  if(confEl) confEl.innerHTML = confBadge(it.confianca, it.confianca === 'manual' && (it.ocrMsg || it.srvMsg));
 }
 // Preview do documento no AutoRenomear: mostra a 1ª página do PDF (via PDF.js
 // já embutido) ou a imagem, sob demanda — para ler Nome/Data no próprio

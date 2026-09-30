@@ -395,8 +395,9 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
       }
       
       if (texto.replace(/\s/g, '').length < 20) {
-        out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-          avisos: ['PDF escaneado (sem texto selecionável) — toque em 📷 Tentar OCR local abaixo ou preencha o nome manualmente'], trecho: '' });
+        // PDF escaneado (sem camada de texto): sinaliza que precisa de OCR no cliente
+        out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual', needsOcr: true,
+          avisos: ['PDF escaneado (sem texto selecionável) — OCR automático será tentado'], trecho: '' });
         continue;
       }
       
