@@ -13,6 +13,18 @@ const DB_FILE = path.join(ROOT, 'db.json');
 const UPLOAD_DIR = path.join(ROOT, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+function attachmentExtension(value) {
+  return String((value && (value.name || value.originalname)) || '').split('.').pop().toLowerCase();
+}
+
+function isAudioAttachment(value) {
+  if (!value || value.expired || !value.url) return false;
+  if (value.kind === 'audio') return true;
+  const mime = String(value.mimetype || '').toLowerCase();
+  if (mime.startsWith('audio/')) return true;
+  return ['webm', 'mp3', 'ogg', 'oga', 'm4a', 'wav'].includes(attachmentExtension(value));
+}
+
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const DEFAULT_UNIDADE = 'UMEPE Juazeiro';
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
@@ -1747,14 +1759,16 @@ const store = {
       throw e;
     }
     const safe = Date.now() + '-' + Math.round(Math.random() * 1e9) + '-' + orig.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const createdAt = new Date().toISOString();
+    const kind = String(file.mimetype || '').toLowerCase().startsWith('audio/') ? 'audio' : 'file';
     if (MODE === 'file') {
       fs.writeFileSync(path.join(UPLOAD_DIR, safe), file.buffer);
-      return { url: '/uploads/' + safe, name: file.originalname, size: file.size, mimetype: file.mimetype };
+      return { url: '/uploads/' + safe, name: file.originalname, size: file.size, mimetype: file.mimetype, kind, createdAt };
     }
     const up = await supa.storage.from('anexos').upload(safe, file.buffer, { contentType: file.mimetype || 'application/octet-stream', upsert: false });
     if (up.error) throw new Error('upload: ' + up.error.message);
     const pub = supa.storage.from('anexos').getPublicUrl(safe);
-    return { url: pub.data.publicUrl, name: file.originalname, size: file.size, mimetype: file.mimetype };
+    return { url: pub.data.publicUrl, name: file.originalname, size: file.size, mimetype: file.mimetype, kind, createdAt };
   },
 
   // Apaga o arquivo físico de um anexo (ignora erros: pode já ter sumido)
@@ -1775,31 +1789,58 @@ const store = {
 
   // Expira anexos de tickets fechados e de chat com mais de maxAgeMs (padrão 24h, via FILES_TTL_HOURS).
   // Apaga o arquivo físico e deixa um marcador {expired:true} no lugar.
-  // Tickets ativos (aguardando/em_atendimento) NUNCA são tocados; chat expira todo anexo > TTL.
+  // Áudios de ticket com createdAt acima do TTL são apagados mesmo em tickets
+  // ativos. Os demais anexos de tickets ativos NUNCA são tocados; chat expira
+  // todo anexo > TTL.
   async cleanupExpiredFiles(maxAgeMs) {
     const ttl = typeof maxAgeMs === 'number' ? maxAgeMs : (Number(process.env.FILES_TTL_HOURS) || 24) * 3600e3;
     const now = Date.now();
     let filesRemoved = 0, ticketsTouched = 0, chatsTouched = 0;
+    const expireAudioList = async (list) => {
+      if (!Array.isArray(list)) return { list, changed: false };
+      let changed = false;
+      const out = [];
+      for (const a of list) {
+        if (!isAudioAttachment(a)) { out.push(a); continue; }
+        const createdAt = Date.parse(a.createdAt || '');
+        if (!Number.isFinite(createdAt) || now - createdAt < ttl) { out.push(a); continue; }
+        await store.deleteStoredFile(a.url);
+        filesRemoved++;
+        changed = true;
+        out.push({ name: a.name || 'arquivo', kind: 'audio', createdAt: a.createdAt, expired: true, expiredAt: new Date().toISOString() });
+      }
+      return { list: out, changed };
+    };
     const tickets = await store.tickets.all();
     for (const t of tickets) {
-      if (!['finalizado', 'cancelado'].includes(t.status)) continue;
-      const ref = t.finishedAt || t.cancelledAt || t.createdAt;
-      if (!ref || now - new Date(ref).getTime() < ttl) continue;
-      const cleanList = async (list) => {
-        if (!Array.isArray(list)) return list;
-        const out = [];
-        for (const a of list) {
-          if (!a || a.expired || !a.url) { out.push(a); continue; }
-          await store.deleteStoredFile(a.url);
-          filesRemoved++;
-          out.push({ name: a.name || 'arquivo', expired: true, expiredAt: new Date().toISOString() });
+      let anexos = t.anexos;
+      let fotosPos = t.fotosPos;
+      let changed = false;
+      ({ list: anexos, changed: changed } = await expireAudioList(anexos));
+      const fotosResult = await expireAudioList(fotosPos);
+      fotosPos = fotosResult.list;
+      changed = changed || fotosResult.changed;
+      if (['finalizado', 'cancelado'].includes(t.status)) {
+        const ref = t.finishedAt || t.cancelledAt || t.createdAt;
+        if (ref && now - new Date(ref).getTime() >= ttl) {
+          const cleanList = async (list) => {
+            if (!Array.isArray(list)) return list;
+            const out = [];
+            for (const a of list) {
+              if (!a || a.expired || !a.url) { out.push(a); continue; }
+              await store.deleteStoredFile(a.url);
+              filesRemoved++;
+              out.push({ name: a.name || 'arquivo', expired: true, expiredAt: new Date().toISOString() });
+            }
+            return out;
+          };
+          const beforeClosed = JSON.stringify([anexos, fotosPos]);
+          anexos = await cleanList(anexos);
+          fotosPos = await cleanList(fotosPos);
+          changed = changed || JSON.stringify([anexos, fotosPos]) !== beforeClosed;
         }
-        return out;
-      };
-      const before = JSON.stringify([t.anexos, t.fotosPos]);
-      const anexos = await cleanList(t.anexos);
-      const fotosPos = await cleanList(t.fotosPos);
-      if (JSON.stringify([anexos, fotosPos]) !== before) {
+      }
+      if (changed) {
         await store.tickets.patch(t.id, { anexos, fotosPos });
         ticketsTouched++;
       }
