@@ -92,6 +92,51 @@ async function postPdf(path, pdfBuf, fields) {
   r = await postPdf('/api/pdf/watermark', Buffer.from('nao é pdf'), { text: 'X' });
   assert(r.status === 400, 'watermark não-PDF: 400');
 
+  console.log('\n=== PDF TOOLS — text / split-zip ===');
+  // text: pdf com texto
+  const { StandardFonts } = require('pdf-lib');
+  const dt = await PDFDocument.create();
+  const pg = dt.addPage([595.28, 841.89]);
+  const fnt = await dt.embedFont(StandardFonts.Helvetica);
+  pg.drawText('Ola mundo SISUMEPE', { x: 50, y: 700, size: 14, font: fnt });
+  const pdfTxt = Buffer.from(await dt.save());
+  {
+    const fd = new FormData();
+    fd.append('file', new Blob([pdfTxt], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/text', { method: 'POST', body: fd });
+    const body = await res.text();
+    assert(res.status === 200, 'text: 200');
+    assert(/text\/plain/.test(res.headers.get('content-type') || ''), 'text: content-type txt');
+    assert(body.includes('SISUMEPE'), 'text: contém o texto do PDF');
+  }
+  // text: pdf sem texto -> 400
+  {
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf3], { type: 'application/pdf' }), 'vazio.pdf');
+    const res = await fetch(BASE + '/api/pdf/text', { method: 'POST', body: fd });
+    assert(res.status === 400, 'text sem texto: 400');
+  }
+  // split-zip: 3 páginas -> zip com 3 entradas
+  {
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf3], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/split-zip', { method: 'POST', body: fd });
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert(res.status === 200, 'split-zip: 200');
+    assert(/application\/zip/.test(res.headers.get('content-type') || ''), 'split-zip: content-type zip');
+    assert(buf.slice(0, 2).toString() === 'PK', 'split-zip: assinatura PK');
+    const names = (buf.toString('binary').match(/pagina-\d+\.pdf/g) || []);
+    assert(new Set(names).size === 3, 'split-zip: 3 entradas pagina-NN.pdf');
+  }
+  // split-zip: 1 página -> 400
+  {
+    const one = await makePdf(1);
+    const fd = new FormData();
+    fd.append('file', new Blob([one], { type: 'application/pdf' }), 'um.pdf');
+    const res = await fetch(BASE + '/api/pdf/split-zip', { method: 'POST', body: fd });
+    assert(res.status === 400, 'split-zip 1 página: 400');
+  }
+
   server.close();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   process.exit(failed ? 1 : 0);

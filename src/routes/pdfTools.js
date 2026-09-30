@@ -1,10 +1,49 @@
 const express = require('express');
 const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
+const pdfParse = require('pdf-parse');
 const shared = require('../lib/shared');
 const router = express.Router();
 
 // helper para validar PDFs
 function isPdf(buf){ return buf && buf.length>4 && buf.slice(0,4).toString()==='%PDF'; }
+
+// ZIP mínimo (stored, sem compressão) — evita dependência extra no servidor
+const ZIP_CRC_T = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function zipCrc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=ZIP_CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){
+  const enc = new TextEncoder();
+  const partes = [], central = [];
+  let offset = 0;
+  const le16=(v,a)=>a.push(v&0xFF,(v>>>8)&0xFF);
+  const le32=(v,a)=>a.push(v&0xFF,(v>>>8)&0xFF,(v>>>16)&0xFF,(v>>>24)&0xFF);
+  for(const f of files){
+    const nomeB = enc.encode(f.name);
+    const dados = Buffer.isBuffer(f.data) ? new Uint8Array(f.data) : f.data;
+    const crc = zipCrc32(dados);
+    const lh=[];
+    le32(0x04034b50,lh); le16(20,lh); le16(0x0800,lh); le16(0,lh); le16(0,lh); le16(0,lh);
+    le32(crc,lh); le32(dados.length,lh); le32(dados.length,lh);
+    le16(nomeB.length,lh); le16(0,lh);
+    const h=Buffer.from(lh);
+    partes.push(h, Buffer.from(nomeB), Buffer.from(dados));
+    const ch=[];
+    le32(0x02014b50,ch); le16(20,ch); le16(20,ch); le16(0x0800,ch); le16(0,ch);
+    le16(0,ch); le16(0,ch); le32(crc,ch);
+    le32(dados.length,ch); le32(dados.length,ch);
+    le16(nomeB.length,ch); le16(0,ch); le16(0,ch); le16(0,ch); le16(0,ch);
+    le32(0,ch); le32(offset,ch);
+    central.push(Buffer.from(ch), Buffer.from(nomeB));
+    offset += h.length + nomeB.length + dados.length;
+  }
+  let centralTam=0;
+  for(const c of central){ partes.push(c); centralTam+=c.length; }
+  const fim=[];
+  le32(0x06054b50,fim); le16(0,fim); le16(0,fim);
+  le16(files.length,fim); le16(files.length,fim);
+  le32(centralTam,fim); le32(offset,fim); le16(0,fim);
+  partes.push(Buffer.from(fim));
+  return Buffer.concat(partes);
+}
 
 // Merge PDFs
 router.post('/api/pdf/merge', shared.auth(['tecnico','psico','admin']), shared.upload.array('files', 10), shared.ah(async (req,res)=>{
@@ -220,6 +259,42 @@ router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), s
   res.setHeader('Content-Type','application/pdf');
   res.setHeader('Content-Disposition','attachment; filename="sem-paginas.pdf"');
   res.send(Buffer.from(bytes));
+}));
+
+// Extrair texto do PDF -> .txt (pdf-parse; escaneados sem texto usam o OCR)
+router.post('/api/pdf/text', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  // pdf-parse usa PDF.js antigo que ignora o byteOffset de Buffers vindos
+  // do pool do Node (lê lixo vizinho e falha): cópia exata antes de extrair
+  const clean = new Uint8Array(req.file.buffer);
+  const data = await pdfParse(clean);
+  const txt = String(data.text||'').replace(/\r/g,'').trim();
+  if(!txt) return res.status(400).json({ error: 'Nenhum texto extraível — PDF escaneado? Use o OCR do AutoRenomear' });
+  res.setHeader('Content-Type','text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition','attachment; filename="texto.txt"');
+  res.send(txt);
+}));
+
+// Dividir em ZIP: 1 PDF por página (limite 60 páginas por vez)
+router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const src = await PDFDocument.load(req.file.buffer);
+  const total = src.getPageCount();
+  if(total < 2) return res.status(400).json({ error: 'PDF tem só 1 página — use Dividir' });
+  if(total > 60) return res.status(400).json({ error: 'Máximo 60 páginas por vez' });
+  const files = [];
+  for(let i=0;i<total;i++){
+    const out = await PDFDocument.create();
+    const [p] = await out.copyPages(src, [i]);
+    out.addPage(p);
+    files.push({ name: `pagina-${String(i+1).padStart(2,'0')}.pdf`, data: Buffer.from(await out.save()) });
+  }
+  const zip = zipStore(files);
+  res.setHeader('Content-Type','application/zip');
+  res.setHeader('Content-Disposition','attachment; filename="paginas.zip"');
+  res.send(zip);
 }));
 
 module.exports = router;
