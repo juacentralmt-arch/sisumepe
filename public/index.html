@@ -1283,11 +1283,13 @@
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR/UPR</h3>
-          <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
-            <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
-            <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT">🎁 KIT COMPLETO</option></select></div>
-            <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option></select></div>
+<div class="grid grid-cols-2 gap-2.5">
+             <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
+             <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+             <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT">🎁 KIT COMPLETO</option></select></div>
+             <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1" onchange="toggleEstMovTipo()"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option><option value="movimentacao">Movimentação</option></select></div>
+             <div id="estMovOrigemWrap" class="hidden"><label class="lbl">ORIGEM *</label><select id="estMovOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+             <div id="estMovDestinoWrap" class="hidden"><label class="lbl">DESTINO *</label><select id="estMovDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
             <div class="col-span-2"><label class="lbl">QTD *</label><input id="estQtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEstSeriaisQtd()"></div>
           </div>
           <p id="estKitHint" class="hidden mt-2 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-2"></p>
@@ -1304,24 +1306,7 @@
           <input id="estMotivo" placeholder="Ex: Recebimento lote 123 em lote, ajuste inventário" class="inp mt-1">
           <button onclick="movimentarEstoque()" class="btn btn-primary w-full py-2.5 text-sm mt-3">✓ Confirmar movimentação na unidade</button>
           <p id="estErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
-          <div class="mt-4 border-t border-slate-100 pt-4">
-            <h4 class="font-bold text-xs mb-2">🔄 Transferir entre unidades (lote)</h4>
-            <div class="grid grid-cols-2 gap-2">
-              <div><label class="lbl">ORIGEM *</label><select id="estTransOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
-              <div><label class="lbl">DESTINO *</label><select id="estTransDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
-              <div class="col-span-2 grid grid-cols-2 gap-2">
-                <div><label class="lbl">MATERIAL *</label><select id="estTransMaterial" class="inp mt-1" onchange="toggleTransSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option></select></div>
-                <div><label class="lbl">QTD *</label><input id="estTransQtd" type="number" min="1" max="500" class="inp mt-1" oninput="syncTransSeriaisQtd()"></div>
-              </div>
-            </div>
-            <div id="estTransSeriaisWrap" class="mt-2">
-              <label class="lbl flex justify-between"><span id="estTransSeriaisLabel">SERIAIS TZPR04/UPR04 (lote) *</span> <span id="estTransSeriaisCount" class="text-[11px] font-bold">0</span></label>
-              <textarea id="estTransSeriais" rows="3" placeholder="Cole seriais do lote (10 dígitos cada)" class="inp mt-1 font-mono text-xs" oninput="syncTransSeriaisQtd()"></textarea>
-            </div>
-            <input id="estTransMotivo" placeholder="Motivo (opcional)" class="inp mt-2">
-            <button onclick="transferirEstoque()" class="btn btn-ghost w-full py-2 text-xs mt-2 border">🔄 Transferir lote</button>
-            <p id="estTransErr" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
-          </div>
+
         </div>
         <div class="lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📋 Últimas movimentações <span id="estMovCount" class="text-xs font-normal text-slate-400"></span></h3>
@@ -7885,7 +7870,7 @@ function toggleEstSeriaisPanel(abrir){
 }
 function verSeriaisCadastrados(material){
   const m=document.getElementById('estSerMat'); if(m) m.value=material||'';
-  const u=document.getElementById('estSerUnd'); if(u && estoqueUnidadeAtiva) u.value=estoqueUnidadeAtiva;
+  const u=document.getElementById('estSerUnd'); if(u) u.value='';
   const b=document.getElementById('estSerBusca'); if(b) b.value='';
   toggleEstSeriaisPanel(true);
 }
@@ -7896,7 +7881,7 @@ async function loadEstSeriais(){
     const und=document.getElementById('estSerUnd')?.value||'';
     const st=document.getElementById('estSerStatus')?.value||'';
     const q=document.getElementById('estSerBusca')?.value.trim()||'';
-    let url='/api/estoque/seriais?limit=2000&sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo());
+    let url='/api/estoque/seriais?limit=all&sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo());
     if(mat) url+='&material='+encodeURIComponent(mat);
     if(und) url+='&unidade='+encodeURIComponent(und);
     if(st) url+='&status='+encodeURIComponent(st);
@@ -7980,6 +7965,12 @@ async function quickEstoque(material, delta){
   }
   await loadEstoque();
 }
+function toggleEstMovTipo(){
+  const on = document.getElementById('estTipo')?.value === 'movimentacao';
+  document.getElementById('estMovOrigemWrap')?.classList.toggle('hidden', !on);
+  document.getElementById('estMovDestinoWrap')?.classList.toggle('hidden', !on);
+  if(on) toggleEstSeriais();
+}
 async function movimentarEstoque(){
   const err=document.getElementById('estErr');
   err.classList.add('hidden');
@@ -7987,6 +7978,9 @@ async function movimentarEstoque(){
   const unidade=document.getElementById('estUnidade').value;
   const material=document.getElementById('estMaterial').value;
   const tipo=document.getElementById('estTipo').value;
+  const origem=document.getElementById('estMovOrigem')?.value || unidade;
+  const destino=document.getElementById('estMovDestino')?.value || unidade;
+  if(tipo==='movimentacao' && origem===destino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
   const qtd=Number(document.getElementById('estQtd').value);
   const motivo=document.getElementById('estMotivo').value.trim();
   if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
@@ -8024,8 +8018,13 @@ async function movimentarEstoque(){
     if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
-    await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: contrato, unidade, material, qtd: delta, motivo, seriais }) });
-    toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoqueSistemaAtivo+']');
+    if(tipo==='movimentacao'){
+      await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, material, qtd: Math.abs(qtd), motivo, unidadeOrigem: origem, unidadeDestino: destino, seriais }) });
+      toast('✅ '+material+' transferido: '+origem+' → '+destino+(seriais.length?` (${seriais.length} seriais)`:'')+' ['+estoqueSistemaAtivo+']');
+    } else {
+      await api('/api/estoque/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: contrato, unidade, material, qtd: delta, motivo, seriais }) });
+      toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoqueSistemaAtivo+']');
+    }
     document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const st=document.getElementById('estSeriais'); if(st) st.value=''; document.getElementById('estSeriaisList').innerHTML='';
     loadEstoque();
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
