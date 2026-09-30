@@ -5289,10 +5289,8 @@ function renderPdfMergeList(){
   }
   list.classList.remove('hidden');
   list.innerHTML = pdfMergeFiles.map((f, i) => `
-    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg" draggable="true" data-idx="${i}"
+    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
       ondragstart="pdfMergeDragStart(event)"
-      ondragover="pdfMergeDragOver(event)"
-      ondrop="pdfMergeDrop(event)"
       ondragend="pdfMergeDragEnd(event)">
       <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
       <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
@@ -5301,19 +5299,15 @@ function renderPdfMergeList(){
     </div>
   `).join('');
   btn.disabled = pdfMergeFiles.length < 2;
+  // container aceita drop entre itens
+  list.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  list.ondrop = pdfMergeDrop;
 }
 function pdfMergeDragStart(e){
   e.dataTransfer.effectAllowed = 'move';
   const row = e.currentTarget;
   row.dataset.dragging = 'true';
   row.classList.add('opacity-50', 'ring-2', 'ring-indigo-300');
-}
-function pdfMergeDragOver(e){
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  // visual feedback no drop target
-  const target = e.target.closest('[data-idx]');
-  if(target && !target.dataset.dragging) target.classList.add('bg-indigo-50', 'border-indigo-300');
 }
 function pdfMergeDrop(e){
   e.preventDefault();
@@ -5326,7 +5320,6 @@ function pdfMergeDrop(e){
     pdfMergeFiles.splice(to, 0, moved);
     renderPdfMergeList();
   }
-  // limpa feedback visual
   document.querySelectorAll('[data-idx]').forEach(el => el.classList.remove('bg-indigo-50', 'border-indigo-300'));
 }
 function pdfMergeDragEnd(e){
@@ -5389,10 +5382,8 @@ function renderPdfJpgList(){
   }
   list.classList.remove('hidden');
   list.innerHTML = pdfJpgFiles.map((f, i) => `
-    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg" draggable="true" data-idx="${i}"
+    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg cursor-grab active:cursor-grabbing" draggable="true" data-idx="${i}"
       ondragstart="pdfJpgDragStart(event)"
-      ondragover="pdfJpgDragOver(event)"
-      ondrop="pdfJpgDrop(event)"
       ondragend="pdfJpgDragEnd(event)">
       <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
       <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
@@ -5401,18 +5392,14 @@ function renderPdfJpgList(){
     </div>
   `).join('');
   btn.disabled = false;
+  list.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  list.ondrop = pdfJpgDrop;
 }
 function pdfJpgDragStart(e){
   e.dataTransfer.effectAllowed = 'move';
   const row = e.currentTarget;
   row.dataset.dragging = 'true';
   row.classList.add('opacity-50', 'ring-2', 'ring-amber-300');
-}
-function pdfJpgDragOver(e){
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  const target = e.target.closest('[data-idx]');
-  if(target && !target.dataset.dragging) target.classList.add('bg-amber-50', 'border-amber-300');
 }
 function pdfJpgDrop(e){
   e.preventDefault();
