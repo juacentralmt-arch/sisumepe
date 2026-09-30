@@ -2443,7 +2443,8 @@ function cardFila(t,i){
     <div class="flex items-center gap-3">
       <span class="avatar w-10 h-10 text-sm">${initials(t.person?.nome)}</span>
       <div class="min-w-0"><p class="font-bold text-sm truncate">${esc(t.person?.nome||'-')}</p>
-      <p class="text-xs text-slate-500 truncate">${esc(t.person?.cpf||t.person?.rg||'sem doc.')} • ${esc(t.motivo)}</p></div>
+      <p class="text-xs text-slate-500 truncate">${esc(t.person?.cpf||t.person?.rg||'sem doc.')} • ${esc(t.motivo)}</p>
+      ${(t.createdByName || t.createdBy) ? `<p class="text-[11px] text-slate-400 truncate">Criado por ${esc(t.createdByName || t.createdBy)}</p>` : ''}</div>
     </div>
     ${t.descricao?`<p class="text-xs mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 leading-relaxed">${esc(t.descricao)}</p>`:''}
     ${visitanteQr(t)}
