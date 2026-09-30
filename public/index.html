@@ -337,7 +337,18 @@
             <option>Outros</option>
           </select>
           <label class="lbl">DESCRIÇÃO</label>
-          <textarea id="tDesc" rows="3" placeholder="Descreva o problema, avaria, decisão judicial..." class="inp mt-1 mb-3"></textarea>
+          <textarea id="tDesc" rows="3" placeholder="Descreva o problema, avaria, decisão judicial..." class="inp mt-1 mb-2"></textarea>
+          <div class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" id="ticketAudioBtn" onclick="toggleTicketAudio()" class="btn btn-ghost text-xs px-3 py-2">🎙️ Gravar áudio</button>
+              <span id="ticketAudioStatus" class="text-[11px] font-semibold text-slate-500">Nenhum áudio gravado.</span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Opcional, com até 5 minutos. O áudio é anexado ao ticket e apagado automaticamente após 24 horas.</p>
+            <div id="ticketAudioPreview" class="hidden mt-2 flex flex-wrap items-center gap-2">
+              <audio id="ticketAudioPlayer" controls preload="metadata" class="h-9 w-full max-w-[260px]"></audio>
+              <button type="button" onclick="clearTicketAudio()" class="text-[11px] font-bold text-rose-600 hover:text-rose-800">Remover áudio</button>
+            </div>
+          </div>
           <label class="lbl">MODELO DA TORNOZELEIRA <span id="modeloLabelReq" class="font-normal normal-case">(vem do cadastro — toque para corrigir)</span></label>
           <div class="grid grid-cols-3 gap-2.5 mt-1 mb-3">
             <button type="button" data-modelo="Spacecom" onclick="pickModelo('Spacecom')" class="relative rounded-2xl border-2 border-slate-200 bg-white p-3 text-xs font-bold text-slate-500 transition min-h-[84px] active:scale-95">
@@ -2369,10 +2380,41 @@ function fotosPosHtml(list){
       : `<a class="text-indigo-600 underline font-semibold text-[11px]" target="_blank" href="${url}">📄 ${esc(a.name || 'PDF')}</a>`;
   }).join('')}</div>`;
 }
+function isTicketAudio(a){
+  if(!a || a.expired || !a.url) return false;
+  if(a.kind === 'audio') return true;
+  const mime = String(a.mimetype || '').toLowerCase();
+  if(mime.startsWith('audio/')) return true;
+  const ext = String(a.name || '').split('.').pop().toLowerCase();
+  return ['webm', 'mp3', 'ogg', 'oga', 'm4a', 'wav'].includes(ext);
+}
+async function loadTicketAudio(url, id){
+  try{
+    const r = await authFetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const el = document.getElementById(id);
+    if(el) el.src = objectUrl;
+  }catch(e){
+    const el = document.getElementById(id);
+    if(el) el.outerHTML = '<span class="text-[11px] text-rose-600 font-semibold">Não foi possível carregar o áudio.</span>';
+  }
+}
+function ticketAudioHtml(a){
+  const id = 'ticket-aud-' + Math.random().toString(36).slice(2, 10);
+  const label = `<span class="text-[11px] font-semibold text-slate-600 truncate max-w-[160px]">${esc(a.name || 'áudio')}</span>`;
+  if(String(a.url || '').startsWith('/uploads/')){
+    setTimeout(() => loadTicketAudio(a.url, id), 30);
+    return `<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5">${label}<audio id="${id}" controls preload="none" class="h-9 w-full max-w-[230px]"></audio></div>`;
+  }
+  return `<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5">${label}<audio controls preload="none" src="${esc(a.url || '')}" class="h-9 w-full max-w-[230px]"></audio></div>`;
+}
 function anexosHtml(list){
   if(!list || !list.length) return '';
   return `<div class="mt-1.5 flex gap-1.5 flex-wrap items-center"><span class="text-[11px] font-bold text-slate-500">📎</span>${list.map(a => {
     if(a.expired) return `<span class="text-[11px] text-slate-400 italic" title="Arquivo removido automaticamente após 24h">🗑️ ${esc(a.name || 'arquivo')} (expirado)</span>`;
+    if(isTicketAudio(a)) return ticketAudioHtml(a);
     const url = esc(a.url || ''), name = esc(a.name || 'arquivo');
     const isImg = ((a.mimetype || '').startsWith('image/')) || /\.(jpe?g|png|webp|gif)$/i.test(a.url || '');
     return isImg
@@ -2565,6 +2607,154 @@ function setAbrirTicketBusy(b){
     else if(btn.dataset.labelOrig){ btn.innerHTML = btn.dataset.labelOrig; delete btn.dataset.labelOrig; }
   });
 }
+// Áudio opcional da descrição do ticket (máx. 5 minutos). O arquivo é
+// enviado como anexo e o backend o apaga automaticamente após 24 horas.
+const TICKET_AUDIO_MAX_SECONDS = 300;
+let ticketAudioRecording = false;
+let ticketAudioRecorder = null;
+let ticketAudioStream = null;
+let ticketAudioChunks = [];
+let ticketAudioTimer = null;
+let ticketAudioSeconds = 0;
+let ticketAudioMime = 'audio/webm';
+let ticketAudioFile = null;
+let ticketAudioUrl = '';
+
+function ticketAudioExtension(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m.includes('mp4') || m.includes('m4a')) return 'm4a';
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
+  if (m.includes('ogg') || m.includes('oga')) return 'ogg';
+  if (m.includes('wav') || m.includes('wave')) return 'wav';
+  return 'webm';
+}
+
+function ticketAudioDuration(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function paintTicketAudioIdle(message) {
+  const btn = document.getElementById('ticketAudioBtn');
+  const status = document.getElementById('ticketAudioStatus');
+  if (btn) {
+    btn.disabled = false;
+    btn.classList.remove('opacity-60');
+    btn.textContent = '🎙️ Gravar áudio';
+  }
+  if (status && message != null) status.textContent = message;
+}
+
+function stopTicketAudioTracks() {
+  if (ticketAudioStream) {
+    ticketAudioStream.getTracks().forEach(track => { try { track.stop(); } catch (e) {} });
+    ticketAudioStream = null;
+  }
+}
+
+function finalizeTicketAudio() {
+  paintTicketAudioIdle();
+  if (!ticketAudioChunks.length) {
+    document.getElementById('ticketAudioStatus').textContent = 'Nenhum áudio gravado.';
+    return;
+  }
+  const blob = new Blob(ticketAudioChunks, { type: ticketAudioMime });
+  if (!blob.size) {
+    ticketAudioChunks = [];
+    document.getElementById('ticketAudioStatus').textContent = 'Não foi possível salvar o áudio. Tente novamente.';
+    return;
+  }
+  if (blob.size > 15 * 1024 * 1024) {
+    ticketAudioChunks = [];
+    document.getElementById('ticketAudioStatus').textContent = 'Áudio muito longo para envio. Grave até 5 minutos.';
+    return;
+  }
+  if (ticketAudioUrl) URL.revokeObjectURL(ticketAudioUrl);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  ticketAudioFile = new File([blob], `descricao-audio-${stamp}.${ticketAudioExtension(ticketAudioMime)}`, { type: ticketAudioMime });
+  ticketAudioUrl = URL.createObjectURL(ticketAudioFile);
+  const player = document.getElementById('ticketAudioPlayer');
+  if (player) player.src = ticketAudioUrl;
+  document.getElementById('ticketAudioPreview').classList.remove('hidden');
+  document.getElementById('ticketAudioStatus').textContent = `Áudio pronto (${ticketAudioDuration(ticketAudioSeconds)}). Ele será apagado automaticamente após 24 horas.`;
+  ticketAudioChunks = [];
+}
+
+function clearTicketAudio(message) {
+  if (ticketAudioRecording) {
+    toast('⚠️ Pare a gravação antes de remover o áudio.');
+    return;
+  }
+  stopTicketAudioTracks();
+  if (ticketAudioUrl) URL.revokeObjectURL(ticketAudioUrl);
+  ticketAudioRecorder = null;
+  ticketAudioChunks = [];
+  ticketAudioSeconds = 0;
+  ticketAudioFile = null;
+  ticketAudioUrl = '';
+  const player = document.getElementById('ticketAudioPlayer');
+  if (player) player.removeAttribute('src');
+  document.getElementById('ticketAudioPreview').classList.add('hidden');
+  paintTicketAudioIdle(message || 'Nenhum áudio gravado.');
+}
+
+async function toggleTicketAudio() {
+  if (ticketAudioRecording) {
+    if (ticketAudioRecorder && ticketAudioRecorder.state !== 'inactive') ticketAudioRecorder.stop();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    return toast('⚠️ Seu navegador não suporta gravação de áudio');
+  }
+  if (window.isSecureContext === false) {
+    return toast('⚠️ Áudio exige HTTPS ou localhost');
+  }
+  const btn = document.getElementById('ticketAudioBtn');
+  const status = document.getElementById('ticketAudioStatus');
+  try {
+    clearTicketAudio();
+    ticketAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    ticketAudioChunks = [];
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(candidate => {
+      try { return MediaRecorder.isTypeSupported(candidate); } catch (e) { return false; }
+    }) || '';
+    ticketAudioRecorder = mime ? new MediaRecorder(ticketAudioStream, { mimeType: mime }) : new MediaRecorder(ticketAudioStream);
+    ticketAudioMime = String(ticketAudioRecorder.mimeType || mime || 'audio/webm').split(';')[0];
+    ticketAudioRecorder.ondataavailable = event => { if (event.data && event.data.size > 0) ticketAudioChunks.push(event.data); };
+    ticketAudioRecorder.onstop = () => {
+      clearInterval(ticketAudioTimer);
+      ticketAudioRecording = false;
+      stopTicketAudioTracks();
+      finalizeTicketAudio();
+    };
+    ticketAudioRecorder.start(1000);
+    ticketAudioRecording = true;
+    ticketAudioSeconds = 0;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⏹️ Parar gravação';
+    }
+    if (status) status.textContent = `Gravando áudio (0:00 de até 5:00)...`;
+    ticketAudioTimer = setInterval(() => {
+      ticketAudioSeconds += 1;
+      if (status) status.textContent = `Gravando áudio (${ticketAudioDuration(ticketAudioSeconds)} de até 5:00)...`;
+      if (ticketAudioSeconds >= TICKET_AUDIO_MAX_SECONDS && ticketAudioRecorder && ticketAudioRecorder.state !== 'inactive') {
+        ticketAudioRecorder.stop();
+      }
+    }, 1000);
+  } catch (e) {
+    stopTicketAudioTracks();
+    clearInterval(ticketAudioTimer);
+    ticketAudioRecording = false;
+    const name = (e && e.name) || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError') toast('⚠️ Microfone bloqueado. Permita o microfone e recarregue.');
+    else if (name === 'NotFoundError' || name === 'OverconstrainedError') toast('⚠️ Nenhum microfone encontrado no dispositivo.');
+    else if (name === 'NotReadableError') toast('⚠️ Microfone em uso por outro app. Feche e tente de novo.');
+    else toast('⚠️ Erro no microfone (' + (name || 'desconhecido') + ')');
+    paintTicketAudioIdle('Nenhum áudio gravado.');
+  }
+}
+
 // Comprime fotos no navegador antes do upload (máx 1600px, JPEG q0.82,
 // preto e branco para melhor leitura de documentos).
 // Reduz drasticamente o tamanho do PDF unificado e o tempo de envio.
@@ -2620,7 +2810,10 @@ async function abrirTicket(){
     if(!motivoSel) return toast('⚠️ Selecione o motivo do atendimento');
     if(setorSel==='tecnico' && !modeloVal) return toast('⚠️ Toque no modelo da tornozeleira (Spacecom ou Infinity) para o setor Técnico');
   }
-  if([...document.getElementById('tFiles').files].length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
+  if(ticketAudioRecording) return toast('⚠️ Pare a gravação de áudio antes de abrir o ticket.');
+  const ticketPhotoFiles = [...document.getElementById('tFiles').files];
+  const ticketAudioFiles = ticketAudioFile ? [ticketAudioFile] : [];
+  if(ticketPhotoFiles.length + ticketAudioFiles.length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
   setAbrirTicketBusy(true);
   const fd=new FormData();
   fd.append('personId',selPersonId); fd.append('motivo',motivoSel);
@@ -2629,10 +2822,11 @@ async function abrirTicket(){
   fd.append('setor',setorSel); fd.append('visitante', isVis ? 'true' : 'false');
   fd.append('tecnicoRecepcao',document.getElementById('tResp').value);
   fd.append('createdBy', session ? session.user : '');
-  for(const f of await compressPhotoFiles(document.getElementById('tFiles').files)) fd.append('anexos',f);
+  for(const f of await compressPhotoFiles(ticketPhotoFiles)) fd.append('anexos',f);
+  for(const f of ticketAudioFiles) fd.append('anexos',f);
   try{ const t=await authFetch('/api/tickets',{method:'POST',body:fd}).then(async r=>{const j=await r.json(); if(!r.ok) throw new Error(j.error); return j;});
     toast(t.duplicated ? ('🎫 Ticket '+t.code+' já havia sido criado!') : ('🎫 Ticket '+t.code+' criado!'));
-    document.getElementById('tDesc').value=''; document.getElementById('tFiles').value=''; document.getElementById('tMotivo').value='';
+    document.getElementById('tDesc').value=''; document.getElementById('tFiles').value=''; document.getElementById('tMotivo').value=''; clearTicketAudio();
     const vl=document.getElementById('visitLocal'); if(vl) vl.value=''; const vm=document.getElementById('visitMotivo'); if(vm) vm.value=''; const vo=document.getElementById('visitObs'); if(vo) vo.value='';
     refreshScanPreview(); toggleNovoCad(false);
     modeloSel=''; paintModelo(); prio=false; setorSel=''; paintSetor(); updateTicketFieldsForSetor();
