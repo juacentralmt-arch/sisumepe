@@ -270,7 +270,7 @@ const MATERIAIS_SERIAL_VALIDOS = ['TZPR04','TZPR','UPR04'];
 router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, material, status, q, limit } = req.query;
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
-  const opts = sistema ? { sistema } : {};
+  const opts = sistema ? { sistema, limit: 'all' } : { limit: 'all' };
   const c = contrato ? resolveContrato(contrato, sistema) : null;
   if(c) opts.contrato = c;
   if(unidade) opts.unidade = String(unidade).trim();
