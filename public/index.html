@@ -5237,6 +5237,7 @@ function openPdfTool(tool){
     extract: `<h4 class="font-bold text-sm mb-2">📑 Extrair páginas</h4><p class="text-xs text-slate-500 mb-3">Salve páginas específicas como novo PDF</p><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfExtractInfo')"><div id="pdfExtractInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp mb-3"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button>`
   };
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
+  if(tool === 'merge') renderPdfMergeGrid();
   area.scrollIntoView({behavior:'smooth',block:'center'});
 }
 async function pdfHandleResponse(res, filename){
