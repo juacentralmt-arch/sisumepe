@@ -2429,7 +2429,7 @@ function closeTicketAudioModal(){
   }
   if(modal) modal.classList.add('hidden');
 }
-async function loadTicketAudioSource(url){
+async function loadTicketAudioSource(url, mime){
   if(ticketAudioModalObjectUrl && ticketAudioModalSource === url) return ticketAudioModalObjectUrl;
   if(ticketAudioModalObjectUrl) URL.revokeObjectURL(ticketAudioModalObjectUrl);
   ticketAudioModalObjectUrl = '';
@@ -2437,8 +2437,11 @@ async function loadTicketAudioSource(url){
   if(String(url || '').startsWith('/uploads/')){
     const r = await authFetch(url);
     if(!r.ok) throw new Error('HTTP ' + r.status);
-    const blob = await r.blob();
-    if(!blob || !blob.size) throw new Error('áudio vazio');
+    const raw = await r.blob();
+    if(!raw || !raw.size) throw new Error('áudio vazio');
+    // Render/static storage can return octet-stream. Re-tag blob with actual
+    // recorder MIME so browser decodes WebM/Opus instead of showing 0:00.
+    const blob = new Blob([raw], { type: mime || raw.type || 'audio/webm' });
     ticketAudioModalObjectUrl = URL.createObjectURL(blob);
     return ticketAudioModalObjectUrl;
   }
@@ -2461,7 +2464,7 @@ async function openTicketAudio(btn){
   player.load();
   modal.classList.remove('hidden');
   try{
-    const src = await loadTicketAudioSource(url);
+    const src = await loadTicketAudioSource(url, mime);
     player.src = src;
     player.load();
     if(download){
