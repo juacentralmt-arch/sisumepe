@@ -5043,7 +5043,7 @@ async function analisarRenomear(){
         const r = await authFetch('/api/termos/autorenomear', { method: 'POST', body: fd });
         const j = await r.json().catch(() => ({}));
         if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
-        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: (it && it.sugestao) || sugestaoLocal(it) || (it.arquivo || 'arquivo'), motor: (it && it.motor) || '', dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), ocrMsg: '' }));
+        (j.itens || []).forEach((it, k) => renomearCache.push({ file: lote[k] || null, ...it, nome: (it && it.nome) || '', sugestao: (it && it.sugestao) || sugestaoLocal(it) || (it.arquivo || 'arquivo'), motor: (it && it.motor) || '', dataDoArquivo: !!((it.avisos || []).some(a => /nome do arquivo/i.test(a))), ocrMsg: '', srvMsg: '' }));
       }catch(e){
         lote.forEach(f => renomearCache.push({ file: f, arquivo: f.name, erro: e.message || 'Falha no lote' }));
       }
@@ -5078,9 +5078,10 @@ function renderRenomear(){
     const trecho = it.trecho ? `<details class="mt-1"><summary class="cursor-pointer text-[11px] text-slate-400 underline">Ver trecho lido</summary><p class="text-[11px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 leading-relaxed">${esc(it.trecho)}</p></details>` : '';
     const podeOcr = it.file && /\.(pdf|jpe?g|png)$/i.test(it.arquivo || '');
     const ocrBtn = (podeOcr && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrRenomear(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">📷 Tentar OCR local (lê foto/escaneado)</button><p id="renomearOcr${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.ocrMsg || '')}</p>` : '';
+    const srvBtn = (podeOcr && (it.confianca === 'manual' || it.erro)) ? `<button onclick="ocrServidorItem(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">🖥️ OCR no servidor (lê foto/escaneado)</button><p id="renomearSrv${i}" class="text-[11px] text-indigo-600 font-semibold mt-1">${esc(it.srvMsg || '')}</p>` : '';
     return `<div class="border border-slate-200 rounded-2xl p-3.5 bg-white">
       <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-slate-400">#${i + 1}</span><span class="text-xs font-semibold text-slate-500 truncate flex-1">${esc(it.arquivo || '')}</span><span id="renomearConf${i}">${confBadge(it.confianca)}</span>${it.erro ? '<span class="text-[10px] font-extrabold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">ERRO</span>' : ''}</div>
-      ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>${ocrBtn}` : `
+      ${it.erro ? `<p class="text-xs text-rose-600 font-semibold mt-2">⚠️ ${esc(it.erro)}</p>${ocrBtn}${srvBtn}` : `
       ${det ? `<p id="renomearDet${i}" class="text-[11px] text-slate-500 mt-1.5">${esc(det)}</p>` : ''}
       <div id="renomearAv${i}">${avisos}</div>
       <div class="grid grid-cols-2 gap-2 mt-2">
@@ -5098,7 +5099,7 @@ function renderRenomear(){
         <input id="renomearNome${i}" value="${esc(it.sugestao || '')}" class="inp flex-1 font-mono text-xs">
         <button onclick="baixarRenomeado(${i})" class="btn btn-primary text-xs px-4 py-2 whitespace-nowrap">⬇ Baixar</button>
       </div>
-      ${podeOcr ? `<button onclick="togglePreviewRenomear(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">👁 Ver documento</button><div id="renomearPrev${i}" class="hidden mt-2 text-center"></div>` : ''}${ocrBtn}${trecho}`}
+      ${podeOcr ? `<button onclick="togglePreviewRenomear(${i}, this)" class="btn btn-ghost w-full py-2 text-xs mt-2 border">👁 Ver documento</button><div id="renomearPrev${i}" class="hidden mt-2 text-center"></div>` : ''}${ocrBtn}${srvBtn}${trecho}`}
     </div>`;
   }).join('');
 }
@@ -5342,8 +5343,69 @@ async function executarOcrItem(i, setStatus){
   if(fullText.replace(/\s/g, '').length < 10) throw new Error('OCR não encontrou texto — confira a qualidade da imagem ou preencha manualmente');
   setStatus('⏳ Interpretando texto...');
   const r = await api('/api/termos/autorenomear-texto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: fullText.slice(0, 8000), arquivo: it.arquivo }) });
-  renomearCache[i] = { ...renomearCache[i], ...r, nome: r.nome || '', dataDoArquivo: !!((r.avisos || []).some(a => /nome do arquivo/i.test(a))), erro: undefined, ocrMsg: '' };
+  renomearCache[i] = { ...renomearCache[i], ...r, nome: r.nome || '', dataDoArquivo: !!((r.avisos || []).some(a => /nome do arquivo/i.test(a))), erro: undefined, ocrMsg: '', srvMsg: '' };
   return true;
+}
+// OCR no SERVIDOR: rasteriza até 2 páginas no navegador (PDF.js renderiza bem
+// no cliente) e envia as imagens ao Tesseract que roda no servidor.
+async function paginasParaJPEG(it){
+  const imgs = [];
+  const paraJPEG = (canvas, q) => new Promise(res => { try{ canvas.toBlob(res, 'image/jpeg', q == null ? 0.85 : q); }catch(e){ res(null); } });
+  if(/\.pdf$/i.test(it.file.name || '')){
+    await ensurePdfJsAtiv();
+    const buf = await it.file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    const n = Math.min(pdf.numPages, 2);
+    for(let p = 1; p <= n; p++){
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.8 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      let blob = await paraJPEG(canvas, 0.85);
+      if(blob && blob.size > 950 * 1024){
+        const c2 = document.createElement('canvas');
+        c2.width = 1400; c2.height = Math.round(canvas.height * (1400 / canvas.width));
+        c2.getContext('2d').drawImage(canvas, 0, 0, c2.width, c2.height);
+        blob = (await paraJPEG(c2, 0.75)) || blob;
+      }
+      if(blob) imgs.push(blob);
+    }
+  } else {
+    const url = URL.createObjectURL(it.file);
+    try{
+      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+      const sc = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * sc); canvas.height = Math.round(img.naturalHeight * sc);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const blob = await paraJPEG(canvas, 0.85);
+      if(blob) imgs.push(blob);
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 5000); }
+  }
+  return imgs;
+}
+async function ocrServidorItem(i, btn){
+  const it = renomearCache[i];
+  if(!it || !it.file) return toast('⚠️ Arquivo original não está mais disponível — analise novamente');
+  if(btn && !setBtnLoading(btn, true, 'Lendo no servidor...')) return;
+  syncRenomearInputs();
+  const setStatus = (t) => { const el = document.getElementById('renomearSrv' + i); if(el) el.innerHTML = ocrStatusHTML(t); };
+  try{
+    setStatus('⏳ Renderizando páginas...');
+    const imgs = await paginasParaJPEG(it);
+    if(!imgs.length) throw new Error('Não foi possível preparar as páginas');
+    setStatus('🖥️ Lendo no servidor... (pode levar ~1min)');
+    const fd = new FormData();
+    fd.append('arquivo', it.arquivo || 'documento');
+    imgs.forEach((b, k) => fd.append('imagens', b, 'pagina' + (k + 1) + '.jpg'));
+    const r = await authFetch('/api/termos/autorenomear-ocr', { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(j.error || 'OCR no servidor falhou');
+    renomearCache[i] = { ...renomearCache[i], ...j, nome: j.nome || '', dataDoArquivo: !!((j.avisos || []).some(a => /nome do arquivo/i.test(a))), erro: undefined, ocrMsg: '', srvMsg: '' };
+    renderRenomear();
+    toast('✅ OCR no servidor concluído — revise o nome sugerido');
+  }catch(e){ const msg = '⚠️ Servidor: ' + e.message; if(renomearCache[i]) renomearCache[i].srvMsg = msg; setStatus(msg); toast(msg); if(btn) setBtnLoading(btn, false); }
 }
 async function ocrRenomear(i, btn){
   if(renomearFilaOcr) return toast('⏳ OCR em lote em andamento — toque em ⏹ Parar para fazer manual');

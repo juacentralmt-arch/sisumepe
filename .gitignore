@@ -9,3 +9,5 @@ uploads/
 cloudflare-url.log
 tornozeleira-system/
 .freebuff/
+*.traineddata
+*.traineddata.gz
