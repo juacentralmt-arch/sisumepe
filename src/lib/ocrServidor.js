@@ -73,4 +73,12 @@ async function ocrImagem(buffer, opts) {
   return String((data && data.text) || '').trim();
 }
 
-module.exports = { ocrImagem, comTimeout, resetOcrServidor, getWorker };
+// pdfjs-dist v5 (ESM) — importa dinamicamente para CJS funcionar
+async function carregarPdfjs() {
+  try { return require('pdfjs-dist/legacy/build/pdf.js'); } catch (_) {
+    const m = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    return m.default || m;
+  }
+}
+
+module.exports = { ocrImagem, comTimeout, resetOcrServidor, getWorker, carregarPdfjs };

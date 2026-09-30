@@ -66,7 +66,6 @@ function desenharPagina() {
 })()
   .catch(e => { console.log('  ❌ fatal: ' + (e && e.message)); process.exitCode = 1; })
   .finally(async () => {
-    // Worker Tesseract mantém o event loop vivo: encerra e sai explícito.
     try { await ocr.resetOcrServidor(); } catch (e) {}
     process.exit(process.exitCode || 0);
   });
