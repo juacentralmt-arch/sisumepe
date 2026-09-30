@@ -5218,12 +5218,12 @@ function openPdfTool(tool){
   area.classList.remove('hidden');
   if(msg) msg.classList.add('hidden');
   const tools={
-    merge: `<h4 class="font-bold text-sm mb-2">⧉ Juntar PDFs</h4><p class="text-xs text-slate-500 mb-3">Selecione 2 a 10 PDFs para mesclar em um único arquivo</p><input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="inp mb-3"><button onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm">⧉ Mesclar PDFs</button>`,
-    split: `<h4 class="font-bold text-sm mb-2">✂️ Dividir PDF</h4><p class="text-xs text-slate-500 mb-3">Extraia páginas específicas. Ex: 1,3,5-7</p><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp mb-3"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button>`,
-    compress: `<h4 class="font-bold text-sm mb-2">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500 mb-3">Reduz tamanho removendo metadados</p><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="inp mb-3"><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button>`,
-    jpg2pdf: `<h4 class="font-bold text-sm mb-2">🖼️ JPG para PDF</h4><p class="text-xs text-slate-500 mb-3">Converta imagens JPG/PNG em PDF (até 20)</p><input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="inp mb-3"><button onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm">🖼️→📄 Converter</button>`,
-    rotate: `<h4 class="font-bold text-sm mb-2">🔄 Girar PDF</h4><p class="text-xs text-slate-500 mb-3">Gire todas as páginas</p><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><select id="pdfRotateAngle" class="inp mb-3"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button>`,
-    extract: `<h4 class="font-bold text-sm mb-2">📑 Extrair páginas</h4><p class="text-xs text-slate-500 mb-3">Salve páginas específicas como novo PDF</p><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5"><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp mb-3"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button>`
+    merge: `<h4 class="font-bold text-sm mb-2">⧉ Juntar PDFs</h4><p class="text-xs text-slate-500 mb-3">Selecione 2 a 10 PDFs — arraste para reordenar antes de mesclar</p><input id="pdfMergeFiles" type="file" accept=".pdf,application/pdf" multiple class="inp mb-3" onchange="renderPdfMergeList()"><div id="pdfMergeList" class="hidden space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50"></div><button id="pdfMergeBtn" onclick="pdfMerge()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>⧉ Mesclar PDFs</button>`,
+    split: `<h4 class="font-bold text-sm mb-2">✂️ Dividir PDF</h4><p class="text-xs text-slate-500 mb-3">Extraia páginas específicas. Ex: 1,3,5-7</p><input id="pdfSplitFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfSplitInfo')"><div id="pdfSplitInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfSplitPages" placeholder="Ex: 1,3,5-7 ou deixe vazio para todas" class="inp mb-3"><button onclick="pdfSplit()" class="btn btn-primary w-full py-2.5 text-sm">✂️ Dividir</button>`,
+    compress: `<h4 class="font-bold text-sm mb-2">🗜️ Comprimir PDF</h4><p class="text-xs text-slate-500 mb-3">Reduz tamanho removendo metadados</p><input id="pdfCompressFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfCompressInfo')"><div id="pdfCompressInfo" class="text-xs text-slate-500 mb-2 hidden"></div><button onclick="pdfCompress()" class="btn btn-primary w-full py-2.5 text-sm">🗜️ Comprimir</button>`,
+    jpg2pdf: `<h4 class="font-bold text-sm mb-2">🖼️ JPG para PDF</h4><p class="text-xs text-slate-500 mb-3">Converta imagens JPG/PNG em PDF (até 20) — arraste para reordenar</p><input id="pdfJpgFiles" type="file" accept="image/jpeg,image/png" multiple class="inp mb-3" onchange="renderPdfJpgList()"><div id="pdfJpgList" class="hidden space-y-1.5 max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50"></div><button id="pdfJpgBtn" onclick="pdfJpgToPdf()" class="btn btn-primary w-full py-2.5 text-sm mt-2 disabled:opacity-50 disabled:pointer-events-none" disabled>🖼️→📄 Converter</button>`,
+    rotate: `<h4 class="font-bold text-sm mb-2">🔄 Girar PDF</h4><p class="text-xs text-slate-500 mb-3">Gire todas as páginas</p><input id="pdfRotateFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfRotateInfo')"><div id="pdfRotateInfo" class="text-xs text-slate-500 mb-2 hidden"></div><select id="pdfRotateAngle" class="inp mb-3"><option value="90">90° horário</option><option value="180">180°</option><option value="270">270° horário</option></select><button onclick="pdfRotate()" class="btn btn-primary w-full py-2.5 text-sm">🔄 Girar</button>`,
+    extract: `<h4 class="font-bold text-sm mb-2">📑 Extrair páginas</h4><p class="text-xs text-slate-500 mb-3">Salve páginas específicas como novo PDF</p><input id="pdfExtractFile" type="file" accept=".pdf,application/pdf" class="inp mb-2.5" onchange="pdfShowPageCount(this,'pdfExtractInfo')"><div id="pdfExtractInfo" class="text-xs text-slate-500 mb-2 hidden"></div><input id="pdfExtractPages" placeholder="Ex: 1,3,5-7" class="inp mb-3"><button onclick="pdfExtract()" class="btn btn-primary w-full py-2.5 text-sm">📑 Extrair</button>`
   };
   area.innerHTML = tools[tool]||'<p class="text-xs text-slate-500">Ferramenta não encontrada</p>';
   area.scrollIntoView({behavior:'smooth',block:'center'});
@@ -5237,46 +5237,201 @@ async function pdfHandleResponse(res, filename){
   const msg=document.getElementById('pdfToolMsg');
   if(msg){ msg.textContent='✅ Pronto! Download iniciado.'; msg.className='text-xs font-bold text-emerald-600 mt-2'; msg.classList.remove('hidden'); }
 }
-async function pdfMerge(){
-  const inp=document.getElementById('pdfMergeFiles');
-  if(!inp.files.length) return toast('⚠️ Selecione ao menos 2 PDFs');
-  if(inp.files.length<2) return toast('⚠️ Selecione 2 ou mais PDFs');
-  const fd=new FormData(); for(const f of inp.files) fd.append('files', f);
-  try{ const r=await authFetch('/api/pdf/merge',{method:'POST',body:fd}); await pdfHandleResponse(r,'mesclado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
-}
 async function pdfSplit(){
+  const btn = event?.target?.closest('button');
   const f=document.getElementById('pdfSplitFile').files[0];
   if(!f) return toast('⚠️ Selecione um PDF');
   const pages=document.getElementById('pdfSplitPages').value;
   const fd=new FormData(); fd.append('file',f); if(pages) fd.append('pages',pages);
-  try{ const r=await authFetch('/api/pdf/split',{method:'POST',body:fd}); await pdfHandleResponse(r,'dividido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+  try{ setBtnLoading(btn, true, 'Dividindo...'); const r=await authFetch('/api/pdf/split',{method:'POST',body:fd}); await pdfHandleResponse(r,'dividido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
 }
 async function pdfCompress(){
+  const btn = event?.target?.closest('button');
   const f=document.getElementById('pdfCompressFile').files[0];
   if(!f) return toast('⚠️ Selecione um PDF');
   const fd=new FormData(); fd.append('file',f);
-  try{ const r=await authFetch('/api/pdf/compress',{method:'POST',body:fd}); await pdfHandleResponse(r,'comprimido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
-}
-async function pdfJpgToPdf(){
-  const inp=document.getElementById('pdfJpgFiles');
-  if(!inp.files.length) return toast('⚠️ Selecione imagens');
-  const fd=new FormData(); for(const f of inp.files) fd.append('files', f);
-  try{ const r=await authFetch('/api/pdf/jpg-to-pdf',{method:'POST',body:fd}); await pdfHandleResponse(r,'imagens.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+  try{ setBtnLoading(btn, true, 'Comprimindo...'); const r=await authFetch('/api/pdf/compress',{method:'POST',body:fd}); 
+    if(r.ok){
+      const orig = r.headers.get('X-Original-Size');
+      const comp = r.headers.get('X-Compressed-Size');
+      if(orig && comp){ const ratio = Math.round((1 - comp/orig)*100); toast(`✅ Comprimido: ${Math.round(orig/1024)}KB → ${Math.round(comp/1024)}KB (${ratio}% redução)`); }
+    }
+    await pdfHandleResponse(r,'comprimido.pdf'); 
+  }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
 }
 async function pdfRotate(){
+  const btn = event?.target?.closest('button');
   const f=document.getElementById('pdfRotateFile').files[0];
   if(!f) return toast('⚠️ Selecione um PDF');
   const angle=document.getElementById('pdfRotateAngle').value;
   const fd=new FormData(); fd.append('file',f); fd.append('angle',angle);
-  try{ const r=await authFetch('/api/pdf/rotate',{method:'POST',body:fd}); await pdfHandleResponse(r,'rotacionado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+  try{ setBtnLoading(btn, true, 'Girando...'); const r=await authFetch('/api/pdf/rotate',{method:'POST',body:fd}); await pdfHandleResponse(r,'rotacionado.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
 }
 async function pdfExtract(){
+  const btn = event?.target?.closest('button');
   const f=document.getElementById('pdfExtractFile').files[0];
   if(!f) return toast('⚠️ Selecione um PDF');
   const pages=document.getElementById('pdfExtractPages').value;
   if(!pages) return toast('⚠️ Informe as páginas. Ex: 1,3,5-7');
   const fd=new FormData(); fd.append('file',f); fd.append('pages',pages);
-  try{ const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }
+  try{ setBtnLoading(btn, true, 'Extraindo...'); const r=await authFetch('/api/pdf/extract',{method:'POST',body:fd}); await pdfHandleResponse(r,'extraido.pdf'); }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }
+}
+let pdfMergeFiles = [];
+function renderPdfMergeList(){
+  const inp = document.getElementById('pdfMergeFiles');
+  const list = document.getElementById('pdfMergeList');
+  const btn = document.getElementById('pdfMergeBtn');
+  pdfMergeFiles = inp && inp.files ? [...inp.files] : [];
+  if(!pdfMergeFiles.length){
+    list.classList.add('hidden');
+    btn.disabled = true;
+    return;
+  }
+  list.classList.remove('hidden');
+  list.innerHTML = pdfMergeFiles.map((f, i) => `
+    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg" draggable="true" data-idx="${i}"
+      ondragstart="pdfMergeDragStart(event)"
+      ondragover="pdfMergeDragOver(event)"
+      ondrop="pdfMergeDrop(event)"
+      ondragend="pdfMergeDragEnd(event)">
+      <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
+      <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
+      <span class="text-[11px] text-slate-500">(${Math.round(f.size/1024)} KB)</span>
+      <button type="button" onclick="pdfMergeRemove(${i})" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Remover">✕</button>
+    </div>
+  `).join('');
+  btn.disabled = pdfMergeFiles.length < 2;
+}
+function pdfMergeDragStart(e){
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.dataset.dragging = 'true';
+  e.target.classList.add('opacity-50', 'ring-2', 'ring-indigo-300');
+}
+function pdfMergeDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function pdfMergeDrop(e){
+  e.preventDefault();
+  const from = parseInt(document.querySelector('[data-dragging="true"]')?.dataset.idx || '-1', 10);
+  const toEl = e.target.closest('[data-idx]');
+  const to = toEl ? parseInt(toEl.dataset.idx, 10) : -1;
+  if(from >= 0 && to >= 0 && from !== to){
+    const [moved] = pdfMergeFiles.splice(from, 1);
+    pdfMergeFiles.splice(to, 0, moved);
+    // Atualiza o input files (não dá pra setar diretamente, recriamos a lista visual)
+    renderPdfMergeList();
+  }
+}
+function pdfMergeDragEnd(e){
+  e.target.classList.remove('opacity-50', 'ring-2', 'ring-indigo-300');
+  delete e.target.dataset.dragging;
+}
+function pdfMergeRemove(idx){
+  pdfMergeFiles.splice(idx, 1);
+  // Recria DataTransfer para o input
+  const dt = new DataTransfer();
+  pdfMergeFiles.forEach(f => dt.items.add(f));
+  document.getElementById('pdfMergeFiles').files = dt.files;
+  renderPdfMergeList();
+}
+async function pdfMerge(){
+  if(pdfMergeFiles.length < 2) return toast('⚠️ Selecione 2 ou mais PDFs');
+  const fd = new FormData();
+  for(const f of pdfMergeFiles) fd.append('files', f);
+  try{
+    const btn = document.getElementById('pdfMergeBtn');
+    setBtnLoading(btn, true, 'Mesclando...');
+    const r = await authFetch('/api/pdf/merge', { method: 'POST', body: fd });
+    await pdfHandleResponse(r, 'mesclado.pdf');
+  }catch(e){
+    const m = document.getElementById('pdfToolMsg');
+    if(m){ m.textContent = '⚠️ ' + e.message; m.className = 'text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); }
+  }finally{
+    setBtnLoading(document.getElementById('pdfMergeBtn'), false);
+  }
+}
+async function pdfShowPageCount(inp, infoId){
+  const f = inp.files[0];
+  const el = document.getElementById(infoId);
+  if(!f){ el.classList.add('hidden'); return; }
+  el.textContent = `📄 Lendo PDF...`;
+  el.classList.remove('hidden');
+  try{
+    const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+    const buf = await f.arrayBuffer();
+    const doc = await PDFDocument.load(buf);
+    const pages = doc.getPageCount();
+    const kb = Math.round(f.size/1024);
+    el.textContent = `${pages} página${pages>1?'s':''} • ${kb} KB`;
+  }catch(e){
+    el.textContent = `⚠️ Não foi possível ler: ${e.message}`;
+  }
+}
+let pdfJpgFiles = [];
+function renderPdfJpgList(){
+  const inp = document.getElementById('pdfJpgFiles');
+  const list = document.getElementById('pdfJpgList');
+  const btn = document.getElementById('pdfJpgBtn');
+  pdfJpgFiles = inp && inp.files ? [...inp.files] : [];
+  if(!pdfJpgFiles.length){
+    list.classList.add('hidden');
+    btn.disabled = true;
+    return;
+  }
+  list.classList.remove('hidden');
+  list.innerHTML = pdfJpgFiles.map((f, i) => `
+    <div class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg" draggable="true" data-idx="${i}"
+      ondragstart="pdfJpgDragStart(event)"
+      ondragover="pdfMergeDragOver(event)"
+      ondrop="pdfJpgDrop(event)"
+      ondragend="pdfMergeDragEnd(event)">
+      <span class="text-xs text-slate-400 w-5 text-center">${i+1}</span>
+      <span class="flex-1 text-xs font-mono truncate">${esc(f.name)}</span>
+      <span class="text-[11px] text-slate-500">(${Math.round(f.size/1024)} KB)</span>
+      <button type="button" onclick="pdfJpgRemove(${i})" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Remover">✕</button>
+    </div>
+  `).join('');
+  btn.disabled = false;
+}
+function pdfJpgDragStart(e){
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.dataset.dragging = 'true';
+  e.target.classList.add('opacity-50', 'ring-2', 'ring-amber-300');
+}
+function pdfJpgDrop(e){
+  e.preventDefault();
+  const from = parseInt(document.querySelector('[data-dragging="true"]')?.dataset.idx || '-1', 10);
+  const toEl = e.target.closest('[data-idx]');
+  const to = toEl ? parseInt(toEl.dataset.idx, 10) : -1;
+  if(from >= 0 && to >= 0 && from !== to){
+    const [moved] = pdfJpgFiles.splice(from, 1);
+    pdfJpgFiles.splice(to, 0, moved);
+    renderPdfJpgList();
+  }
+}
+function pdfJpgRemove(idx){
+  pdfJpgFiles.splice(idx, 1);
+  const dt = new DataTransfer();
+  pdfJpgFiles.forEach(f => dt.items.add(f));
+  document.getElementById('pdfJpgFiles').files = dt.files;
+  renderPdfJpgList();
+}
+async function pdfJpgToPdf(){
+  if(!pdfJpgFiles.length) return toast('⚠️ Selecione ao menos 1 imagem');
+  const fd = new FormData();
+  for(const f of pdfJpgFiles) fd.append('files', f);
+  try{
+    const btn = document.getElementById('pdfJpgBtn');
+    setBtnLoading(btn, true, 'Convertendo...');
+    const r = await authFetch('/api/pdf/jpg-to-pdf', { method: 'POST', body: fd });
+    await pdfHandleResponse(r, 'imagens.pdf');
+  }catch(e){
+    const m = document.getElementById('pdfToolMsg');
+    if(m){ m.textContent = '⚠️ ' + e.message; m.className = 'text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); }
+  }finally{
+    setBtnLoading(document.getElementById('pdfJpgBtn'), false);
+  }
 }
 // --- AUTORENOMEAR: upload em lote → "Tipo - Nome - Data" pelo conteúdo ---
 let renomearCache = [];

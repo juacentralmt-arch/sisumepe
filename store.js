@@ -1516,7 +1516,7 @@ const store = {
           if(r.length < passo) break;
         }
         return out;
-      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm); if(cNorm) list=list.filter(s=> String(s.contrato).toUpperCase()===cNorm); if(unidade) list=list.filter(s=> String(s.unidade)===normalizeUnidade(unidade)); if(status) list=list.filter(s=> String(s.status)===String(status)); return list; }}
+      }catch(e){ console.warn('estoqueSerial.all fallback', e.message); let list=[...mem.estoqueSerial]; if(sisNorm) list=list.filter(s=> normalizeSistema(s.sistema||DEFAULT_SISTEMA)===sisNorm); if(cNorm) list=list.filter(s=> String(s.contrato).toUpperCase()===cNorm); if(unidade) list=list.filter(s=> String(s.unidade)===normalizeUnidade(unidade)); if(status) list=list.filter(s=> String(s.status)===String(status)); return list; }
     },
     async byContrato(contrato){
       const all=await store.estoqueSerial.all();
