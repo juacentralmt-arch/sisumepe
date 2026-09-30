@@ -5317,11 +5317,11 @@ async function executarOcrItem(i, setStatus){
     await ensurePdfJsAtiv();
     const buf = await it.file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-    const n = Math.min(pdf.numPages, 2);
+    const n = Math.min(pdf.numPages, 1);
     for(let p = 1; p <= n; p++){
-      setStatus(`📷 OCR página ${p}/${n}... (pode levar ~30s)`);
+      setStatus(`📷 OCR página ${p}/${n}... (modo rápido)`);
       const page = await pdf.getPage(p);
-      const viewport = page.getViewport({ scale: 1.8 });
+      const viewport = page.getViewport({ scale: 1.25 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width; canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
@@ -5356,14 +5356,14 @@ async function paginasParaJPEG(it){
     await ensurePdfJsAtiv();
     const buf = await it.file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-    const n = Math.min(pdf.numPages, 2);
+    const n = Math.min(pdf.numPages, 1);
     for(let p = 1; p <= n; p++){
       const page = await pdf.getPage(p);
-      const viewport = page.getViewport({ scale: 1.8 });
+      const viewport = page.getViewport({ scale: 1.25 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width; canvas.height = viewport.height;
       await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      let blob = await paraJPEG(canvas, 0.85);
+      let blob = await paraJPEG(canvas, 0.72);
       if(blob && blob.size > 950 * 1024){
         const c2 = document.createElement('canvas');
         c2.width = 1400; c2.height = Math.round(canvas.height * (1400 / canvas.width));
@@ -5376,7 +5376,7 @@ async function paginasParaJPEG(it){
     const url = URL.createObjectURL(it.file);
     try{
       const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
-      const sc = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.naturalWidth * sc); canvas.height = Math.round(img.naturalHeight * sc);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
