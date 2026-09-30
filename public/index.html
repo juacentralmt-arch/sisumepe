@@ -6868,7 +6868,7 @@ function closeModal(){ document.getElementById('modalFin').classList.add('hidden
 async function confirmFinish(){
   const rel=document.getElementById('mRel').value, tec=document.getElementById('mTec').value, err=document.getElementById('mErr');
   if(!tec.trim()){ err.textContent='Informe o nome do técnico.'; err.classList.remove('hidden'); return; }
-  if(!rel.trim()||rel.trim().length<10){ err.textContent='Relatório obrigatório: descreva a ação realizada (mín. 10 caracteres).'; err.classList.remove('hidden'); return; }
+  if(!rel.trim()){ err.textContent='Informe o relatório da ação realizada.'; err.classList.remove('hidden'); return; }
   try{
     const fd=new FormData();
     fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
