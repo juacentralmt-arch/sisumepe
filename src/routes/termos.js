@@ -422,6 +422,31 @@ router.post('/api/termos/autorenomear-texto', auth(['tecnico', 'psico', 'admin']
   res.json({ arquivo: arquivo || 'texto', ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 1500) });
 }));
 
+// AutoRenomear via OCR no SERVIDOR: recebe até 3 imagens (páginas já
+// rasterizadas no navegador — PDF escaneado ou foto), aplica Tesseract WASM
+// no servidor e sugere "<Tipo> - <Nome> - <Data>".
+// Sem persistência — só análise (o rename final é feito no navegador).
+router.post('/api/termos/autorenomear-ocr', auth(['tecnico', 'psico', 'admin']), shared.upload.array('imagens', 3), ah(async (req,res)=>{
+  const arquivo = String((req.body && req.body.arquivo) || 'documento.pdf');
+  if(!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 imagem da página (JPG ou PNG)' });
+  const ocr = require('../lib/ocrServidor');
+  const textos = [];
+  try{
+    for(const f of req.files.slice(0, 3)){
+      const t = await ocr.comTimeout(ocr.ocrImagem(f.buffer), 150000, 'timeout no OCR servidor');
+      if(t) textos.push(t);
+    }
+  }catch(e){
+    if(/timeout/i.test(e.message || '')) { try { await ocr.resetOcrServidor(); } catch (_) {} }
+    return res.status(502).json({ error: 'OCR no servidor falhou: ' + (e.message || 'erro desconhecido') });
+  }
+  const texto = textos.join('\n');
+  if(texto.replace(/\s/g, '').length < 20) return res.status(502).json({ error: 'OCR no servidor não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });
+  const { sugerirNome } = require('../lib/autoRenomear');
+  const r = sugerirNome(texto.slice(0, 8000), arquivo);
+  res.json({ arquivo, ...r, ocr: 'servidor', trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
+}));
+
 router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
