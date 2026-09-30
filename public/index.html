@@ -2411,6 +2411,20 @@ function isTicketAudio(a){
 }
 let ticketAudioModalObjectUrl = '';
 let ticketAudioModalSource = '';
+const ticketAudioCache = new Map();
+async function preloadTicketAudio(url, mime){
+  if(!url || !String(url).startsWith('/uploads/') || ticketAudioCache.has(url)) return ticketAudioCache.get(url) || null;
+  try{
+    const r = await authFetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const raw = await r.blob();
+    if(!raw || !raw.size) throw new Error('áudio vazio');
+    const blob = new Blob([raw], { type: mime || raw.type || 'audio/webm' });
+    const objectUrl = URL.createObjectURL(blob);
+    ticketAudioCache.set(url, objectUrl);
+    return objectUrl;
+  }catch(e){ return null; }
+}
 function ticketAudioModalElements(){
   return {
     modal: document.getElementById('modalTicketAudio'),
@@ -2435,15 +2449,10 @@ async function loadTicketAudioSource(url, mime){
   ticketAudioModalObjectUrl = '';
   ticketAudioModalSource = url;
   if(String(url || '').startsWith('/uploads/')){
-    const r = await authFetch(url);
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const raw = await r.blob();
-    if(!raw || !raw.size) throw new Error('áudio vazio');
-    // Render/static storage can return octet-stream. Re-tag blob with actual
-    // recorder MIME so browser decodes WebM/Opus instead of showing 0:00.
-    const blob = new Blob([raw], { type: mime || raw.type || 'audio/webm' });
-    ticketAudioModalObjectUrl = URL.createObjectURL(blob);
-    return ticketAudioModalObjectUrl;
+    const cached = await preloadTicketAudio(url, mime);
+    if(!cached) throw new Error('áudio vazio ou indisponível');
+    ticketAudioModalObjectUrl = cached;
+    return cached;
   }
   return url;
 }
@@ -2474,9 +2483,16 @@ async function openTicketAudio(btn){
     }
     if(play) play.disabled = false;
     const supported = !mime || (player.canPlayType ? player.canPlayType(mime) : 'maybe');
-    status.textContent = supported === ''
-      ? 'Este navegador pode não reproduzir este formato de áudio. Baixe o arquivo para ouvir em outro player.'
-      : 'Pronto — toque em “Ouvir agora”.';
+    if(supported === ''){
+      status.textContent = 'Este navegador pode não reproduzir este formato. Baixe o arquivo para ouvir.';
+    } else {
+      try{
+        await player.play();
+        status.textContent = 'Reproduzindo áudio...';
+      }catch(e){
+        status.textContent = 'Pronto — toque em “Ouvir agora”.';
+      }
+    }
   }catch(e){
     status.textContent = 'Não foi possível carregar o áudio. Verifique a conexão e tente baixar o arquivo.';
     if(play) play.disabled = true;
@@ -2511,12 +2527,14 @@ function ticketAudioHtml(a){
   const url = String(a.url || '');
   const name = String(a.name || 'áudio');
   const size = a.size != null ? String(a.size) : '';
+  const mime = guessTicketAudioMime(a);
+  if(url.startsWith('/uploads/')) preloadTicketAudio(url, mime);
   return `<div class="mt-1.5 w-full rounded-2xl border border-indigo-100 bg-indigo-50/60 p-2.5">
     <p class="text-[11px] font-extrabold text-indigo-700">🎧 Áudio da descrição</p>
     <p class="text-[11px] font-semibold text-slate-600 truncate">${esc(name)}${a.size ? ` • ${fmtSize(a.size)}` : ''}</p>
     <p class="text-[10px] text-slate-500">Apagado automaticamente após 24 horas</p>
     <div class="mt-2">
-      <button type="button" data-audio-url="${esc(url)}" data-audio-name="${esc(name)}" data-audio-size="${esc(size)}" data-audio-mime="${esc(guessTicketAudioMime(a))}" onclick="openTicketAudio(this)" class="btn btn-primary w-full py-2 text-xs">▶ Ouvir áudio</button>
+      <button type="button" data-audio-url="${esc(url)}" data-audio-name="${esc(name)}" data-audio-size="${esc(size)}" data-audio-mime="${esc(mime)}" onclick="openTicketAudio(this)" class="btn btn-primary w-full py-2.5 text-sm font-extrabold">▶ Ouvir áudio</button>
     </div>
   </div>`;
 }
