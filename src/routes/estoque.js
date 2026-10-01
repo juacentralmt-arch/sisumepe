@@ -279,8 +279,11 @@ router.get('/api/estoque/seriais', shared.auth(['tecnico','admin']), shared.ah(a
   list = list.map(s => ({ ...s, material: serialMaterial(s.serial, s.sistema || sistema) }));
   const matFiltro = material ? String(material).toUpperCase().trim() : null;
   if(matFiltro){
-    if(!MATERIAIS_SERIAL_VALIDOS.includes(matFiltro)) return res.status(400).json({ error: 'Material inválido (TZPR04/TZPR/UPR04)' });
-    list = list.filter(s => s.material === matFiltro);
+    if(matFiltro === 'OUTROS') list = list.filter(s => !s.material);
+    else {
+      if(!MATERIAIS_SERIAL_VALIDOS.includes(matFiltro)) return res.status(400).json({ error: 'Material inválido (TZPR04/TZPR/UPR04/OUTROS)' });
+      list = list.filter(s => s.material === matFiltro);
+    }
   }
   const busca = q ? String(q).replace(/\D/g, '') : '';
   if(busca) list = list.filter(s => String(s.serial).includes(busca));
@@ -552,6 +555,79 @@ router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(asy
     totalEntradas, totalSaidas, movimentacoes: movs.length,
     geradoEm: new Date().toISOString()
   });
+}));
+
+// Conciliação saldo × seriais: por unidade × material (inclui OUTROS =
+// seriais fora do padrão 431/471), quantos têm serial, quantos entraram
+// sem serial e as últimas entradas sem serial (para regularizar).
+router.get('/api/estoque/conciliacao', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato } = req.query;
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema);
+  if(contrato && c && !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  const mats = materiaisDoSistemaRoute(effectiveSistema);
+  const matsTodos = [...mats, 'OUTROS'];
+  let estoque = c ? await shared.store.estoque.byContrato(c, effectiveSistema) : await shared.store.estoque.all(effectiveSistema);
+  if(c) estoque = estoque.filter(e=> String(e.contrato).toUpperCase()===c);
+  const serials = await shared.store.estoqueSerial.all({ sistema: effectiveSistema, ...(c ? { contrato: c } : {}), limit: 'all' });
+  const comSerial = storeMod.MATERIAIS_COM_SERIAL || ['TZPR04','UPR04','TZPR'];
+  const linhas = [];
+  for(const u of UNIDADES){
+    for(const m of matsTodos){
+      const saldo = estoque.filter(e=> String(e.unidade)===u && String(e.material).toUpperCase()===m).reduce((s,e)=> s+Number(e.saldo||0), 0);
+      let disp = 0, emUso = 0;
+      for(const s of serials){
+        if(String(s.unidade)!==u) continue;
+        const sm = serialMaterial(s.serial, s.sistema || effectiveSistema) || 'OUTROS';
+        if(sm!==m) continue;
+        if(String(s.status)==='disponivel') disp++; else emUso++;
+      }
+      linhas.push({ unidade: u, material: m, saldo, disponivel: disp, emUso, semSerial: saldo - disp });
+    }
+  }
+  // Entradas de materiais com serial que não informaram seriais (origem do semSerial)
+  let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema, limit: 'all' });
+  if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
+  const entradasSemSerial = movs
+    .filter(m=> String(m.tipo)!=='saida' && comSerial.includes(String(m.material||'').toUpperCase()) && (!Array.isArray(m.seriais) || !m.seriais.length))
+    .sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt))
+    .slice(0, 50)
+    .map(m=> ({ id: m.id, createdAt: m.createdAt, material: m.material, unidade: m.unidade, qtd: Math.abs(Number(m.qtd)||0), motivo: m.motivo || '' }));
+  const totalSemSerial = linhas.reduce((s,l)=> s + Math.max(0, l.semSerial), 0);
+  res.json({
+    sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null,
+    unidades: UNIDADES, materiais: matsTodos, linhas, entradasSemSerial, totalSemSerial,
+    geradoEm: new Date().toISOString()
+  });
+}));
+
+// Cadastro avulso de seriais (disponíveis, SEM mexer no saldo): regulariza
+// unidades que entraram sem serial. Body: {contrato?, unidade, seriais: "um por linha" ou array}
+router.post('/api/estoque/seriais/avulso', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, unidade, seriais } = req.body || {};
+  const sistema = req.auth.role==='admin' ? (req.body.sistema || req.query.sistema ? normalizeSistema(req.body.sistema || req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  if(!c || !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  const und = String(unidade||'').trim();
+  if(!und || !UNIDADES.includes(storeMod.normalizeUnidade ? storeMod.normalizeUnidade(und) : und)) return res.status(400).json({ error: 'Unidade inválida' });
+  const lista = Array.isArray(seriais) ? seriais : String(seriais||'').split(/[\s,;]+/);
+  const limpos = [...new Set(lista.map(s=> String(s||'').trim()).filter(Boolean))];
+  if(!limpos.length) return res.status(400).json({ error: 'Informe ao menos 1 serial (10 dígitos, um por linha)' });
+  if(limpos.length > 200) return res.status(400).json({ error: 'Máximo 200 seriais por vez' });
+  const ok = [], erros = [];
+  for(const s of limpos){
+    try{
+      await shared.store.estoqueSerial.add({ sistema: effectiveSistema, contrato: c, serial: s, unidade: und });
+      ok.push(s);
+    }catch(e){ erros.push({ serial: s, erro: e.message || 'Falha ao cadastrar' }); }
+  }
+  try{
+    await shared.store.audit.insert({ kind: 'estoque', action: 'serial-avulso', personName: `${c} ${und}`, ticketId: null, ref: `${c} ${und}`, byUser: req.auth.user, byName: req.auth.name, summary: `Seriais avulsos: ${ok.length} ok${erros.length ? `, ${erros.length} erros` : ''} (${ok.slice(0,5).join(', ')}${ok.length>5 ? '...' : ''})` });
+  }catch(e){}
+  shared.broadcast();
+  res.status(201).json({ ok, erros, total: ok.length });
 }));
 
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema

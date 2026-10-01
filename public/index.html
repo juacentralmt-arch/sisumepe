@@ -1273,6 +1273,7 @@
         <button onclick="loadEstoque()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
         <button onclick="toggleEstSeriaisPanel(true)" class="btn btn-ghost text-xs px-3 py-2">🔢 Seriais</button>
         <button onclick="toggleEstFluxoPanel(true)" class="btn btn-ghost text-xs px-3 py-2">📊 Entradas × Saídas</button>
+        <button onclick="toggleEstConcPanel(true)" class="btn btn-ghost text-xs px-3 py-2">⚖️ Conciliação</button>
         <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
         <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
         <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
@@ -1292,6 +1293,7 @@
             <option value="">TZPR04 + UPR04</option>
             <option value="TZPR04">TZPR04</option>
             <option value="UPR04">UPR04</option>
+            <option value="OUTROS">OUTROS (fora do padrão)</option>
           </select>
           <select id="estSerUnd" class="inp !w-auto text-xs" onchange="loadEstSeriais()">
             <option value="">Todas as unidades</option>
@@ -1328,6 +1330,37 @@
           <button onclick="estFluxoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
         </div>
         <div id="estFluxoBody" class="space-y-5"></div>
+      </div>
+      <div id="estConcPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">⚖️ Conciliação saldo × seriais <span id="estConcSub" class="text-[11px] font-normal text-slate-400"></span></h3>
+          <button onclick="toggleEstConcPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Compara o saldo de cada material/unidade com os seriais cadastrados. <b>Sem serial</b> = unidades que entraram sem número de série (não aparecem na lista).</p>
+        <div class="flex flex-wrap gap-2 mb-3 items-end">
+          <button onclick="loadEstConc()" class="btn btn-primary text-xs px-4 py-2">🔍 Atualizar</button>
+          <button onclick="estConcCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <div id="estConcBody" class="mb-4"></div>
+        <h4 class="font-bold text-sm mb-1">➕ Cadastrar seriais avulsos</h4>
+        <p class="text-xs text-slate-500 mb-2">Registra seriais como <b>disponíveis sem mexer no saldo</b> — para regularizar unidades que entraram sem série. Um por linha (10 dígitos).</p>
+        <div class="grid sm:grid-cols-[220px_1fr_auto] gap-2 items-end mb-2">
+          <div><label class="lbl">UNIDADE</label>
+            <select id="estConcUnd" class="inp text-xs mt-1">
+              <option>UMEPE Juazeiro</option>
+              <option>UP-Juazeiro</option>
+              <option>UP-Cariri</option>
+              <option>UP-Crato</option>
+              <option>Fórum de Crato</option>
+              <option>Fórum de Jardim</option>
+            </select>
+          </div>
+          <div><label class="lbl">SERIAIS (um por linha)</label><textarea id="estConcSeriais" rows="2" placeholder="4315023601&#10;4315023602" class="inp text-xs mt-1 font-mono"></textarea></div>
+          <button onclick="estConcAvulso()" class="btn btn-primary text-xs px-4 py-2">➕ Cadastrar</button>
+        </div>
+        <p id="estConcMsg" class="hidden text-xs font-semibold mt-1"></p>
+        <h4 class="font-bold text-sm mt-4 mb-1">📥 Últimas entradas sem serial <span class="text-[11px] font-normal text-slate-400">(origem das diferenças)</span></h4>
+        <div id="estConcSemSerial" class="space-y-1.5 max-h-[220px] overflow-y-auto"></div>
       </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
@@ -8808,6 +8841,60 @@ function estFluxoCSV(){
     return [u,m,e,s,e-s].map(v=>String(v??'')).join(';');
   }).join('\n')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
+}
+let estConcCache=null;
+function toggleEstConcPanel(show){
+  const p=document.getElementById('estConcPanel');
+  if(!p) return;
+  p.classList.toggle('hidden', !show);
+  if(show){ loadEstConc(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+async function loadEstConc(){
+  const body=document.getElementById('estConcBody'); const sub=document.getElementById('estConcSub');
+  const semBox=document.getElementById('estConcSemSerial');
+  if(!body) return;
+  body.innerHTML='<p class="text-xs text-slate-400 text-center py-4">Calculando conciliação...</p>';
+  try{
+    const url='/api/estoque/conciliacao?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo());
+    const r=await api(url);
+    estConcCache=r;
+    const label=r.contratoLabel||r.contrato||'';
+    if(sub) sub.textContent=`— ${label} • ${r.totalSemSerial} un. sem serial`;
+    const rows=r.linhas.filter(l=>l.saldo!==0||l.disponivel!==0||l.emUso!==0).map(l=>{
+      const sem=l.semSerial;
+      const semHtml=sem===0?'<span class="text-slate-300">0</span>':sem>0?`<span class="text-amber-600 font-bold">faltam ${sem}</span>`:`<span class="text-rose-600 font-bold">sobram ${-sem}</span>`;
+      return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(l.unidade)}</td><td class="py-1.5 px-2">${esc(l.material)}</td><td class="text-center py-1.5 px-2 font-extrabold">${l.saldo}</td><td class="text-center py-1.5 px-2 text-emerald-700 font-bold">${l.disponivel}</td><td class="text-center py-1.5 px-2 text-slate-500">${l.emUso}</td><td class="text-center py-1.5 px-2">${semHtml}</td></tr>`;
+    }).join('');
+    body.innerHTML=`<div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th><th class="text-left py-2 px-2">Material</th><th class="text-center py-2 px-2">Saldo</th><th class="text-center py-2 px-2">Seriais disp.</th><th class="text-center py-2 px-2">Em uso</th><th class="text-center py-2 px-2">Sem serial</th></tr></thead><tbody>${rows||'<tr><td colspan="6" class="text-center py-4 text-slate-400">Sem divergências e sem movimento.</td></tr>'}</tbody></table></div>`;
+    if(semBox){
+      semBox.innerHTML=(r.entradasSemSerial||[]).length?(r.entradasSemSerial||[]).map(m=>{
+        const dt=new Date(m.createdAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+        return `<div class="flex gap-2 items-center text-xs bg-amber-50/60 border border-amber-100 rounded-lg px-2 py-1.5"><span class="text-slate-400 whitespace-nowrap">${dt}</span><b>${esc(m.material)}</b><span class="text-slate-500">${esc(m.unidade)} • qtd ${m.qtd}</span><span class="flex-1 truncate text-slate-400">${esc(m.motivo||'')}</span></div>`;
+      }).join(''):'<p class="text-xs text-slate-400">Nenhuma entrada sem serial. ✅</p>';
+    }
+  }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao calcular conciliação</p>'; }
+}
+async function estConcAvulso(){
+  const msg=document.getElementById('estConcMsg');
+  const und=document.getElementById('estConcUnd')?.value||'';
+  const txt=document.getElementById('estConcSeriais')?.value||'';
+  if(!txt.trim()) return toast('⚠️ Cole os seriais (um por linha)');
+  if(!confirm(`Cadastrar seriais avulsos em ${und} sem alterar o saldo?`)) return;
+  try{
+    if(msg){ msg.textContent='⏳ Cadastrando...'; msg.className='text-xs font-bold text-indigo-600 mt-1'; msg.classList.remove('hidden'); }
+    const r=await api('/api/estoque/seriais/avulso',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato: getEstoqueContratoEfetivo(), unidade: und, seriais: txt }) });
+    const det=(r.erros||[]).length?` • erros: ${(r.erros||[]).map(e=>e.serial+': '+e.erro).join('; ')}`:'';
+    if(msg){ msg.textContent=`✅ ${r.total} seriais cadastrados${det}`; msg.className='text-xs font-bold text-emerald-600 mt-1'; msg.classList.remove('hidden'); }
+    document.getElementById('estConcSeriais').value='';
+    toast(`✅ ${r.total} seriais cadastrados`);
+    await loadEstConc(); loadEstSeriais();
+  }catch(e){ if(msg){ msg.textContent='⚠️ '+e.message; msg.className='text-xs font-bold text-rose-600 mt-1'; msg.classList.remove('hidden'); } }
+}
+function estConcCSV(){
+  if(!estConcCache) return toast('⚠️ Atualize a conciliação primeiro');
+  const r=estConcCache;
+  const csv='unidade;material;saldo;disponivel;em_uso;sem_serial\n'+r.linhas.map(l=>[l.unidade,l.material,l.saldo,l.disponivel,l.emUso,l.semSerial].map(v=>String(v??'')).join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='conciliacao-estoque.csv'; a.click();
 }
 async function estornarMov(id){
   const motivo=prompt('Motivo do estorno (mín. 3 caracteres):');
