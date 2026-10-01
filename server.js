@@ -133,7 +133,7 @@ app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html'))
 // Erros de upload e JSON inválido viram 400 JSON (nunca HTML)
 app.use((err, req, res, next) => {
   if (err && (err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'))
-    return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (máx. 15MB cada, 20 por vez).' });
+    return res.status(400).json({ error: 'Arquivo muito grande ou em excesso (ferramentas PDF: máx. 200MB; demais: máx. 15MB cada, 20 por vez).' });
   if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.too.large'))
     return res.status(400).json({ error: 'Corpo da requisição inválido ou grande demais.' });
   console.error(JSON.stringify({ level: 'error', requestId: req.requestId || null, method: req.method, path: req.path, status: err && err.status || 500, message: err && err.message || 'internal_error', at: new Date().toISOString() }));
