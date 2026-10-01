@@ -46,7 +46,7 @@ function zipStore(files){
 }
 
 // Merge PDFs
-router.post('/api/pdf/merge', shared.auth(['tecnico','psico','admin']), shared.upload.array('files', 10), shared.ah(async (req,res)=>{
+router.post('/api/pdf/merge', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.array('files', 10), shared.ah(async (req,res)=>{
   if(!req.files || req.files.length<2) return res.status(400).json({ error: 'Envie ao menos 2 PDFs para mesclar' });
   const pdfDoc = await PDFDocument.create();
   for(const f of req.files){
@@ -62,7 +62,7 @@ router.post('/api/pdf/merge', shared.auth(['tecnico','psico','admin']), shared.u
 }));
 
 // Split PDF (por intervalo ou páginas específicas)
-router.post('/api/pdf/split', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/split', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const { pages, from, to } = req.body||{};
@@ -95,7 +95,7 @@ router.post('/api/pdf/split', shared.auth(['tecnico','psico','admin']), shared.u
 }));
 
 // Compress PDF (remove metadata, re-save)
-router.post('/api/pdf/compress', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/compress', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const src = await PDFDocument.load(req.file.buffer);
@@ -115,7 +115,7 @@ router.post('/api/pdf/compress', shared.auth(['tecnico','psico','admin']), share
 }));
 
 // JPG/PNG -> PDF (cada imagem vira uma página A4)
-router.post('/api/pdf/jpg-to-pdf', shared.auth(['tecnico','psico','admin']), shared.upload.array('files', 20), shared.ah(async (req,res)=>{
+router.post('/api/pdf/jpg-to-pdf', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.array('files', 20), shared.ah(async (req,res)=>{
   if(!req.files || !req.files.length) return res.status(400).json({ error: 'Envie imagens JPG/PNG' });
   const pdfDoc = await PDFDocument.create();
   for(const f of req.files){
@@ -136,7 +136,7 @@ router.post('/api/pdf/jpg-to-pdf', shared.auth(['tecnico','psico','admin']), sha
 }));
 
 // Rotate PDF
-router.post('/api/pdf/rotate', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/rotate', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const angle = parseInt(req.body.angle||'90',10);
@@ -151,7 +151,7 @@ router.post('/api/pdf/rotate', shared.auth(['tecnico','psico','admin']), shared.
 }));
 
 // Extract pages as single PDF (alias de split)
-router.post('/api/pdf/extract', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/extract', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   const pages = String(req.body.pages||'').trim();
   if(!pages) return res.status(400).json({ error: 'Informe as páginas. Ex: 1,3,5-7' });
@@ -194,7 +194,7 @@ function parsePaginas(str, total){
 }
 
 // Marca d'água (texto em todas as páginas: centro diagonal ou rodapé)
-router.post('/api/pdf/watermark', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/watermark', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const text = String(req.body.text||'').trim().slice(0,60);
@@ -222,7 +222,7 @@ router.post('/api/pdf/watermark', shared.auth(['tecnico','psico','admin']), shar
 }));
 
 // Numerar páginas (rodapé: centro ou direita, a partir de N)
-router.post('/api/pdf/pagenumber', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/pagenumber', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const pos = req.body.pos === 'direita' ? 'direita' : 'centro';
@@ -244,7 +244,7 @@ router.post('/api/pdf/pagenumber', shared.auth(['tecnico','psico','admin']), sha
 }));
 
 // Remover páginas ("1,3,5-7" = páginas a EXCLUIR)
-router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const pages = String(req.body.pages||'').trim();
@@ -262,7 +262,7 @@ router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), s
 }));
 
 // Extrair texto do PDF -> .txt (pdf-parse; escaneados sem texto usam o OCR)
-router.post('/api/pdf/text', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/text', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   // pdf-parse usa PDF.js antigo que ignora o byteOffset de Buffers vindos
@@ -277,7 +277,7 @@ router.post('/api/pdf/text', shared.auth(['tecnico','psico','admin']), shared.up
 }));
 
 // Dividir em ZIP: 1 PDF por página (limite 60 páginas por vez)
-router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shared.upload.single('file'), shared.ah(async (req,res)=>{
+router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const src = await PDFDocument.load(req.file.buffer);

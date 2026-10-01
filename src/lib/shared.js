@@ -154,6 +154,9 @@ function broadcastTo(targets, event) {
 
 // Uploads em memória -> disco local (file) ou Supabase Storage (supabase)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024, files: 20 } });
+// Uploads grandes (ferramentas PDF): PDFs de até 200MB. Instância separada
+// para não afrouxar o teto dos demais uploads (tickets, chat, etc.).
+const uploadLarge = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024, files: 20 } });
 async function mapFiles(files) {
   const out = [];
   for (const f of (files || [])) out.push(await store.saveFileUpload(f));
@@ -422,7 +425,7 @@ module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
   loginRateLimit, apiRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
-  upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
+  upload, uploadLarge, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
