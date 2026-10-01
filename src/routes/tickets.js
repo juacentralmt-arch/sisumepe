@@ -1,7 +1,39 @@
 const express = require('express');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { checarPermissao, montarEdicao, aplicarEdicao, separarAnexos, validarAdicao } = require('../lib/ticketEdicao');
 const router = express.Router();
+
+// Anexa edição ao histórico do ticket (quem + o quê + quando). Best-effort no
+// Supabase sem a coluna edicoes (rode deploy/migration-tickets-edicoes.sql):
+// nunca derruba a alteração principal.
+let warnedEdicoes = false;
+async function appendEdicao(t, editor, changes) {
+  if (!changes || !changes.length) return t;
+  const entry = montarEdicao(editor, changes);
+  const edicoes = aplicarEdicao(t, entry);
+  try {
+    const upd = await store.tickets.patch(t.id, { edicoes });
+    if (upd) return upd;
+  } catch (e) {
+    if (!warnedEdicoes) { warnedEdicoes = true; console.warn('tickets.edicoes: coluna ausente no Supabase — rode deploy/migration-tickets-edicoes.sql', e && e.message); }
+  }
+  return { ...t, edicoes };
+}
+
+// Guarda compartilhada dos endpoints de anexos: recepção/admin em AGUARDANDO,
+// técnico dono em EM_ATENDIMENTO. Retorna {t, actor} ou responde o erro.
+async function guardaAnexos(req, res) {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) { res.status(404).json({ error: 'Ticket não encontrado' }); return null; }
+  const actor = await store.users.byName(req.auth.user);
+  const role = actor ? actor.role : req.auth.role;
+  const perm = checarPermissao({ role, status: t.status, dono: ticketOwnerOf(t), user: req.auth.user });
+  if (perm) { res.status(perm.status).json({ error: perm.error }); return null; }
+  const block = (ticketSistemaBlocked || infinityBlocked)(t, actor || req.auth);
+  if (block) { res.status(403).json({ error: block }); return null; }
+  return { t, actor: actor || { user: req.auth.user, name: req.auth.name, role } };
+}
 
 // Tickets - filas separadas por sistema (Spacecom x Infinity).
 // Tecnico só vê a sua fila; recepcao vê aguardando/em_atendimento; admin vê tudo.
@@ -223,11 +255,89 @@ router.patch('/api/tickets/:id/edit', auth(['recepcao', 'admin']), ah(async (req
   const np = String(prioridadeLegal) === 'true' || prioridadeLegal === true;
   if (np !== !!t.prioridadeLegal) { changes.push({ field: 'prioridadeLegal', label: 'Prioridade legal', from: t.prioridadeLegal ? 'SIM' : 'NÃO', to: np ? 'SIM' : 'NÃO' }); patch.prioridadeLegal = np; }
   if (!changes.length) return res.status(400).json({ error: 'Nenhuma alteração detectada' });
-  const upd = await store.tickets.patch(t.id, patch);
+  let upd = await store.tickets.patch(t.id, patch);
+  upd = await appendEdicao(upd || { ...t, ...patch }, editor, changes);
   const person = await store.persons.byId(t.personId);
   await store.audit.insert({
     action: 'editado', personId: t.personId, personName: person ? person.nome : '',
     ticketId: t.id, ref: t.code, byUser: editor.user, byName: editor.name, byRole: editor.role,
+    summary: changes.map(c => c.label).join(', ')
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+// Adicionar anexos ao ticket (recepção/admin em AGUARDANDO; técnico dono em EM_ATENDIMENTO).
+// Arquivos entram avulsos (sem consolidar), até o teto de 20 por ticket.
+router.post('/api/tickets/:id/anexos', auth(['recepcao', 'admin', 'tecnico']), upload.array('anexos', 20), ah(async (req, res) => {
+  const g = await guardaAnexos(req, res);
+  if (!g) return;
+  const { t, actor } = g;
+  if (!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 arquivo' });
+  const lim = validarAdicao(t.anexos, req.files);
+  if (lim) return res.status(lim.status).json({ error: lim.error });
+  const novos = await mapFiles(req.files);
+  let upd = await store.tickets.patch(t.id, { anexos: [...(t.anexos || []), ...novos] });
+  const changes = [{ field: 'anexos', label: 'Anexos adicionados', from: '', to: novos.map(a => a.name).join(', ') }];
+  upd = await appendEdicao(upd || { ...t, anexos: [...(t.anexos || []), ...novos] }, actor, changes);
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'anexo-adicionado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: actor.user, byName: actor.name, byRole: actor.role,
+    summary: 'Anexos adicionados: ' + novos.map(a => a.name).join(', ')
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.status(201).json(enrich(upd, persons));
+}));
+
+// Remover anexos do ticket (mesmas regras de quem/quando).
+router.delete('/api/tickets/:id/anexos', auth(['recepcao', 'admin', 'tecnico']), ah(async (req, res) => {
+  const g = await guardaAnexos(req, res);
+  if (!g) return;
+  const { t, actor } = g;
+  const { urls } = req.body || {};
+  if (!Array.isArray(urls) || !urls.length) return res.status(400).json({ error: 'Informe os anexos a remover' });
+  const { mantidos, removidos } = separarAnexos(t.anexos, urls);
+  if (!removidos.length) return res.status(400).json({ error: 'Nenhum anexo encontrado' });
+  let upd = await store.tickets.patch(t.id, { anexos: mantidos });
+  const changes = [{ field: 'anexos', label: 'Anexos removidos', from: removidos.map(a => a.name).join(', '), to: '' }];
+  upd = await appendEdicao(upd || { ...t, anexos: mantidos }, actor, changes);
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'anexo-removido', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: actor.user, byName: actor.name, byRole: actor.role,
+    summary: 'Anexos removidos: ' + removidos.map(a => a.name).join(', ')
+  });
+  broadcast();
+  const persons = await store.persons.all();
+  res.json(enrich(upd, persons));
+}));
+
+// Técnico altera a descrição durante o atendimento (somente o dono).
+router.patch('/api/tickets/:id/edit-atendimento', auth(['tecnico']), ah(async (req, res) => {
+  const t = await store.tickets.byId(req.params.id);
+  if (!t) return res.status(404).json({ error: 'Ticket não encontrado' });
+  const owner = (ticketOwnerOf(t) || '').toLowerCase().trim();
+  const by = String(req.auth.user).toLowerCase().trim();
+  if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível alterar tickets em atendimento.' });
+  if (!owner || by !== owner) return res.status(403).json({ error: 'Somente o técnico vinculado (' + (t.tecnico || owner) + ') pode alterar este atendimento.' });
+  const actor = await store.users.byName(req.auth.user);
+  const block = (ticketSistemaBlocked || infinityBlocked)(t, actor || req.auth);
+  if (block) return res.status(403).json({ error: block });
+  const { descricao } = req.body || {};
+  const changes = [];
+  const patch = {};
+  const nd = String(descricao == null ? t.descricao : descricao);
+  if (nd !== (t.descricao || '')) { changes.push({ field: 'descricao', label: 'Descrição', from: t.descricao || '', to: nd }); patch.descricao = nd; }
+  if (!changes.length) return res.status(400).json({ error: 'Nenhuma alteração detectada' });
+  let upd = await store.tickets.patch(t.id, patch);
+  upd = await appendEdicao(upd || { ...t, ...patch }, actor || req.auth, changes);
+  const person = await store.persons.byId(t.personId);
+  await store.audit.insert({
+    action: 'editado', personId: t.personId, personName: person ? person.nome : '',
+    ticketId: t.id, ref: t.code, byUser: by, byName: actor ? actor.name : by, byRole: 'tecnico',
     summary: changes.map(c => c.label).join(', ')
   });
   broadcast();

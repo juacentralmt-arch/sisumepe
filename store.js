@@ -383,7 +383,7 @@ const T = {
   cancelledAt: 'cancelledat', cancelledBy: 'cancelledby',
   transferredAt: 'transferredat', transferredBy: 'transferredby', transferredFrom: 'transferredfrom',
   returnedAt: 'returnedat', returnedBy: 'returnedby',
-  setor: 'setor', visitante: 'visitante'
+  setor: 'setor', visitante: 'visitante', edicoes: 'edicoes'
 };
 const A = {
   id: 'id', kind: 'kind', action: 'action', personId: 'personid', personName: 'personname',

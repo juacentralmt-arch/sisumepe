@@ -1843,10 +1843,37 @@
     <label class="lbl">DESCRIÇÃO</label>
     <textarea id="teDesc" rows="2" class="inp mt-1 mb-2.5"></textarea>
     <label class="flex items-center gap-2.5 py-1 text-sm font-semibold cursor-pointer"><input id="tePrio" type="checkbox" class="w-5 h-5 accent-rose-600"> ⚖️ Prioridade legal</label>
+    <label class="lbl">ANEXOS DO TICKET</label>
+    <div id="teAnexos" class="mt-1 mb-2 space-y-1.5"></div>
+    <div class="flex gap-2 mb-2.5">
+      <input id="teFiles" type="file" multiple class="inp flex-1 text-xs">
+      <button onclick="editAddAnexos('teFiles')" class="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">➕ Adicionar</button>
+    </div>
     <p id="teErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
     <div class="flex gap-2.5 mt-4">
       <button onclick="closeTicketEdit()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
       <button onclick="saveTicketEdit()" class="btn btn-primary flex-1 py-3 text-sm">Salvar correção</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR EM ATENDIMENTO (técnico vinculado) -->
+<div id="modalTecEdit" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl fade">
+    <h3 class="font-display font-bold text-lg">Editar atendimento <span id="tecEditCode" class="text-xs font-bold text-indigo-600"></span></h3>
+    <p class="text-xs text-slate-500 mt-1 mb-3">Somente o técnico vinculado, durante o atendimento. Tudo entra no histórico do ticket.</p>
+    <label class="lbl">DESCRIÇÃO</label>
+    <textarea id="tecEditDesc" rows="3" class="inp mt-1 mb-2.5"></textarea>
+    <label class="lbl">ANEXOS DO TICKET</label>
+    <div id="tecAnexos" class="mt-1 mb-2 space-y-1.5"></div>
+    <div class="flex gap-2 mb-2.5">
+      <input id="tecFiles" type="file" multiple class="inp flex-1 text-xs">
+      <button onclick="editAddAnexos('tecFiles')" class="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">➕ Adicionar</button>
+    </div>
+    <p id="tecEditErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
+    <div class="flex gap-2.5 mt-4">
+      <button onclick="closeTecEdit()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+      <button onclick="saveTecEdit()" class="btn btn-primary flex-1 py-3 text-sm">Salvar</button>
     </div>
   </div>
 </div>
@@ -2555,6 +2582,19 @@ function anexosHtml(list){
       : `<a class="text-indigo-600 underline font-semibold text-[11px]" target="_blank" title="${name}" href="${url}">📄 ${name}</a>`;
   }).join('')}</div>`;
 }
+function edicoesHtml(list){
+  if(!list || !list.length) return '';
+  const fmt = iso => { try{ return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } };
+  const items = list.slice(-3).map(e=>{
+    const ch = (e.changes||[]).map(c=>{
+      const det = (c.from || c.to) ? `: ${esc(String(c.from||'—')).slice(0,60)} → ${esc(String(c.to||'—')).slice(0,60)}` : '';
+      return `${esc(c.label||c.field||'alteração')}${det}`;
+    }).join('; ');
+    return `<p class="text-[11px] text-slate-600 bg-amber-50/70 border border-amber-100 rounded-lg px-2 py-1 leading-relaxed">✏️ <b>${esc(e.byName||e.byUser||'')}</b> <span class="text-slate-400">(${esc(e.byRole||'')})</span> • ${esc(fmt(e.at))} — ${ch}</p>`;
+  }).join('');
+  const mais = list.length > 3 ? `<p class="text-[10px] text-slate-400 text-right">+${list.length-3} alterações anteriores</p>` : '';
+  return `<div class="mt-1.5 space-y-1">${items}${mais}</div>`;
+}
 function statusPill(st){
   if(st==='aguardando') return '<span class="text-[10px] font-extrabold tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">AGUARDANDO</span>';
   if(st==='em_atendimento') return '<span class="text-[10px] font-extrabold tracking-wide bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full">EM ATENDIMENTO</span>';
@@ -2582,6 +2622,7 @@ function cardFila(t,i){
     ${t.descricao?`<p class="text-xs mt-3 bg-slate-50 border border-slate-100 rounded-xl p-2.5 leading-relaxed">${esc(t.descricao)}</p>`:''}
     ${visitanteQr(t)}
     ${anexosHtml(t.anexos)}
+    ${edicoesHtml(t.edicoes)}
     ${filaActions(t)}
   </div>`;
 }
@@ -3966,6 +4007,68 @@ function openTicketEdit(id){
   paintModelBoxes('data-tmodelo', ticketModelo);
   document.getElementById('teErr').classList.add('hidden');
   document.getElementById('modalTicket').classList.remove('hidden');
+  renderEditAnexos('teAnexos');
+}
+// --- Anexos do ticket (Corrigir recepção + Editar técnico): lista, adiciona, remove ---
+function editTicketAnexos(id){
+  const t = tickets.find(x => x.id === id);
+  return t ? (t.anexos || []) : [];
+}
+function renderEditAnexos(boxId){
+  const box = document.getElementById(boxId);
+  if(!box || editTicketId == null) return;
+  const list = editTicketAnexos(editTicketId);
+  box.innerHTML = list.length ? list.map(a=>{
+    if(a.expired) return `<span class="text-[11px] text-slate-400 italic">🗑️ ${esc(a.name||'arquivo')} (expirado)</span>`;
+    return `<div class="flex items-center gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5"><span class="flex-1 truncate font-semibold" title="${esc(a.name||'arquivo')}">📎 ${esc(a.name||'arquivo')}</span><a href="${esc(a.url||'')}" target="_blank" class="text-indigo-600 underline font-semibold">ver</a><button onclick="editRemoveAnexo('${esc(a.url||'')}', '${boxId}')" class="text-rose-600 font-bold px-1" title="Remover anexo">✕</button></div>`;
+  }).join('') : '<p class="text-[11px] text-slate-400">Nenhum anexo.</p>';
+}
+async function editAddAnexos(inputId){
+  const inp = document.getElementById(inputId);
+  if(!inp || !inp.files.length) return toast('⚠️ Selecione arquivos');
+  if(inp.files.length + editTicketAnexos(editTicketId).length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
+  const fd = new FormData();
+  for(const f of inp.files) fd.append('anexos', f);
+  try{
+    await api('/api/tickets/' + editTicketId + '/anexos', { method: 'POST', body: fd });
+    inp.value = '';
+    toast('📎 Anexos adicionados');
+    await loadAll();
+    renderEditAnexos('teAnexos');
+    renderEditAnexos('tecAnexos');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function editRemoveAnexo(url, boxId){
+  if(!confirm('Remover este anexo do ticket? Fica registrado no histórico.')) return;
+  try{
+    await api('/api/tickets/' + editTicketId + '/anexos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: [url] }) });
+    toast('🗑️ Anexo removido');
+    await loadAll();
+    renderEditAnexos(boxId || 'teAnexos');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+// --- EDITAR EM ATENDIMENTO (técnico vinculado) ---
+function openTecEdit(id){
+  const t = tickets.find(x => x.id === id);
+  if(!t || t.status !== 'em_atendimento') return toast('⚠️ Só é possível editar em atendimento');
+  editTicketId = id;
+  document.getElementById('tecEditCode').textContent = t.code;
+  document.getElementById('tecEditDesc').value = t.descricao || '';
+  document.getElementById('tecEditErr').classList.add('hidden');
+  document.getElementById('modalTecEdit').classList.remove('hidden');
+  renderEditAnexos('tecAnexos');
+}
+function closeTecEdit(){ document.getElementById('modalTecEdit').classList.add('hidden'); if(document.getElementById('modalTicket').classList.contains('hidden')) editTicketId = null; }
+async function saveTecEdit(){
+  const err = document.getElementById('tecEditErr');
+  err.classList.add('hidden');
+  const t = tickets.find(x => x.id === editTicketId);
+  const desc = document.getElementById('tecEditDesc').value;
+  if(t && desc === (t.descricao || '')){ closeTecEdit(); loadAll(); return; }
+  try{
+    await api('/api/tickets/' + editTicketId + '/edit-atendimento', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ descricao: desc }) });
+    closeTecEdit(); toast('✅ Atendimento atualizado'); loadAll();
+  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
 function closeTicketEdit(){ document.getElementById('modalTicket').classList.add('hidden'); editTicketId = null; }
 async function saveTicketEdit(){
@@ -4030,6 +4133,7 @@ function atendBtn(t){
   if(!filaVisivel(t) && session && session.role === 'tecnico') return isInfinityTicketJS(t) ? lockInfinity() : lockSpacecom();
   const mine = session && owner && owner.toLowerCase() === String(session.user).toLowerCase();
   if (mine || !owner) return `<button onclick="openModal(${t.id},'${esc(t.code)}')" class="btn btn-green mt-2 w-full py-2.5 text-xs">✔ Finalizar com relatório</button>
+    <button onclick="openTecEdit(${t.id})" class="btn btn-ghost mt-2 w-full py-2 text-xs">✏️ Editar descrição/anexos</button>
     <div class="grid grid-cols-2 gap-2 mt-2">
       <button onclick="openTransfer(${t.id})" class="btn btn-ghost py-2.5 text-xs">↗ Repassar</button>
       <button onclick="returnQueue(${t.id},'${esc(t.code)}')" class="btn py-2.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100">↩ Devolver à fila</button>
@@ -4090,7 +4194,7 @@ function renderTec(){
   const mini=(t,btn)=>`<div class="card card-hover p-4 text-sm ${t.prioridadeLegal?'prio-glow':''}">
     <div class="flex gap-2 items-center flex-wrap"><b class="text-indigo-600 text-xs tracking-wide">${esc(t.code)}</b>${t.prioridadeLegal?'<span class="text-[10px] font-extrabold text-white px-2 py-0.5 rounded-full" style="background:linear-gradient(135deg,#dc2626,#ef4444)">PRIORIDADE</span>':''}${modeloBadge(t.modeloTornozeleira)}<span class="ml-auto text-[11px] font-semibold text-slate-400">${tempo(t.createdAt)}</span></div>
     <div class="flex items-center gap-2.5 mt-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(t.person?.nome)}</span>
-    <div><p class="font-bold leading-tight">${esc(t.person?.nome||'')}</p><p class="text-xs text-slate-500">${esc(t.motivo)}</p></div></div>${anexosHtml(t.anexos)}${btn||''}</div>`;
+    <div><p class="font-bold leading-tight">${esc(t.person?.nome||'')}</p><p class="text-xs text-slate-500">${esc(t.motivo)}</p></div></div>${anexosHtml(t.anexos)}${edicoesHtml(t.edicoes)}${btn||''}</div>`;
   document.getElementById('tecAguard').innerHTML=ag.length?ag.map(t=>mini(t,startBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nada aguardando.</p>';
   document.getElementById('tecAtend').innerHTML=at.length?at.map(t=>mini(t,`<p class="text-[11px] mt-2.5 text-slate-500">Técnico: <b class="text-slate-700">${esc(t.tecnico||'-')}</b></p>`+atendBtn(t))).join(''):'<p class="text-xs text-slate-400 text-center py-4">Nenhum em atendimento.</p>';
   document.getElementById('tecFin').innerHTML=fi.map(t=>`<div class="card p-4 text-xs"><div class="flex items-center gap-2"><b class="text-indigo-600">${esc(t.code)}</b><span class="font-bold text-slate-700 truncate">${esc(t.person?.nome||'')}</span></div><p class="text-slate-500 mt-0.5">${esc(t.motivo)} • por ${esc(t.tecnico||'-')}</p><p class="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 leading-relaxed">${esc((t.relatorio||'').slice(0,160))}</p>${checklistBadge(t.checklist)}${fotosPosHtml(t.fotosPos)}${reopenBtn(t)}</div>`).join('');
