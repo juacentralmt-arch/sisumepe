@@ -1302,8 +1302,8 @@
             <option>Fórum de Jardim</option>
           </select>
           <select id="estSerStatus" class="inp !w-auto text-xs" onchange="loadEstSeriais()">
-            <option value="">Disponíveis + em uso</option>
-            <option value="disponivel" selected>Somente disponíveis</option>
+            <option value="" selected>Disponíveis + em uso</option>
+            <option value="disponivel">Somente disponíveis</option>
             <option value="em_uso">Somente em uso</option>
           </select>
           <input id="estSerBusca" placeholder="Buscar serial (ex: 4315023...)" class="inp !w-auto text-xs font-mono" onkeydown="if(event.key==='Enter') loadEstSeriais()">
@@ -8723,7 +8723,7 @@ async function loadEstSeriais(){
     if(q) url+='&q='+encodeURIComponent(q);
     const list=await api(url);
     estSeriaisCache=Array.isArray(list)?list:[];
-    if(cntEl) cntEl.textContent=`${estSeriaisCache.length} seriais${estSeriaisCache.length>=2000?' (limite de 2000 — refine material/unidade/busca)':''}`;
+    if(cntEl){ const nd=estSeriaisCache.filter(s=>String(s.status)==='disponivel').length; cntEl.textContent=`${estSeriaisCache.length} seriais (${nd} disponíveis • ${estSeriaisCache.length-nd} em uso)${estSeriaisCache.length>=2000?' (limite de 2000 — refine material/unidade/busca)':''}`; }
     listEl.innerHTML = estSeriaisCache.length ? `<table class="min-w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="text-left py-2 px-3">Serial</th><th class="text-left py-2 px-3">Material</th><th class="text-left py-2 px-3">Unidade</th><th class="text-left py-2 px-3">Situação</th></tr></thead><tbody>${estSeriaisCache.map(s=>{
       const stBadge=String(s.status)==='disponivel' ? '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">disponível</span>' : '<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">em uso</span>';
       return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-3 font-mono font-bold">${esc(s.serial)}</td><td class="py-1.5 px-3">${esc(s.material||'')}</td><td class="py-1.5 px-3">${esc(s.unidade||'')}</td><td class="py-1.5 px-3">${stBadge}</td></tr>`;
