@@ -1532,6 +1532,26 @@ const store = {
       const c=String(contrato||'').toUpperCase();
       const all=await store.estoqueSerial.all();
       return all.filter(s=> String(s.contrato).toUpperCase()===c && String(s.unidade)===u);
+    },
+    // Cadastro avulso: registra seriais como disponíveis SEM mexer no saldo.
+    // Uso: regularizar unidades que entraram sem serial (conciliação).
+    async add({ sistema, contrato, serial, unidade }){
+      const sis = sistema;
+      const c = String(contrato||'').toUpperCase();
+      const s = String(serial||'').trim();
+      const u = normalizeUnidade(unidade);
+      if(!/^\d{10}$/.test(s)){ const e=new Error('Serial inválido (exige 10 dígitos): '+s); e.status=400; throw e; }
+      const quando = new Date().toISOString();
+      if(MODE==='file'){
+        const dup = mem.estoqueSerial.find(x=> String(x.contrato).toUpperCase()===c && String(x.serial)===s && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sis);
+        if(dup){ const e=new Error('Serial já cadastrado: '+s); e.status=400; throw e; }
+        const row = { id: mem.seqEstoqueSerial++, sistema: sis, contrato: c, serial: s, unidade: u, status: 'disponivel', createdAt: quando, updatedAt: quando };
+        mem.estoqueSerial.push(row); saveFile(); return row;
+      }
+      const chk = must(await supa.from('estoque_serial').select('id').eq('contrato',c).eq('serial',s).eq('sistema',sis).limit(1),'estoqueSerial.check');
+      if(chk.length){ const e=new Error('Serial já cadastrado: '+s); e.status=400; throw e; }
+      const row = must(await supa.from('estoque_serial').insert({ sistema: sis, contrato: c, serial: s, unidade: u, status: 'disponivel', createdat: quando, updatedat: quando }).select().single(),'estoqueSerial.insert');
+      return appESTSER(row);
     }
   },
 
