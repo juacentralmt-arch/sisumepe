@@ -25,6 +25,8 @@ function normRecEquip(src){
   const g = (k,n) => String(s[k]==null?'':s[k]).trim().slice(0,n);
   const nd = {};
   ['nomeMonitorado','serie','observacoes','autorDocumento','recebedorMatricula'].forEach(k=>{ nd[k]=g(k, k==='observacoes'?1000:150); });
+  nd.modalidade = String(s.modalidade||'tzpr').toLowerCase() === 'upr' ? 'upr' : 'tzpr';
+  if(nd.modalidade === 'upr') nd.nomeMonitorado = '';
   ['eqDanificado','fonteDanificada'].forEach(k=>{
     const x = String(s[k]==null?'':s[k]).toLowerCase();
     nd[k] = x==='sim' ? 'sim' : x==='nao' ? 'nao' : null;
@@ -109,8 +111,8 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const t = (tipo === 'ativacao') ? 'ativacao' : (tipo === 'recolhimento') ? 'recolhimento' : (tipo === 'recEquip') ? 'recEquip' : (tipo === 'endereco' ? 'endereco' : (PSI_DOCS.includes(tipo) ? tipo : 'listagem'));
   if(t === 'recEquip'){
     const nd = normRecEquip(dados);
-    if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o nome do monitorado' });
-    if(!nd.serie) return res.status(400).json({ error: 'Informe a série do TZPR' });
+    if(nd.modalidade !== 'upr' && !nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o nome do monitorado' });
+    if(!nd.serie) return res.status(400).json({ error: 'Informe a série do equipamento' });
     const termo = await store.termos.insert({
       user: req.auth.user, tipo: 'recEquip',
       dataEnvio: nd.dataDevolucao || new Date().toISOString().slice(0,10),
@@ -457,8 +459,8 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
   if(dataEnvio !== undefined) patch.dataEnvio = dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null;
   if(t.tipo === 'recEquip' && dados && typeof dados === 'object'){
     const nd = normRecEquip(Object.assign({}, t.dados||{}, dados));
-    if(!nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o nome do monitorado' });
-    if(!nd.serie) return res.status(400).json({ error: 'Informe a série do TZPR' });
+    if(nd.modalidade !== 'upr' && !nd.nomeMonitorado) return res.status(400).json({ error: 'Informe o nome do monitorado' });
+    if(!nd.serie) return res.status(400).json({ error: 'Informe a série do equipamento' });
     patch.dados = nd;
     if(nd.dataDevolucao) patch.dataEnvio = nd.dataDevolucao;
   }

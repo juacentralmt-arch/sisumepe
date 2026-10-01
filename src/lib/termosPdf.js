@@ -536,6 +536,11 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   const has = (x)=>v(x)!=='';
   const sn = (x)=> x==='sim' ? 'sim' : x==='nao' ? 'nao' : null;
   const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  // Modalidade: 'tzpr' (Monitoração Eletrônica) ou 'upr' (Prevenção à Violência Doméstica)
+  const isUPR = String(d.modalidade||'tzpr').toLowerCase() === 'upr';
+  const titulo2 = isUPR ? 'PREVENÇÃO À VIOLÊNCIA DOMÉSTICA' : 'MONITORAÇÃO ELETRÔNICA';
+  const q1label = isUPR ? 'UPR/“botão do pânico” danificado?' : 'Equipamento de monitoração eletrônica danificado?';
+  const obsLabel = isUPR ? 'Outras observações: ' : 'Outras observações ';
   const pg = pdfDoc.addPage([PW, PH]);
   // ---- Cabeçalho: esquerda = logo combinado (distintivo + POLÍCIA PENAL +
   // Coordenadoria COMEP numa imagem só) / direita = bloco CEARÁ combinado ----
@@ -571,7 +576,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   pg.drawLine({start:{x:M,y},end:{x:PW-M,y},thickness:1.3,color:GREEN});
   y -= 26;
   // ---- Título ----
-  const t1='DECLARAÇÃO DE DEVOLUÇÃO DE EQUIPAMENTOS DE', t2='MONITORAÇÃO ELETRÔNICA';
+  const t1='DECLARAÇÃO DE DEVOLUÇÃO DE EQUIPAMENTOS DE', t2=titulo2;
   pg.drawText(t1,{x:(PW-fontBold.widthOfTextAtSize(t1,13))/2,y,size:13,font:fontBold,color:BLACK});
   y -= 19;
   pg.drawText(t2,{x:(PW-fontBold.widthOfTextAtSize(t2,13))/2,y,size:13,font:fontBold,color:BLACK});
@@ -610,12 +615,9 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
       y-=lh;
     });
   };
-  // ---- Parágrafo em QUEBRAS FIXAS (como no modelo): L1..L5 justificadas, L6 à esquerda.
-  // Tamanho 11 se a L1 couber, senão 10.5 — determinístico para o mesmo dado.
-  const lead1='Declaro para os devidos fins que o(s) equipamento(s) de monitoração eletrônica, TZPR série ';
-  const serieRaw = has(d.serie) ? v(d.serie).slice(0,12) : '';
-  const PS = (font.widthOfTextAtSize(lead1,11)+font.widthOfTextAtSize(serieRaw||'_',11)<=W) ? 11 : 10.5;
-  const PLH = PS*1.5;
+  // ---- Parágrafo em QUEBRAS FIXAS (como no modelo). Tamanho 11 se a L1
+  // couber, senão 10.5 — determinístico para o mesmo dado.
+  let PS = 11, PLH = 16.5;
   const fitPH = (avail,fnt)=>{
     const uw=fnt.widthOfTextAtSize('_',PS);
     return '_'.repeat(Math.max(4,Math.min(30,Math.floor((avail-4)/uw))));
@@ -634,26 +636,39 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
     pg.drawText(t,{x:M,y,size:PS,font,color:BLACK});
     y-=PLH;
   }
-  let serieD = serieRaw;
-  {
-    const maxW = W - font.widthOfTextAtSize(lead1,PS) - 2;
+  function serieSegPara(lead){
+    let serieD = has(d.serie) ? v(d.serie).slice(0,12) : '';
+    const maxW = W - font.widthOfTextAtSize(lead,PS) - 2;
     while(serieD.length>4 && font.widthOfTextAtSize(serieD,PS)>maxW) serieD=serieD.slice(0,-1);
+    return serieD ? {t:serieD} : {t:fitPH(W-font.widthOfTextAtSize(lead,PS)-4,fontOb),f:fontOb,c:GRAY};
   }
-  const serieSeg = serieD ? {t:serieD} : {t:fitPH(W-font.widthOfTextAtSize(lead1,PS)-4,fontOb),f:fontOb,c:GRAY};
-  linhaJ([{t:lead1},serieSeg]);
-  linhaJ([{t:'e a fonte de energia elétrica (carregador),'}]);
-  linhaJ([{t:'vinculados à medida judicial de monitoramento eletrônico imposta a'}]);
-  const suf4='foi devolvido na';
-  if(has(d.nomeMonitorado)){
-    let nm=v(d.nomeMonitorado);
-    const avail=W-font.widthOfTextAtSize(suf4,PS)-font.widthOfTextAtSize(' ',PS)-4;
-    while(nm.length>4 && font.widthOfTextAtSize(nm+',',PS)>avail) nm=nm.slice(0,-1);
-    linhaJ([{t:nm.trim()+','},{t:suf4}]);
+  if(!isUPR){
+    const lead1='Declaro para os devidos fins que o(s) equipamento(s) de monitoração eletrônica, TZPR série ';
+    PS = (font.widthOfTextAtSize(lead1,11)+font.widthOfTextAtSize(has(d.serie)?v(d.serie).slice(0,12):'_',11)<=W) ? 11 : 10.5;
+    PLH = PS*1.5;
+    linhaJ([{t:lead1},serieSegPara(lead1)]);
+    linhaJ([{t:'e a fonte de energia elétrica (carregador),'}]);
+    linhaJ([{t:'vinculados à medida judicial de monitoramento eletrônico imposta a'}]);
+    const suf4='foi devolvido na';
+    if(has(d.nomeMonitorado)){
+      let nm=v(d.nomeMonitorado);
+      const avail=W-font.widthOfTextAtSize(suf4,PS)-font.widthOfTextAtSize(' ',PS)-4;
+      while(nm.length>4 && font.widthOfTextAtSize(nm+',',PS)>avail) nm=nm.slice(0,-1);
+      linhaJ([{t:nm.trim()+','},{t:suf4}]);
+    } else {
+      linhaJ([{t:fitPH(W-font.widthOfTextAtSize(', '+suf4,PS)-4,fontOb),f:fontOb,c:GRAY},{t:', '+suf4}]);
+    }
+    linhaJ([{t:'presente Unidade de Monitoramento Eletrônico de Pessoas - UMEPE Juazeiro do'}]);
+    linhaE('Norte-CE na seguinte circunstância:');
   } else {
-    linhaJ([{t:fitPH(W-font.widthOfTextAtSize(', '+suf4,PS)-4,fontOb),f:fontOb,c:GRAY},{t:', '+suf4}]);
+    const leadU='Declaro para os devidos fins que o(s) equipamento(s), UPR/“botão do pânico” série ';
+    PS = (font.widthOfTextAtSize(leadU,11)+font.widthOfTextAtSize(has(d.serie)?v(d.serie).slice(0,12):'_',11)<=W) ? 11 : 10.5;
+    PLH = PS*1.5;
+    linhaJ([{t:leadU},serieSegPara(leadU)]);
+    linhaJ([{t:'e a fonte de energia elétrica (carregador), foi devolvido'}]);
+    linhaJ([{t:'na presente Unidade de Monitoramento Eletrônico de Pessoas – UMEPE/ Juazeiro'}]);
+    linhaE('do Norte-CE na seguinte circunstância:');
   }
-  linhaJ([{t:'presente Unidade de Monitoramento Eletrônico de Pessoas - UMEPE Juazeiro do'}]);
-  linhaE('Norte-CE na seguinte circunstância:');
   y -= 14;
   // ---- Inspeção preliminar: caixas SIM/NÃO (colunas separadas e alinhadas) ----
   function ckbx(cx,cy,s,marked){
@@ -682,11 +697,11 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
     ckbx(b1x,yy-1.5,BS,val==='sim');
     ckbx(b1x+BS+BGAP,yy-1.5,BS,val==='nao');
   }
-  simNaoRow('Equipamento de monitoração eletrônica danificado?', sn(d.eqDanificado), y); y -= 20;
+  simNaoRow(q1label, sn(d.eqDanificado), y); y -= 20;
   simNaoRow('Fonte de energia elétrica danificada?', sn(d.fonteDanificada), y); y -= 26;
   // ---- Outras observações (2 linhas) ----
   const obsSize=11;
-  const obsL='Outras observações ';
+  const obsL=obsLabel;
   pg.drawText(obsL,{x:M,y,size:obsSize,font,color:BLACK});
   const ox=M+font.widthOfTextAtSize(obsL,obsSize);
   pg.drawLine({start:{x:ox,y:y-3},end:{x:PW-M,y:y-3},thickness:0.8,color:BLACK});
