@@ -21,7 +21,7 @@ function norm(s) {
 const TIPOS = [
   { id: 'dae', label: 'DAE', chaves: ['documento de arrecadacao', 'arrecadacao estadual', 'funpen', 'dae - documento'] },
   { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['entregues pelas unidades penais', 'itens rebidos', 'itens recebidos', 'descricao do equipamentos', 'descricao dos equipamentos', 'auto de recolhimento'], semNome: true },
-  { id: 'recEquip', label: 'Termo de recolhimento equipamento', chaves: ['monitorado(a', 'recolhimento de equipamento', 'termo de recolhimento'], semNome: false },
+  { id: 'recEquip', label: 'Declaração de devolução de equipamentos', chaves: ['declaracao de devolucao', 'devolucao de equipamento', 'inspecao preliminar', 'monitorado(a', 'recolhimento de equipamento', 'termo de recolhimento'], semNome: false },
   { id: 'manutencao', label: 'Termo de manutenção', chaves: ['termo de manutencao', 'manutencao de tornozeleira', 'manutencao preventiva', 'manutencao corretiva'] },
   { id: 'ativacao', label: 'Termo de ativação', chaves: ['termo de ativacao', 'ativacao de tornozeleira', 'instalacao de tornozeleira', 'termo de instalacao'] },
   { id: 'retirada', label: 'Termo de retirada', chaves: ['termo de retirada', 'retirada de tornozeleira', 'desativacao de tornozeleira'] },
@@ -51,6 +51,8 @@ const ROTULOS_NOME = [
   'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
   'nome do requerente', 'requerente', 'interessado\\(a\\)', 'interessados?',
   'nome\\s+depositante', 'nome\\s+da\\s+m[ãa]e', 'nome\\s+do\\s+pai',
+  // "…monitoramento eletrônico imposta a FULANO…" (declaração de devolução)
+  'imposta\\s+a',
   // "nome" genérico NÃO pode casar rótulos compostos (ex: NOME DEPOSITANTE, NOME DA MÃE)
   '\\bnome\\b(?!\\s+(?:depositante|da\\s+m[ãa]e|do\\s+pai|completo))'
 ];
@@ -206,8 +208,9 @@ function sugerirNome(texto, nomeOriginal) {
     // Marcador de versão do motor (diagnóstico: prova qual código gerou a resposta).
     // BUMP a cada mudança de lógica: rn1 = tipos semNome+fallback arquivo,
     // rn2 = recEquip priorizado + OCR-manual, rn3 = sobrenome Nascimento preservado,
-    // rn4 = detectarTipo tolera 0/O + rótulo Interessado (ofícios).
-    motor: 'rn4'
+    // rn4 = detectarTipo tolera 0/O + rótulo Interessado (ofícios),
+    // rn5 = recEquip vira Declaração de Devolução + rótulo "imposta a".
+    motor: 'rn5'
   };
 }
 

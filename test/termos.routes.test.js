@@ -90,13 +90,10 @@ const endBody = () => ({
 const recEqBody = () => ({
   tipo: 'recEquip',
   dados: {
-    nomeMonitorado: 'Fulano De Tal', numeroTermo: 'T-2026/045', idMonitorado: 'MG-777',
-    perfil: 'Prisão preventiva', estabelecimento: 'UP-Juazeiro', cpfRg: 'RG 1.111.222',
-    monitoradoDesde: '2026-01-10', desativadoDesde: '2026-09-28', dataHora: '2026-09-28T10:00:00.000Z',
-    descricao: 'Devolução de kit completo',
-    equipamentos: [
-      { numero: '4315023610', danificado: false, checks: { ladoExterno: true, cinta: true, travas: true, fonte: true, fonteCE01: true, ladoInterno: true, abaDireita: true, abaEsquerda: true } }
-    ]
+    nomeMonitorado: 'Fulano De Tal', serie: '4315023610',
+    eqDanificado: 'nao', fonteDanificada: 'sim',
+    observacoes: 'Fonte com trinca no conector', dataDevolucao: '2026-09-28',
+    autorDocumento: 'RG 1.111.222', recebedorMatricula: '12345'
   }
 });
 const atvBody = () => ({

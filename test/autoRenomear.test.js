@@ -142,7 +142,19 @@ console.log('\n=== TESTES AUTORENOMEAR — recolhimento sem nome (d3f0263) ===')
   );
   assert(r.tipoId === 'recEquip', 'recEquip: priorizado quando há MONITORADO(A)');
   assert(r.nome === 'Joao da Silva', 'recEquip: nome extraído — "' + r.nome + '"');
-  assert(r.sugestao === 'Termo de recolhimento equipamento - Joao da Silva - 28-09-2026.pdf', 'recEquip: sugestão completa — "' + r.sugestao + '"');
+  assert(r.sugestao === 'Declaração de devolução de equipamentos - Joao da Silva - 28-09-2026.pdf', 'recEquip: sugestão completa — "' + r.sugestao + '"');
+}
+// Novo modelo: DECLARAÇÃO DE DEVOLUÇÃO — nome após "imposta a", data por extenso:
+{
+  const r = sugerirNome(
+    'DECLARAÇÃO DE DEVOLUÇÃO DE EQUIPAMENTOS DE MONITORAÇÃO ELETRÔNICA\nDeclaro para os devidos fins que o(s) equipamento(s) de monitoração eletrônica, TZPR série 4315023610 e a fonte de energia elétrica (carregador), vinculados à medida judicial de monitoramento eletrônico imposta a FULANO DA SILVA, foi devolvido na presente Unidade de Monitoramento Eletrônico de Pessoas - UMEPE Juazeiro do Norte-CE na seguinte circunstância:\nINSPEÇÃO PRELIMINAR SIM NÃO\nEm Juazeiro do Norte-CE aos 05 de outubro de 2026.',
+    'devol.pdf'
+  );
+  assert(r.tipoId === 'recEquip', 'devolucao: tipo detectado — "' + r.tipoId + '"');
+  assert(r.nome === 'Fulano da Silva', 'devolucao: nome após "imposta a" — "' + r.nome + '"');
+  assert(r.dataISO === '2026-10-05', 'devolucao: data por extenso — "' + r.dataISO + '"');
+  assert(r.sugestao === 'Declaração de devolução de equipamentos - Fulano da Silva - 05-10-2026.pdf', 'devolucao: sugestão completa — "' + r.sugestao + '"');
+  assert(r.confianca === 'alta', 'devolucao: confiança alta (tipo+nome+data)');
 }
 
 console.log('\n=== TESTES AUTORENOMEAR — data do nome do arquivo (d3f0263) ===');
@@ -218,7 +230,7 @@ console.log('\n=== TESTES AUTORENOMEAR — formato da sugestão e helpers ===');
 // Marcador de versão do motor presente (a9ed2cb) — prova qual código gerou:
 {
   const r = sugerirNome('MONITORADO: Teste Da Silva\nData: 01/01/2026', 'doc.pdf');
-  assert(r.motor === 'rn4', 'motor: versão rn4 (0/O + Interessado) — "' + r.motor + '"');
+  assert(r.motor === 'rn5', 'motor: versão rn5 (devolução + imposta a) — "' + r.motor + '"');
 }
 
 console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
