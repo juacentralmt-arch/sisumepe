@@ -7,8 +7,146 @@ const MATERIAIS_SERIAL = ['TZPR04','TZPR','UPR04'];
 const LIMITES = { TZPR04: 5, TZPR: 5, UPR04: 5, FONTE04: 5, CINTA: 10, TRAVAS: 20 };
 const CONTRATO_INFINITY = 'INF';
 
+// Sinônimos para comandos
+const SINONIMOS = {
+  saldo: ['quantidade', 'quanto tem', 'estoque atual', 'tem quanto', 'quanto resta', 'level', 'nivel'],
+  consumo: ['uso', 'gasto', 'saída', 'utilização', 'consumo médio', 'media de uso'],
+  compra: ['pedir', 'adquirir', 'repor', 'comprar', 'pedido', 'sugestão de compra'],
+  baixo: ['crítico', 'escasso', 'pouco', 'zerado', 'em falta', 'faltando', 'urgente'],
+  alertas: ['avisos', 'atenção', 'problemas', 'itens baixos'],
+  historico: ['histórico', 'movimentações', 'movimentacao', 'registro', 'log'],
+  comparar: ['diferença', 'comparação', 'versus', 'vs', 'confrontar'],
+  transferir: ['mover', 'transferência', 'enviar', 'passar', 'deslocar']
+};
+
+// Sinônimos para materiais
+const SINONIMOS_MATERIAIS = {
+  'TZPR04': ['tornozeleira', 'tornozeleira spacecom', 'tzpr 04', 'tzpr04', 'tornozeleira digital'],
+  'TZPR': ['tornozeleira infinity', 'tzpr infinity', 'tornozeleira inf'],
+  'UPR04': ['upr', 'upr04', 'unidade portátil', 'portátil'],
+  'FONTE04': ['fonte', 'fonte de alimentação', 'carregador', 'fonte 04'],
+  'CINTA': ['cinta', 'cinta de fixação', 'pulseira'],
+  'TRAVAS': ['travas', 'trava', 'presilha', 'fixadores']
+};
+
+// Correções de typos comuns
+const CORRECOES_TYPO = {
+  'tornozeleira': 'TZPR04',
+  'tornozeleiras': 'TZPR04',
+  'upr04': 'UPR04',
+  'tzpr04': 'TZPR04',
+  'fnte': 'FONTE04',
+  'citna': 'CINTA',
+  'cinta': 'CINTA',
+  'trava': 'TRAVAS',
+  'travas': 'TRAVAS',
+  'fonte': 'FONTE04',
+  'carregador': 'FONTE04',
+  'portatil': 'UPR04',
+  'portátil': 'UPR04',
+  'saldo': 'saldo',
+  'consumo': 'consumo',
+  'alerta': 'alertas',
+  'alertas': 'alertas',
+  'reposicao': 'reposição',
+  'reposição': 'reposição',
+  'compra': 'compra',
+  'pedido': 'compra',
+  'historico': 'historico',
+  'histórico': 'historico',
+  'movimentacoes': 'historico',
+  'movimentações': 'historico',
+  'unidade': 'unidades',
+  'unidades': 'unidades',
+  'serial': 'seriais',
+  'seriais': 'seriais',
+  'kit': 'kit',
+  'transferencia': 'transferir',
+  'transferência': 'transferir',
+  'previsao': 'previsao ruptura',
+  'previsão': 'previsao ruptura',
+  'ruptura': 'previsao ruptura',
+  'sugestao': 'sugestao compra',
+  'sugestão': 'sugestao compra',
+  'quanto tempo': 'duracao',
+  'dura': 'duracao',
+  'falta': 'itens em falta',
+  'faltando': 'itens em falta',
+  'tem': 'tem em'
+};
+
 function norm(s) {
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+
+// Distância de Levenshtein para fuzzy matching
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] 
+        ? dp[i - 1][j - 1] 
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// Busca com fuzzy matching
+function fuzzyMatch(query, target, maxDist = 2) {
+  if (!query || !target) return false;
+  const q = norm(query);
+  const t = norm(target);
+  if (q.includes(t) || t.includes(q)) return true;
+  if (q.length < 3 || t.length < 3) return false;
+  return levenshtein(q, t) <= maxDist;
+}
+
+// Aplica correções de typos comuns
+function corrigirTypos(query) {
+  const n = norm(query);
+  let corrigida = n;
+  let teveCorrecao = false;
+  
+  for (const [errado, correto] of Object.entries(CORRECOES_TYPO)) {
+    const regex = new RegExp(`\\b${errado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    if (regex.test(corrigida)) {
+      corrigida = corrigida.replace(regex, correto.toLowerCase());
+      teveCorrecao = true;
+    }
+  }
+  
+  return teveCorrecao ? { original: query, corrigida } : null;
+}
+
+// Expande query com sinônimos e correções
+function expandQuery(query) {
+  const n = norm(query);
+  
+  // Aplicar correções de typos primeiro
+  const correcao = corrigirTypos(query);
+  const queryFinal = correcao ? correcao.corrigida : n;
+  
+  const expanded = [queryFinal];
+  
+  // Sinônimos de comandos
+  for (const [key, syns] of Object.entries(SINONIMOS)) {
+    if (syns.some(s => queryFinal.includes(norm(s)))) {
+      expanded.push(norm(key));
+    }
+  }
+  
+  // Sinônimos de materiais
+  for (const [mat, syns] of Object.entries(SINONIMOS_MATERIAIS)) {
+    if (syns.some(s => fuzzyMatch(queryFinal, s, 1))) {
+      expanded.push(norm(mat));
+    }
+  }
+  
+  return expanded.join(' ');
 }
 
 function extractContrato(q) {
@@ -47,7 +185,18 @@ function labelContrato(contrato, store) {
 
 function extractMaterial(q) {
   const up = String(q).toUpperCase();
+  // Busca direta
   for (const m of MATERIAIS) if (up.includes(m)) return m;
+  
+  // Busca por sinônimos
+  const n = norm(q);
+  for (const [mat, syns] of Object.entries(SINONIMOS_MATERIAIS)) {
+    for (const syn of syns) {
+      if (fuzzyMatch(n, syn, 1)) return mat;
+    }
+  }
+  
+  // Padrões legados
   if (/\btornozeleira\b|\btzpr\b/i.test(q)) return 'TZPR04';
   if (/\bupr\b/i.test(q)) return 'UPR04';
   if (/\bfonte\b/i.test(q)) return 'FONTE04';
@@ -85,11 +234,13 @@ function extractData(q) {
 
 function extractPeriodo(q) {
   const n = norm(q);
-  if (/ultimos?\s*7\s*dias|uma semana/.test(n)) return 7;
-  if (/ultimos?\s*15\s*dias/.test(n)) return 15;
-  if (/ultimos?\s*30\s*dias|um mes/.test(n)) return 30;
-  if (/esta semana/.test(n)) return 7;
-  if (/este mes/.test(n)) return 30;
+  if (/ultimos?\s*7\s*dias|uma semana|semana passada|semana anterior/.test(n)) return 7;
+  if (/ultimos?\s*15\s*dias|quinze dias|duas semanas/.test(n)) return 15;
+  if (/ultimos?\s*30\s*dias|um mes|mes passado|mes anterior|trinta dias/.test(n)) return 30;
+  if (/ultimos?\s*60\s*dias|dois meses|60 dias/.test(n)) return 60;
+  if (/ultimos?\s*90\s*dias|tres meses|90 dias|trimestre/.test(n)) return 90;
+  if (/esta semana|semana atual/.test(n)) return 7;
+  if (/este mes|mes atual/.test(n)) return 30;
   const m = n.match(/ultimos?\s*(\d{1,3})\s*dias/);
   if (m) return Math.min(90, Math.max(1, Number(m[1])));
   return null;
@@ -157,7 +308,9 @@ function matsProntos(sistema) {
 
 module.exports = {
   UNIDADES, MATERIAIS, MATERIAIS_SERIAL, LIMITES, CONTRATO_INFINITY,
-  norm, extractContrato, extractSistema, normContrato, labelContrato,
+  SINONIMOS, SINONIMOS_MATERIAIS, CORRECOES_TYPO,
+  norm, levenshtein, fuzzyMatch, expandQuery, corrigirTypos,
+  extractContrato, extractSistema, normContrato, labelContrato,
   extractMaterial, extractUnidade, extractData, extractPeriodo,
   extractSerial, extractThreshold, fmtSaldo, matTZPR, matsProntos,
   matsTodos, findUsuario

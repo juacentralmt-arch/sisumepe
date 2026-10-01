@@ -1,6 +1,6 @@
 const BaseHandler = require('./BaseHandler');
 const { getOrFetch } = require('../cache');
-const { MATERIAIS, MATERIAIS_SERIAL, LIMITES, fmtSaldo } = require('../helpers');
+const { MATERIAIS, MATERIAIS_SERIAL, LIMITES, fmtSaldo, UNIDADES } = require('../helpers');
 
 class SaldoHandler extends BaseHandler {
   match(query, ctx) {
@@ -11,7 +11,29 @@ class SaldoHandler extends BaseHandler {
   }
 
   async handle(query, ctx) {
-    const { store, helpers, contrato, unidade, material } = ctx;
+    const { store, helpers, contrato, unidade, material, last } = ctx;
+    
+    // Detectar ambiguidade: query genérica sem contexto anterior
+    const isGenericQuery = /saldo|estoque|quanto tem|quantos/.test(query) && 
+                           !contrato && !unidade && !material &&
+                           !last?.contrato && !last?.unidade && !last?.material;
+    
+    if (isGenericQuery) {
+      return {
+        intent: 'saldo_ambiguo',
+        text: '❓ **Qual saldo você quer ver?**\nEspecifique ao menos um filtro:',
+        requiresInput: true,
+        suggestions: [
+          'saldo TZPR04 CE01',
+          'saldo UMEPE Juazeiro CE01',
+          'saldo total CE01',
+          'saldo por unidade CE01',
+          'estoque atual Infinity',
+          'alertas CE01'
+        ]
+      };
+    }
+    
     let all = await getOrFetch('estoque', {}, () => store.estoque.all());
     let filtroDesc = [];
 

@@ -19,14 +19,28 @@ async function getContext(store, user) {
 async function setContext(store, user, ctx) {
   const key = CTX_PREFIX + (user || 'global');
   try {
+    const last = await getContext(store, user);
+    const merged = {
+      current: ctx,
+      history: [...(last.history || []), last.current || {}].slice(-5)
+    };
     await store.audit.insert({
       kind: 'ia_contexto',
       action: 'update',
       byUser: user,
-      summary: JSON.stringify(ctx)
+      summary: JSON.stringify(merged)
     });
   } catch (e) {
     console.warn('IA context persist failed:', e.message);
+  }
+}
+
+async function getHistory(store, user, limit = 5) {
+  try {
+    const ctx = await getContext(store, user);
+    return (ctx.history || []).slice(-limit).reverse();
+  } catch (e) {
+    return [];
   }
 }
 
@@ -39,4 +53,4 @@ async function clearContext(store, user) {
   } catch (e) {}
 }
 
-module.exports = { getContext, setContext, clearContext };
+module.exports = { getContext, setContext, getHistory, clearContext };
