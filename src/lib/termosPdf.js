@@ -540,7 +540,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   const pg = pdfDoc.addPage([PW, PH]);
   // ---- Cabeçalho: esquerda = logo combinado (distintivo + POLÍCIA PENAL +
-  // Coordenadoria COMEP numa imagem só) / direita = brasão + bloco CEARÁ ----
+  // Coordenadoria COMEP numa imagem só) / direita = bloco CEARÁ combinado ----
   const yTop = PH - 36;
   if(badgePP){
     let bh=52, bw=bh*(badgePP.width/badgePP.height);
@@ -552,16 +552,23 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
     pg.drawText('Coordenadoria de Monitoração',{x:M,y:yTop-28,size:8,font:fontBold,color:BLACK});
     pg.drawText('Eletrônica de Pessoas - COMEP',{x:M,y:yTop-38,size:8,font:fontBold,color:BLACK});
   }
-  const cea='CEARÁ'; const ceaW=fontBold.widthOfTextAtSize(cea,22);
-  const g1='GOVERNO DO ESTADO', g1W=fontBold.widthOfTextAtSize(g1,9);
-  const g2='SECRETARIA DA ADMINISTRAÇÃO', g2W=font.widthOfTextAtSize(g2,7);
-  const g3='PENITENCIÁRIA E RESSOCIALIZAÇÃO', g3W=font.widthOfTextAtSize(g3,7);
-  const txtW=Math.max(ceaW,g1W,g2W,g3W);
-  if(brasao){ const brH=64, brW=brH*(brasao.width/brasao.height); pg.drawImage(brasao,{x:PW-M-txtW-8-brW,y:yTop-brH,width:brW,height:brH}); }
-  pg.drawText(cea,{x:PW-M-ceaW,y:yTop-22,size:22,font:fontBold,color:SLATE});
-  pg.drawText(g1,{x:PW-M-g1W,y:yTop-36,size:9,font:fontBold,color:BLACK});
-  pg.drawText(g2,{x:PW-M-g2W,y:yTop-47,size:7,font:font,color:BLACK});
-  pg.drawText(g3,{x:PW-M-g3W,y:yTop-57,size:7,font:font,color:BLACK});
+  let logoCE = null;
+  try{ const p = path.join(ROOT,'public','logo-ceara-header.png'); if(fs.existsSync(p)) logoCE = await pdfDoc.embedPng(fs.readFileSync(p)); }catch(e){}
+  if(logoCE){
+    const hh=56, ww=hh*(logoCE.width/logoCE.height);
+    pg.drawImage(logoCE,{x:PW-M-ww,y:yTop-hh,width:ww,height:hh});
+  } else {
+    const cea='CEARÁ'; const ceaW=fontBold.widthOfTextAtSize(cea,22);
+    const g1='GOVERNO DO ESTADO', g1W=fontBold.widthOfTextAtSize(g1,9);
+    const g2='SECRETARIA DA ADMINISTRAÇÃO', g2W=font.widthOfTextAtSize(g2,7);
+    const g3='PENITENCIÁRIA E RESSOCIALIZAÇÃO', g3W=font.widthOfTextAtSize(g3,7);
+    const txtW=Math.max(ceaW,g1W,g2W,g3W);
+    if(brasao){ const brH=64, brW=brH*(brasao.width/brasao.height); pg.drawImage(brasao,{x:PW-M-txtW-8-brW,y:yTop-brH,width:brW,height:brH}); }
+    pg.drawText(cea,{x:PW-M-ceaW,y:yTop-22,size:22,font:fontBold,color:SLATE});
+    pg.drawText(g1,{x:PW-M-g1W,y:yTop-36,size:9,font:fontBold,color:BLACK});
+    pg.drawText(g2,{x:PW-M-g2W,y:yTop-47,size:7,font:font,color:BLACK});
+    pg.drawText(g3,{x:PW-M-g3W,y:yTop-57,size:7,font:font,color:BLACK});
+  }
   let y = yTop - 72;
   pg.drawLine({start:{x:M,y},end:{x:PW-M,y},thickness:1.3,color:GREEN});
   y -= 26;
