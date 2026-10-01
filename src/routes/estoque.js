@@ -651,7 +651,7 @@ router.post('/api/estoque/seriais/avulso', shared.auth(['tecnico','admin']), sha
 }));
 
 // Backup completo do estoque (saldo + movimentações + seriais)
-router.get('/api/estoque/backup', shared.auth(['admin']), shared.ah(async (req,res)=>{
+router.get('/api/estoque/backup', shared.auth(['admin','tecnico']), shared.ah(async (req,res)=>{
   const dump = await shared.store.backup();
   const filename = `estoque-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
