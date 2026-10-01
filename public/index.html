@@ -2179,23 +2179,24 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
     else if(r === 'psico') show = ['fila', 'checkin', 'psico'].includes(t);
+    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
-    else if(r === 'admin') show = t !== 'tecnico' && t !== 'termos' && t !== 'psico';
     b.classList.toggle('hidden', !show);
   });
   applyNavOrder();
   const cnb = document.getElementById('callNextBtn');
   if(cnb) cnb.classList.toggle('hidden', !(session && session.role === 'tecnico'));
 }
-// Ordem do menu por perfil (admin: Dashboard no topo)
+// Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'fila', 'checkin', 'agenda', 'visao', 'usuarios', 'auditoria', 'estoque'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'fila', 'auditoria', 'usuarios'],
   psico: ['fila', 'checkin', 'psico', 'agenda'],
   tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
+function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
 function applyNavOrder(){
-  const order = NAV_ORDER[role] || NAV_ORDER.tecnico;
+  const order = isGestaoUser() ? NAV_ORDER.admin : (NAV_ORDER[role] || NAV_ORDER.tecnico);
   document.querySelectorAll('#sidebarNav,#mobileNav').forEach(nav => {
     [...nav.querySelectorAll('.tabbtn')]
       .sort((a, b) => order.indexOf(a.dataset.tab) - order.indexOf(b.dataset.tab))
