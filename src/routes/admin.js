@@ -46,6 +46,7 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     byDay[d] = 0;
   }
   let waitSum = 0, waitN = 0, svcSum = 0, svcN = 0, todayN = 0, todayFin = 0;
+  const byCriador = {};
   t.forEach(x => {
     const mot = MOTIVOS_OK.includes(x.motivo) ? x.motivo : 'Outros';
     byMotivo[mot] = (byMotivo[mot] || 0) + 1;
@@ -70,15 +71,18 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     else if (x.status === 'em_atendimento') byMotivoDetalhado[mot].em_atendimento++;
     if (day === today) { byMotivoDetalhado[mot].hoje++; if (x.status === 'finalizado') byMotivoDetalhado[mot].hojeFinalizados++; }
     const key = x.tecnico || '—';
-    byTec[key] = byTec[key] || { tecnico: key, iniciados: 0, finalizados: 0 };
+    byTec[key] = byTec[key] || { tecnico: key, iniciados: 0, finalizados: 0, svcSum: 0, svcN: 0 };
     if (x.startedAt) {
       byTec[key].iniciados++;
       waitSum += new Date(x.startedAt) - new Date(x.createdAt); waitN++;
     }
     if (x.finishedAt) {
       byTec[key].finalizados++;
-      if (x.startedAt) { svcSum += new Date(x.finishedAt) - new Date(x.startedAt); svcN++; }
+      if (x.startedAt) { svcSum += new Date(x.finishedAt) - new Date(x.startedAt); svcN++; byTec[key].svcSum += new Date(x.finishedAt) - new Date(x.startedAt); byTec[key].svcN++; }
     }
+    const ck = x.createdByName || x.createdBy || '—';
+    byCriador[ck] = byCriador[ck] || { nome: ck, criados: 0 };
+    byCriador[ck].criados++;
   });
   const mins = ms => Math.round(ms / 60000);
   const byMotivoFinalizados = {};
@@ -96,7 +100,8 @@ router.get('/api/dashboard', auth(['tecnico', 'admin']), ah(async (req, res) => 
     prioridade: t.filter(x => x.prioridadeLegal && x.status !== 'finalizado').length,
     byMotivo, byModelo, bySetor, bySetorDetalhado,
     byMotivoDetalhado, byMotivoFinalizados,
-    byTec: Object.values(byTec).sort((a, b) => b.finalizados - a.finalizados),
+    byTec: Object.values(byTec).map(x => ({ tecnico: x.tecnico, iniciados: x.iniciados, finalizados: x.finalizados, tempoMedioMin: x.svcN ? mins(x.svcSum / x.svcN) : null })).sort((a, b) => b.finalizados - a.finalizados),
+    byCriador: Object.values(byCriador).sort((a, b) => b.criados - a.criados).slice(0, 10),
     byDay
   };
   dashCache = payload; dashCacheAt = Date.now();

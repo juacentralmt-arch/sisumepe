@@ -1111,7 +1111,10 @@
           <h2 class="font-display font-bold text-xl">Dashboard gerencial</h2>
           <p class="text-xs text-slate-500 mt-0.5">Desempenho do atendimento em tempo real</p>
         </div>
-        <button onclick="exportCSV()" class="btn btn-ghost text-xs px-3.5 py-2">⬇ Exportar CSV</button>
+        <div class="flex gap-2">
+          <button id="dashAuditBtn" onclick="exportAuditCSV()" class="btn btn-ghost text-xs px-3.5 py-2 hidden">🧾 Auditoria CSV</button>
+          <button onclick="exportCSV()" class="btn btn-ghost text-xs px-3.5 py-2">⬇ Exportar CSV</button>
+        </div>
       </div>
       <div id="dashCards" class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4"></div>
       <!-- Quantitativo por setor -->
@@ -1127,12 +1130,23 @@
           </table>
         </div>
       </div>
+      <div class="card p-5 mb-4 overflow-x-auto">
+        <h3 class="font-display font-bold text-sm mb-1">🔴 Fila ao vivo <span class="text-[11px] font-normal text-slate-400">quem está esperando agora, por ordem de espera</span></h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead><tr class="text-[11px] font-bold tracking-wide text-slate-500 border-b border-slate-200"><th class="text-left py-2 px-2">Código</th><th class="text-left py-2 px-2">Pessoa</th><th class="text-left py-2 px-2">Motivo</th><th class="text-center py-2 px-2">Situação</th><th class="text-center py-2 px-2">Esperando há</th></tr></thead>
+            <tbody id="dashFila"></tbody>
+          </table>
+        </div>
+      </div>
       <div class="grid lg:grid-cols-2 gap-4 items-start">
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-1">🍩 Situação atual <span class="text-[11px] font-normal text-slate-400">aguardando × em atendimento × finalizados</span></h3><div class="h-56"><canvas id="chSit"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por motivo (total)</h3><div class="h-56"><canvas id="chMotivo"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Finalizados por motivo</h3><div class="h-56"><canvas id="chMotivoFin"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por modelo</h3><div class="h-56"><canvas id="chModelo"></canvas></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Últimos 7 dias</h3><div class="h-56"><canvas id="chDias"></canvas></div></div>
-        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">Por técnico</h3><div id="dashTec" class="space-y-2"></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-1">👥 Por técnico <span class="text-[11px] font-normal text-slate-400">finalizados e tempo médio</span></h3><div id="dashTec" class="space-y-2"></div></div>
+        <div class="card p-5"><h3 class="font-display font-bold text-sm mb-1">📝 Por criador <span class="text-[11px] font-normal text-slate-400">quem cadastrou tickets</span></h3><div id="dashCriador" class="space-y-2"></div></div>
         <div class="card p-5"><h3 class="font-display font-bold text-sm mb-3">🕘 Atividade recente (auditoria)</h3><div id="dashFeed" class="space-y-2 max-h-[320px] overflow-y-auto"></div></div>
       </div>
     </section>
@@ -4289,6 +4303,7 @@ function ensureFullCalendar(){
 }
 async function loadAgenda(){
   try{
+    agendaTheme();
     if(role === 'admin') await updateGoogleStatus().catch(()=>{});
     const list = await api('/api/agenda');
     agendaEvents = list;
@@ -4491,6 +4506,40 @@ async function renderAgendaCalendar(){
     agendaCalendar.render();
   }, 100);
 }
+function agendaTheme(){
+  if(document.getElementById('agendaThemeCss')) return;
+  const s = document.createElement('style');
+  s.id = 'agendaThemeCss';
+  s.textContent = `
+#agendaCalendar .fc{font-family:'Inter',system-ui,sans-serif}
+#agendaCalendar .fc-button-primary{background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;border-radius:.65rem;font-weight:700;font-size:.75rem;padding:.45rem .8rem;box-shadow:0 6px 14px -6px rgba(99,102,241,.5)}
+#agendaCalendar .fc-button-primary:hover{filter:brightness(1.08)}
+#agendaCalendar .fc-button-primary:disabled{opacity:.5}
+#agendaCalendar .fc-button-active{background:linear-gradient(135deg,#312e81,#6d28d9)!important}
+#agendaCalendar .fc-toolbar-title{font-weight:800;font-size:1.05rem;color:#0f172a;text-transform:capitalize}
+#agendaCalendar .fc-col-header-cell{background:#f8fafc}
+#agendaCalendar .fc-col-header-cell-cushion{font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:800}
+#agendaCalendar .fc-day-today{background:rgba(99,102,241,.07)!important}
+#agendaCalendar .fc-daygrid-day-number{font-weight:700;color:#334155}
+#agendaCalendar .fc-day-today .fc-daygrid-day-number{background:#4f46e5;color:#fff;border-radius:9999px;min-width:1.6rem;height:1.6rem;display:inline-flex;align-items:center;justify-content:center}
+#agendaCalendar .fc-event{border-radius:.5rem;border:none;padding:1px 4px;font-weight:600;box-shadow:0 2px 6px -2px rgba(15,23,42,.25)}
+#agendaCalendar .fc-list-day-cushion{background:#eef2ff!important}
+#agendaCalendar .fc-list-day-text,#agendaCalendar .fc-list-day-side-text{font-weight:800;color:#312e81}
+#agendaCalendar .fc-list-event:hover td{background:#f5f3ff!important}
+#agendaCalendar .fc-timegrid-now-indicator-line{border-color:#ef4444}
+#agendaCalendar .fc-timegrid-now-indicator-arrow{border-color:#ef4444;color:#ef4444}
+#agendaCalendar .fc-daygrid-more-link{font-weight:700;color:#4f46e5}`;
+  document.head.appendChild(s);
+}
+function agendaRel(s, e, now){
+  if(e < now){ const m=Math.round((now-e)/60000); return m<60?`há ${m}min`:`há ${Math.floor(m/60)}h`; }
+  if(s <= now) return 'agora 📍';
+  const m=Math.round((s-now)/60000);
+  if(m<60) return `em ${m}min`;
+  const h=Math.floor(m/60);
+  if(h<48) return `em ${h}h${m%60?String(m%60).padStart(2,'0'):''}`;
+  return `em ${Math.floor(h/24)} dias`;
+}
 function renderAgendaList(){
   const box = document.getElementById('agendaList');
   if(!box) return;
@@ -4512,8 +4561,11 @@ function renderAgendaList(){
 
   box.innerHTML = Object.entries(byDay).slice(0, 14).map(([day, evs]) => {
     const dayDate = new Date(day + 'T12:00:00');
-    const isToday = day === now.toISOString().slice(0,10);
-    const isPast = dayDate < new Date(now.toISOString().slice(0,10) + 'T12:00:00');
+    const todayStr = now.toISOString().slice(0,10);
+    const isToday = day === todayStr;
+    const tomorrow = new Date(now.getTime() + 864e5).toISOString().slice(0,10);
+    const isTomorrow = day === tomorrow;
+    const isPast = dayDate < new Date(todayStr + 'T12:00:00');
 
     const filtered = evs.filter(ev => {
       if(categoryFilter !== 'all' && ev.category !== categoryFilter) return false;
@@ -4523,11 +4575,18 @@ function renderAgendaList(){
 
     if(!filtered.length) return '';
 
+    const diaPill = isToday
+      ? '<span class="text-[9px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full">HOJE</span>'
+      : isTomorrow
+        ? '<span class="text-[9px] font-extrabold bg-sky-500 text-white px-2 py-0.5 rounded-full">AMANHÃ</span>'
+        : '';
+
     return `
-      <div class="mb-3">
-        <div class="flex items-center gap-2 mb-2 ${isPast ? 'opacity-50' : ''}">
-          <span class="font-bold text-sm text-slate-700 ${isToday ? 'text-sky-600' : ''}">${dayDate.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}${isToday ? ' (hoje)' : ''}</span>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${filtered.length} agendamento${filtered.length>1?'s':''}</span>
+      <div class="mb-4">
+        <div class="flex items-center gap-2.5 mb-2 ${isPast ? 'opacity-50' : ''}">
+          <span class="w-10 h-10 flex-none rounded-2xl flex flex-col items-center justify-center text-white shadow ${isToday ? 'bg-gradient-to-br from-indigo-500 to-violet-600' : 'bg-gradient-to-br from-slate-400 to-slate-500'}"><b class="text-sm leading-none">${dayDate.getDate()}</b><span class="text-[8px] font-bold uppercase leading-none mt-0.5">${dayDate.toLocaleDateString('pt-BR',{month:'short'}).replace('.','')}</span></span>
+          <span class="min-w-0"><b class="block text-sm capitalize ${isToday ? 'text-indigo-700' : 'text-slate-700'}">${dayDate.toLocaleDateString('pt-BR', { weekday: 'long' })}</b><span class="text-[11px] text-slate-400">${filtered.length} agendamento${filtered.length>1?'s':''}</span></span>
+          <span class="ml-auto">${diaPill}</span>
         </div>
         <div class="space-y-2">
           ${filtered.map(ev => {
@@ -4535,23 +4594,19 @@ function renderAgendaList(){
             const isPastEv = e < now;
             const isCal = ev.origem === 'calendly' || ev.calendlyUri;
             const catLabel = ev.category ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:${(ev.color||'#3b82f6') + '20'}; color:${ev.color||'#3b82f6'}">${ev.category}</span>` : '';
-            const statusBadge = ev.status && ev.status !== 'confirmado' ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${ev.status==='cancelado'?'bg-rose-100 text-rose-700':ev.status==='tentativo'?'bg-amber-100 text-amber-700':ev.status==='concluido'?'bg-emerald-100 text-emerald-700':''}">${ev.status}</span>` : '';
+            const statusBadge = ev.status && ev.status !== 'confirmado' ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${ev.status==='cancelado'?'bg-rose-100 text-rose-700':ev.status==='tentativo'?'bg-amber-100 text-amber-700':ev.status==='concluido'?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-600'}">${ev.status}</span>` : '';
+            const rel = agendaRel(s, e, now);
             return `
-              <div class="border ${isPastEv?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPastEv?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})" style="border-left: 3px solid ${ev.color || '#3b82f6'}">
-                <div class="flex items-start gap-2">
-                  <div class="w-2 h-2 mt-2 rounded-full" style="background:${ev.color || '#3b82f6'}"></div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                      <b class="text-xs truncate flex-1">${esc(ev.title)}</b>
-                      ${catLabel}
-                      ${statusBadge}
-                      ${isCal ? '<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Calendly</span>' : '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>'}
-                    </div>
-                    <p class="text-[11px] text-slate-500 mt-1">📅 ${s.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} → ${e.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}${ev.location ? ' • 📍 ' + esc(ev.location) : ''}</p>
-                    ${ev.description ? `<p class="text-xs mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1.5">${esc(ev.description)}</p>` : ''}
-                    ${ev.attendees && ev.attendees.length ? `<p class="text-[10px] text-slate-500 mt-1.5">👥 ${ev.attendees.map(a => esc(a)).join(', ')}</p>` : ''}
-                  </div>
+              <div class="border ${isPastEv?'border-slate-200 bg-slate-50 opacity-60':'border-slate-200 bg-white'} rounded-xl p-3 ${isPastEv?'':'card-hover cursor-pointer'}" onclick="openAgendaModal(${ev.id})" style="border-left: 4px solid ${ev.color || '#3b82f6'}">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-[10px] font-extrabold bg-slate-100 text-slate-700 px-2 py-1 rounded-lg whitespace-nowrap">🕐 ${s.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} → ${e.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</span>
+                  <span class="text-[10px] font-bold ${isPastEv ? 'text-slate-400' : 'text-indigo-600'}">${rel}</span>
+                  <span class="ml-auto flex gap-1 flex-wrap">${catLabel}${statusBadge}${isCal ? '<span class="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">Calendly</span>' : '<span class="text-[9px] font-bold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">Local</span>'}</span>
                 </div>
+                <b class="block text-xs mt-1.5 truncate">${esc(ev.title)}</b>
+                ${ev.location ? `<p class="text-[11px] text-slate-500 mt-0.5">📍 ${esc(ev.location)}</p>` : ''}
+                ${ev.description ? `<p class="text-xs mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-1.5">${esc(ev.description)}</p>` : ''}
+                ${ev.attendees && ev.attendees.length ? `<p class="text-[10px] text-slate-500 mt-1.5">👥 ${ev.attendees.map(a => esc(a)).join(', ')}</p>` : ''}
               </div>
             `;
           }).join('')}
@@ -4672,21 +4727,22 @@ async function updateAgendaWeekStats(weekStart){
     if(box){
       box.innerHTML = `
         <div class="grid grid-cols-2 gap-2 text-center">
-          <div class="bg-sky-50 border border-sky-200 rounded-xl p-2">
-            <div class="text-2xl font-bold text-sky-600">${stats.total}</div>
-            <div class="text-[10px] text-sky-500">Agendamentos</div>
+          <div class="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-2.5 text-white shadow-lg shadow-sky-200">
+            <div class="text-2xl font-extrabold leading-none">${stats.total}</div>
+            <div class="text-[10px] opacity-90 mt-0.5">Agendamentos</div>
           </div>
-          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2">
-            <div class="text-2xl font-bold text-emerald-600">${Math.round(stats.totalMinutes/60)}h ${stats.totalMinutes%60}min</div>
-            <div class="text-[10px] text-emerald-500">Tempo total</div>
+          <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-2.5 text-white shadow-lg shadow-emerald-200">
+            <div class="text-2xl font-extrabold leading-none">${Math.round(stats.totalMinutes/60)}h${stats.totalMinutes%60 ? String(stats.totalMinutes%60).padStart(2,'0') : ''}</div>
+            <div class="text-[10px] opacity-90 mt-0.5">Tempo total</div>
           </div>
         </div>
-        <div class="mt-2 flex gap-1 overflow-x-auto text-[10px]">
+        <div class="mt-2 flex gap-1 text-[10px]">
           ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i) => {
             const dayKey = new Date(stats.weekStart).getTime() + i*864e5;
             const dayStr = new Date(dayKey).toISOString().slice(0,10);
             const count = stats.byDay[dayStr] || 0;
-            return `<div class="flex-1 text-center px-1 py-1.5 rounded-lg ${count? 'bg-sky-50 text-sky-700 font-bold' : 'bg-slate-50 text-slate-400'}">${d}<br>${count}</div>`;
+            const isToday = dayStr === new Date().toISOString().slice(0,10);
+            return `<div class="flex-1 text-center px-1 py-1.5 rounded-lg ${isToday ? 'bg-indigo-600 text-white font-extrabold shadow ring-2 ring-indigo-300' : count ? 'bg-sky-50 text-sky-700 font-bold' : 'bg-slate-50 text-slate-400'}">${d}<br>${count}</div>`;
           }).join('')}
         </div>
       `;
@@ -8065,7 +8121,7 @@ async function saveEdit(){
 }
 
 // --- DASHBOARD GERENCIAL ---
-let chM = null, chMF = null, chMo = null, chD = null;
+let chM = null, chMF = null, chMo = null, chD = null, chS = null;
 function ensureChart(){
   return new Promise((res, rej) => {
     if(typeof Chart !== 'undefined') return res();
@@ -8078,19 +8134,24 @@ function ensureChart(){
 function dashCard(label, val, color){
   return `<div class="card card-hover p-4 sm:p-5"><p class="font-display text-2xl font-extrabold leading-none ${color}">${val}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1.5">${label}</p></div>`;
 }
+function dashKpi(icon, label, val, sub, grad){
+  return `<div class="card card-hover p-4 sm:p-5 flex items-center gap-3"><div class="w-11 h-11 flex-none rounded-2xl bg-gradient-to-br ${grad} text-white flex items-center justify-center text-xl shadow-lg">${icon}</div><div class="min-w-0"><p class="font-display text-2xl font-extrabold leading-none text-slate-800 truncate">${val}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${label}</p>${sub?`<p class="text-[10px] text-slate-400 truncate">${sub}</p>`:''}</div></div>`;
+}
 async function loadDash(){
   try{
     const d = await api('/api/dashboard');
+    const ab = document.getElementById('dashAuditBtn');
+    if(ab) ab.classList.toggle('hidden', !(session && session.role === 'admin'));
+    const taxa = d.total ? Math.round(d.finalizados / d.total * 100) : 0;
     document.getElementById('dashCards').innerHTML =
-      dashCard('TICKETS HOJE', d.hoje, 'text-slate-800') +
-      dashCard('AGUARDANDO', d.aguardando, 'text-amber-600') +
-      dashCard('EM ATENDIMENTO', d.emAtendimento, 'text-blue-600') +
-      dashCard('FINALIZADOS (TOTAL)', d.finalizados, 'text-emerald-600') +
-      dashCard('ESPERA MÉDIA', d.esperaMediaMin + ' min', 'text-indigo-600') +
-      dashCard('ATEND. MÉDIO', d.atendimentoMedioMin + ' min', 'text-violet-600') +
-      dashCard('PRIORIDADE NA FILA', d.prioridade, 'text-rose-600') +
-      dashCard('ESPERA +30MIN', (d.esperaAlta == null ? 0 : d.esperaAlta), 'text-orange-600') +
-      dashCard('ATENDIDOS', document.getElementById('stPes').textContent, 'text-slate-800');
+      dashKpi('🎫', 'TICKETS HOJE', d.hoje, `${d.hojeFinalizados||0} finalizados hoje`, 'from-indigo-500 to-violet-600') +
+      dashKpi('⏳', 'AGUARDANDO', d.aguardando, 'na fila agora', 'from-amber-500 to-orange-600') +
+      dashKpi('🔧', 'EM ATENDIMENTO', d.emAtendimento, 'sendo atendidos', 'from-sky-500 to-blue-600') +
+      dashKpi('✅', 'TAXA DE CONCLUSÃO', taxa + '%', `${d.finalizados} de ${d.total} finalizados`, 'from-emerald-500 to-teal-600') +
+      dashKpi('⏱️', 'ESPERA MÉDIA', d.esperaMediaMin + ' min', 'criação → início', 'from-cyan-500 to-sky-600') +
+      dashKpi('⚡', 'ATEND. MÉDIO', d.atendimentoMedioMin + ' min', 'início → fim', 'from-violet-500 to-purple-600') +
+      dashKpi('⚖️', 'PRIORIDADE', d.prioridade, 'prioridade legal na fila', 'from-rose-500 to-pink-600') +
+      dashKpi('🚨', 'ESPERA +30MIN', (d.esperaAlta == null ? 0 : d.esperaAlta), 'aguardando há mais de 30 min', 'from-red-500 to-orange-500');
     // Quantitativo por motivo
     const det = d.byMotivoDetalhado || {};
     const ordem = ['Manutenção','Retirada de Tornozeleira','Instalação de Tornozeleira','Botão do Pânico','Outros'];
@@ -8137,8 +8198,11 @@ async function loadDash(){
     }
     try{ await ensureChart(); }catch(e){}
     if(typeof Chart !== 'undefined'){
-      if(chM) chM.destroy(); if(chMF) chMF.destroy(); if(chMo) chMo.destroy(); if(chD) chD.destroy();
+      if(chM) chM.destroy(); if(chMF) chMF.destroy(); if(chMo) chMo.destroy(); if(chD) chD.destroy(); if(chS) chS.destroy();
       const grid = { color: '#eef2f7' };
+      chS = new Chart(document.getElementById('chSit'), { type: 'doughnut',
+        data: { labels: ['Aguardando', 'Em atendimento', 'Finalizados'], datasets: [{ data: [d.aguardando||0, d.emAtendimento||0, d.finalizados||0], backgroundColor: ['#f59e0b', '#0ea5e9', '#10b981'], borderWidth: 3, borderColor: '#ffffff' }] },
+        options: { plugins: { legend: { position: 'bottom' } }, maintainAspectRatio: false, cutout: '62%' } });
       chM = new Chart(document.getElementById('chMotivo'), { type: 'bar',
         data: { labels: Object.keys(d.byMotivo), datasets: [{ data: Object.values(d.byMotivo), backgroundColor: '#6366f1', borderRadius: 8 }] },
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
@@ -8158,13 +8222,60 @@ async function loadDash(){
         data: { labels: days.map(x => x.slice(8, 10) + '/' + x.slice(5, 7)), datasets: [{ data: Object.values(d.byDay), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.15)', fill: true, tension: .4, pointRadius: 3 }] },
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid }, x: { grid: { display: false } } }, maintainAspectRatio: false } });
     }
-    document.getElementById('dashTec').innerHTML = d.byTec.length ? d.byTec.map(x => `<div class="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3 py-2 text-xs"><span class="avatar w-8 h-8 text-[11px]">${initials(x.tecnico)}</span><b class="flex-1 truncate">${esc(x.tecnico)}</b><span class="text-slate-500">${x.iniciados} inic. • <b class="text-emerald-700">${x.finalizados} fin.</b></span></div>`).join('') : '<p class="text-xs text-slate-400">Sem dados.</p>';
+    document.getElementById('dashTec').innerHTML = d.byTec.length ? d.byTec.map(x => {
+      const maxFin = Math.max(1, ...d.byTec.map(y => y.finalizados||0));
+      const pct = Math.round((x.finalizados||0) / maxFin * 100);
+      const med = x.tempoMedioMin != null ? ` • ⏱ ${x.tempoMedioMin} min/atend.` : '';
+      return `<div class="border border-slate-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center gap-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(x.tecnico)}</span><b class="flex-1 truncate">${esc(x.tecnico)}</b><span class="text-slate-500 whitespace-nowrap">${x.iniciados} inic. • <b class="text-emerald-700">${x.finalizados} fin.</b>${med}</span></div><div class="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-full bg-gradient-to-r from-sky-500 to-indigo-500" style="width:${pct}%"></div></div></div>`;
+    }).join('') : '<p class="text-xs text-slate-400">Sem dados.</p>';
+    const criEl = document.getElementById('dashCriador');
+    if(criEl){
+      const bc = d.byCriador || [];
+      const maxC = Math.max(1, ...bc.map(y => y.criados||0));
+      criEl.innerHTML = bc.length ? bc.map(x => {
+        const pct = Math.round((x.criados||0) / maxC * 100);
+        return `<div class="border border-slate-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center gap-2.5"><span class="avatar w-8 h-8 text-[11px]">${initials(x.nome)}</span><b class="flex-1 truncate">${esc(x.nome)}</b><span class="text-slate-500 whitespace-nowrap"><b class="text-indigo-700">${x.criados}</b> tickets</span></div><div class="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-full bg-gradient-to-r from-violet-500 to-purple-500" style="width:${pct}%"></div></div></div>`;
+      }).join('') : '<p class="text-xs text-slate-400">Sem dados.</p>';
+    }
+    renderDashFila();
     const feed = await api('/api/audit?limit=12');
     document.getElementById('dashFeed').innerHTML = feed.length ? feed.map(auditItem).join('') : '<p class="text-xs text-slate-400">Sem atividade registrada.</p>';
   }catch(e){ toast('⚠️ ' + e.message); }
 }
+function renderDashFila(){
+  const box = document.getElementById('dashFila');
+  if(!box) return;
+  const live = (typeof tickets !== 'undefined' ? tickets : []).filter(t => t.status === 'aguardando' || t.status === 'em_atendimento')
+    .sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+  if(!live.length){ box.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-400">Fila vazia — ninguém aguardando. 🎉</td></tr>'; return; }
+  box.innerHTML = live.map(t => {
+    const mins = Math.max(0, Math.round((Date.now() - new Date(t.createdAt)) / 60000));
+    const espera = mins >= 60 ? `${Math.floor(mins/60)}h${mins%60 ? ' ' + (mins%60) + 'min' : ''}` : `${mins} min`;
+    const alerta = t.status === 'aguardando' && mins > 30;
+    const pill = t.status === 'aguardando'
+      ? '<span class="text-[10px] font-extrabold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">AGUARDANDO</span>'
+      : '<span class="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">EM ATENDIMENTO</span>';
+    return `<tr class="border-b border-slate-100 last:border-0 ${alerta ? 'bg-red-50/60' : ''}"><td class="py-2 px-2 font-bold text-indigo-600 whitespace-nowrap">${esc(t.code)}${t.prioridadeLegal ? ' ⚖️' : ''}</td><td class="py-2 px-2 font-semibold text-slate-700">${esc((t.person && t.person.nome) || '-')}</td><td class="py-2 px-2 text-slate-500">${esc(t.motivo || '')}</td><td class="text-center py-2 px-2">${pill}</td><td class="text-center py-2 px-2 font-bold ${alerta ? 'text-red-600' : 'text-slate-600'}">${espera}${alerta ? ' 🚨' : ''}</td></tr>`;
+  }).join('');
+}
+async function exportAuditCSV(){
+  try{
+    toast('⏳ Gerando CSV da auditoria...');
+    const list = await api('/api/audit/search?limit=500');
+    const rows = Array.isArray(list) ? list : (list.items || []);
+    const head = ['Quando', 'Tipo', 'Ação', 'Pessoa', 'Ticket', 'Por (usuário)', 'Por (nome)', 'Perfil', 'Resumo'];
+    const body = rows.map(a => [a.at || '', a.kind || '', a.action || '', a.personName || '', a.ref || a.ticketId || '', a.byUser || '', a.byName || '', a.byRole || '', a.summary || '']);
+    const csv = [head, ...body].map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\n');
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+    const el = document.createElement('a');
+    el.href = URL.createObjectURL(blob); el.download = 'auditoria.csv'; el.click();
+    setTimeout(() => URL.revokeObjectURL(el.href), 5000);
+    toast(`✅ Auditoria exportada (${rows.length} registros)`);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
 function auditItem(a){
-  const icon = a.kind === 'ticket' ? ({ criado: '🎫', iniciado: '▶', finalizado: '✔', editado: '📝', cancelado: '🚫', reaberto: '🔄', transferido: '↗', devolvido: '↩' }[a.action] || '•') : '✏️';
+  const icons = { criado: '🎫', iniciado: '▶', finalizado: '✔', editado: '📝', cancelado: '🚫', reaberto: '🔄', transferido: '↗', devolvido: '↩', 'anexo-adicionado': '📎', 'anexo-removido': '🗑️', restaurado: '💾' };
+  const icon = icons[a.action] || (a.kind === 'ticket' ? '•' : '✏️');
   const what = a.kind === 'ticket'
     ? `<b>${esc(a.ref || '')}</b> ${esc(a.action || '')} — ${esc(a.personName || '')}${a.summary ? ' • ' + esc(a.summary) : ''}`
     : `<b>${esc(a.personName || '')}</b> alterou cadastro (${(a.changes || []).map(c => esc(c.label)).join(', ')})`;
