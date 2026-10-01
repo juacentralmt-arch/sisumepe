@@ -100,7 +100,17 @@
   }
 </style>
   <style>#initialLoader{position:fixed;inset:0;z-index:100;background:#0b1220;display:flex;align-items:center;justify-content:center;transition:opacity .3s ease}</style>
-  <script>try{var s=JSON.parse(localStorage.getItem('te_session')||'null');if(s&&s.token)document.documentElement.classList.add('has-session');}catch(e){}</script>
+  <script>
+    try{var s=JSON.parse(localStorage.getItem('te_session')||'null');if(s&&s.token)document.documentElement.classList.add('has-session');}catch(e){}
+    // Fallback: esconde loader após 10s (cold start Render)
+    setTimeout(function(){
+      var el=document.getElementById('initialLoader');
+      if(el && el.parentNode){
+        el.style.opacity='0';
+        setTimeout(function(){ el.remove(); },300);
+      }
+    },10000);
+  </script>
 </head>
 <body class="min-h-screen">
 <div id="initialLoader"><div class="text-center"><div class="w-10 h-10 mx-auto rounded-full border-2 border-white/20 border-t-white animate-spin" style="border-top-color:#fff"></div><p class="text-white text-xs mt-3 tracking-wide">Carregando SISUMEPE...</p></div></div>
