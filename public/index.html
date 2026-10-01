@@ -593,9 +593,13 @@
         </div>
         <div id="termoFormRecEquip" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-3">📋 Declaração de Devolução de Equipamentos <span id="termoRecEqEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <div class="mb-2.5"><label class="lbl">MODALIDADE *</label><select id="reqModalidade" class="inp mt-1" onchange="toggleRecEqModalidade()">
+            <option value="tzpr">TZPR — Monitoração Eletrônica</option>
+            <option value="upr">UPR — Prevenção à Violência Doméstica (botão do pânico)</option>
+          </select></div>
           <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">MONITORADO(A) *</label><input id="reqNome" placeholder="Nome completo" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">TZPR SÉRIE *</label><input id="reqSerie" placeholder="Ex: 4315023610" class="inp mt-1 mb-2.5 font-mono" oninput="scheduleRecEqPreview()"></div>
+            <div id="reqNomeRow"><label class="lbl">MONITORADO(A) *</label><input id="reqNome" placeholder="Nome completo" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl" id="reqSerieLbl">TZPR SÉRIE *</label><input id="reqSerie" placeholder="Ex: 4315023610" class="inp mt-1 mb-2.5 font-mono" oninput="scheduleRecEqPreview()"></div>
             <div><label class="lbl">DATA DA DEVOLUÇÃO</label><input id="reqData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()" onchange="scheduleRecEqPreview()"></div>
             <div><label class="lbl">EQUIPAMENTO DANIFICADO?</label><select id="reqEqDan" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()">
               <option value="">— Não informado —</option>
@@ -4795,6 +4799,8 @@ function clearTermoForm(){
   recEquips = []; renderRecEquips();
   ['reqNome','reqSerie','reqData','reqObs','reqAutorDoc','reqMatricula'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   ['reqEqDan','reqFonteDan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  { const el=document.getElementById('reqModalidade'); if(el) el.value='tzpr'; }
+  toggleRecEqModalidade();
   { const el=document.getElementById('reqData'); if(el && !el.value){ const d = new Date(); const p = n=>String(n).padStart(2,'0'); el.value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; } }
   { const el=document.getElementById('reqErr'); if(el) el.classList.add('hidden'); }
   { const el=document.getElementById('reqPreviewStatus'); if(el) el.textContent=''; }
@@ -4842,8 +4848,10 @@ let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
 function getRecEqFormData(){
   const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const mod = gv('reqModalidade') === 'upr' ? 'upr' : 'tzpr';
   return {
-    nomeMonitorado: gv('reqNome'),
+    modalidade: mod,
+    nomeMonitorado: mod === 'upr' ? '' : gv('reqNome'),
     serie: gv('reqSerie'),
     dataDevolucao: gv('reqData'),
     eqDanificado: gv('reqEqDan') === 'sim' ? 'sim' : gv('reqEqDan') === 'nao' ? 'nao' : null,
@@ -4853,14 +4861,24 @@ function getRecEqFormData(){
     recebedorMatricula: gv('reqMatricula')
   };
 }
+function toggleRecEqModalidade(){
+  const m = (document.getElementById('reqModalidade')?.value) === 'upr' ? 'upr' : 'tzpr';
+  const nomeRow = document.getElementById('reqNomeRow');
+  if(nomeRow) nomeRow.classList.toggle('hidden', m === 'upr');
+  const serieLbl = document.getElementById('reqSerieLbl');
+  if(serieLbl) serieLbl.textContent = m === 'upr' ? 'UPR SÉRIE *' : 'TZPR SÉRIE *';
+  scheduleRecEqPreview();
+}
 function setRecEqFormData(t){
   const d = (t && t.dados) || {};
   const s = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
+  s('reqModalidade', d.modalidade === 'upr' ? 'upr' : 'tzpr');
   s('reqNome', d.nomeMonitorado); s('reqSerie', d.serie);
   s('reqData', d.dataDevolucao ? String(d.dataDevolucao).slice(0,10) : '');
   s('reqEqDan', d.eqDanificado === 'sim' ? 'sim' : d.eqDanificado === 'nao' ? 'nao' : '');
   s('reqFonteDan', d.fonteDanificada === 'sim' ? 'sim' : d.fonteDanificada === 'nao' ? 'nao' : '');
   s('reqObs', d.observacoes); s('reqAutorDoc', d.autorDocumento); s('reqMatricula', d.recebedorMatricula);
+  toggleRecEqModalidade();
   document.getElementById('termoRecEqEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
 }
@@ -4869,8 +4887,9 @@ async function previewRecEqPDF(silent){
   const err = document.getElementById('reqErr');
   if(err) err.classList.add('hidden');
   let rec = getRecEqFormData();
-  if(!rec.nomeMonitorado || !rec.serie){
-    if(!silent && err){ err.textContent='⚠️ Informe o monitorado e a série do TZPR'; err.classList.remove('hidden'); }
+  const needNome = rec.modalidade !== 'upr';
+  if((needNome && !rec.nomeMonitorado) || !rec.serie){
+    if(!silent && err){ err.textContent = needNome ? '⚠️ Informe o monitorado e a série do equipamento' : '⚠️ Informe a série do UPR'; err.classList.remove('hidden'); }
     if(silent){
       // preview com placeholder mesmo sem dados
       rec = { ...rec, serie: rec.serie || '—', nomeMonitorado: rec.nomeMonitorado || '—' };
@@ -4904,8 +4923,8 @@ async function saveTermoRecEquip(){
   const err = document.getElementById('reqErr');
   err.classList.add('hidden');
   const rec = getRecEqFormData();
-  if(!rec.nomeMonitorado){ err.textContent='⚠️ Informe o nome do monitorado'; err.classList.remove('hidden'); return; }
-  if(!rec.serie){ err.textContent='⚠️ Informe a série do TZPR'; err.classList.remove('hidden'); return; }
+  if(rec.modalidade !== 'upr' && !rec.nomeMonitorado){ err.textContent='⚠️ Informe o nome do monitorado'; err.classList.remove('hidden'); return; }
+  if(!rec.serie){ err.textContent='⚠️ Informe a série do equipamento'; err.classList.remove('hidden'); return; }
   const body = { tipo: 'recEquip', dados: rec };
   try{
     let res;

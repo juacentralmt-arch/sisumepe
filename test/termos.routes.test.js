@@ -96,6 +96,15 @@ const recEqBody = () => ({
     autorDocumento: 'RG 1.111.222', recebedorMatricula: '12345'
   }
 });
+const recEqUprBody = () => ({
+  tipo: 'recEquip',
+  dados: {
+    modalidade: 'upr', serie: '4714569930',
+    eqDanificado: 'sim', fonteDanificada: 'nao',
+    observacoes: 'Botão com trinca', dataDevolucao: '2026-09-28',
+    autorDocumento: 'RG 2.222.333', recebedorMatricula: '54321'
+  }
+});
 const atvBody = () => ({
   tipo: 'ativacao',
   dados: {
@@ -151,6 +160,7 @@ async function main() {
   await mesmosBytes('recolhimento', recBody, recBody(), 'tecnico|tec1|Tec Um');
   await mesmosBytes('endereco', endBody, endBody(), 'tecnico|tec1|Tec Um');
   await mesmosBytes('recEquip', recEqBody, recEqBody(), 'tecnico|tec1|Tec Um');
+  await mesmosBytes('recEquip-upr', recEqUprBody, recEqUprBody(), 'tecnico|tec1|Tec Um');
   await mesmosBytes('ativacao', atvBody, atvBody(), 'tecnico|tec1|Tec Um');
   await mesmosBytes('declaracao (psi)', psiBody, psiBody(), 'psico|psi1|Psic. Ana');
   await mesmosBytes('listagem upr', listBody, listBody(), 'tecnico|tec1|Tec Um');
