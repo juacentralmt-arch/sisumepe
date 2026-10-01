@@ -514,6 +514,46 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
   res.json(rel);
 }));
 
+// Fluxo por unidade: ENTRADAS x SAÍDAS agregadas por unidade × material,
+// no mesmo formato da matriz "Saldo por unidade" (para o painel do frontend).
+//   ?contrato=CE01|CE02|INF  ?sistema=spacecom|infinity  ?from=AAAA-MM-DD  ?to=AAAA-MM-DD
+router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, from, to } = req.query;
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema);
+  if(contrato && c && !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  // limit:'all' — o agregado precisa enxergar o histórico completo
+  let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema, limit: 'all' });
+  if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
+  let dFrom = null, dTo = null;
+  if(from){ const d=new Date(from); if(!isNaN(d)) dFrom = d; }
+  if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); dTo = d; } }
+  if(dFrom) movs = movs.filter(m=> new Date(m.createdAt) >= dFrom);
+  if(dTo) movs = movs.filter(m=> new Date(m.createdAt) <= dTo);
+  const mats = materiaisDoSistemaRoute(effectiveSistema);
+  const entradas = {}, saidas = {};
+  UNIDADES.forEach(u=>{ entradas[u]={}; saidas[u]={}; mats.forEach(m=>{ entradas[u][m]=0; saidas[u][m]=0; }); });
+  let totalEntradas = 0, totalSaidas = 0;
+  for(const m of movs){
+    const u = String(m.unidade||'').trim();
+    if(!UNIDADES.includes(u)) continue;
+    const mat = String(m.material||'').toUpperCase();
+    if(!mats.includes(mat)) continue;
+    const qtd = Math.abs(Number(m.qtd)||0);
+    if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
+    else { entradas[u][mat]+=qtd; totalEntradas+=qtd; }
+  }
+  res.json({
+    sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null,
+    from: dFrom ? dFrom.toISOString().slice(0,10) : null,
+    to: dTo ? dTo.toISOString().slice(0,10) : null,
+    unidades: UNIDADES, materiais: mats, entradas, saidas,
+    totalEntradas, totalSaidas, movimentacoes: movs.length,
+    geradoEm: new Date().toISOString()
+  });
+}));
+
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema
 router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, from, to } = req.query;

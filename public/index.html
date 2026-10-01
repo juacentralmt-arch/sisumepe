@@ -1272,6 +1272,7 @@
         </select>
         <button onclick="loadEstoque()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
         <button onclick="toggleEstSeriaisPanel(true)" class="btn btn-ghost text-xs px-3 py-2">🔢 Seriais</button>
+        <button onclick="toggleEstFluxoPanel(true)" class="btn btn-ghost text-xs px-3 py-2">📊 Entradas × Saídas</button>
         <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
         <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
         <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
@@ -1313,6 +1314,20 @@
         </div>
         <p id="estSerCount" class="text-[11px] font-bold text-slate-500 mb-2"></p>
         <div id="estSerList" class="max-h-[320px] overflow-y-auto border border-slate-100 rounded-xl"></div>
+      </div>
+      <div id="estFluxoPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">📊 Entradas × Saídas por unidade <span id="estFluxoSub" class="text-[11px] font-normal text-slate-400"></span></h3>
+          <button onclick="toggleEstFluxoPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Soma de todas as movimentações por unidade e material, no contrato/sistema ativo. Deixe o período vazio para todo o histórico.</p>
+        <div class="flex flex-wrap gap-2 mb-3 items-end">
+          <div><label class="lbl">DE</label><input id="estFluxoFrom" type="date" class="inp !w-auto text-xs mt-1"></div>
+          <div><label class="lbl">ATÉ</label><input id="estFluxoTo" type="date" class="inp !w-auto text-xs mt-1"></div>
+          <button onclick="loadEstFluxo()" class="btn btn-primary text-xs px-4 py-2">🔍 Listar</button>
+          <button onclick="estFluxoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <div id="estFluxoBody" class="space-y-5"></div>
       </div>
       <div class="grid lg:grid-cols-3 gap-4 items-start">
         <div class="card p-5">
@@ -8744,6 +8759,55 @@ function estSeriaisCSV(){
   if(!estSeriaisCache.length) return toast('⚠️ Liste os seriais primeiro');
   const csv='serial;material;unidade;contrato;sistema;status\n'+estSeriaisCache.map(s=>[s.serial,s.material,s.unidade,s.contrato,s.sistema,s.status].map(v=>String(v??'')).join(';')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='seriais-estoque.csv'; a.click();
+}
+let estFluxoCache=null;
+function toggleEstFluxoPanel(show){
+  const p=document.getElementById('estFluxoPanel');
+  if(!p) return;
+  p.classList.toggle('hidden', !show);
+  if(show){ loadEstFluxo(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+function fluxoMatrizHTML(mats, unidades, dados, cor){
+  const valCls = cor === 'rose' ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
+  const rows = unidades.map(u=>{
+    const cells = mats.map(m=>{
+      const v = Number((dados[u] && dados[u][m]) || 0);
+      return `<td class="text-center py-1.5 px-2 ${v===0?'text-slate-300':valCls}">${v}</td>`;
+    }).join('');
+    const tot = mats.reduce((s,m)=> s + Number((dados[u] && dados[u][m]) || 0), 0);
+    return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center py-1.5 px-2 font-extrabold">${tot}</td></tr>`;
+  }).join('');
+  return `<div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${esc(m)}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function loadEstFluxo(){
+  const body=document.getElementById('estFluxoBody'); const sub=document.getElementById('estFluxoSub');
+  if(!body) return;
+  body.innerHTML='<p class="text-xs text-slate-400 text-center py-4">Carregando movimentações...</p>';
+  try{
+    let url='/api/estoque/fluxo?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo());
+    const from=document.getElementById('estFluxoFrom')?.value||'';
+    const to=document.getElementById('estFluxoTo')?.value||'';
+    if(from) url+='&from='+encodeURIComponent(from);
+    if(to) url+='&to='+encodeURIComponent(to);
+    const r=await api(url);
+    estFluxoCache=r;
+    const label=r.contratoLabel||r.contrato||'';
+    const periodo=(r.from||r.to)?` • ${r.from?new Date(r.from+'T12:00:00').toLocaleDateString('pt-BR'):'início'} → ${r.to?new Date(r.to+'T12:00:00').toLocaleDateString('pt-BR'):'hoje'}`:' • todo o histórico';
+    if(sub) sub.textContent=`— ${label} (${r.movimentacoes} movimentações${periodo})`;
+    const head=(titulo,total,cor)=>`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">${titulo} — ${esc(label)} <span class="font-normal text-slate-500">Total: ${total}</span></h4><span class="text-[11px] text-slate-400">${r.unidades.length} localidades</span></div>`;
+    body.innerHTML =
+      `<div>${head('📈 ENTRADAS', r.totalEntradas, 'emerald')}${fluxoMatrizHTML(r.materiais, r.unidades, r.entradas, 'emerald')}</div>` +
+      `<div>${head('📉 SAÍDAS', r.totalSaidas, 'rose')}${fluxoMatrizHTML(r.materiais, r.unidades, r.saidas, 'rose')}</div>`;
+  }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar fluxo</p>'; }
+}
+function estFluxoCSV(){
+  if(!estFluxoCache) return toast('⚠️ Liste o fluxo primeiro');
+  const r=estFluxoCache;
+  const csv='unidade;material;entradas;saidas;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
+    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
+    return [u,m,e,s,e-s].map(v=>String(v??'')).join(';');
+  }).join('\n')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
 }
 async function estornarMov(id){
   const motivo=prompt('Motivo do estorno (mín. 3 caracteres):');
