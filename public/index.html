@@ -8701,10 +8701,12 @@ async function loadEstoque(){
 // --- Backup / Restore Estoque ---
 async function backupEstoque(){
   try{
-    const blob = await fetch('/api/estoque/backup', { headers: authHeaders() }).then(r => {
-      if(!r.ok) throw new Error('Falha ao baixar backup');
-      return r.blob();
-    });
+    const response = await fetch('/api/estoque/backup', { headers: authHeaders() });
+    if(!response.ok){
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`Falha ao baixar backup (${response.status}): ${errorText || 'Verifique se você é admin e está logado'}`);
+    }
+    const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -8727,7 +8729,7 @@ async function restoreEstoque(input){
     }
     const confirmMsg = `⚠️ ATENÇÃO: Isso vai SOBRESCREVER todos os dados atuais de estoque (${dump.estoque?.length||0} saldos, ${dump.estoqueMov?.length||0} movimentações, ${dump.estoqueSerial?.length||0} seriais).\n\nContinuar?`;
     if(!confirm(confirmMsg)) return;
-    await api('/api/estoque/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dump) });
+    const response = await api('/api/estoque/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dump) });
     toast('✅ Estoque restaurado com sucesso');
     loadEstoque();
   }catch(e){ toast('⚠️ '+e.message); }
