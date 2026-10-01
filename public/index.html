@@ -9253,8 +9253,8 @@ function updateEstIAQuick(ctx){
     <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
     <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
     <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>`;
-  const quick=document.getElementById('estIAQuick');
-  if(quick) quick.innerHTML = html + base;
+  const quickEl=document.getElementById('estIAQuick');
+  if(quickEl) quickEl.innerHTML = html + base;
 }
 function estIAFormatText(t){
   // markdown leve: **negrito**, `code`, quebras
