@@ -4827,9 +4827,7 @@ async function updateGoogleStatus(){
     const btnC = document.getElementById('googleConnectBtn');
     const btnD = document.getElementById('googleDisconnectBtn');
     if(!s.configured){
-      box.className = 'mb-4 rounded-xl p-3 text-xs font-semibold border bg-amber-50 border-amber-200 text-amber-800';
-      box.textContent = '⚠️ Google Agenda não configurado no servidor (defina GOOGLE_CLIENT_ID/SECRET). Agenda funciona localmente.';
-      box.classList.remove('hidden');
+      box.classList.add('hidden');
       btnC.classList.add('hidden'); btnD.classList.add('hidden');
       return;
     }
