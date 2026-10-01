@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="SISUMEPE">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch.png">
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com"></script> <!-- Nota: Para produção, instale via PostCSS/CLI -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -1287,6 +1287,9 @@
         <button onclick="gerarRelatorioEstoque()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
         <button onclick="exportEstoqueCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
         <button onclick="exportEstoquePDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
+        <button onclick="backupEstoque()" class="btn btn-ghost text-xs px-3 py-2" title="Baixar backup completo (saldo + movimentações + seriais)">💾 Backup</button>
+        <input id="restoreEstoqueFile" type="file" accept=".json" class="hidden" onchange="restoreEstoque(this)">
+        <button onclick="document.getElementById('restoreEstoqueFile').click()" class="btn btn-ghost text-xs px-3 py-2" title="Restaurar estoque a partir de backup">📥 Restaurar</button>
       </div>
       <div id="estoqueUnidadeResumo" class="hidden mb-3 text-xs"></div>
       <div id="estoqueAlertas" class="mb-3"></div>
@@ -8692,6 +8695,41 @@ async function loadEstoque(){
     loadEstoqueAlertas();
     // garante que o campo de seriais apareça corretamente para TZPR04/UPR04 (lote)
     toggleEstSeriais(); toggleTransSeriais();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+// --- Backup / Restore Estoque ---
+async function backupEstoque(){
+  try{
+    const blob = await fetch('/api/estoque/backup', { headers: authHeaders() }).then(r => {
+      if(!r.ok) throw new Error('Falha ao baixar backup');
+      return r.blob();
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estoque-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('✅ Backup baixado');
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+async function restoreEstoque(input){
+  const file = input.files?.[0];
+  if(!file) return;
+  input.value = '';
+  try{
+    const text = await file.text();
+    const dump = JSON.parse(text);
+    if(!dump || !Array.isArray(dump.estoque) || !Array.isArray(dump.estoqueMov) || !Array.isArray(dump.estoqueSerial)){
+      return toast('⚠️ Arquivo inválido (esperado: estoque, estoqueMov, estoqueSerial)');
+    }
+    const confirmMsg = `⚠️ ATENÇÃO: Isso vai SOBRESCREVER todos os dados atuais de estoque (${dump.estoque?.length||0} saldos, ${dump.estoqueMov?.length||0} movimentações, ${dump.estoqueSerial?.length||0} seriais).\n\nContinuar?`;
+    if(!confirm(confirmMsg)) return;
+    await api('/api/estoque/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dump) });
+    toast('✅ Estoque restaurado com sucesso');
+    loadEstoque();
   }catch(e){ toast('⚠️ '+e.message); }
 }
 // Inicialização: garante visibilidade do campo seriais ao carregar (default TZPR04/UPR04 = com lote)
