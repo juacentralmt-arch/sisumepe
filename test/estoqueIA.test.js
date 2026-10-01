@@ -2,7 +2,7 @@ const {
   answer,
   extractContrato, extractSistema, extractMaterial, extractUnidade,
   extractData, extractPeriodo, extractSerial, extractThreshold,
-  normContrato, labelContrato, matTZPR, matsProntos, norm,
+  normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
   invalidateCache, clearCache
 } = require('../src/lib/estoqueIA');
 
@@ -42,7 +42,9 @@ const mockStore = {
       const base = [
         { tipo: 'saida', qtd: 2, createdAt: new Date(Date.now() - 5*86400000).toISOString(), contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', saldoAntes: 12, saldoDepois: 10, motivo: 'teste', userName: 'test' },
         { tipo: 'saida', qtd: 1, createdAt: new Date(Date.now() - 10*86400000).toISOString(), contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', saldoAntes: 11, saldoDepois: 10, motivo: 'teste', userName: 'test' },
-        { tipo: 'entrada', qtd: 5, createdAt: new Date(Date.now() - 2*86400000).toISOString(), contrato: 'CE01', material: 'FONTE04', unidade: 'UMEPE Juazeiro', saldoAntes: 3, saldoDepois: 8, motivo: 'recebimento', userName: 'test' }
+        { tipo: 'entrada', qtd: 5, createdAt: new Date(Date.now() - 2*86400000).toISOString(), contrato: 'CE01', material: 'FONTE04', unidade: 'UMEPE Juazeiro', saldoAntes: 3, saldoDepois: 8, motivo: 'recebimento', userName: 'test' },
+        { tipo: 'saida', qtd: 3, createdAt: new Date(Date.now() - 5*86400000).toISOString(), contrato: 'CE01', material: 'UPR04', unidade: 'UP-Cariri', saldoAntes: 8, saldoDepois: 5, motivo: 'instalação', userName: 'Joanderson Silva', user: 'joanderson' },
+        { tipo: 'entrada', qtd: 4, createdAt: new Date(Date.now() - 12*86400000).toISOString(), contrato: 'CE02', material: 'CINTA', unidade: 'UP-Cariri', saldoAntes: 0, saldoDepois: 4, motivo: 'recebimento', userName: 'Adailton Souza', user: 'adailton' }
       ];
       let result = base;
       if (opts.contrato) result = result.filter(m => m.contrato === opts.contrato);
@@ -51,6 +53,12 @@ const mockStore = {
       if (opts.limit && opts.limit !== 'all') result = result.slice(0, opts.limit);
       return result;
     }
+  },
+  users: {
+    all: async () => [
+      { user: 'joanderson', name: 'Joanderson Silva' },
+      { user: 'adailton', name: 'Adailton Souza' }
+    ]
   },
   estoqueSerial: {
     all: async (opts = {}) => {
@@ -149,6 +157,18 @@ async function runTests() {
   assert(extractThreshold('menor que 5', 'TZPR04') === 5, 'extractThreshold: menor que');
   assert(extractThreshold('estoque baixo', 'TZPR04') === 5, 'extractThreshold: baixo usa limite');
 
+  // extractPeriodo genérico
+  assert(extractPeriodo('últimos 45 dias') === 45, 'extractPeriodo: genérico 45 dias');
+  assert(extractPeriodo('últimos 200 dias') === 90, 'extractPeriodo: teto 90 dias');
+
+  // findUsuario
+  const UU = [{ user: 'joanderson', name: 'Joanderson Silva' }, { user: 'adailton', name: 'Adailton Souza' }];
+  assert(findUsuario('movimentações de joanderson CE01', UU).user === 'joanderson', 'findUsuario: login');
+  assert(findUsuario('o que Joanderson Silva fez ontem?', UU).user === 'joanderson', 'findUsuario: nome completo');
+  assert(findUsuario('movs do adailton', UU).user === 'adailton', 'findUsuario: outro usuário');
+  assert(findUsuario('saldo total CE01', UU) === null, 'findUsuario: null sem usuário');
+  assert(findUsuario('movimentações CE01', []) === null, 'findUsuario: null sem base');
+
   // normContrato
   assert(normContrato('ce01', 'spacecom', mockStore) === 'CE01', 'normContrato: spacecom');
   assert(normContrato('INF', 'infinity', mockStore) === 'INF', 'normContrato: infinity');
@@ -238,6 +258,35 @@ async function runTests() {
   // Infinity normaliza TZPR04→TZPR
   const r21 = await answer('saldo TZPR04', mockStore, { user: 'inf_test', sistema: 'infinity' });
   assert(r21.data?.material === 'TZPR' || r21.text.includes('TZPR'), 'infinity: normaliza TZPR04→TZPR');
+
+  // Movimentações por usuário + data + contrato
+  const r22 = await answer('mostre movimentações de joanderson CE01', mockStore, { user: 'test22' });
+  assert(r22.intent === 'movs', 'intent: movs por usuário');
+  assert(r22.data.usuario && r22.data.usuario.user === 'joanderson', 'movs: filtra usuário joanderson');
+  assert(r22.data.movs.length === 1 && /joanderson/i.test(r22.data.movs[0].userName), 'movs: só movs do usuário');
+  assert(r22.text.includes('Joanderson'), 'movs: resposta cita o usuário');
+  assert(Array.isArray(r22.suggestions) && r22.suggestions.length > 0, 'movs: traz sugestões');
+
+  const dia5 = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+  const r23 = await answer(`movimentações de joanderson em ${dia5} CE01`, mockStore, { user: 'test23' });
+  assert(r23.intent === 'movs', 'intent: movs por usuário+data');
+  assert(r23.data.movs.length === 1, 'movs: filtra dia exato');
+  assert(/entradas|saídas/.test(r23.text), 'movs: resumo entradas/saídas');
+
+  const r24 = await answer('o que adailton fez CE02', mockStore, { user: 'test24' });
+  assert(r24.intent === 'movs' && r24.data.usuario.user === 'adailton', 'intent: "o que X fez"');
+
+  // Consumo médio: formas livres + período + todos os materiais
+  const r25 = await answer('consumo médio de materiais em 30 dias CE01', mockStore, { user: 'test25' });
+  assert(r25.intent === 'media_consumo', 'intent: consumo médio 30 dias');
+  assert(r25.data.dias === 30, 'media_consumo: 30 dias');
+  assert(r25.text.includes('TZPR04') && r25.text.includes('CINTA') && r25.text.includes('TRAVAS'), 'media_consumo: cobre todos os materiais');
+  assert(r25.text.includes('todas as unidades'), 'media_consumo: agrega unidades quando sem filtro');
+
+  const r26 = await answer('consumo médio FONTE04 últimos 15 dias UMEPE', mockStore, { user: 'test26' });
+  assert(r26.intent === 'media_consumo', 'intent: consumo médio 15 dias');
+  assert(r26.data.dias === 15, 'media_consumo: honra período');
+  assert(r26.text.includes('15 dias') && r26.text.includes('UMEPE'), 'media_consumo: resposta com período+unidade');
 
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) process.exitCode = 1;

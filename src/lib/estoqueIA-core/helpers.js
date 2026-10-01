@@ -90,6 +90,8 @@ function extractPeriodo(q) {
   if (/ultimos?\s*30\s*dias|um mes/.test(n)) return 30;
   if (/esta semana/.test(n)) return 7;
   if (/este mes/.test(n)) return 30;
+  const m = n.match(/ultimos?\s*(\d{1,3})\s*dias/);
+  if (m) return Math.min(90, Math.max(1, Number(m[1])));
   return null;
 }
 
@@ -113,6 +115,34 @@ function extractThreshold(q, material) {
   return null;
 }
 
+// Todos os materiais do sistema (para "consumo de materiais"/"todos")
+function matsTodos(sistema) {
+  return String(sistema) === 'infinity' ? ['TZPR','FONTE04','CINTA','TRAVAS'] : ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+}
+
+// Localiza usuário (login ou nome) mencionado na pergunta.
+// Retorna {user, name} ou null. Ex: "movimentações de joanderson" → {user:'joanderson',...}
+function findUsuario(q, users) {
+  const list = Array.isArray(users) ? users : [];
+  if (!list.length) return null;
+  const n = norm(q);
+  const escRx = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const u of list) {
+    const user = norm((u && u.user) || '');
+    const name = norm((u && u.name) || '');
+    if (!user) continue;
+    const first = (name.split(/\s+/)[0] || '');
+    const cands = [user];
+    if (name && name !== user) cands.push(name);
+    if (first && first.length >= 4 && first !== user && first !== name) cands.push(first);
+    for (const c of cands) {
+      if (!c || c.length < 3) continue;
+      if (new RegExp(`\\b${escRx(c)}\\b`).test(n)) return { user: u.user, name: u.name || u.user };
+    }
+  }
+  return null;
+}
+
 function fmtSaldo(n) {
   return Number(n||0).toLocaleString('pt-BR');
 }
@@ -129,5 +159,6 @@ module.exports = {
   UNIDADES, MATERIAIS, MATERIAIS_SERIAL, LIMITES, CONTRATO_INFINITY,
   norm, extractContrato, extractSistema, normContrato, labelContrato,
   extractMaterial, extractUnidade, extractData, extractPeriodo,
-  extractSerial, extractThreshold, fmtSaldo, matTZPR, matsProntos
+  extractSerial, extractThreshold, fmtSaldo, matTZPR, matsProntos,
+  matsTodos, findUsuario
 };

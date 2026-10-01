@@ -13,8 +13,9 @@ class HelpHandler extends BaseHandler {
 **1️⃣ Estoque Atual (Prontos para uso)**
 • \`estoque atual [CE01] [UMEPE]\` / \`prontos para uso TZPR UPR\` — TZPR e UPR no local
 
-**2️⃣ Média de Consumo Mensal**
+**2️⃣ Média de Consumo**
 • \`média de consumo mensal [CE01] [UMEPE]\` / \`consumo mensal\` — previsão 30 dias
+• \`consumo médio [material] [N dias]\` — ex: "consumo médio de materiais em 30 dias", "consumo médio FONTE04 15 dias"
 
 **3️⃣ Necessidade de Reposição (Segurança)**
 • \`necessidade de reposição [CE01] [UMEPE]\` / \`quantos faltam para segurança\` — faltam hoje
@@ -37,9 +38,10 @@ class HelpHandler extends BaseHandler {
 • \`previsão ruptura TZPR04 UMEPE 30 dias\` — regressão linear 90 dias
 • \`sugestão pedido compra CE01 próximo mês\` — consumo + lead time + segurança
 
-**📅 Histórico**
+**📅 Histórico e movimentações**
 • \`histórico [data] [unidade]\` — ex: "histórico ontem UMEPE" / "2026-09-24"
 • \`movimentações [hoje|ontem|últimos 7 dias]\` — últimas 20
+• \`movimentações de [usuário] [data] [CE01]\` — ex: "movimentações de joanderson ontem CE01"
 
 **🔢 Seriais (TZPR04/UPR04)**
 • \`seriais [CE01] [unidade]\` — disponíveis
@@ -50,7 +52,7 @@ class HelpHandler extends BaseHandler {
 • \`transferência sugerida UMEPE → UP-Cariri\` — balanceamento`,
 
       data: null,
-      suggestions: ['saldo total CE01', 'reposição CE01', 'consumo TZPR04', 'ficha TZPR04 UMEPE', 'comparar UMEPE vs UP-Cariri', 'histórico ontem', 'seriais UPR04', 'ranking CINTA', 'evolução 7 dias', 'estoque baixo', 'previsão ruptura TZPR04 UMEPE 30 dias', 'sugestão pedido compra CE01 próximo mês', 'transferência sugerida UMEPE → UP-Cariri']
+      suggestions: ['saldo total CE01', 'movimentações por usuário ontem CE01', 'consumo médio 30 dias', 'reposição CE01', 'consumo TZPR04', 'ficha TZPR04 UMEPE', 'comparar UMEPE vs UP-Cariri', 'histórico ontem', 'seriais UPR04', 'ranking CINTA', 'evolução 7 dias', 'estoque baixo', 'previsão ruptura TZPR04 UMEPE 30 dias', 'sugestão pedido compra CE01 próximo mês', 'transferência sugerida UMEPE → UP-Cariri']
     };
   }
 }

@@ -4,7 +4,7 @@ const { getOrFetch, invalidate } = require('./estoqueIA-core/cache');
 const {
   extractContrato, extractSistema, extractMaterial, extractUnidade,
   extractData, extractPeriodo, extractSerial, extractThreshold,
-  normContrato, labelContrato, matTZPR, matsProntos, norm,
+  normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
   MATERIAIS, MATERIAIS_SERIAL, LIMITES, UNIDADES, CONTRATO_INFINITY
 } = require('./estoqueIA-core/helpers');
 
@@ -14,7 +14,7 @@ async function answer(query, store, opts = {}) {
     return {
       intent: 'vazio',
       text: 'Digite um comando. Ex: "saldo TZPR04 em UMEPE Juazeiro CE01" ou "estoque atual Infinity"',
-      suggestions: ['saldo TZPR04 UMEPE Juazeiro CE01', 'estoque atual Infinity', 'histórico ontem', 'seriais disponíveis', 'reposição CE01']
+      suggestions: ['saldo TZPR04 UMEPE Juazeiro CE01', 'movimentações por usuário ontem CE01', 'consumo médio 30 dias', 'histórico ontem', 'seriais disponíveis', 'reposição CE01']
     };
   }
 
@@ -28,6 +28,10 @@ async function answer(query, store, opts = {}) {
   const data = extractData(qRaw);
   const periodo = extractPeriodo(qRaw);
   const serial = extractSerial(qRaw);
+  // usuário mencionado ("movimentações de joanderson") — lista cacheada, tolera store sem users
+  let usuarios = [];
+  try { if (store.users && typeof store.users.all === 'function') usuarios = await getOrFetch('usuarios', {}, () => store.users.all()) || []; } catch (e) {}
+  let usuario = findUsuario(qRaw, usuarios);
 
   // 2. Sistema: opts (perfil) > menção explícita > contexto
   let sistema = opts.sistema || extractSistema(qRaw) || null;
@@ -67,6 +71,7 @@ async function answer(query, store, opts = {}) {
   }
   if (!material && last.material && /^(e |e\?)/.test(q)) material = last.material;
   if (!unidade && last.unidade && /^(e |e\?)/.test(q)) unidade = last.unidade;
+  if (!usuario && last.usuario && /^(e |e\?)/.test(q)) usuario = { user: last.usuario, name: last.usuario };
 
   // 7. Contexto para handlers
   const ctx = {
@@ -80,6 +85,7 @@ async function answer(query, store, opts = {}) {
     data,
     periodo,
     serial,
+    usuario,
     sistema,
     user,
     last
@@ -107,12 +113,13 @@ async function answer(query, store, opts = {}) {
         } catch (e) {}
 
         // Persistir contexto se houver entidades
-        if (contrato || material || unidade || sistema) {
+        if (contrato || material || unidade || sistema || usuario) {
           await setContext(store, user, {
             contrato: contrato || last.contrato,
             material: material || last.material,
             unidade: unidade || last.unidade,
-            sistema: sistema || last.sistema
+            sistema: sistema || last.sistema,
+            usuario: usuario ? usuario.user : last.usuario
           });
         }
 
@@ -127,8 +134,8 @@ async function answer(query, store, opts = {}) {
   // 9. Fallback
   return {
     intent: 'nao_entendi',
-    text: `🤔 Não entendi: "${qRaw}".\nTente:\n• "saldo TZPR04 UMEPE Juazeiro CE01"\n• "reposição CE01" — o que comprar\n• "comparar UMEPE vs UP-Cariri"\n• "consumo TZPR04" — média e ruptura\n• "ficha UPR04 UMEPE" — detalhe\n• "histórico ontem" / "evolução 7 dias TZPR04"\n• "seriais disponíveis" / "buscar serial 1234"\n• "previsão ruptura TZPR04 UMEPE 30 dias"\n• "sugestão pedido compra CE01 próximo mês"\n• "transferência sugerida UMEPE → UP-Cariri"`,
-    suggestions: ['saldo total CE01', 'reposição CE01', 'consumo TZPR04', 'ficha TZPR04 UMEPE', 'comparar UMEPE vs UP-Cariri', 'histórico ontem', 'seriais UPR04', 'previsão ruptura TZPR04 UMEPE 30 dias', 'sugestão pedido compra CE01 próximo mês', 'transferência sugerida UMEPE → UP-Cariri']
+    text: `🤔 Não entendi: "${qRaw}".\nTente:\n• "saldo TZPR04 UMEPE Juazeiro CE01"\n• "movimentações de joanderson ontem CE01" — por usuário/data\n• "consumo médio 30 dias" — todos os materiais\n• "reposição CE01" — o que comprar\n• "comparar UMEPE vs UP-Cariri"\n• "consumo TZPR04" — média e ruptura\n• "ficha UPR04 UMEPE" — detalhe\n• "histórico ontem" / "evolução 7 dias TZPR04"\n• "seriais disponíveis" / "buscar serial 1234"\n• "previsão ruptura TZPR04 UMEPE 30 dias"\n• "sugestão pedido compra CE01 próximo mês"\n• "transferência sugerida UMEPE → UP-Cariri"`,
+    suggestions: ['saldo total CE01', 'movimentações por usuário ontem CE01', 'consumo médio 30 dias', 'reposição CE01', 'consumo TZPR04', 'ficha TZPR04 UMEPE', 'comparar UMEPE vs UP-Cariri', 'histórico ontem', 'seriais UPR04', 'previsão ruptura TZPR04 UMEPE 30 dias', 'sugestão pedido compra CE01 próximo mês', 'transferência sugerida UMEPE → UP-Cariri']
   };
 }
 
@@ -139,7 +146,7 @@ module.exports = {
   // Extractors para testes unitários
   extractContrato, extractSistema, extractMaterial, extractUnidade,
   extractData, extractPeriodo, extractSerial, extractThreshold,
-  normContrato, labelContrato, matTZPR, matsProntos, norm,
+  normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
   // Cache controls
   invalidateCache: () => invalidate('estoque'),
   clearCache: () => require('./cache').clear()
