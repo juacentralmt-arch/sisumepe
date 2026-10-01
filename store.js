@@ -1631,15 +1631,18 @@ const store = {
   },
 
   async backup() {
-    const [persons, tickets, chat, audit, users, agenda, termos, psi] = await Promise.all([
+    const [persons, tickets, chat, audit, users, agenda, termos, psi, estoque, estoqueMov, estoqueSerial] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
-      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[]), store.psi.all().catch(()=>[])
+      store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[]), store.psi.all().catch(()=>[]),
+      store.estoque.all(), store.estoqueMov.all({ limit: 'all' }), store.estoqueSerial.all({ limit: 'all' })
     ]);
     const mx = a => a.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
     return {
       persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500), termos: termos.slice(-500), psi: psi.slice(-2000),
+      estoque, estoqueMov, estoqueSerial,
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
-      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1
+      seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1,
+      seqEstoque: mx(estoque) + 1, seqEstoqueMov: mx(estoqueMov) + 1, seqEstoqueSerial: mx(estoqueSerial) + 1
     };
   },
 
@@ -1658,6 +1661,9 @@ const store = {
       const keepSeqAgenda = (mem && mem.seqAgenda) || 1;
       const keepSeqTermo = (mem && mem.seqTermo) || 1;
       const keepSeqPsi = (mem && mem.seqPsi) || 1;
+      const keepSeqEstoque = (mem && mem.seqEstoque) || 1;
+      const keepSeqEstoqueMov = (mem && mem.seqEstoqueMov) || 1;
+      const keepSeqEstoqueSerial = (mem && mem.seqEstoqueSerial) || 1;
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat.slice(-200) : [],
@@ -1667,11 +1673,15 @@ const store = {
         googleTokens: keepTokens,
         termos: Array.isArray(dump.termos) ? dump.termos.slice(-500) : keepTermos,
         psi: Array.isArray(dump.psi) ? dump.psi.slice(-2000) : keepPsi,
+        estoque: Array.isArray(dump.estoque) ? dump.estoque : [],
+        estoqueMov: Array.isArray(dump.estoqueMov) ? dump.estoqueMov : [],
+        estoqueSerial: Array.isArray(dump.estoqueSerial) ? dump.estoqueSerial : [],
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
-        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi
+        seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi,
+        seqEstoque: dump.seqEstoque || keepSeqEstoque, seqEstoqueMov: dump.seqEstoqueMov || keepSeqEstoqueMov, seqEstoqueSerial: dump.seqEstoqueSerial || keepSeqEstoqueSerial
       };
       saveFile();
-      return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length };
+      return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length, estoque: mem.estoque.length, estoqueMov: mem.estoqueMov.length, estoqueSerial: mem.estoqueSerial.length };
     }
     for (const t of ['audit', 'chat', 'tickets', 'persons']) {
       const all = must(await supa.from(t).select('id').limit(10000), 'restore.list');
@@ -1725,8 +1735,18 @@ const store = {
     if (Array.isArray(dump.psi) && dump.psi.length) {
       try{ await chunk('psi_records', dump.psi.slice(-2000), PSI); }catch(e){}
     }
+    // estoque (opcional)
+    if (Array.isArray(dump.estoque) && dump.estoque.length) {
+      try{ await chunk('estoque', dump.estoque, { id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdat: 'createdAt', updatedat: 'updatedAt' }); }catch(e){}
+    }
+    if (Array.isArray(dump.estoqueMov) && dump.estoqueMov.length) {
+      try{ await chunk('estoque_mov', dump.estoqueMov, { id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', tipo: 'tipo', qtd: 'qtd', motivo: 'motivo', seriais: 'seriais', user: 'user', username: 'userName', createdat: 'createdAt', unidadedestino: 'unidadeDestino', saldobantes: 'saldoAntes', saldodepois: 'saldoDepois' }); }catch(e){}
+    }
+    if (Array.isArray(dump.estoqueSerial) && dump.estoqueSerial.length) {
+      try{ await chunk('estoque_serial', dump.estoqueSerial, { id: 'id', sistema: 'sistema', contrato: 'contrato', serial: 'serial', unidade: 'unidade', status: 'status', createdat: 'createdAt', updatedat: 'updatedAt' }); }catch(e){}
+    }
     try{ must(await supa.rpc('reset_sequences'), 'restore.seq'); }catch(e){}
-    return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length };
+    return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length, estoque: dump.estoque?.length || 0, estoqueMov: dump.estoqueMov?.length || 0, estoqueSerial: dump.estoqueSerial?.length || 0 };
   },
 
   // Arquivos: disco local (file) ou Supabase Storage (supabase)

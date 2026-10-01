@@ -650,6 +650,26 @@ router.post('/api/estoque/seriais/avulso', shared.auth(['tecnico','admin']), sha
   res.status(201).json({ ok, erros, total: ok.length });
 }));
 
+// Backup completo do estoque (saldo + movimentações + seriais)
+router.get('/api/estoque/backup', shared.auth(['admin']), shared.ah(async (req,res)=>{
+  const dump = await shared.store.backup();
+  const filename = `estoque-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(dump, null, 2));
+}));
+
+// Restore do estoque (apenas admin, sobrescreve dados atuais)
+router.post('/api/estoque/restore', shared.auth(['admin']), shared.ah(async (req,res)=>{
+  const dump = req.body;
+  if(!dump || !Array.isArray(dump.estoque) || !Array.isArray(dump.estoqueMov) || !Array.isArray(dump.estoqueSerial)){
+    return res.status(400).json({ error: 'Arquivo de backup inválido (esperado: estoque, estoqueMov, estoqueSerial)' });
+  }
+  const result = await shared.store.restore(dump);
+  shared.broadcast();
+  res.json({ ok: true, ...result, message: 'Estoque restaurado com sucesso' });
+}));
+
 // Relatório completo (estoque atual + movimentações + auditoria) com filtro unidade e sistema
 router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   const { contrato, unidade, from, to } = req.query;
