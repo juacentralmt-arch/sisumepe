@@ -539,13 +539,19 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   const sn = (x)=> x==='sim' ? 'sim' : x==='nao' ? 'nao' : null;
   const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   const pg = pdfDoc.addPage([PW, PH]);
-  // ---- Cabeçalho: esquerda Polícia Penal / direita brasão + CEARÁ ----
+  // ---- Cabeçalho: esquerda = logo combinado (distintivo + POLÍCIA PENAL +
+  // Coordenadoria COMEP numa imagem só) / direita = brasão + bloco CEARÁ ----
   const yTop = PH - 36;
-  let txL = M;
-  if(badgePP){ const bh=62, bw=bh*(badgePP.width/badgePP.height); pg.drawImage(badgePP,{x:M,y:yTop-bh,width:bw,height:bh}); txL = M + bw + 8; }
-  pg.drawText('POLÍCIA PENAL',{x:txL,y:yTop-15,size:15,font:fontBold,color:BLACK});
-  pg.drawText('Coordenadoria de Monitoração',{x:txL,y:yTop-28,size:8,font:fontBold,color:BLACK});
-  pg.drawText('Eletrônica de Pessoas - COMEP',{x:txL,y:yTop-38,size:8,font:fontBold,color:BLACK});
+  if(badgePP){
+    let bh=52, bw=bh*(badgePP.width/badgePP.height);
+    const maxW=250;
+    if(bw>maxW){ bw=maxW; bh=bw/(badgePP.width/badgePP.height); }
+    pg.drawImage(badgePP,{x:M,y:yTop-bh,width:bw,height:bh});
+  } else {
+    pg.drawText('POLÍCIA PENAL',{x:M,y:yTop-15,size:15,font:fontBold,color:BLACK});
+    pg.drawText('Coordenadoria de Monitoração',{x:M,y:yTop-28,size:8,font:fontBold,color:BLACK});
+    pg.drawText('Eletrônica de Pessoas - COMEP',{x:M,y:yTop-38,size:8,font:fontBold,color:BLACK});
+  }
   const cea='CEARÁ'; const ceaW=fontBold.widthOfTextAtSize(cea,22);
   const g1='GOVERNO DO ESTADO', g1W=fontBold.widthOfTextAtSize(g1,9);
   const g2='SECRETARIA DA ADMINISTRAÇÃO', g2W=font.widthOfTextAtSize(g2,7);
