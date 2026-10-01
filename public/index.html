@@ -509,7 +509,7 @@
         <div class="flex gap-2 bg-white border border-slate-200 rounded-xl p-1 flex-wrap">
           <button id="termoTipoListagem" onclick="setTermoTipo('listagem')" class="btn text-xs px-4 py-2">📋 Listagem</button>
           <button id="termoTipoRecolhimento" onclick="setTermoTipo('recolhimento')" class="btn text-xs px-4 py-2">📦 Recolhimento</button>
-          <button id="termoTipoRecEquip" onclick="setTermoTipo('recEquip')" class="btn text-xs px-4 py-2">🧰 Recolhimento Equipamento</button>
+          <button id="termoTipoRecEquip" onclick="setTermoTipo('recEquip')" class="btn text-xs px-4 py-2">📋 Devolução Equipamentos</button>
           <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
           <button id="termoTipoPdf" onclick="setTermoTipo('pdf')" class="btn text-xs px-4 py-2">📄 PDF</button>
@@ -592,41 +592,26 @@
           <p id="termoRecErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <div id="termoFormRecEquip" class="hidden lg:col-span-2 card p-5">
-          <h3 class="font-display font-bold text-sm mb-3">🧰 Termo de Recolhimento Equipamento <span id="termoRecEqEditId" class="text-xs font-bold text-indigo-600"></span></h3>
+          <h3 class="font-display font-bold text-sm mb-3">📋 Declaração de Devolução de Equipamentos <span id="termoRecEqEditId" class="text-xs font-bold text-indigo-600"></span></h3>
           <div class="grid grid-cols-2 gap-2.5">
             <div><label class="lbl">MONITORADO(A) *</label><input id="reqNome" placeholder="Nome completo" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">DATA / HORA *</label><input id="reqDataHora" type="datetime-local" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()" onchange="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">HORA FINAL (De __ às __)</label><input id="reqHoraFim" placeholder="Ex: 13:10" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">Nº DO TERMO</label><input id="reqNumeroTermo" placeholder="Ex: 4212022981" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">ID. MONITORADO</label><input id="reqIdMonitorado" placeholder="Ex: M10544" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">PERFIL</label><select id="reqPerfil" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()">
-              <option value="">Selecione</option>
-              <option>Recolhimento Integral Aos Finais De Semana E Feriados</option>
-              <option>Recolhimento Noturno E Integral Aos Finais De Semana E Feriados</option>
-              <option>Recolhimento Noturno Ou Diurno</option>
-              <option>Prisão Domiciliar</option>
-              <option>Medida Protetiva</option>
+            <div><label class="lbl">TZPR SÉRIE *</label><input id="reqSerie" placeholder="Ex: 4315023610" class="inp mt-1 mb-2.5 font-mono" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">DATA DA DEVOLUÇÃO</label><input id="reqData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()" onchange="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">EQUIPAMENTO DANIFICADO?</label><select id="reqEqDan" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()">
+              <option value="">— Não informado —</option>
+              <option value="sim">SIM</option>
+              <option value="nao">NÃO</option>
             </select></div>
-            <div><label class="lbl">ESTABELECIMENTO</label><input id="reqEstabelecimento" placeholder="Ex: Cariri - Núcleo Cariri" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">CPF/RG (assinatura)</label><input id="reqCpfRg" placeholder="CPF ou RG do monitorado" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
+            <div><label class="lbl">FONTE DANIFICADA?</label><select id="reqFonteDan" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()">
+              <option value="">— Não informado —</option>
+              <option value="sim">SIM</option>
+              <option value="nao">NÃO</option>
+            </select></div>
+            <div><label class="lbl">AUTOR DA DEVOLUÇÃO — DOCUMENTO</label><input id="reqAutorDoc" placeholder="RG/CPF de quem devolveu" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
           </div>
-          <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">MONITORADO DESDE</label><input id="reqMonDesde" type="date" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">DESATIVADO DESDE</label><input id="reqDesatDesde" type="date" class="inp mt-1 mb-2.5" onchange="scheduleRecEqPreview()"></div>
-          </div>
-          <div class="flex items-center justify-between mt-1 mb-2">
-            <label class="lbl">EQUIPAMENTOS * (SIM/NÃO em cada item)</label>
-            <button onclick="addRecEqEquip()" class="btn btn-ghost text-xs px-3 py-1.5">+ Adicionar equipamento</button>
-          </div>
-          <div id="termoRecEqEquips" class="space-y-2.5 mb-2.5"></div>
-          <label class="lbl">DESCRIÇÃO DA DESATIVAÇÃO</label>
-          <textarea id="reqDescricao" rows="3" placeholder="Descreva a inspeção e o estado dos equipamentos devolvidos..." class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></textarea>
-          <div class="grid grid-cols-2 gap-2.5">
-            <div><label class="lbl">POLICIAL PENAL (nome)</label><input id="reqPolicial" placeholder="Nome do policial" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">MAT. POLICIAL</label><input id="reqPolicialMat" placeholder="Matrícula" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">TÉCNICO RESPONSÁVEL</label><input id="reqTecnico" placeholder="Nome do técnico" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-            <div><label class="lbl">MAT. TÉCNICO</label><input id="reqTecnicoMat" placeholder="Matrícula (opcional)" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
-          </div>
+          <label class="lbl">OUTRAS OBSERVAÇÕES</label>
+          <textarea id="reqObs" rows="2" placeholder="Estado dos equipamentos, avarias, faltas..." class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></textarea>
+          <div><label class="lbl">MATRÍCULA RECEBEDOR (policial/servidor)</label><input id="reqMatricula" placeholder="Matrícula de quem recebeu" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
           <div class="flex gap-2 mt-2">
             <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
             <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
@@ -4800,7 +4785,6 @@ function setTermoFormData(t){
   editingTermoId = t.id || null;
 }
 let recEquips = [];
-let recEqEquips = [];
 let recEqPreviewTimer = null;
 let ativPreviewTimer = null;
 function clearTermoForm(){
@@ -4809,11 +4793,9 @@ function clearTermoForm(){
   document.getElementById('termoRecEditId').textContent = '';
   const reqEqEdit = document.getElementById('termoRecEqEditId'); if(reqEqEdit) reqEqEdit.textContent = '';
   recEquips = []; renderRecEquips();
-  recEqEquips = []; renderRecEqEquips();
-  ['reqNome','reqHoraFim','reqNumeroTermo','reqIdMonitorado','reqEstabelecimento','reqCpfRg','reqMonDesde','reqDesatDesde','reqDescricao','reqPolicial','reqPolicialMat','reqTecnicoMat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  ['reqPerfil'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  if(session) { const el=document.getElementById('reqTecnico'); if(el) el.value = session.name; }
-  { const el=document.getElementById('reqDataHora'); if(el){ const d = new Date(); const p = n=>String(n).padStart(2,'0'); el.value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; } }
+  ['reqNome','reqSerie','reqData','reqObs','reqAutorDoc','reqMatricula'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['reqEqDan','reqFonteDan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  { const el=document.getElementById('reqData'); if(el && !el.value){ const d = new Date(); const p = n=>String(n).padStart(2,'0'); el.value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; } }
   { const el=document.getElementById('reqErr'); if(el) el.classList.add('hidden'); }
   { const el=document.getElementById('reqPreviewStatus'); if(el) el.textContent=''; }
   clearTimeout(recEqPreviewTimer);
@@ -4858,76 +4840,27 @@ function clearTermoForm(){
 }
 let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
-const REC_EQ_CHECKS = [['ladoExterno','LADO EXTERNO (TZPR)'],['cinta','CINTA DE FIXAÇÃO'],['travas','TRAVAS'],['fonte','FONTE )'],['fonteCE01','FONTE (SIM/NÃO final)'],['ladoInterno','LADO INTERNO (TZPR)'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
-function addRecEqEquip(data){ recEqEquips.push(Object.assign({ numero: '', danificado: false, checks: {} }, data||{})); renderRecEqEquips(); }
-function removeRecEqEquip(i){ recEqEquips.splice(i,1); renderRecEqEquips(); }
-function setRecEqCheck(i, k, v){
-  if(!recEqEquips[i].checks) recEqEquips[i].checks = {};
-  const cur = recEqEquips[i].checks[k];
-  const nv = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
-  recEqEquips[i].checks[k] = (cur === nv) ? null : nv;
-  renderRecEqEquips();
-}
-function setRecEqDanificado(i, v){ recEqEquips[i].danificado = !!v; renderRecEqEquips(); }
-function renderRecEqEquips(){
-  const box = document.getElementById('termoRecEqEquips');
-  if(!box) return;
-  if(!recEqEquips.length){ box.innerHTML = '<p class="text-xs text-slate-400 text-center py-3 border border-dashed border-slate-300 rounded-xl">Nenhum equipamento. Toque em + Adicionar.</p>'; return; }
-  scheduleRecEqPreview();
-  box.innerHTML = recEqEquips.map((eq,i)=>{
-    const rows = REC_EQ_CHECKS.map(([k,label])=>{
-      const st = (eq.checks && eq.checks[k] === true) ? 'sim' : (eq.checks && eq.checks[k] === false) ? 'nao' : '';
-      const bS = st==='sim' ? 'background:#059669;color:#fff;border-color:#059669' : '';
-      const bN = st==='nao' ? 'background:#dc2626;color:#fff;border-color:#dc2626' : '';
-      return `<div class="flex items-center gap-1.5 py-1 border-b border-slate-100 last:border-0">
-        <span class="text-[11px] font-bold text-slate-600 flex-1">${label}</span>
-        <button onclick="setRecEqCheck(${i},'${k}','sim')" style="${bS}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">SIM</button>
-        <button onclick="setRecEqCheck(${i},'${k}','nao')" style="${bN}" class="text-[10px] font-extrabold px-2 py-1 rounded-lg border border-slate-200">NÃO</button>
-      </div>`;
-    }).join('');
-    return `<div class="border border-slate-200 rounded-xl p-3 bg-white">
-      <div class="flex gap-2 items-center mb-1.5">
-        <input value="${esc(eq.numero||'')}" oninput="recEqEquips[${i}].numero=this.value;scheduleRecEqPreview()" placeholder="N° do equipamento (ex: SAC24-CE01) *" class="inp !py-1.5 text-xs flex-1 font-bold">
-        <label class="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 whitespace-nowrap cursor-pointer"><input type="checkbox" ${eq.danificado?'checked':''} onchange="setRecEqDanificado(${i},this.checked)" class="w-4 h-4 accent-amber-600"> DANIFICADO</label>
-        <button onclick="removeRecEqEquip(${i})" class="text-rose-600 font-bold text-sm px-1">✕</button>
-      </div>
-      <div class="bg-slate-50 rounded-lg px-2">${rows}</div>
-    </div>`;
-  }).join('');
-}
 function getRecEqFormData(){
   const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   return {
     nomeMonitorado: gv('reqNome'),
-    dataHora: document.getElementById('reqDataHora').value ? new Date(document.getElementById('reqDataHora').value).toISOString() : new Date().toISOString(),
-    horaFim: gv('reqHoraFim'),
-    numeroTermo: gv('reqNumeroTermo'),
-    idMonitorado: gv('reqIdMonitorado'),
-    perfil: gv('reqPerfil'),
-    estabelecimento: gv('reqEstabelecimento'),
-    cpfRg: gv('reqCpfRg'),
-    monitoradoDesde: gv('reqMonDesde'),
-    desativadoDesde: gv('reqDesatDesde'),
-    equipamentos: recEqEquips.map(e=>({ numero: (e.numero||'').trim(), danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) })),
-    descricao: gv('reqDescricao'),
-    policialNome: gv('reqPolicial'),
-    policialMat: gv('reqPolicialMat'),
-    tecnicoNome: gv('reqTecnico') || (session ? session.name : ''),
-    tecnicoMat: gv('reqTecnicoMat')
+    serie: gv('reqSerie'),
+    dataDevolucao: gv('reqData'),
+    eqDanificado: gv('reqEqDan') === 'sim' ? 'sim' : gv('reqEqDan') === 'nao' ? 'nao' : null,
+    fonteDanificada: gv('reqFonteDan') === 'sim' ? 'sim' : gv('reqFonteDan') === 'nao' ? 'nao' : null,
+    observacoes: gv('reqObs'),
+    autorDocumento: gv('reqAutorDoc'),
+    recebedorMatricula: gv('reqMatricula')
   };
 }
 function setRecEqFormData(t){
   const d = (t && t.dados) || {};
   const s = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
-  s('reqNome', d.nomeMonitorado); s('reqHoraFim', d.horaFim); s('reqNumeroTermo', d.numeroTermo);
-  s('reqIdMonitorado', d.idMonitorado); s('reqPerfil', d.perfil); s('reqEstabelecimento', d.estabelecimento);
-  s('reqCpfRg', d.cpfRg); s('reqMonDesde', d.monitoradoDesde ? String(d.monitoradoDesde).slice(0,10) : '');
-  s('reqDesatDesde', d.desativadoDesde ? String(d.desativadoDesde).slice(0,10) : '');
-  if(d.dataHora){ const dd = new Date(d.dataHora); const p = n=>String(n).padStart(2,'0'); document.getElementById('reqDataHora').value = `${dd.getFullYear()}-${p(dd.getMonth()+1)}-${p(dd.getDate())}T${p(dd.getHours())}:${p(dd.getMinutes())}`; }
-  s('reqDescricao', d.descricao); s('reqPolicial', d.policialNome); s('reqPolicialMat', d.policialMat);
-  s('reqTecnico', d.tecnicoNome); s('reqTecnicoMat', d.tecnicoMat);
-  recEqEquips = (d.equipamentos||[]).map(e=>({ numero: e.numero||'', danificado: !!e.danificado, checks: Object.assign({}, e.checks||{}) }));
-  renderRecEqEquips();
+  s('reqNome', d.nomeMonitorado); s('reqSerie', d.serie);
+  s('reqData', d.dataDevolucao ? String(d.dataDevolucao).slice(0,10) : '');
+  s('reqEqDan', d.eqDanificado === 'sim' ? 'sim' : d.eqDanificado === 'nao' ? 'nao' : '');
+  s('reqFonteDan', d.fonteDanificada === 'sim' ? 'sim' : d.fonteDanificada === 'nao' ? 'nao' : '');
+  s('reqObs', d.observacoes); s('reqAutorDoc', d.autorDocumento); s('reqMatricula', d.recebedorMatricula);
   document.getElementById('termoRecEqEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
 }
@@ -4936,11 +4869,11 @@ async function previewRecEqPDF(silent){
   const err = document.getElementById('reqErr');
   if(err) err.classList.add('hidden');
   let rec = getRecEqFormData();
-  if(!rec.equipamentos.some(e=>e.numero)){
-    if(!silent && err){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); }
+  if(!rec.nomeMonitorado || !rec.serie){
+    if(!silent && err){ err.textContent='⚠️ Informe o monitorado e a série do TZPR'; err.classList.remove('hidden'); }
     if(silent){
       // preview com placeholder mesmo sem dados
-      rec = { ...rec, equipamentos: [{ numero: '—', danificado: false, checks: {} }], nomeMonitorado: rec.nomeMonitorado || '—' };
+      rec = { ...rec, serie: rec.serie || '—', nomeMonitorado: rec.nomeMonitorado || '—' };
     } else {
       return;
     }
@@ -4952,7 +4885,7 @@ async function previewRecEqPDF(silent){
     if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const wrap = setTermoPreview(url, '— Termo de Recolhimento Equipamento');
+    const wrap = setTermoPreview(url, '— Declaração de Devolução');
     if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
     if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   }catch(e){
@@ -4971,8 +4904,8 @@ async function saveTermoRecEquip(){
   const err = document.getElementById('reqErr');
   err.classList.add('hidden');
   const rec = getRecEqFormData();
-  if(!rec.equipamentos.some(e=>e.numero)){ err.textContent='⚠️ Adicione ao menos um equipamento com número'; err.classList.remove('hidden'); return; }
   if(!rec.nomeMonitorado){ err.textContent='⚠️ Informe o nome do monitorado'; err.classList.remove('hidden'); return; }
+  if(!rec.serie){ err.textContent='⚠️ Informe a série do TZPR'; err.classList.remove('hidden'); return; }
   const body = { tipo: 'recEquip', dados: rec };
   try{
     let res;
