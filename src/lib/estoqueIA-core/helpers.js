@@ -14,7 +14,7 @@ const SINONIMOS = {
   compra: ['pedir', 'adquirir', 'repor', 'comprar', 'pedido', 'sugestão de compra'],
   baixo: ['crítico', 'escasso', 'pouco', 'zerado', 'em falta', 'faltando', 'urgente'],
   alertas: ['avisos', 'atenção', 'problemas', 'itens baixos'],
-  historico: ['histórico', 'movimentações', 'movimentacao', 'registro', 'log'],
+  historico: ['histórico', 'registro', 'log'],
   comparar: ['diferença', 'comparação', 'versus', 'vs', 'confrontar'],
   transferir: ['mover', 'transferência', 'enviar', 'passar', 'deslocar']
 };
@@ -54,8 +54,6 @@ const CORRECOES_TYPO = {
   'pedido': 'compra',
   'historico': 'historico',
   'histórico': 'historico',
-  'movimentacoes': 'historico',
-  'movimentações': 'historico',
   'unidade': 'unidades',
   'unidades': 'unidades',
   'serial': 'seriais',

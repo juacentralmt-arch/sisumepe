@@ -12,12 +12,19 @@ const mockStore = {
   },
   estoqueMov: {
     all: async () => [
-      { tipo: 'saida', material: 'TZPR04', qtd: 2, createdAt: new Date().toISOString(), contrato: 'CE01', unidade: 'UMEPE Juazeiro' }
+      { tipo: 'saida', material: 'TZPR04', qtd: 2, createdAt: new Date().toISOString(), contrato: 'CE01', unidade: 'UMEPE Juazeiro', user: 'joanderson', userName: 'Joanderson Vitor' },
+      { tipo: 'entrada', material: 'UPR04', qtd: 3, createdAt: new Date().toISOString(), contrato: 'CE01', unidade: 'UMEPE Juazeiro', user: 'adailton', userName: 'Adailton Silva' }
     ]
   },
   estoqueSerial: {
     all: async () => [],
     byContratoUnidade: async () => []
+  },
+  users: {
+    all: async () => [
+      { user: 'joanderson', name: 'Joanderson Vitor', role: 'tecnico' },
+      { user: 'adailton', name: 'Adailton Silva', role: 'tecnico' }
+    ]
   },
   audit: {
     insert: async () => {},
@@ -37,6 +44,11 @@ const CASOS = [
   { q: 'saldo', expectIntent: 'saldo_ambiguo', desc: 'Saldo ambíguo sem contexto' },
   { q: 'estoque atual CE01', expectIntent: 'estoque_atual', desc: 'Estoque atual' },
   { q: 'unidades', expectIntent: 'unidades', desc: 'Lista de unidades' },
+  // Testes de filtro por usuário
+  { q: 'movimentações de joanderson', expectIntent: 'movs', desc: 'Movimentações por usuário (login)' },
+  { q: 'movimentações de Joanderson Vitor', expectIntent: 'movs', desc: 'Movimentações por usuário (nome completo)' },
+  { q: 'o que joanderson fez hoje', expectIntent: 'movs', desc: 'Movimentações de usuário hoje' },
+  { q: 'movimentações de adailton ontem', expectIntent: 'movs', desc: 'Movimentações de usuário ontem' },
   // Testes de typo correction
   { q: 'saldo tzpr04 CE01', expectIntent: 'saldo', desc: 'Typo: tzpr04 minúsculo' },
   { q: 'consumo toronozeleira', expectIntent: 'consumo', desc: 'Typo: toronozeleira (matched by ConsumoHandler)' },
