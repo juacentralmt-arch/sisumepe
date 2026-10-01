@@ -1428,17 +1428,58 @@
         <div class="p-4">
           <p class="text-xs text-slate-500 mb-3">Pergunte em linguagem natural. Novos comandos: <b>reposição</b>, <b>comparar</b>, <b>evolução 7 dias</b>, <b>ontem</b>.</p>
           <div id="estIAQuick" class="flex flex-wrap gap-1.5 mb-3">
-            <button onclick="estIAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
-            <button onclick="estIAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
-            <button onclick="estIAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
-            <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
-            <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
-            <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
-            <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
-            <button onclick="estIAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
-            <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
-            <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
-            <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">🚀 Principais</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="estIAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
+                <button onclick="estIAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
+                <button onclick="estIAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
+                <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+                <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+              </div>
+            </div>
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📊 Análise & Relatórios</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+                <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+                <button onclick="estIAAsk('consumo médio 30 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 consumo médio</button>
+                <button onclick="estIAAsk('previsão ruptura TZPR04 UMEPE 30 dias')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔮 ruptura</button>
+                <button onclick="estIAAsk('sugestão pedido compra CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+              </div>
+            </div>
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📦 Operações & Estoque</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+                <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+                <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+                <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+                <button onclick="estIAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+                <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+                <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
+              </div>
+            </div>
+            <div class="w-full">
+              <button id="estIAMoreBtn" onclick="toggleEstIAMore()" class="btn btn-ghost text-[11px] px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50" style="width:100%">
+                <span id="estIAMoreText">Mais opções...</span>
+                <svg id="estIAMoreIcon" class="inline-block w-3 h-3 ml-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+            </div>
+            <div id="estIAExtra" class="hidden flex flex-wrap gap-1.5 mt-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1 w-full">🔧 Ferramentas & Avançado</p>
+              <div class="flex flex-wrap gap-1.5 w-full">
+                <button onclick="estIAAsk('transferência sugerida UMEPE → UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔁 transferir</button>
+                <button onclick="estIAAsk('sugestão pedido compra CE01 próximo mês')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+                <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="estIAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+                <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+                <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
+                <button onclick="estIAAsk('exportar CSV CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📤 exportar</button>
+              </div>
+            </div>
           </div>
           <div id="estIAMessages" class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-[340px] overflow-y-auto space-y-3 text-sm">
             <div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2.5 text-xs text-slate-700 max-w-[85%] leading-relaxed">Olá! Sou a IA do estoque — <b>100% on-prem</b>.<br><br><b>1️⃣ Estoque Atual:</b> “estoque atual UMEPE Juazeiro CE01” — TZPR e UPR prontos<br><b>2️⃣ Média Mensal:</b> “média de consumo mensal UMEPE CE01” — previsão 30d<br><b>3️⃣ Reposição:</b> “necessidade de reposição UMEPE CE01” — faltas para segurança<br><br>Outros: “saldo TZPR04”, “reposição CE01”, “comparar UMEPE vs UP-Cariri”, “evolução 7 dias”, “buscar 1234567890”.</div></div>
@@ -9152,6 +9193,59 @@ async function exportHistoricoCSV(){
 }
 // --- CHAT IA ESTOQUE (on-prem) - APRIMORADO ---
 function estIAAsk(q){ const el=document.getElementById('estIAInput'); if(el){ el.value=q; el.focus(); estIASend(); } }
+let estIALastCtx=null;
+function toggleEstIAMore(){
+  const extra=document.getElementById('estIAExtra');
+  const btn=document.getElementById('estIAMoreBtn');
+  const txt=document.getElementById('estIAMoreText');
+  const icon=document.getElementById('estIAMoreIcon');
+  if(!extra||!btn) return;
+  const open=!extra.classList.contains('hidden');
+  extra.classList.toggle('hidden');
+  btn.classList.toggle('ring-2', !open);
+  btn.classList.toggle('ring-indigo-300', !open);
+  if(txt) txt.textContent=open?'Menos opções':'Mais opções...';
+  if(icon) icon.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+}
+function updateEstIAQuick(ctx){
+  const quick=document.getElementById('estIAQuick');
+  if(!quick) return;
+  let html='';
+  if(ctx?.intent==='movs' || /movimenta|hist[oó]rico/.test(ctx?.qRaw||'')){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📋 Histórico</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="estIAAsk('movimentações de ${estIALastCtx?.usuario?.user||'joanderson'} ontem CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📋 por usuário</button>
+      <button onclick="estIAAsk('movimentações ontem CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+      <button onclick="estIAAsk('movimentações última semana CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 semana</button>
+    </div></div>`;
+  } else if(ctx?.intent==='media_consumo' || /consumo|m[eé]dia/.test(ctx?.qRaw||'')){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📊 Consumo</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="estIAAsk('consumo médio 15 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 15 dias</button>
+      <button onclick="estIAAsk('consumo médio 60 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 60 dias</button>
+      <button onclick="estIAAsk('previsão ruptura TZPR04 UMEPE 30 dias')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔮 ruptura</button>
+    </div>`;
+  } else if(/reposi[cç][aã]o|faltar|comprar/.test((ctx?.qRaw||'').toLowerCase())){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📦 Reposição</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="estIAAsk('reposição CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 reposição</button>
+      <button onclick="estIAAsk('sugestão pedido compra CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+      <button onclick="estIAAsk('transferência sugerida UMEPE → UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔁 transferir</button>
+    </div>`;
+  }
+  // Always show base buttons
+  const base=`<div class="flex flex-wrap gap-1.5 mb-3" id="estIAQuickBase">
+    <button onclick="estIAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
+    <button onclick="estIAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
+    <button onclick="estIAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
+    <button onclick="estIAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+    <button onclick="estIAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+    <button onclick="estIAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+    <button onclick="estIAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+    <button onclick="estIAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+    <button onclick="estIAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+    <button onclick="estIAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+    <button onclick="estIAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>`;
+  const quick=document.getElementById('estIAQuick');
+  if(quick) quick.innerHTML = html + base;
+}
 function estIAFormatText(t){
   // markdown leve: **negrito**, `code`, quebras
   let h=esc(t);

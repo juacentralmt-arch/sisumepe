@@ -3,6 +3,11 @@ const shared = require('../lib/shared');
 const estoqueIA = require('../lib/estoqueIA');
 const { popularEstoque } = require('../lib/estoqueSeed');
 const router = express.Router();
+
+// Helper para invalidar cache da IA após movimentações
+function invalidateEstoqueCache() {
+  try { estoqueIA.invalidateAllCache(); } catch (_) {}
+}
 const UNIDADES = ['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
 const MATERIAIS = ['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
 
@@ -155,6 +160,7 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
     sistema: effectiveSistema, contrato: contratoNorm, material, unidade, qtd: qtdFinal, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
+  invalidateEstoqueCache();
   shared.broadcast();
   res.json(r);
 }));
@@ -219,6 +225,7 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
     }
     return res.status(e.status || 400).json({ error: e.message || 'Falha ao movimentar KIT', revertidos: feitos.length });
   }
+  invalidateEstoqueCache();
   shared.broadcast();
   res.json({ ok: true, kits: n, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
 }));
@@ -229,6 +236,7 @@ router.post('/api/estoque/estornar', shared.auth(['tecnico','admin']), shared.ah
   const targetId = movId || id;
   if(!targetId) return res.status(400).json({ error: 'Informe movId' });
   const r = await shared.store.estoque.estornar(targetId, { motivo: motivo||'Estorno solicitado', user: req.auth.user, userName: req.auth.name });
+  invalidateEstoqueCache();
   shared.broadcast();
   res.json(r);
 }));
@@ -249,6 +257,7 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
     sistema: effectiveSistema, contrato: contratoNorm, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
     user: req.auth.user, userName: req.auth.name
   });
+  invalidateEstoqueCache();
   shared.broadcast();
   res.json(r);
 }));
@@ -378,12 +387,22 @@ router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.ah(async
   const sistema = req.auth.role==='admin' ? (req.body.sistema || req.query.sistema ? normalizeSistema(req.body.sistema || req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
   // passa sistema e usuário para contexto
-  const out = await estoqueIA.answer(query, shared.store, { sistema: effectiveSistema, user: req.auth.user });
+  const out = await estoqueIA.answer(query, shared.store, { sistema: effectiveSistema, user: req.auth.user, userName: req.auth.name });
   // log opcional em audit como consulta IA (não persiste saldo)
   res.json({ pergunta: query, ...out, geradoEm: new Date().toISOString(), sistema: effectiveSistema });
 }));
+
 router.get('/api/estoque/ia/sugestoes', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
   res.json({ sugestoes: ['saldo TZPR04 UMEPE Juazeiro CE01','saldo total CE01','histórico 2026-09-24 UMEPE Juazeiro','últimas movimentações CE01','seriais TZPR04 CE01','buscar serial 1234567890','ranking CINTA CE01','estoque baixo','resumo CE01','alertas CE01','saldo por unidade CE01','unidades'] });
+}));
+
+router.get('/api/estoque/ia/metrics', shared.auth(['admin']), shared.ah(async (req,res)=>{
+  res.json(estoqueIA.getMetrics());
+}));
+
+router.post('/api/estoque/ia/metrics/reset', shared.auth(['admin']), shared.ah(async (req,res)=>{
+  estoqueIA.resetMetrics();
+  res.json({ ok: true, message: 'Métricas resetadas' });
 }));
 
 // Seed antigo de demonstração (só modo arquivo, sem transferências entre
@@ -626,6 +645,7 @@ router.post('/api/estoque/seriais/avulso', shared.auth(['tecnico','admin']), sha
   try{
     await shared.store.audit.insert({ kind: 'estoque', action: 'serial-avulso', personName: `${c} ${und}`, ticketId: null, ref: `${c} ${und}`, byUser: req.auth.user, byName: req.auth.name, summary: `Seriais avulsos: ${ok.length} ok${erros.length ? `, ${erros.length} erros` : ''} (${ok.slice(0,5).join(', ')}${ok.length>5 ? '...' : ''})` });
   }catch(e){}
+  invalidateEstoqueCache();
   shared.broadcast();
   res.status(201).json({ ok, erros, total: ok.length });
 }));

@@ -1,10 +1,12 @@
 const { handlers } = require('./estoqueIA-core/registry');
 const { getContext, setContext } = require('./estoqueIA-core/context');
 const { getOrFetch, invalidate } = require('./estoqueIA-core/cache');
+const { recordQuery, getMetrics, resetMetrics } = require('./estoqueIA-core/metrics');
 const {
   extractContrato, extractSistema, extractMaterial, extractUnidade,
   extractData, extractPeriodo, extractSerial, extractThreshold,
   normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
+  expandQuery, fuzzyMatch, SINONIMOS, corrigirTypos,
   MATERIAIS, MATERIAIS_SERIAL, LIMITES, UNIDADES, CONTRATO_INFINITY
 } = require('./estoqueIA-core/helpers');
 
@@ -18,7 +20,12 @@ async function answer(query, store, opts = {}) {
     };
   }
 
-  const q = norm(qRaw);
+  // Detectar e corrigir typos
+  const correcao = corrigirTypos(qRaw);
+  
+  // Expande query com sinônimos
+  const qExpanded = expandQuery(qRaw);
+  const q = norm(qExpanded);
   const user = opts.user || 'global';
 
   // 1. Extrair entidades
@@ -99,6 +106,9 @@ async function answer(query, store, opts = {}) {
         const result = await handler.handle(q, ctx);
         const latency = Date.now() - start;
 
+        // Métricas
+        recordQuery(result.intent, latency, false);
+
         // Auditoria
         try {
           await store.audit.insert({
@@ -123,9 +133,16 @@ async function answer(query, store, opts = {}) {
           });
         }
 
+        // Incluir info de correção de typo se houver
+        if (correcao) {
+          result.correcao = { original: correcao.original, corrigida: correcao.corrigida };
+          result.text = `🔧 *Corrigido: "${correcao.original}" → "${correcao.corrigida}"*\n\n${result.text}`;
+        }
+
         return result;
       } catch (e) {
         console.error(`Handler ${handler.constructor.name} error:`, e);
+        recordQuery('erro', 0, true);
         return { intent: 'erro', text: 'Erro interno: ' + e.message };
       }
     }
@@ -149,5 +166,11 @@ module.exports = {
   normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
   // Cache controls
   invalidateCache: () => invalidate('estoque'),
-  clearCache: () => require('./cache').clear()
+  clearCache: () => require('./cache').clear(),
+  invalidateAllCache: () => require('./cache').invalidateAll(),
+  // Metrics
+  getMetrics,
+  resetMetrics,
+  // Typo correction
+  corrigirTypos
 };

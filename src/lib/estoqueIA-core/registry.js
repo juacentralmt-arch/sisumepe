@@ -19,10 +19,14 @@ const HelpHandler = require('./handlers/HelpHandler');
 const PrevisaoRupturaHandler = require('./handlers/PrevisaoRupturaHandler');
 const SugestaoCompraHandler = require('./handlers/SugestaoCompraHandler');
 const TransferenciaSugeridaHandler = require('./handlers/TransferenciaSugeridaHandler');
+const LinguagemNaturalHandler = require('./handlers/LinguagemNaturalHandler');
+const HistoricoConversasHandler = require('./handlers/HistoricoConversasHandler');
 
 // Ordem importa: handlers mais específicos primeiro
 const handlers = [
   new SerialHandler(),           // serial exato/parcial (mais específico)
+  new LinguagemNaturalHandler(), // linguagem natural conversacional
+  new HistoricoConversasHandler(), // histórico de consultas
   new HelpHandler(),             // ajuda
   new UnidadesHandler(),         // unidades
   new PrevisaoRupturaHandler(),  // previsão ruptura

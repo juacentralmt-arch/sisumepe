@@ -153,6 +153,17 @@ store.users.ensureSeeded()
 setTimeout(() => { store.cleanupExpiredFiles().catch(() => {}); }, 60e3).unref();
 setInterval(() => { store.cleanupExpiredFiles().catch(() => {}); }, 3600e3).unref();
 
+// Alertas proativos de estoque (a cada 6 horas, opcional via ENABLE_STOCK_ALERTS)
+const ENABLE_STOCK_ALERTS = process.env.ENABLE_STOCK_ALERTS !== '0';
+if (ENABLE_STOCK_ALERTS) {
+  const { verificarAlertasProativos } = require('./scripts/alertas-proativos');
+  // Primeira verificação após 2 min do boot
+  setTimeout(() => { verificarAlertasProativos(); }, 2 * 60e3).unref();
+  // Depois a cada 6 horas
+  setInterval(() => { verificarAlertasProativos(); }, 6 * 3600e3).unref();
+  console.log('[alertas-proativos] Ativado: verificação a cada 6 horas');
+}
+
 // Bot anti-oscilação Render Free (opcional, sem custo)
 // Mantém o serviço acordado com self-ping a cada 4 min enquanto estiver no ar.
 // O wake-up real depende de ping EXTERNO (GitHub Actions .github/workflows/keep-alive.yml a cada 5 min),
