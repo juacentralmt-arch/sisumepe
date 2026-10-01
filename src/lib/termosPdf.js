@@ -534,8 +534,6 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   try{ const p = path.join(ROOT,'public','brasao-ceara.png'); if(fs.existsSync(p)) brasao = await pdfDoc.embedPng(fs.readFileSync(p)); }catch(e){}
   const v = (x)=>(x==null?'':String(x)).trim();
   const has = (x)=>v(x)!=='';
-  // Valor preenchido: preto normal; vazio: placeholder sublinhado cinza itálico
-  const V = (val, ph)=> has(val) ? { t: v(val), f: font, c: BLACK } : { t: ph, f: fontOb, c: GRAY };
   const sn = (x)=> x==='sim' ? 'sim' : x==='nao' ? 'nao' : null;
   const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   const pg = pdfDoc.addPage([PW, PH]);
@@ -543,8 +541,8 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   // Coordenadoria COMEP numa imagem só) / direita = bloco CEARÁ combinado ----
   const yTop = PH - 36;
   if(badgePP){
-    let bh=52, bw=bh*(badgePP.width/badgePP.height);
-    const maxW=250;
+    let bh=58, bw=bh*(badgePP.width/badgePP.height);
+    const maxW=260;
     if(bw>maxW){ bw=maxW; bh=bw/(badgePP.width/badgePP.height); }
     pg.drawImage(badgePP,{x:M,y:yTop-bh,width:bw,height:bh});
   } else {
@@ -612,15 +610,52 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
       y-=lh;
     });
   };
-  drawPara([
-    { t:'Declaro para os devidos fins que o(s) equipamento(s) de monitoração eletrônica, TZPR série' },
-    V(d.serie,'____________________'),
-    { t:'e a fonte de energia elétrica (carregador), vinculados à medida judicial de monitoramento eletrônico imposta a' },
-    V(d.nomeMonitorado,'__________________________________________________'),
-    { t:', foi devolvido na presente Unidade de Monitoramento Eletrônico de Pessoas - UMEPE Juazeiro do Norte-CE na seguinte circunstância:' }
-  ], 11, 16.5, 0, true);
+  // ---- Parágrafo em QUEBRAS FIXAS (como no modelo): L1..L5 justificadas, L6 à esquerda.
+  // Tamanho 11 se a L1 couber, senão 10.5 — determinístico para o mesmo dado.
+  const lead1='Declaro para os devidos fins que o(s) equipamento(s) de monitoração eletrônica, TZPR série ';
+  const serieRaw = has(d.serie) ? v(d.serie).slice(0,12) : '';
+  const PS = (font.widthOfTextAtSize(lead1,11)+font.widthOfTextAtSize(serieRaw||'_',11)<=W) ? 11 : 10.5;
+  const PLH = PS*1.5;
+  const fitPH = (avail,fnt)=>{
+    const uw=fnt.widthOfTextAtSize('_',PS);
+    return '_'.repeat(Math.max(4,Math.min(30,Math.floor((avail-4)/uw))));
+  };
+  function linhaJ(segs){
+    const words=[];
+    segs.forEach(s=>{ String(s.t||'').split(/\s+/).filter(Boolean).forEach(w=>words.push({w,f:s.f||font,c:s.c||BLACK})); });
+    const spW=font.widthOfTextAtSize(' ',PS);
+    let content=0; words.forEach(wd=>{ content+=wd.f.widthOfTextAtSize(wd.w,PS); });
+    const gap = words.length>1 ? Math.max(spW,(W-content)/(words.length-1)) : spW;
+    let xx=M;
+    words.forEach((wd,i)=>{ if(i>0) xx+=gap; pg.drawText(wd.w,{x:xx,y,size:PS,font:wd.f,color:wd.c}); xx+=wd.f.widthOfTextAtSize(wd.w,PS); });
+    y-=PLH;
+  }
+  function linhaE(t){
+    pg.drawText(t,{x:M,y,size:PS,font,color:BLACK});
+    y-=PLH;
+  }
+  let serieD = serieRaw;
+  {
+    const maxW = W - font.widthOfTextAtSize(lead1,PS) - 2;
+    while(serieD.length>4 && font.widthOfTextAtSize(serieD,PS)>maxW) serieD=serieD.slice(0,-1);
+  }
+  const serieSeg = serieD ? {t:serieD} : {t:fitPH(W-font.widthOfTextAtSize(lead1,PS)-4,fontOb),f:fontOb,c:GRAY};
+  linhaJ([{t:lead1},serieSeg]);
+  linhaJ([{t:'e a fonte de energia elétrica (carregador),'}]);
+  linhaJ([{t:'vinculados à medida judicial de monitoramento eletrônico imposta a'}]);
+  const suf4='foi devolvido na';
+  if(has(d.nomeMonitorado)){
+    let nm=v(d.nomeMonitorado);
+    const avail=W-font.widthOfTextAtSize(suf4,PS)-font.widthOfTextAtSize(' ',PS)-4;
+    while(nm.length>4 && font.widthOfTextAtSize(nm+',',PS)>avail) nm=nm.slice(0,-1);
+    linhaJ([{t:nm.trim()+','},{t:suf4}]);
+  } else {
+    linhaJ([{t:fitPH(W-font.widthOfTextAtSize(', '+suf4,PS)-4,fontOb),f:fontOb,c:GRAY},{t:', '+suf4}]);
+  }
+  linhaJ([{t:'presente Unidade de Monitoramento Eletrônico de Pessoas - UMEPE Juazeiro do'}]);
+  linhaE('Norte-CE na seguinte circunstância:');
   y -= 14;
-  // ---- Inspeção preliminar: caixas SIM/NÃO ----
+  // ---- Inspeção preliminar: caixas SIM/NÃO (colunas separadas e alinhadas) ----
   function ckbx(cx,cy,s,marked){
     pg.drawRectangle({x:cx,y:cy,width:s,height:s,borderColor:BLACK,borderWidth:0.9,color:rgb(1,1,1)});
     if(marked){
@@ -628,13 +663,13 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
       pg.drawLine({start:{x:cx+1.2,y:cy+1.2},end:{x:cx+s-1.4,y:cy+s-1.5},thickness:1.1,color:BLACK});
     }
   }
-  const BS = 11;
-  const b1x = PW - M - 2*(BS+4);
-  const c1 = b1x + BS/2, c2 = b1x + BS + 8 + BS/2;
+  const BS = 12, BGAP = 16;
+  const b1x = PW - M - (2*BS + BGAP);
+  const c1 = b1x + BS/2, c2 = b1x + BS + BGAP + BS/2;
   const inspT='INSPEÇÃO PRELIMINAR', simT='SIM', naoT='NÃO';
   pg.drawText(inspT,{x:(M+b1x-fontBold.widthOfTextAtSize(inspT,11))/2,y,size:11,font:fontBold,color:BLACK});
-  pg.drawText(simT,{x:c1-fontBold.widthOfTextAtSize(simT,10)/2,y,size:10,font:fontBold,color:BLACK});
-  pg.drawText(naoT,{x:c2-fontBold.widthOfTextAtSize(naoT,10)/2,y,size:10,font:fontBold,color:BLACK});
+  pg.drawText(simT,{x:c1-fontBold.widthOfTextAtSize(simT,8.5)/2,y,size:8.5,font:fontBold,color:BLACK});
+  pg.drawText(naoT,{x:c2-fontBold.widthOfTextAtSize(naoT,8.5)/2,y,size:8.5,font:fontBold,color:BLACK});
   y -= 20;
   function simNaoRow(label, val, yy){
     const size=11;
@@ -645,7 +680,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
     const endX=b1x-6;
     while(dx<endX){ pg.drawText('.',{x:dx,y:yy,size,font,color:BLACK}); dx+=dotW+1.2; }
     ckbx(b1x,yy-1.5,BS,val==='sim');
-    ckbx(b1x+BS+8,yy-1.5,BS,val==='nao');
+    ckbx(b1x+BS+BGAP,yy-1.5,BS,val==='nao');
   }
   simNaoRow('Equipamento de monitoração eletrônica danificado?', sn(d.eqDanificado), y); y -= 20;
   simNaoRow('Fonte de energia elétrica danificada?', sn(d.fonteDanificada), y); y -= 26;
