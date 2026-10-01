@@ -9,6 +9,8 @@ class MovsHandler extends BaseHandler {
     if (/movimentac|movimentacoes|ultimas|recentes|^hoje$|^ontem$|esta semana/.test(query)) return true;
     // "o que joanderson fez ontem", "o que X fizeram"
     if (ctx && ctx.usuario && (/o que.*(fez|fizeram)|(fez|fizeram).*(ontem|hoje|essa semana|semana)/.test(query))) return true;
+    // "movimentações de joanderson", "o que joanderson fez" (sem data) — match se usuario presente
+    if (ctx && ctx.usuario && /movimentac|movimentacoes|o que.*fez|o que.*fizeram/.test(query)) return true;
     return false;
   }
 
