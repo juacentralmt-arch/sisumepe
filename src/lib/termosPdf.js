@@ -933,8 +933,189 @@ async function gerarTermoEnderecoPDF(termo){
   return pdfBytes;
 }
 
+// =====================================================================
+// Termo "Outros" — Tabela personalizável
+// =====================================================================
+async function gerarTermoOutrosPDF(termo){
+  const d = (termo.dados && typeof termo.dados === 'object') ? termo.dados : {};
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontOb = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const PW = 595.32, PH = 841.92, M = 50;
+  const W = PW - 2 * M;
+  let y = PH - 50;
+  let pg = pdfDoc.addPage([PW, PH]);
+  
+  // Cabeçalho com brasão
+  let brasao = null;
+  try{
+    const bp = path.join(ROOT, 'public', 'brasao-ceara.png');
+    if(fs.existsSync(bp)) brasao = await pdfDoc.embedPng(fs.readFileSync(bp));
+  }catch(e){}
+  if(brasao){
+    const bh = 46, bw = bh * (brasao.width / brasao.height);
+    pg.drawImage(brasao, { x: M, y: PH - 50 - bh, width: bw, height: bh });
+  }
+  pg.drawText('GOVERNO DO ESTADO DO CEARÁ', { x: M, y: PH - 50, size: 12, font: fontBold, color: rgb(0,0,0) });
+  pg.drawText('SECRETARIA DA ADMINISTRAÇÃO PENITENCIÁRIA', { x: M, y: PH - 65, size: 10, font: fontBold, color: rgb(0,0,0) });
+  pg.drawText('COORDENADORIA DE MONITORAÇÃO ELETRÔNICA - COMEP', { x: M, y: PH - 78, size: 9, font: fontBold, color: rgb(0,0,0) });
+  pg.drawText('UMEPE JUAZEIRO DO NORTE', { x: M, y: PH - 90, size: 9, font: font, color: rgb(0,0,0) });
+  
+  // Linha separadora
+  pg.drawLine({ start: { x: M, y: PH - 100 }, end: { x: PW - M, y: PH - 100 }, thickness: 1.1, color: rgb(0.16, 0.5, 0.27) });
+  y = PH - 115;
+  
+  // Título do termo
+  const titulo = d.titulo || 'TERMO PERSONALIZADO';
+  const tw = fontBold.widthOfTextAtSize(titulo, 14);
+  pg.drawText(titulo, { x: (PW - tw) / 2, y, size: 14, font: fontBold, color: rgb(0,0,0) });
+  pg.drawLine({ start: { x: (PW - tw) / 2, y: y - 2 }, end: { x: (PW + tw) / 2, y: y - 2 }, thickness: 0.8, color: rgb(0,0,0) });
+  y -= 22;
+  
+  // Subtítulo
+  if(d.subtitulo){
+    const sw = fontOb.widthOfTextAtSize(d.subtitulo, 10);
+    pg.drawText(d.subtitulo, { x: (PW - sw) / 2, y, size: 10, font: fontOb, color: rgb(0.4, 0.4, 0.4) });
+    y -= 18;
+  }
+  
+  // Data e Destinatário
+  const dataFmt = d.dataEnvio ? (() => { try{ const dt = new Date(d.dataEnvio); return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`; }catch(e){ return d.dataEnvio; } })() : '';
+  pg.drawText(`Data: ${dataFmt || '________________'}`, { x: M, y, size: 10, font, color: rgb(0,0,0) });
+  if(d.destinatario){
+    pg.drawText(`Destinatário: ${d.destinatario}`, { x: PW - M - font.widthOfTextAtSize(`Destinatário: ${d.destinatario}`, 10), y, size: 10, font, color: rgb(0,0,0) });
+  }
+  y -= 20;
+  
+  // Cabeçalho livre
+  if(d.cabecalho){
+    const drawPara = (text, size, lh, indent) => {
+      const words = text.split(/\s+/).filter(Boolean);
+      const spW = font.widthOfTextAtSize(' ', size);
+      let line = [], lw = 0, first = true;
+      const avail = () => W - (first ? indent : 0);
+      words.forEach(w => {
+        const ww = font.widthOfTextAtSize(w, size);
+        if(line.length && lw + spW + ww > avail()){ pg.drawText(line.join(' '), { x: M + (first ? indent : 0), y, size, font, color: rgb(0,0,0) }); y -= lh; line = []; lw = 0; first = false; }
+        if(line.length) lw += spW;
+        line.push(w); lw += ww;
+      });
+      if(line.length){ pg.drawText(line.join(' '), { x: M + (first ? indent : 0), y, size, font, color: rgb(0,0,0) }); y -= lh; }
+      y -= 6;
+    };
+    drawPara(d.cabecalho, 10, 14, 0);
+    y -= 8;
+  }
+  
+  // Tabela
+  const colunas = d.colunas || [];
+  if(colunas.length){
+    // Calcular larguras proporcionais
+    const totalLargura = colunas.reduce((s, c) => s + (c.largura || 100), 0);
+    const colBounds = [M];
+    colunas.forEach(c => { colBounds.push(colBounds[colBounds.length - 1] + (c.largura || 100) / totalLargura * W); });
+    
+    // Cabeçalho da tabela
+    const headerH = 22;
+    pg.drawRectangle({ x: M, y: y - headerH, width: W, height: headerH, color: rgb(0.93, 0.94, 0.96), borderColor: rgb(0,0,0), borderWidth: 0.8 });
+    colunas.forEach((c, i) => {
+      const cx = (colBounds[i] + colBounds[i + 1]) / 2;
+      const cw = fontBold.widthOfTextAtSize(c.titulo, 10);
+      pg.drawText(c.titulo, { x: cx - cw / 2, y: y - 13, size: 10, font: fontBold, color: rgb(0,0,0) });
+    });
+    y -= headerH;
+    pg.drawLine({ start: { x: M, y: y + headerH }, end: { x: PW - M, y: y + headerH }, thickness: 0.8, color: rgb(0,0,0) });
+    
+    // Linhas
+    const linhas = d.linhas || [];
+    const rowH = 22;
+    for(const row of linhas){
+      if(y - rowH < 60){
+        pg = pdfDoc.addPage([PW, PH]);
+        y = PH - 50;
+        // Repetir cabeçalho
+        pg.drawRectangle({ x: M, y: y - headerH, width: W, height: headerH, color: rgb(0.93, 0.94, 0.96), borderColor: rgb(0,0,0), borderWidth: 0.8 });
+        colunas.forEach((c, i) => {
+          const cx = (colBounds[i] + colBounds[i + 1]) / 2;
+          const cw = fontBold.widthOfTextAtSize(c.titulo, 10);
+          pg.drawText(c.titulo, { x: cx - fontBold.widthOfTextAtSize(c.titulo, 10) / 2, y: y - 13, size: 10, font: fontBold, color: rgb(0,0,0) });
+        });
+        y -= headerH;
+        pg.drawLine({ start: { x: M, y: y + headerH }, end: { x: PW - M, y: y + headerH }, thickness: 0.8, color: rgb(0,0,0) });
+      }
+      
+      pg.drawRectangle({ x: M, y: y - rowH, width: W, height: rowH, borderColor: rgb(0,0,0), borderWidth: 0.6, color: rgb(1,1,1) });
+      colunas.forEach((c, i) => {
+        const val = String(row[c.chave] || '').trim().substring(0, 40);
+        if(val){
+          const cx = (colBounds[i] + colBounds[i + 1]) / 2;
+          const vw = font.widthOfTextAtSize(val, 9);
+          pg.drawText(val, { x: cx - vw / 2, y: y - 13, size: 9, font, color: rgb(0,0,0) });
+        }
+      });
+      y -= rowH;
+      pg.drawLine({ start: { x: M, y: y + rowH }, end: { x: PW - M, y: y + rowH }, thickness: 0.6, color: rgb(0,0,0) });
+      for(const x of colBounds) pg.drawLine({ start: { x, y: y + rowH }, end: { x, y: y }, thickness: 0.6, color: rgb(0,0,0) });
+      y -= 2;
+    }
+    
+    // Linhas verticais da tabela
+    for(const x of colBounds) pg.drawLine({ start: { x, y: y + (linhas.length + 1) * rowH + headerH }, end: { x, y }, thickness: 0.6, color: rgb(0,0,0) });
+    y -= 10;
+  }
+  
+  // Rodapé livre
+  if(d.rodape){
+    y -= 10;
+    const drawPara = (text, size, lh, indent) => {
+      const words = text.split(/\s+/).filter(Boolean);
+      const spW = font.widthOfTextAtSize(' ', size);
+      let line = [], lw = 0, first = true;
+      const avail = () => W - (first ? indent : 0);
+      words.forEach(w => {
+        const ww = font.widthOfTextAtSize(w, size);
+        if(line.length && lw + spW + ww > avail()){ pg.drawText(line.join(' '), { x: M + (first ? indent : 0), y, size, font, color: rgb(0,0,0) }); y -= lh; line = []; lw = 0; first = false; }
+        if(line.length) lw += spW;
+        line.push(w); lw += ww;
+      });
+      if(line.length){ pg.drawText(line.join(' '), { x: M + (first ? indent : 0), y, size, font, color: rgb(0,0,0) }); y -= lh; }
+      y -= 6;
+    };
+    drawPara(d.rodape, 10, 14, 0);
+    y -= 8;
+  }
+  
+  // Assinaturas
+  y -= 30;
+  const respEntrega = d.respEntrega || '';
+  const respRecebimento = d.respRecebimento || '';
+  
+  pg.drawLine({ start: { x: M + 40, y }, end: { x: PW / 2 - 40, y }, thickness: 0.9, color: rgb(0,0,0) });
+  y -= 8;
+  pg.drawText('RESPONSÁVEL PELA ENTREGA', { x: (M + PW / 2) / 2 - fontBold.widthOfTextAtSize('RESPONSÁVEL PELA ENTREGA', 10) / 2, y, size: 10, font: fontBold, color: rgb(0,0,0) });
+  y -= 14;
+  pg.drawText(`(${respEntrega || 'RG/CPF/MATRÍCULA'})`, { x: (M + PW / 2) / 2 - font.widthOfTextAtSize(respEntrega || 'RG/CPF/MATRÍCULA', 9) / 2, y, size: 9, font, color: rgb(0,0,0) });
+  
+  // Coluna direita
+  const rightX = PW / 2 + 20;
+  pg.drawLine({ start: { x: rightX, y: y + 30 }, end: { x: PW - M - 40, y: y + 30 }, thickness: 0.9, color: rgb(0,0,0) });
+  pg.drawText('RESPONSÁVEL PELO RECEBIMENTO', { x: (PW / 2 + PW) / 2 - fontBold.widthOfTextAtSize('RESPONSÁVEL PELO RECEBIMENTO', 10) / 2, y, size: 10, font: fontBold, color: rgb(0,0,0) });
+  pg.drawText(`(${respRecebimento || 'RG/CPF/MATRÍCULA'})`, { x: (PW / 2 + PW) / 2 - font.widthOfTextAtSize(respRecebimento || 'RG/CPF/MATRÍCULA', 9) / 2, y - 14, size: 9, font, color: rgb(0,0,0) });
+  
+  y -= 50;
+  
+  // Local e data
+  const local = 'Juazeiro do Norte - CE';
+  const dataExt = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+  pg.drawText(`${local}, ${dataExt}.`, { x: M, y, size: 10, font, color: rgb(0,0,0) });
+  
+  const pdfBytes = await saveDeterministico(pdfDoc);
+  return pdfBytes;
+}
+
 module.exports = { gerarTermoHTML, gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoRecolhimentoEquipamentoPDF,
-gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF };
+gerarTermoEnderecoPDF, gerarTermoOutrosPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF };
 
 // =====================================================================
 // Documentos psicossociais (UMEPE Juazeiro do Norte)
