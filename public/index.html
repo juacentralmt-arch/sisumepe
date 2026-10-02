@@ -5274,14 +5274,15 @@ function setTermoTipo(t){
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
     b.style.background = t === k ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : '';
   });
-  const listEl=document.getElementById('termoFormListagem'); if(listEl){ listEl.classList.toggle('hidden', t!=='listagem'); listEl.classList.toggle('lg:col-span-2', t==='listagem'); }
-  const recEl=document.getElementById('termoFormRecolhimento'); if(recEl){ recEl.classList.toggle('hidden', t!=='recolhimento'); recEl.classList.toggle('lg:col-span-2', t==='recolhimento'); }
-  const recEqEl = document.getElementById('termoFormRecEquip'); if(recEqEl){ recEqEl.classList.toggle('hidden', t!=='recEquip'); recEqEl.classList.toggle('lg:col-span-2', t==='recEquip'); }
-  const endEl=document.getElementById('termoFormEndereco'); if(endEl){ endEl.classList.toggle('hidden', t!=='endereco'); endEl.classList.toggle('lg:col-span-2', t==='endereco'); }
-  const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl){ ativEl.classList.toggle('hidden', t!=='ativacao'); ativEl.classList.toggle('lg:col-span-2', t==='ativacao'); }
-  const outrosEl=document.getElementById('termoFormOutros'); if(outrosEl){ outrosEl.classList.toggle('hidden', t!=='outros'); outrosEl.classList.toggle('lg:col-span-2', t==='outros'); }
-  const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl){ pdfEl.classList.toggle('hidden', t!=='pdf'); pdfEl.classList.toggle('lg:col-span-2', t==='pdf'); }
-  const renEl=document.getElementById('termoFormRenomear'); if(renEl){ renEl.classList.toggle('hidden', t!=='renomear'); renEl.classList.toggle('lg:col-span-2', t==='renomear'); }
+  const _tgl = (el, show) => { if(!el) return; el.classList.toggle('hidden', !show); el.classList.toggle('lg:col-span-2', show); try{ el.style.display = show ? '' : 'none'; }catch(e){} };
+  _tgl(document.getElementById('termoFormListagem'), t==='listagem');
+  _tgl(document.getElementById('termoFormRecolhimento'), t==='recolhimento');
+  _tgl(document.getElementById('termoFormRecEquip'), t==='recEquip');
+  _tgl(document.getElementById('termoFormEndereco'), t==='endereco');
+  _tgl(document.getElementById('termoFormAtivacao'), t==='ativacao');
+  _tgl(document.getElementById('termoFormOutros'), t==='outros');
+  _tgl(document.getElementById('termoFormPdf'), t==='pdf');
+  _tgl(document.getElementById('termoFormRenomear'), t==='renomear');
   try{ renderTermos(); }catch(e){ console.warn('renderTermos:', e.message); }
   try{
     if(t === 'listagem') scheduleListagemPreview(true);
