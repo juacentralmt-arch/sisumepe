@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
+const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT, horarioComercialInfo, RECP_MSG } = shared;
 const router = express.Router();
 
 // Login / usuários
@@ -17,6 +17,9 @@ router.post('/api/login', loginRateLimit, ah(async (req, res) => {
   }
   if (!ok) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
   if (u.active === false) return res.status(403).json({ error: 'Usuário desativado. Fale com o administrador.' });
+  // Recepção só entra em horário comercial (seg–sex, 8h–12h e 13h–17h, America/Fortaleza)
+  if (u.role === 'recepcao' && !horarioComercialInfo().emHorario)
+    return res.status(403).json({ error: RECP_MSG });
   const token = await issueToken(u);
   // httpOnly cookie para mitigar XSS steal via localStorage
   res.setHeader('Set-Cookie', `te_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${12*3600}${process.env.FORCE_HTTPS==='1' ? '; Secure' : ''}`);
