@@ -87,6 +87,11 @@ function auth(roles) {
     if (!t) return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' });
     store.sessions.get(t).then(s => {
       if (!s || s.exp < Date.now()) { store.sessions.del(t).catch(() => {}); return res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }); }
+      // Recepção fora do horário comercial: derruba a sessão (401 = frontend desloga e mostra o motivo)
+      if (s.role === 'recepcao' && !horarioComercialInfo().emHorario) {
+        store.sessions.del(t).catch(() => {});
+        return res.status(401).json({ error: RECP_MSG });
+      }
       req.auth = s; req.auth.token = t;
       if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
       next();
@@ -109,6 +114,38 @@ function authAgenda() {
       next();
     });
   };
+}
+
+// Horário comercial da recepção (America/Fortaleza):
+// seg–sex, 08:00–12:00 e 13:00–17:00. Fora disso, recepção não acessa.
+// Fuso fixo via Intl (Ceará não tem DST); fallback UTC-3 se Intl falhar.
+const RECP_TZ = process.env.RECP_TZ || 'America/Fortaleza';
+const RECP_MSG = 'Acesso da recepção permitido apenas em horário comercial (seg–sex, 8h–12h e 13h–17h).';
+function horarioComercialInfo(when) {
+  const dt = when instanceof Date ? when : new Date(when === undefined ? Date.now() : when);
+  let dia = null, hora = null, minuto = null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: RECP_TZ, weekday: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(dt);
+    const get = t => { const p = parts.find(x => x.type === t); return p ? p.value : null; };
+    const wd = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[get('weekday')];
+    if (wd !== undefined && wd !== null) dia = wd;
+    hora = (Number(get('hour')) || 0) % 24;
+    minuto = Number(get('minute')) || 0;
+  } catch (e) {
+    const f = new Date(dt.getTime() - 3 * 3600e3);
+    dia = f.getUTCDay(); hora = f.getUTCHours(); minuto = f.getUTCMinutes();
+  }
+  const diaUtil = dia !== null && dia >= 1 && dia <= 5;
+  const mins = hora * 60 + minuto;
+  const emHorario = !!(diaUtil && ((mins >= 8 * 60 && mins < 12 * 60) || (mins >= 13 * 60 && mins < 17 * 60)));
+  return { dia, hora, minuto, diaUtil, emHorario, tz: RECP_TZ };
+}
+function recepcaoBloqueada(sess) {
+  if (!sess || sess.role !== 'recepcao') return false;
+  return !horarioComercialInfo().emHorario;
 }
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
@@ -425,6 +462,7 @@ module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
   loginRateLimit, apiRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
+  horarioComercialInfo, recepcaoBloqueada, RECP_TZ, RECP_MSG,
   upload, uploadLarge, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,
   PERSON_LABELS, MOTIVOS_OK,
