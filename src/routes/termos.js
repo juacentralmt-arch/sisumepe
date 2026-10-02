@@ -39,36 +39,6 @@ function normRecEquip(src){
   return nd;
 }
 
-// Normalização para Termo "Outros" — tabela personalizável com linhas e colunas definidas pelo usuário
-function normOutros(src){
-  const s = (src && typeof src === 'object') ? src : {};
-  const g = (k, n) => String(s[k] == null ? '' : s[k]).trim().slice(0, n);
-  const nd = {};
-  // Cabeçalho
-  nd.titulo = g('titulo', 120) || 'TERMO PERSONALIZADO';
-  nd.subtitulo = g('subtitulo', 200) || '';
-  nd.cabecalho = g('cabecalho', 500) || '';
-  nd.rodape = g('rodape', 500) || '';
-  // Configuração da tabela
-  nd.colunas = Array.isArray(s.colunas) ? s.colunas.slice(0, 10).map(c => ({
-    chave: String(c.chave || '').trim().slice(0, 30),
-    titulo: String(c.titulo || '').trim().slice(0, 50),
-    largura: Number(c.largura) || 100
-  })).filter(c => c.chave && c.titulo) : [];
-  nd.linhas = Array.isArray(s.linhas) ? s.linhas.slice(0, 50).map(l => {
-    const obj = {};
-    if (Array.isArray(s.colunas)) {
-      s.colunas.forEach(c => {
-        if (c.chave) obj[c.chave] = String(l[c.chave] || '').trim().slice(0, 100);
-      });
-    } else {
-      Object.keys(l).forEach(k => { obj[k] = String(l[k] || '').trim().slice(0, 100); });
-    }
-    return obj;
-  }).filter(l => Object.values(l).some(v => v)) : [];
-  return nd;
-}
-
 // Normalização do Termo de Recolhimento (unidades penais) — COMPARTILHADA por
 // POST, PATCH e preview: os três caminhos produzem exatamente o mesmo registro,
 // logo o preview é byte-idêntico ao PDF final.
@@ -169,21 +139,6 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
       dataEnvio: new Date().toISOString().slice(0,10),
       destinatario: nd.vara, equipamentos: [],
       respEntrega: '', respRecebimento: '',
-      dados: nd
-    });
-    broadcast();
-    return res.status(201).json(termo);
-  }
-  if(t === 'outros'){
-    const nd = normOutros(dados);
-    if(!nd.colunas.length) return res.status(400).json({ error: 'Defina ao menos uma coluna para a tabela' });
-    const termo = await store.termos.insert({
-      user: req.auth.user, tipo: 'outros',
-      dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
-      destinatario: String(destinatario).trim().slice(0,120),
-      equipamentos: [],
-      respEntrega: String(respEntrega||'').trim().slice(0,80),
-      respRecebimento: String(respRecebimento||'').trim().slice(0,80),
       dados: nd
     });
     broadcast();
@@ -543,14 +498,6 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
     patch.dados = nd;
     patch.destinatario = nd.vara || t.destinatario;
   }
-  if(t.tipo === 'outros' && dados && typeof dados === 'object'){
-    const nd = normOutros(Object.assign({}, t.dados||{}, dados));
-    if(!nd.colunas.length) return res.status(400).json({ error: 'Defina ao menos uma coluna para a tabela' });
-    patch.dados = nd;
-    if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
-    if(respEntrega!=null) patch.respEntrega = String(respEntrega).trim().slice(0,80);
-    if(respRecebimento!=null) patch.respRecebimento = String(respRecebimento).trim().slice(0,80);
-  }
   if(destinatario!=null) patch.destinatario = String(destinatario).trim().slice(0,120);
   if(t.tipo === 'endereco' && dados && typeof dados === 'object'){
     const nd = Object.assign({}, t.dados||{});
@@ -619,7 +566,6 @@ async function termoPDFFromRecord(t) {
   if (t.tipo === 'recolhimento') return gerarTermoRecolhimentoPDF(t);
   if (t.tipo === 'recEquip') return gerarTermoRecolhimentoEquipamentoPDF(t);
   if (t.tipo === 'endereco') return gerarTermoEnderecoPDF(t);
-  if (t.tipo === 'outros') return gerarTermoOutrosPDF(t);
   if (t.tipo === 'declaracao') return gerarDeclaracaoPDF(t);
   if (t.tipo === 'relfreq') return gerarRelFrequenciaPDF(t);
   if (t.tipo === 'reltec') return gerarRelTecnicoPDF(t);
@@ -671,11 +617,6 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
   }
   if(tipo === 'ativacao'){
     return enviarPdf({ tipo: 'ativacao', dados: normAtivacao(dados) });
-  }
-  if(tipo === 'outros'){
-    const nd = normOutros(dados);
-    if(!nd.colunas.length) return res.status(400).json({ error: 'Defina ao menos uma coluna para a tabela' });
-    return enviarPdf({ tipo: 'outros', dados: nd });
   }
   if(PSI_DOCS.includes(tipo)){
     if(req.auth.role !== 'psico') return res.status(403).json({ error: 'Documentos psicossociais: só o psicólogo' });
