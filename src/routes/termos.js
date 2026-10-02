@@ -83,9 +83,11 @@ function normRecolhimentoDados(src){
     });
     return { numero: String(r.numero||'').trim().slice(0,30), danificado: !!r.danificado, checks };
   }).filter(r=> r.numero);
+  let dataHoraSafe = new Date().toISOString();
+  try { if(d.dataHora){ const _dh = new Date(d.dataHora); if(!isNaN(_dh)) dataHoraSafe = _dh.toISOString(); } } catch(e){}
   return {
     itensRecebidos: String(d.itensRecebidos||'').trim().slice(0,200),
-    dataHora: d.dataHora ? new Date(d.dataHora).toISOString() : new Date().toISOString(),
+    dataHora: dataHoraSafe,
     equipamentos: normEq,
     descricao: String(d.descricao||'').trim().slice(0,2000),
     policialNome: String(d.policialNome||'').trim().slice(0,80),
@@ -234,12 +236,16 @@ router.post('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   if(t === 'recolhimento'){
     const nd = normRecolhimentoDados(dados);
     if(!nd.equipamentos.length) return res.status(400).json({ error: 'Adicione ao menos um equipamento com número' });
+    let dataEnvioRec = new Date().toISOString().slice(0,10);
+    try {
+      if(dataEnvio){ const _de = new Date(dataEnvio); if(!isNaN(_de)) dataEnvioRec = _de.toISOString().slice(0,10); }
+      else if(nd.dataHora) dataEnvioRec = String(nd.dataHora).slice(0,10);
+    } catch(e){}
     const termo = await store.termos.insert({
       user: req.auth.user, tipo: 'recolhimento',
       // dataEnvio espelha dados.dataHora (a data do documento); se o cliente
       // mandar dataEnvio explícita, ela vence — consistente com o PATCH.
-      dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10)
-        : (nd.dataHora ? nd.dataHora.slice(0,10) : new Date().toISOString().slice(0,10)),
+      dataEnvio: dataEnvioRec,
       destinatario: '', equipamentos: [],
       respEntrega: '', respRecebimento: '',
       dados: nd
@@ -649,14 +655,15 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
   if(tipo === 'endereco'){
     const d = (dados && typeof dados === 'object') ? dados : {};
     const g = (k) => String(d[k] == null ? '' : d[k]).trim();
+    const safeDate = (v, fb) => { try { const dt = new Date(v); if(!isNaN(dt)) return dt.toISOString().slice(0,10); } catch(e){} return fb; };
     const termo = {
       tipo: 'endereco',
       dados: {
         numero: g('numero'), ano: g('ano') || String(new Date().getFullYear()),
         cidade: g('cidade') || 'Fortaleza',
-        dataOficio: d.dataOficio ? new Date(d.dataOficio).toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+        dataOficio: safeDate(d.dataOficio, new Date().toISOString().slice(0,10)),
         vara: g('vara'), processo: g('processo'), nome: g('nome'), cpf: g('cpf'), mae: g('mae'),
-        dataSolicitacao: d.dataSolicitacao ? new Date(d.dataSolicitacao).toISOString().slice(0,10) : '',
+        dataSolicitacao: d.dataSolicitacao ? safeDate(d.dataSolicitacao, '') : '',
         endereco: g('endereco'), contato: g('contato'), motivo: g('motivo')
       }
     };
@@ -676,8 +683,10 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
     if(!nd.psicologo) nd.psicologo = (req.auth && req.auth.name) || '';
     return enviarPdf({ tipo, dados: nd });
   }
+  let dataEnvioSafe = '';
+  try { if(dataEnvio){ const _d = new Date(dataEnvio); if(!isNaN(_d)) dataEnvioSafe = _d.toISOString().slice(0,10); } } catch(e){}
   const termo = {
-    dataEnvio: dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : '',
+    dataEnvio: dataEnvioSafe,
     destinatario: String(destinatario||'').trim() || '_________________________',
     equipamentos: Array.isArray(equipamentos) ? equipamentos.slice(0,30).map(r=>({ tzpr04: String((r&&r.tzpr04)||''), upr04: String((r&&(r.upr04 ?? r.tzpr04))||''), fonte04: String((r&&r.fonte04)||''), cinta: String((r&&r.cinta)||''), trava: String((r&&r.trava)||'') })) : [],
     respEntrega: String(respEntrega||'').trim(),
