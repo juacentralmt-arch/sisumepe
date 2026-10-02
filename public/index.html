@@ -5264,9 +5264,10 @@ async function saveTermoRecEquip(){
   }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 function setTermoTipo(t){
+  try{ console.log('[setTermoTipo] switching to:', t); }catch(e){}
   termoTipoAtivo = t;
   try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer); clearTimeout(recEqPreviewTimer); clearTimeout(outrosPreviewTimer);}catch(e){}
-  if(termoPreviewExpand) toggleTermoPreviewExpand();
+  try{ if(termoPreviewExpand && typeof toggleTermoPreviewExpand === 'function') toggleTermoPreviewExpand(); }catch(e){ console.warn('togglePreview:', e.message); }
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
   [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoOutros','outros'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
     const b = document.getElementById(id);
@@ -5283,6 +5284,14 @@ function setTermoTipo(t){
   _tgl(document.getElementById('termoFormOutros'), t==='outros');
   _tgl(document.getElementById('termoFormPdf'), t==='pdf');
   _tgl(document.getElementById('termoFormRenomear'), t==='renomear');
+  try{
+    const _dbg = {t: t};
+    ['Listagem','Recolhimento','RecEquip','Endereco','Ativacao','Outros','Pdf','Renomear'].forEach(function(k){
+      const el = document.getElementById('termoForm' + k);
+      _dbg[k] = el ? (el.style.display !== 'none' && !el.classList.contains('hidden') ? 'VISIVEL' : 'oculto') : 'AUSENTE';
+    });
+    console.log('[setTermoTipo] estado:', JSON.stringify(_dbg));
+  }catch(e){}
   try{ renderTermos(); }catch(e){ console.warn('renderTermos:', e.message); }
   try{
     if(t === 'listagem') scheduleListagemPreview(true);
