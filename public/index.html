@@ -522,7 +522,6 @@
           <button id="termoTipoRecEquip" onclick="setTermoTipo('recEquip')" class="btn text-xs px-4 py-2">📋 Devolução Equipamentos</button>
           <button id="termoTipoEndereco" onclick="setTermoTipo('endereco')" class="btn text-xs px-4 py-2">🏠 Endereço</button>
           <button id="termoTipoAtivacao" onclick="setTermoTipo('ativacao')" class="btn text-xs px-4 py-2">⚡ Ativações</button>
-          <button id="termoTipoOutros" onclick="setTermoTipo('outros')" class="btn text-xs px-4 py-2">⚙️ Outros</button>
           <button id="termoTipoPdf" onclick="setTermoTipo('pdf')" class="btn text-xs px-4 py-2">📄 PDF</button>
           <button id="termoTipoRenomear" onclick="setTermoTipo('renomear')" class="btn text-xs px-4 py-2">🏷️ AutoRenomear</button>
         </div>
@@ -802,57 +801,6 @@
           </div>
           <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="ativAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleAtivPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="ativPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
           <p id="ativErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
-        </div>
-        <!-- OUTROS — Tabela personalizável -->
-        <div id="termoFormOutros" class="hidden lg:col-span-2 card p-5">
-          <h3 class="font-display font-bold text-sm mb-3">⚙️ Termo Personalizado <span id="termoOutrosEditId" class="text-xs font-bold text-indigo-600"></span></h3>
-          <p class="text-xs text-slate-500 mb-3">Crie tabelas personalizadas definindo colunas, linhas e cabeçalhos/rodapés.</p>
-          
-          <div class="grid grid-cols-2 gap-2.5 mb-3">
-            <div><label class="lbl">TÍTULO DO TERMO *</label><input id="outTitulo" placeholder="Ex: Termo de Entrega de Materiais" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></div>
-            <div><label class="lbl">SUBTÍTULO</label><input id="outSubtitulo" placeholder="Ex: Controle Interno de Equipamentos" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></div>
-          </div>
-          <div class="grid grid-cols-2 gap-2.5 mb-3">
-            <div><label class="lbl">DATA DO TERMO</label><input id="outData" type="date" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()" onchange="scheduleOutrosPreview()"></div>
-            <div><label class="lbl">DESTINATÁRIO</label><input id="outDestinatario" placeholder="Ex: Setor de Almoxarifado" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></div>
-          </div>
-          
-          <!-- Cabeçalho e Rodapé -->
-          <div class="grid grid-cols-2 gap-2.5 mb-3">
-            <div class="col-span-2"><label class="lbl">CABEÇALHO (texto livre acima da tabela)</label><textarea id="outCabecalho" rows="2" placeholder="Texto que aparecerá antes da tabela..." class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></textarea></div>
-            <div class="col-span-2"><label class="lbl">RODAPÉ (texto livre abaixo da tabela)</label><textarea id="outRodape" rows="2" placeholder="Texto que aparecerá após a tabela..." class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></textarea></div>
-          </div>
-          
-          <!-- Configuração das Colunas -->
-          <div class="mb-3">
-            <div class="flex items-center justify-between mb-2">
-              <label class="lbl">COLUNAS DA TABELA</label>
-              <button type="button" onclick="addOutrosColuna()" class="btn btn-primary text-xs px-3 py-1.5">＋ Adicionar coluna</button>
-            </div>
-            <div id="outrosColunasList" class="space-y-2"></div>
-            <p class="text-[11px] text-slate-500 mt-1">Defina as colunas da tabela. Cada coluna precisa de um identificador (chave), título e largura relativa.</          </div>
-          
-          <!-- Configuração das Linhas -->
-          <div class="mb-3">
-            <div class="flex items-center justify-between mb-2">
-              <label class="lbl">LINHAS DA TABELA</label>
-              <button type="button" onclick="addOutrosLinha()" class="btn btn-primary text-xs px-3 py-1.5">＋ Adicionar linha</button>
-            </div>
-            <div id="outrosLinhasList" class="space-y-2 max-h-[300px] overflow-y-auto"></div>
-            <p class="text-[11px] text-slate-500 mt-1">Preencha os valores para cada coluna definida acima.</p>
-          </div>
-          
-          <div class="grid grid-cols-2 gap-2.5 mb-3">
-            <div><label class="lbl">RESP. ENTREGA (RG/CPF/MATRÍCULA)</label><input id="outRespEntrega" placeholder="Ex: João Silva - 123456" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></div>
-            <div><label class="lbl">RESP. RECEBIMENTO (RG/CPF/MATRÍCULA)</label><input id="outRespRecebimento" placeholder="Ex: Maria Oliveira - 654321" class="inp mt-1 mb-2.5" oninput="scheduleOutrosPreview()"></div>
-          </div>
-          
-          <div class="flex gap-2 mt-2">
-            <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
-            <button onclick="saveTermo()" class="btn btn-primary flex-1 py-2.5 text-xs">💾 Salvar e gerar PDF</button>
-          </div>
-          <label class="flex items-center gap-2 mt-2.5 text-xs font-semibold text-slate-600 cursor-pointer"><input id="outrosAutoPreview" type="checkbox" checked onchange="if(this.checked) scheduleOutrosPreview(true)" class="w-4 h-4 accent-indigo-600"> Prévia automática em tempo real <span id="outrosPreviewStatus" class="text-[11px] font-normal text-slate-400"></span></label>
-          <p id="outrosErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <!-- PDF Tools (iLovePDF) -->
         <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
@@ -5156,13 +5104,6 @@ function clearTermoForm(){
   const atEdit=document.getElementById('termoAtivEditId'); if(atEdit) atEdit.textContent='';
   document.getElementById('termoPreviewWrapSide').classList.add('hidden');
   if(termoPreviewExpand) toggleTermoPreviewExpand();
-  // Limpar form "Outros"
-  ['outTitulo','outSubtitulo','outData','outDestinatario','outCabecalho','outRodape','outRespEntrega','outRespRecebimento'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('outrosColunasList').innerHTML = '';
-  document.getElementById('outrosLinhasList').innerHTML = '';
-  const outrosErr = document.getElementById('outrosErr'); if(outrosErr) outrosErr.classList.add('hidden');
-  const outrosPreviewStatus = document.getElementById('outrosPreviewStatus'); if(outrosPreviewStatus) outrosPreviewStatus.textContent = '';
-  try{ clearTimeout(outrosPreviewTimer); }catch(e){}
 }
 let termoTipoAtivo = 'listagem';
 const REC_CHECKS = [['ladoExterno','LADO EXTERNO'],['cinta','CINTA'],['travas','TRAVAS'],['ladoInterno','LADO INTERNO'],['abaDireita','ABA DIREITA'],['abaEsquerda','ABA ESQUERDA']];
@@ -5266,10 +5207,10 @@ async function saveTermoRecEquip(){
 function setTermoTipo(t){
   try{ console.log('[setTermoTipo] switching to:', t); }catch(e){}
   termoTipoAtivo = t;
-  try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer); clearTimeout(recEqPreviewTimer); clearTimeout(outrosPreviewTimer);}catch(e){}
+  try{ clearTimeout(listPreviewTimer); clearTimeout(recPreviewTimer); clearTimeout(endPreviewTimer); clearTimeout(ativPreviewTimer); clearTimeout(recEqPreviewTimer);}catch(e){}
   try{ if(termoPreviewExpand && typeof toggleTermoPreviewExpand === 'function') toggleTermoPreviewExpand(); }catch(e){ console.warn('togglePreview:', e.message); }
   const on = 'btn text-xs px-4 py-2 text-white', off = 'btn text-xs px-4 py-2';
-  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoOutros','outros'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
+  [['termoTipoListagem', 'listagem'], ['termoTipoRecolhimento', 'recolhimento'], ['termoTipoRecEquip', 'recEquip'], ['termoTipoEndereco', 'endereco'], ['termoTipoAtivacao','ativacao'], ['termoTipoPdf','pdf'], ['termoTipoRenomear','renomear']].forEach(([id, k])=>{
     const b = document.getElementById(id);
     if(!b) return;
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
@@ -5281,12 +5222,11 @@ function setTermoTipo(t){
   _tgl(document.getElementById('termoFormRecEquip'), t==='recEquip');
   _tgl(document.getElementById('termoFormEndereco'), t==='endereco');
   _tgl(document.getElementById('termoFormAtivacao'), t==='ativacao');
-  _tgl(document.getElementById('termoFormOutros'), t==='outros');
   _tgl(document.getElementById('termoFormPdf'), t==='pdf');
   _tgl(document.getElementById('termoFormRenomear'), t==='renomear');
   try{
     const _dbg = {t: t};
-    ['Listagem','Recolhimento','RecEquip','Endereco','Ativacao','Outros','Pdf','Renomear'].forEach(function(k){
+    ['Listagem','Recolhimento','RecEquip','Endereco','Ativacao','Pdf','Renomear'].forEach(function(k){
       const el = document.getElementById('termoForm' + k);
       if(!el){ _dbg[k] = 'AUSENTE'; return; }
       const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
@@ -5316,7 +5256,6 @@ function setTermoTipo(t){
     else if(t === 'recEquip') scheduleRecEqPreview(true);
     else if(t === 'endereco') scheduleEnderecoPreview(true);
     else if(t==='ativacao') scheduleAtivPreview(true);
-    else if(t==='outros') scheduleOutrosPreview(true);
     else if(t==='pdf' || t==='renomear') { const pw=document.getElementById('termoPreviewWrapSide'); if(pw) pw.classList.add('hidden'); }
   }catch(e){ console.warn('schedulePreview:', e.message); }
 }
@@ -5436,7 +5375,6 @@ async function saveTermo(){
   if(termoTipoAtivo === 'recolhimento') return saveTermoRec();
   if(termoTipoAtivo === 'recEquip') return saveTermoRecEquip();
   if(termoTipoAtivo === 'endereco') return saveTermoEndereco();
-  if(termoTipoAtivo === 'outros') return saveTermoOutros();
   const err = document.getElementById('termoErr');
   err.classList.add('hidden');
   const data = getTermoFormData();
@@ -5535,30 +5473,6 @@ async function saveTermoEndereco(){
     clearTermoForm();
     editingTermoId = null;
     document.getElementById('termoEndEditId').textContent = '';
-  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
-}
-async function saveTermoOutros(){
-  const err = document.getElementById('outrosErr');
-  err.classList.add('hidden');
-  const data = getOutrosFormData();
-  if(!data.titulo){ err.textContent = '⚠️ Informe o título do termo'; err.classList.remove('hidden'); return; }
-  if(!data.colunas.length){ err.textContent = '⚠️ Defina ao menos uma coluna'; err.classList.remove('hidden'); return; }
-  const body = { tipo: 'outros', dados: data };
-  try{
-    let res;
-    if(editingTermoId){
-      res = await api('/api/termos/' + editingTermoId, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      toast('✅ Termo atualizado');
-    } else {
-      res = await api('/api/termos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-      toast('✅ Termo salvo');
-    }
-    await loadTermos();
-    const id = res.id || editingTermoId;
-    if(id) downloadTermoPDF(id);
-    clearTermoForm();
-    editingTermoId = null;
-    document.getElementById('termoOutrosEditId').textContent = '';
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
 // --- PDF Tools (iLovePDF) ---
@@ -7351,161 +7265,6 @@ document.addEventListener('input', (e)=>{
 });
 document.addEventListener('change', (e)=>{
   if(termoTipoAtivo==='ativacao' && e.target && e.target.closest && e.target.closest('#termoFormAtivacao')) scheduleAtivPreview();
-});
-
-// ================= OUTROS — Tabela personalizável =================
-let outrosCols = [];
-let outrosRows = [];
-let outrosPreviewTimer = null;
-
-function addOutrosColuna(){
-  outrosCols.push({ chave: '', titulo: '', largura: 100 });
-  renderOutrosColunas();
-}
-
-function removeOutrosColuna(i){
-  outrosCols.splice(i, 1);
-  // Remove a coluna das linhas existentes
-  outrosRows.forEach(r => delete r[outrosCols[i]?.chave || `col_${i}`]);
-  renderOutrosColunas();
-  renderOutrosLinhas();
-}
-
-function renderOutrosColunas(){
-  const cont = document.getElementById('outrosColunasList');
-  if(!cont) return;
-  cont.innerHTML = outrosCols.map((c, i) => `
-    <div class="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-      <span class="text-[11px] font-bold text-indigo-600 w-6 text-center">${i+1}</span>
-      <input type="text" placeholder="Chave (ex: item, qtd, valor)" value="${c.chave}" class="inp flex-1 min-w-[100px] text-xs" oninput="outrosCols[${i}].chave=this.value; renderOutrosLinhas();">
-      <input type="text" placeholder="Título" value="${c.titulo}" class="inp flex-1 min-w-[120px] text-xs" oninput="outrosCols[${i}].titulo=this.value;">
-      <input type="number" min="10" max="500" value="${c.largura}" class="inp !w-auto text-xs text-center" style="width:70px" oninput="outrosCols[${i}].largura=Math.max(10,Math.min(500,parseInt(this.value)||100));">
-      <button onclick="removeOutrosColuna(${i})" class="btn btn-ghost text-[11px] px-2 py-1 text-rose-600 hover:bg-rose-50">✕</button>
-    </div>
-  `).join('');
-}
-
-function addOutrosLinha(){
-  const row = {};
-  outrosCols.forEach(c => { if(c.chave) row[c.chave] = ''; });
-  outrosRows.push(row);
-  renderOutrosLinhas();
-}
-
-function removeOutrosLinha(i){
-  outrosRows.splice(i, 1);
-  renderOutrosLinhas();
-}
-
-function renderOutrosLinhas(){
-  const cont = document.getElementById('outrosLinhasList');
-  if(!cont) return;
-  if(!outrosCols.length){
-    cont.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">Defina as colunas primeiro para adicionar linhas.</p>';
-    return;
-  }
-  if(!outrosRows.length){
-    cont.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">Nenhuma linha adicionada. Clique em "＋ Adicionar linha".</p>';
-    return;
-  }
-  cont.innerHTML = outrosRows.map((r, i) => `
-    <div class="flex flex-wrap items-start gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-      <span class="text-[11px] font-bold text-indigo-600 w-6 text-center mt-1">${i+1}</span>
-      ${outrosCols.map(c => `
-        <input type="text" placeholder="${c.titulo || c.chave}" value="${r[c.chave] || ''}" class="inp flex-1 min-w-[100px] text-xs" oninput="outrosRows[${i}]['${c.chave}']=this.value;">
-      `).join('')}
-      <button onclick="removeOutrosLinha(${i})" class="btn btn-ghost text-[11px] px-2 py-1 text-rose-600 hover:bg-rose-50 mt-1">✕</button>
-    </div>
-  `).join('');
-}
-
-function getOutrosFormData(){
-  return {
-    titulo: document.getElementById('outTitulo')?.value.trim() || '',
-    subtitulo: document.getElementById('outSubtitulo')?.value.trim() || '',
-    dataEnvio: document.getElementById('outData')?.value || '',
-    destinatario: document.getElementById('outDestinatario')?.value.trim() || '',
-    cabecalho: document.getElementById('outCabecalho')?.value.trim() || '',
-    rodape: document.getElementById('outRodape')?.value.trim() || '',
-    colunas: outrosCols.filter(c => c.chave && c.titulo).map(c => ({ chave: c.chave, titulo: c.titulo, largura: c.largura })),
-    linhas: outrosRows.filter(r => outrosCols.some(c => c.chave && r[c.chave])).map(r => {
-      const obj = {};
-      outrosCols.forEach(c => { if(c.chave) obj[c.chave] = r[c.chave] || ''; });
-      return obj;
-    }),
-    respEntrega: document.getElementById('outRespEntrega')?.value.trim() || '',
-    respRecebimento: document.getElementById('outRespRecebimento')?.value.trim() || ''
-  };
-}
-
-function setOutrosFormData(t){
-  const d = (t && t.dados) || {};
-  const s = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
-  s('outTitulo', d.titulo);
-  s('outSubtitulo', d.subtitulo);
-  s('outData', d.dataEnvio ? String(d.dataEnvio).slice(0,10) : '');
-  s('outDestinatario', d.destinatario);
-  s('outCabecalho', d.cabecalho);
-  s('outRodape', d.rodape);
-  s('outRespEntrega', d.respEntrega);
-  s('outRespRecebimento', d.respRecebimento);
-  
-  outrosCols = (d.colunas || []).filter(c => c.chave && c.titulo);
-  outrosRows = (d.linhas || []).filter(r => Object.values(r).some(v => v));
-  
-  renderOutrosColunas();
-  renderOutrosLinhas();
-  
-document.getElementById('termoOutrosEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
-  editingTermoId = t.id || null;
-}
-function scheduleOutrosPreview(now){
-  const tgl = document.getElementById('outrosAutoPreview');
-  if(tgl && !tgl.checked) return;
-  if(termoTipoAtivo !== 'outros') return;
-  clearTimeout(outrosPreviewTimer);
-  outrosPreviewTimer = setTimeout(() => previewOutrosPDF(true), now ? 400 : 1500);
-}
-
-async function previewOutrosPDF(silent){
-  if(termoTipoAtivo !== 'outros') return;
-  const err = document.getElementById('outrosErr'); if(err) err.classList.add('hidden');
-  const data = getOutrosFormData();
-  
-  if(!data.titulo){
-    if(!silent && err){ err.textContent = '⚠️ Informe o título do termo'; err.classList.remove('hidden'); }
-    if(silent) data.titulo = 'TERMO PERSONALIZADO';
-    else return;
-  }
-  if(!data.colunas.length){
-    if(!silent && err){ err.textContent = '⚠️ Defina ao menos uma coluna'; err.classList.remove('hidden'); }
-    if(silent) data.colunas = [{ chave: 'item', titulo: 'Item', largura: 100 }];
-    else return;
-  }
-  
-  const status = document.getElementById('outrosPreviewStatus');
-  try{
-    if(status) status.textContent = silent ? '⏳ atualizando...' : '';
-    const res = await authFetch('/api/termos/pdf-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo:'outros', dados: data }) });
-    if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.error||'Erro ao gerar PDF'); }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const wrap = setTermoPreview(url, '— Termo Personalizado');
-    if(!silent && wrap) wrap.scrollIntoView({behavior:'smooth', block:'center'});
-    if(status) status.textContent = '✓ atualizada ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  }catch(e){ if(status) status.textContent=''; if(!silent && err){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); } }
-}
-
-function scheduleOutrosPreviewOnInput(){
-  if(termoTipoAtivo === 'outros') scheduleOutrosPreview();
-}
-
-// auto preview on input for outros
-document.addEventListener('input', (e)=>{
-  if(termoTipoAtivo === 'outros' && e.target && e.target.closest && e.target.closest('#termoFormOutros')) scheduleOutrosPreview();
-});
-document.addEventListener('change', (e)=>{
-  if(termoTipoAtivo === 'outros' && e.target && e.target.closest && e.target.closest('#termoFormOutros')) scheduleOutrosPreview();
 });
 
 // ================= PSICOSSOCIAL (sigilo: perfil psico) =================
