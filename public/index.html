@@ -5274,30 +5274,24 @@ function setTermoTipo(t){
     b.className = (t === k ? on : off) + (t === k ? '' : ' btn-ghost');
     b.style.background = t === k ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : '';
   });
-  document.getElementById('termoFormListagem').classList.toggle('hidden', t!=='listagem');
-  document.getElementById('termoFormRecolhimento').classList.toggle('hidden', t!=='recolhimento');
-  const recEqEl = document.getElementById('termoFormRecEquip'); if(recEqEl) recEqEl.classList.toggle('hidden', t!=='recEquip');
-  document.getElementById('termoFormEndereco').classList.toggle('hidden', t!=='endereco');
-  const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl) ativEl.classList.toggle('hidden', t!=='ativacao');
-  const outrosEl=document.getElementById('termoFormOutros'); if(outrosEl) outrosEl.classList.toggle('hidden', t!=='outros');
-  const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl) pdfEl.classList.toggle('hidden', t!=='pdf');
-  const renEl=document.getElementById('termoFormRenomear'); if(renEl) renEl.classList.toggle('hidden', t!=='renomear');
-  document.getElementById('termoFormListagem').classList.toggle('lg:col-span-2', t==='listagem');
-  document.getElementById('termoFormRecolhimento').classList.toggle('lg:col-span-2', t==='recolhimento');
-  if(recEqEl) recEqEl.classList.toggle('lg:col-span-2', t==='recEquip');
-  document.getElementById('termoFormEndereco').classList.toggle('lg:col-span-2', t==='endereco');
-  if(ativEl) ativEl.classList.toggle('lg:col-span-2', t==='ativacao');
-  if(outrosEl) outrosEl.classList.toggle('lg:col-span-2', t==='outros');
-  if(pdfEl) pdfEl.classList.toggle('lg:col-span-2', t==='pdf');
-  if(renEl) renEl.classList.toggle('lg:col-span-2', t==='renomear');
-  renderTermos();
-  if(t === 'listagem') scheduleListagemPreview(true);
-  else if(t === 'recolhimento') scheduleRecPreview(true);
-  else if(t === 'recEquip') scheduleRecEqPreview(true);
-  else if(t === 'endereco') scheduleEnderecoPreview(true);
-  else if(t==='ativacao') scheduleAtivPreview(true);
-  else if(t==='outros') scheduleOutrosPreview(true);
-  else if(t==='pdf' || t==='renomear') { document.getElementById('termoPreviewWrapSide')?.classList.add('hidden'); }
+  const listEl=document.getElementById('termoFormListagem'); if(listEl){ listEl.classList.toggle('hidden', t!=='listagem'); listEl.classList.toggle('lg:col-span-2', t==='listagem'); }
+  const recEl=document.getElementById('termoFormRecolhimento'); if(recEl){ recEl.classList.toggle('hidden', t!=='recolhimento'); recEl.classList.toggle('lg:col-span-2', t==='recolhimento'); }
+  const recEqEl = document.getElementById('termoFormRecEquip'); if(recEqEl){ recEqEl.classList.toggle('hidden', t!=='recEquip'); recEqEl.classList.toggle('lg:col-span-2', t==='recEquip'); }
+  const endEl=document.getElementById('termoFormEndereco'); if(endEl){ endEl.classList.toggle('hidden', t!=='endereco'); endEl.classList.toggle('lg:col-span-2', t==='endereco'); }
+  const ativEl=document.getElementById('termoFormAtivacao'); if(ativEl){ ativEl.classList.toggle('hidden', t!=='ativacao'); ativEl.classList.toggle('lg:col-span-2', t==='ativacao'); }
+  const outrosEl=document.getElementById('termoFormOutros'); if(outrosEl){ outrosEl.classList.toggle('hidden', t!=='outros'); outrosEl.classList.toggle('lg:col-span-2', t==='outros'); }
+  const pdfEl=document.getElementById('termoFormPdf'); if(pdfEl){ pdfEl.classList.toggle('hidden', t!=='pdf'); pdfEl.classList.toggle('lg:col-span-2', t==='pdf'); }
+  const renEl=document.getElementById('termoFormRenomear'); if(renEl){ renEl.classList.toggle('hidden', t!=='renomear'); renEl.classList.toggle('lg:col-span-2', t==='renomear'); }
+  try{ renderTermos(); }catch(e){ console.warn('renderTermos:', e.message); }
+  try{
+    if(t === 'listagem') scheduleListagemPreview(true);
+    else if(t === 'recolhimento') scheduleRecPreview(true);
+    else if(t === 'recEquip') scheduleRecEqPreview(true);
+    else if(t === 'endereco') scheduleEnderecoPreview(true);
+    else if(t==='ativacao') scheduleAtivPreview(true);
+    else if(t==='outros') scheduleOutrosPreview(true);
+    else if(t==='pdf' || t==='renomear') { const pw=document.getElementById('termoPreviewWrapSide'); if(pw) pw.classList.add('hidden'); }
+  }catch(e){ console.warn('schedulePreview:', e.message); }
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
