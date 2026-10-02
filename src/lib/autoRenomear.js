@@ -14,13 +14,12 @@ function norm(s) {
 }
 
 // Tipos na ordem de prioridade (o primeiro que casar vence).
-// ATENÇÃO: 'recolhimento' é SÓ o layout de cartões das unidades penais (sem
-// campo de monitorado) — por isso casa apenas com chaves específicas desse
-// layout. O formulário de equipamento do núcleo (COM "MONITORADO(A): ...")
-// cai em 'recEquip', que extrai o nome.
+// 'recolhimento': Termo de Recolhimento do núcleo (COM "MONITORADO(A): ...").
+// O nome é sempre tentado — se o layout antigo das unidades penais não tiver
+// campo de monitorado, extrairNome retorna '' e a sugestão usa 'SEM NOME'.
 const TIPOS = [
   { id: 'dae', label: 'DAE', chaves: ['documento de arrecadacao', 'arrecadacao estadual', 'funpen', 'dae - documento'] },
-  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['entregues pelas unidades penais', 'itens rebidos', 'itens recebidos', 'descricao do equipamentos', 'descricao dos equipamentos', 'auto de recolhimento'], semNome: true },
+  { id: 'recolhimento', label: 'Termo de recolhimento', chaves: ['entregues pelas unidades penais', 'itens rebidos', 'itens recebidos', 'descricao do equipamentos', 'descricao dos equipamentos', 'auto de recolhimento', 'termo de recolhimento'] },
   { id: 'recEquip', label: 'Declaração de devolução de equipamentos', chaves: ['declaracao de devolucao', 'devolucao de equipamento', 'inspecao preliminar', 'monitorado(a', 'recolhimento de equipamento', 'termo de recolhimento'], semNome: false },
   { id: 'manutencao', label: 'Termo de manutenção', chaves: ['termo de manutencao', 'manutencao de tornozeleira', 'manutencao preventiva', 'manutencao corretiva'] },
   { id: 'ativacao', label: 'Termo de ativação', chaves: ['termo de ativacao', 'ativacao de tornozeleira', 'instalacao de tornozeleira', 'termo de instalacao'] },
@@ -91,6 +90,16 @@ function extrairNome(texto) {
   // cópia com confusão clássica de OCR normalizada (0→O, ex: MONITORAD0):
   // troca 1:1, então as posições são idênticas às do original
   const tOcr = t.replace(/0/g, 'O');
+  // PRIORIDADE 1: rótulo exato "MONITORADO(A):" (Termo de Recolhimento do núcleo).
+  // Regex flexível a espaços OCR: "MONITORADO ( A ) : Nome" / "MONITORADO(A):Nome".
+  // Para em quebra de linha ou no início de "Data/Hora" (campo seguinte no layout).
+  for (const src of [t, tOcr]) {
+    const mMon = src.match(/MONITORADO\s*\(\s*A\s*\)\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'´`. \t]{2,90}?)(?=\s*\n|\s*Data\/Hora|\s*Data\s*:|$)/i);
+    if (mMon && mMon[1]) {
+      const nome = tituloProprio(limparNome(mMon[1]));
+      if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length >= 3 && !STOP_INICIO_NOME.test(nome)) return nome;
+    }
+  }
   // após o rótulo, pula até 12 chars não-nome ("(A): ", "(A); ", ": ") — tolera OCR
   const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'gi');
   const cands = [];
@@ -209,8 +218,9 @@ function sugerirNome(texto, nomeOriginal) {
     // BUMP a cada mudança de lógica: rn1 = tipos semNome+fallback arquivo,
     // rn2 = recEquip priorizado + OCR-manual, rn3 = sobrenome Nascimento preservado,
     // rn4 = detectarTipo tolera 0/O + rótulo Interessado (ofícios),
-    // rn5 = recEquip vira Declaração de Devolução + rótulo "imposta a".
-    motor: 'rn5'
+    // rn5 = recEquip vira Declaração de Devolução + rótulo "imposta a",
+    // rn6 = recolhimento sem semNome + regex dedicada MONITORADO(A) prioritária.
+    motor: 'rn6'
   };
 }
 
