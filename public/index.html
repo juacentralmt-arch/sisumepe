@@ -1346,6 +1346,7 @@
           <div class="flex flex-wrap gap-2 items-end">
             <div><label class="lbl">FECHAMENTO DO DIA</label><input id="estFechData" type="date" class="inp !w-auto text-xs mt-1"></div>
             <div><label class="lbl">UNIDADE</label><select id="estFechUnidade" class="inp !w-auto text-xs mt-1"><option value="">Todas as unidades</option><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+            <div><label class="lbl">MATERIAL</label><select id="estFechMat" class="inp !w-auto text-xs mt-1" onchange="renderFechamento()"><option value="">Todos os materiais</option></select></div>
             <button onclick="loadEstFechamento()" class="btn btn-primary text-xs px-4 py-2">📅 Fechamento do dia</button>
             <button onclick="estFechamentoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
           </div>
@@ -9030,15 +9031,20 @@ function estFluxoCSV(){
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
 }
 let estFechamentoCache=null;
-function fluxoFechMatrizHTML(mats, unidades, get, corFinal){
-  const rows = mats.map(m=>{
+// Materiais que exibem triagem no fechamento por material (só os com serial/lote)
+const FECH_COM_TRIAGEM = ['TZPR', 'TZPR04', 'UPR', 'UPR04'];
+function fluxoFechPorMaterialHTML(mats, unidades, get){
+  return mats.map(m=>{
     let ini=0, ent=0, tri=0, sai=0;
     unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); });
     const fin=ini+ent-sai;
-    const cell=v=>`<td class="text-center py-1.5 px-2 ${v===0?'text-slate-300':'font-bold'}">${v}</td>`;
-    return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(m)}</td>${cell(ini)}${cell(ent)}<td class="text-center py-1.5 px-2 ${tri===0?'text-slate-300':'text-teal-700 font-bold'}">${tri}</td>${cell(sai)}<td class="text-center py-1.5 px-2 font-extrabold ${corFinal}">${fin}</td></tr>`;
+    const comTriagem=FECH_COM_TRIAGEM.includes(String(m).toUpperCase());
+    const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center flex-1 min-w-[86px]"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-base font-extrabold ${cls}">${v}</p></div>`;
+    const seq = comTriagem
+      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700')
+      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700');
+    return `<div class="mb-2.5"><p class="text-[11px] font-extrabold text-slate-600 mb-1">${esc(m)}</p><div class="flex flex-wrap gap-1.5">${seq}</div></div>`;
   }).join('');
-  return `<div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Material</th><th class="text-center py-2 px-2">Inicial</th><th class="text-center py-2 px-2">Entradas</th><th class="text-center py-2 px-2">🔬 Triagem</th><th class="text-center py-2 px-2">Saídas</th><th class="text-center py-2 px-2">Final</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function loadEstFechamento(){
   const body=document.getElementById('estFechamentoBody');
@@ -9052,22 +9058,39 @@ async function loadEstFechamento(){
     if(und) url+='&unidade='+encodeURIComponent(und);
     const r=await api(url);
     estFechamentoCache=r;
-    const label=r.contratoLabel||r.contrato||'';
-    const dt=new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR');
-    const undTxt=r.unidade ? ' • ' + r.unidade : ' • todas as unidades';
-    const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-lg font-extrabold ${cls}">${v}</p></div>`;
-    body.innerHTML =
-      `<p class="text-[11px] font-bold text-slate-600 mb-2">📅 Fechamento ${dt} — ${esc(label)}${esc(undTxt)} (${r.movimentacoes} movimentações no dia)</p>` +
-      `<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">` +
-        card('INICIAL', r.totalInicial, '') +
-        card('🔬 TRIAGEM', '+' + r.totalEntradasTriagem, 'text-teal-600') +
-        card('ENTRADAS', '+' + r.totalEntradas, 'text-emerald-600') +
-        card('SAÍDAS', '−' + r.totalSaidas, 'text-rose-600') +
-        card('FINAL', r.totalFinal, 'text-indigo-700') +
-      `</div>` +
-      `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 mb-1">Por material (total geral) — Final = Inicial + Entradas − Saídas</p>${fluxoFechMatrizHTML(r.materiais, r.unidades, r, 'text-indigo-700')}</div>` +
-      `<div><p class="text-[11px] font-bold text-slate-500 mb-1">Estoque final por unidade</p>${fluxoMatrizHTML(r.materiais, r.unidades, r.final, 'emerald')}</div>`;
+    try{
+      const msel=document.getElementById('estFechMat');
+      if(msel){
+        const mant=msel.value;
+        msel.innerHTML='<option value="">Todos os materiais</option>'+r.materiais.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+        msel.value=(mant && (mant==='' || r.materiais.includes(mant))) ? mant : (r.materiais[0] || '');
+      }
+    }catch(e){}
+    renderFechamento();
   }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-3">Erro ao calcular fechamento: '+esc(e.message)+'</p>'; }
+}
+function renderFechamento(){
+  const r=estFechamentoCache;
+  const body=document.getElementById('estFechamentoBody');
+  if(!r || !body) return;
+  const label=r.contratoLabel||r.contrato||'';
+  const dt=new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR');
+  const undTxt=r.unidade ? ' • ' + r.unidade : ' • todas as unidades';
+  const msel=document.getElementById('estFechMat')?.value||'';
+  const mats=(msel && r.materiais.includes(msel))?[msel]:r.materiais;
+  const subMat=mats.length===1 ? ('Por material — ' + mats[0]) : 'Por material (total geral)';
+  const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-lg font-extrabold ${cls}">${v}</p></div>`;
+  body.innerHTML =
+    `<p class="text-[11px] font-bold text-slate-600 mb-2">📅 Fechamento ${dt} — ${esc(label)}${esc(undTxt)} (${r.movimentacoes} movimentações no dia)</p>` +
+    `<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">` +
+      card('INICIAL', r.totalInicial, '') +
+      card('🔬 TRIAGEM', '+' + r.totalEntradasTriagem, 'text-teal-600') +
+      card('ENTRADAS', '+' + r.totalEntradas, 'text-emerald-600') +
+      card('SAÍDAS', '−' + r.totalSaidas, 'text-rose-600') +
+      card('FINAL', r.totalFinal, 'text-indigo-700') +
+    `</div>` +
+    `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 mb-1">${subMat} — Final = Inicial + Entradas − Saídas</p>${fluxoFechPorMaterialHTML(mats, r.unidades, r)}</div>` +
+    `<div><p class="text-[11px] font-bold text-slate-500 mb-1">Estoque final por unidade</p>${fluxoMatrizHTML(mats, r.unidades, r.final, 'emerald')}</div>`;
 }
 function estFechamentoCSV(){
   if(!estFechamentoCache) return toast('⚠️ Calcule o fechamento primeiro');
