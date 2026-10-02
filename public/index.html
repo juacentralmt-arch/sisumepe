@@ -5288,10 +5288,27 @@ function setTermoTipo(t){
     const _dbg = {t: t};
     ['Listagem','Recolhimento','RecEquip','Endereco','Ativacao','Outros','Pdf','Renomear'].forEach(function(k){
       const el = document.getElementById('termoForm' + k);
-      _dbg[k] = el ? (el.style.display !== 'none' && !el.classList.contains('hidden') ? 'VISIVEL' : 'oculto') : 'AUSENTE';
+      if(!el){ _dbg[k] = 'AUSENTE'; return; }
+      const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      const vis = cs ? cs.display + '/' + cs.visibility + '/' + cs.opacity : '?';
+      const kids = el.children ? el.children.length : -1;
+      const htmlLen = el.innerHTML ? el.innerHTML.length : 0;
+      _dbg[k] = (el.style.display !== 'none' && !el.classList.contains('hidden') ? 'VISIVEL' : 'oculto') + '|computed:' + vis + '|filhos:' + kids + '|html:' + htmlLen;
+    });
+    // Verifica pais do Pdf/Renomear
+    ['termoFormPdf','termoFormRenomear'].forEach(function(fid){
+      const el = document.getElementById(fid);
+      if(!el) return;
+      let p = el.parentElement, chain = [];
+      while(p && chain.length < 5){
+        const cs = window.getComputedStyle ? window.getComputedStyle(p) : null;
+        chain.push((p.id || p.className.toString().slice(0,30)) + '=' + (cs ? cs.display : '?'));
+        p = p.parentElement;
+      }
+      _dbg['pais_' + fid] = chain.join(' < ');
     });
     console.log('[setTermoTipo] estado:', JSON.stringify(_dbg));
-  }catch(e){}
+  }catch(e){ console.warn('dbg:', e.message); }
   try{ renderTermos(); }catch(e){ console.warn('renderTermos:', e.message); }
   try{
     if(t === 'listagem') scheduleListagemPreview(true);
