@@ -56,10 +56,18 @@ function comTimeout(promise, ms, rotulo) {
 async function normalizarImagem(buffer, maxW) {
   const limite = maxW || 2000;
   try {
-    const meta = await sharp(buffer).metadata();
+    let img = sharp(buffer);
+    const meta = await img.metadata();
     if (meta.width && meta.width > limite) {
-      return await sharp(buffer).resize({ width: limite }).jpeg({ quality: 85 }).toBuffer();
+      img = img.resize({ width: limite });
     }
+    // Enhance image for better OCR: increase contrast, sharpen
+    img = img
+      .normalize()           // normalize histogram
+      .sharpen(2, 1, 2)      // sigma, flat, jagged
+      .modulate({ brightness: 1.1, saturation: 0 })  // slight brightness boost, desaturate
+      .jpeg({ quality: 90 });
+    return await img.toBuffer();
   } catch (e) { /* segue com o original */ }
   return buffer;
 }
@@ -69,6 +77,15 @@ async function ocrImagem(buffer, opts) {
   const o = opts || {};
   const buf = await normalizarImagem(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer), o.maxW);
   const w = await getWorker(o.logger);
+  
+  // Melhor configuração para documentos formulários
+  await w.setParameters({
+    tessedit_pageseg_mode: '4',  // PSM 4: single column of text
+    preserve_interword_spaces: '1',
+    tessedit_ocr_engine_mode: '1',  // LSTM only
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀ-ÖØ-öø-ÿ0123456789.,:;/\\()-',
+  });
+  
   const { data } = await w.recognize(buf);
   return String((data && data.text) || '').trim();
 }

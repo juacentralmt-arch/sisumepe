@@ -1095,13 +1095,16 @@ async function gerarTermoOutrosPDF(termo){
   y -= 8;
   pg.drawText('RESPONSÁVEL PELA ENTREGA', { x: (M + PW / 2) / 2 - fontBold.widthOfTextAtSize('RESPONSÁVEL PELA ENTREGA', 10) / 2, y, size: 10, font: fontBold, color: rgb(0,0,0) });
   y -= 14;
-  pg.drawText(`(${respEntrega || 'RG/CPF/MATRÍCULA'})`, { x: (M + PW / 2) / 2 - font.widthOfTextAtSize(respEntrega || 'RG/CPF/MATRÍCULA', 9) / 2, y, size: 9, font, color: rgb(0,0,0) });
+  const respEntLabel = respEntrega || 'RG/CPF/MATRICULA';
+  pg.drawText('(' + respEntLabel + ')', { x: (M + PW / 2) / 2 - font.widthOfTextAtSize(respEntLabel, 9) / 2, y, size: 9, font, color: rgb(0,0,0) });
   
   // Coluna direita
   const rightX = PW / 2 + 20;
   pg.drawLine({ start: { x: rightX, y: y + 30 }, end: { x: PW - M - 40, y: y + 30 }, thickness: 0.9, color: rgb(0,0,0) });
   pg.drawText('RESPONSÁVEL PELO RECEBIMENTO', { x: (PW / 2 + PW) / 2 - fontBold.widthOfTextAtSize('RESPONSÁVEL PELO RECEBIMENTO', 10) / 2, y, size: 10, font: fontBold, color: rgb(0,0,0) });
-  pg.drawText(`(${respRecebimento || 'RG/CPF/MATRÍCULA'})`, { x: (PW / 2 + PW) / 2 - font.widthOfTextAtSize(respRecebimento || 'RG/CPF/MATRÍCULA', 9) / 2, y - 14, size: 9, font, color: rgb(0,0,0) });
+  const respRecLabel = respRecebimento || 'RG/CPF/MATRICULA';
+  const yPos = y - 14;
+  pg.drawText('(' + respRecLabel + ')', { x: (PW / 2 + PW) / 2 - font.widthOfTextAtSize(respRecLabel, 9) / 2, y: yPos, size: 9, font, color: rgb(0,0,0) });
   
   y -= 50;
   
