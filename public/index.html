@@ -7435,11 +7435,9 @@ function setOutrosFormData(t){
   renderOutrosColunas();
   renderOutrosLinhas();
   
-  document.getElementById('termoOutrosEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
+document.getElementById('termoOutrosEditId').textContent = t.id ? '(editando #' + t.id + ')' : '';
   editingTermoId = t.id || null;
 }
-
-let outrosPreviewTimer = null;
 function scheduleOutrosPreview(now){
   const tgl = document.getElementById('outrosAutoPreview');
   if(tgl && !tgl.checked) return;
