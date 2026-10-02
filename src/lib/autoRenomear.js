@@ -46,7 +46,7 @@ function detectarTipo(texto) {
 
 // Rótulos que antecedem o nome da pessoa nos documentos oficiais
 const ROTULOS_NOME = [
-  'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'nome completo',
+  'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'monitorada', 'nome completo',
   'nome do assistido', 'assistido', 'nome do reeducando', 'reeducando',
   'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
   'nome do requerente', 'requerente', 'interessado\\(a\\)', 'interessados?',
@@ -85,7 +85,7 @@ function tituloProprio(s) {
 }
 
 // Inícios que nunca são nome (evita "Monitorado desde 01/02/2020" → "desde")
-const STOP_INICIO_NOME = /^(desde|at[ée]|ao|aos|de|do|da|para|com|por|em|no|na|e|ou)\b/i;
+const STOP_INICIO_NOME = /^(desde|at[ée]|ao|aos|de|do|da|para|com|por|em|no|na|e|ou|jogo)\b/i;
 function extrairNome(texto) {
   const t = String(texto || '').slice(0, 8000);
   // cópia com confusão clássica de OCR normalizada (0→O, ex: MONITORAD0):
