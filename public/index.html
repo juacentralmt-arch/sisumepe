@@ -5160,8 +5160,8 @@ function clearTermoForm(){
   ['outTitulo','outSubtitulo','outData','outDestinatario','outCabecalho','outRodape','outRespEntrega','outRespRecebimento'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('outrosColunasList').innerHTML = '';
   document.getElementById('outrosLinhasList').innerHTML = '';
-  document.getElementById('outrosErr')?.classList.add('hidden');
-  document.getElementById('outrosPreviewStatus')?.textContent = '';
+  const outrosErr = document.getElementById('outrosErr'); if(outrosErr) outrosErr.classList.add('hidden');
+  const outrosPreviewStatus = document.getElementById('outrosPreviewStatus'); if(outrosPreviewStatus) outrosPreviewStatus.textContent = '';
   try{ clearTimeout(outrosPreviewTimer); }catch(e){}
 }
 let termoTipoAtivo = 'listagem';
