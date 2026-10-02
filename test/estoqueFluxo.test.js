@@ -59,6 +59,28 @@ const get = async (p) => {
   const r3 = await get('/api/estoque/fluxo?contrato=XX');
   assert(r3.status === 400, 'fluxo: contrato inválido 400');
 
+  // modo diário (fechamento do dia): data passada sem movimento => zeros consistentes
+  const r4 = await get('/api/estoque/fluxo?contrato=CE01&data=2000-01-01');
+  assert(r4.status === 200, 'diario: 200');
+  const d = r4.body || {};
+  assert(d.modo === 'diario' && d.data === '2000-01-01', 'diario: modo + data');
+  assert(d.inicial && d.entradas && d.entradasTriagem && d.saidas && d.final, 'diario: matrizes inicial/entradas/triagem/saidas/final');
+  assert(d.totalFinal === (d.totalInicial + d.totalEntradas - d.totalSaidas), 'diario: final = inicial + entradas - saidas');
+  let fi = 0, fe = 0, ft = 0, fs = 0, ff = 0;
+  for (const u of d.unidades) for (const m of d.materiais) {
+    fi += d.inicial[u][m]; fe += d.entradas[u][m]; ft += d.entradasTriagem[u][m]; fs += d.saidas[u][m]; ff += d.final[u][m];
+  }
+  assert(fi === d.totalInicial && fe === d.totalEntradas && ft === d.totalEntradasTriagem && fs === d.totalSaidas && ff === d.totalFinal, 'diario: totais batem com matrizes');
+  assert(d.totalEntradasTriagem <= d.totalEntradas, 'diario: triagem é subconjunto das entradas');
+
+  // data inválida => 400
+  const r5 = await get('/api/estoque/fluxo?contrato=CE01&data=ontem');
+  assert(r5.status === 400, 'diario: data inválida 400');
+
+  // modo diário com unidade
+  const r6 = await get('/api/estoque/fluxo?contrato=CE01&data=2000-01-01&unidade=UMEPE%20Juazeiro');
+  assert(r6.status === 200 && r6.body.unidade === 'UMEPE Juazeiro' && r6.body.unidades.length === 1, 'diario: filtro por unidade');
+
   server.close();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   process.exit(failed ? 1 : 0);

@@ -358,13 +358,37 @@ router.get('/api/estoque/historico/detalhado', shared.auth(['tecnico','admin']),
 
 // Histórico de movimentações (com paginação e filtros server-side)
 router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade, material, limit, offset } = req.query;
+  const { contrato, unidade, material, limit, offset, tipo, categoria, from, to, q, usuario } = req.query;
   const n=Math.min(Math.max(Number(limit)||50,1),200);
   const off=Math.max(Number(offset)||0,0);
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
   // limit:'all' — o total informado tem de refletir o histórico inteiro, não só as 1000 últimas
   let list = await shared.store.estoqueMov.all({ limit: 'all', contrato: resolveContrato(contrato, effectiveSistema), unidade, material, sistema: effectiveSistema });
+  // Filtros da lista "Últimas movimentações": tipo (entrada/saida),
+  // categoria ([TRIAGEM]/[MANUTENCAO]/[OUTROS] no motivo), período e busca textual.
+  if(tipo){
+    const t=String(tipo).toLowerCase().trim();
+    if(!['entrada','saida'].includes(t)) return res.status(400).json({ error: 'Tipo inválido (entrada/saida)' });
+    list=list.filter(m=> String(m.tipo)===t);
+  }
+  if(categoria){
+    const cat=String(categoria).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    if(!['triagem','manutencao','outros'].includes(cat)) return res.status(400).json({ error: 'Categoria inválida (triagem/manutencao/outros)' });
+    const rx=new RegExp('^\\['+cat+'\\]','i');
+    list=list.filter(m=> rx.test(String((m&&m.motivo)||'').trim()));
+  }
+  if(from){ const d=new Date(from); if(!isNaN(d)) list=list.filter(m=> new Date(m.createdAt)>=d); }
+  if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); list=list.filter(m=> new Date(m.createdAt)<=d); } }
+  if(q){
+    const nq=String(q).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    const nv=v=> String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(nq) list=list.filter(m=> nv(m.motivo).includes(nq)||nv(m.userName).includes(nq)||nv(m.user).includes(nq)||nv(m.material).includes(nq));
+  }
+  if(usuario){
+    const nu=String(usuario).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    if(nu) list=list.filter(m=> String(((m&&m.user)||'')+' '+((m&&m.userName)||'')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(nu));
+  }
   const total=list.length;
   list=list.slice(off, off+n);
   res.json({ total, offset: off, limit: n, items: list, hasMore: off+n < total });
@@ -540,7 +564,7 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
 // no mesmo formato da matriz "Saldo por unidade" (para o painel do frontend).
 //   ?contrato=CE01|CE02|INF  ?sistema=spacecom|infinity  ?from=AAAA-MM-DD  ?to=AAAA-MM-DD
 router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, from, to } = req.query;
+  const { contrato, from, to, data, unidade } = req.query;
   const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
   const effectiveSistema = sistema || getSistema(req);
   const c = resolveContrato(contrato, effectiveSistema);
@@ -548,6 +572,61 @@ router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(asy
   // limit:'all' — o agregado precisa enxergar o histórico completo
   let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema, limit: 'all' });
   if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
+  // Modo diário (fechamento do dia): ?data=AAAA-MM-DD [&unidade=...]
+  // Retorna estoque inicial do dia, entradas (com split de triagem),
+  // saídas e estoque final por unidade × material.
+  if(data){
+    const cd = c || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+    if(!contratosValidos(effectiveSistema).includes(cd)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+    movs = movs.filter(m=> String(m.contrato).toUpperCase()===cd);
+    const und = unidade ? String(unidade).trim() : null;
+    if(und) movs = movs.filter(m=> String(m.unidade)===und);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data).trim())) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
+    const dia = String(data).trim();
+    const iniDia = new Date(dia + 'T00:00:00Z');
+    const fimDia = new Date(dia + 'T23:59:59.999Z');
+    if(isNaN(iniDia) || isNaN(fimDia)) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
+    const diaAnt = new Date(iniDia); diaAnt.setUTCDate(diaAnt.getUTCDate() - 1);
+    const mats = materiaisDoSistemaRoute(effectiveSistema);
+    const unids = und ? [und] : [...UNIDADES];
+    const zero = () => { const o = {}; unids.forEach(u=>{ o[u]={}; mats.forEach(m=>{ o[u][m]=0; }); }); return o; };
+    const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), fin = zero();
+    let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalFinal = 0, movsDia = 0;
+    const ehTriagem = m => /^\[triagem\]/i.test(String((m && m.motivo) || '').trim());
+    for(const m of movs){
+      const u = String(m.unidade||'').trim();
+      if(!unids.includes(u)) continue;
+      const mat = String(m.material||'').toUpperCase();
+      if(!mats.includes(mat)) continue;
+      const qtd = Math.abs(Number(m.qtd)||0);
+      const ts = new Date(m.createdAt);
+      if(isNaN(ts)) continue;
+      if(ts < iniDia){
+        // compõe o estoque inicial do dia (fim do dia anterior)
+        if(String(m.tipo)==='saida'){ inicial[u][mat]-=qtd; totalInicial-=qtd; }
+        else { inicial[u][mat]+=qtd; totalInicial+=qtd; }
+      } else if(ts <= fimDia){
+        movsDia++;
+        if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
+        else {
+          entradas[u][mat]+=qtd; totalEntradas+=qtd;
+          if(ehTriagem(m)){ entradasTriagem[u][mat]+=qtd; totalEntradasTriagem+=qtd; }
+        }
+      }
+    }
+    for(const u of unids) for(const m of mats){
+      fin[u][m] = inicial[u][m] + entradas[u][m] - saidas[u][m];
+      totalFinal += fin[u][m];
+    }
+    return res.json({
+      modo: 'diario', sistema: effectiveSistema, contrato: cd, contratoLabel: contratoLabel(cd),
+      data: dia, dataAnterior: diaAnt.toISOString().slice(0,10), unidade: und || null,
+      unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, final: fin,
+      totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalFinal,
+      movimentacoes: movsDia,
+      geradoEm: new Date().toISOString()
+    });
+  }
   let dFrom = null, dTo = null;
   if(from){ const d=new Date(from); if(!isNaN(d)) dFrom = d; }
   if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); dTo = d; } }
