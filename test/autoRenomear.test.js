@@ -120,24 +120,33 @@ console.log('\n=== TESTES AUTORENOMEAR — rótulo Interessado (ofícios, motor 
 
 console.log('\n=== TESTES AUTORENOMEAR — recolhimento sem nome (d3f0263) ===');
 
-// Layout de cartões das unidades penais: SEM campo de monitorado, então não
-// deve tentar nome (nem cair em "SEM NOME" na sugestão).
+// Layout de cartões das unidades penais: SEM campo de monitorado — o nome é
+// tentado mas não encontrado, então a sugestão usa "SEM NOME" (transparente).
 {
   const r = sugerirNome(
     'AUTO DE RECOLHIMENTO\nITENS RECEBIDOS\nITENS REBIDOS\nDESCRICAO DO EQUIPAMENTOS\nENTREGUES PELAS UNIDADES PENAIS\nData: 28/09/2026',
     'rec.pdf'
   );
   assert(r.tipoId === 'recolhimento', 'recolhimento: tipo detectado pelas chaves do layout');
-  assert(r.nome === undefined, 'recolhimento: sem nome (semNome) — nome é undefined');
-  assert(!r.sugestao.includes('SEM NOME'), 'recolhimento: sugestão não contém "SEM NOME" — "' + r.sugestao + '"');
-  assert(r.sugestao === 'Termo de recolhimento - 28-09-2026.pdf', 'recolhimento: sugestão "Tipo - Data" — "' + r.sugestao + '"');
-  assert(r.confianca === 'alta', 'recolhimento: confiança alta mesmo sem nome (skipNome conta como achado)');
+  assert(r.nome === '', 'recolhimento sem monitorado: nome vazio — "' + r.nome + '"');
+  assert(r.sugestao.includes('SEM NOME'), 'recolhimento sem monitorado: sugestão contém "SEM NOME" — "' + r.sugestao + '"');
+  assert(r.sugestao === 'Termo de recolhimento - SEM NOME - 28-09-2026.pdf', 'recolhimento sem monitorado: sugestão "Tipo - SEM NOME - Data" — "' + r.sugestao + '"');
 }
-// Mas o formulário do núcleo COM "MONITORADO(A):" cai em recEquip e extrai o
-// nome (2ae8ccb: recEquip priorizado sobre recolhimento):
+// Termo de Recolhimento do núcleo COM "MONITORADO(A):" extrai o nome (rn6):
 {
   const r = sugerirNome(
-    'TERMO DE RECOLHIMENTO DE EQUIPAMENTO\nMONITORADO(A): JOAO DA SILVA\nData: 28/09/2026',
+    'TERMO DE RECOLHIMENTO\nMONITORADO(A): JOAQUIM MENADEL SALVIANO RODRIGUES\nData/Hora: 28/08/2026 De 08:10h',
+    'termo.pdf'
+  );
+  assert(r.tipoId === 'recolhimento', 'recolhimento núcleo: tipo detectado — "' + r.tipoId + '"');
+  assert(r.nome === 'Joaquim Menadel Salviano Rodrigues', 'recolhimento núcleo: nome extraído via MONITORADO(A) — "' + r.nome + '"');
+  assert(r.sugestao === 'Termo de recolhimento - Joaquim Menadel Salviano Rodrigues - 28-08-2026.pdf', 'recolhimento núcleo: sugestão completa — "' + r.sugestao + '"');
+  assert(r.confianca === 'alta', 'recolhimento núcleo: confiança alta (tipo+nome+data)');
+}
+// Formulário de equipamento COM "MONITORADO(A):" continua caindo em recEquip:
+{
+  const r = sugerirNome(
+    'DECLARACAO DE DEVOLUCAO DE EQUIPAMENTOS\nMONITORADO(A): JOAO DA SILVA\nData: 28/09/2026',
     'equip.pdf'
   );
   assert(r.tipoId === 'recEquip', 'recEquip: priorizado quando há MONITORADO(A)');
@@ -230,7 +239,7 @@ console.log('\n=== TESTES AUTORENOMEAR — formato da sugestão e helpers ===');
 // Marcador de versão do motor presente (a9ed2cb) — prova qual código gerou:
 {
   const r = sugerirNome('MONITORADO: Teste Da Silva\nData: 01/01/2026', 'doc.pdf');
-  assert(r.motor === 'rn5', 'motor: versão rn5 (devolução + imposta a) — "' + r.motor + '"');
+  assert(r.motor === 'rn6', 'motor: versão rn6 (recolhimento com nome + MONITORADO prioritário) — "' + r.motor + '"');
 }
 
 console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
