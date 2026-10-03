@@ -1415,7 +1415,7 @@
 <div class="grid grid-cols-2 gap-2.5">
              <div><label class="lbl">CONTRATO *</label><select id="estContrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
              <div><label class="lbl">UNIDADE *</label><select id="estUnidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
-             <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT">🎁 KIT COMPLETO</option></select></div>
+             <div><label class="lbl">MATERIAL *</label><select id="estMaterial" class="inp mt-1" onchange="toggleEstSeriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT-TZPR">Kit completo TZPR</option><option value="KIT-UPR">Kit completo UPR</option></select></div>
              <div><label class="lbl">TIPO *</label><select id="estTipo" class="inp mt-1" onchange="toggleEstMovTipo()"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option><option value="movimentacao">Movimentação</option><option value="triagem">Triagem (+) — adiciona ao estoque</option><option value="manutencao">Manutenção (−) — reduz do estoque</option><option value="outros_entrada">Outros (+) — adiciona</option><option value="outros_saida">Outros (−) — reduz</option></select></div>
              <div id="estMovOrigemWrap" class="hidden"><label class="lbl">ORIGEM *</label><select id="estMovOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
              <div id="estMovDestinoWrap" class="hidden"><label class="lbl">DESTINO *</label><select id="estMovDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
@@ -8658,7 +8658,18 @@ const MATERIAIS_EST_INFINITY=['TZPR','FONTE04','CINTA','TRAVAS'];
 function matsEstoqueAtivo(){ return isInfinitySistema()?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM; }
 function temSerialEst(m){ return MATERIAIS_SERIAL_EST.includes(String(m||'').toUpperCase()); }
 // Mantém os selects de material coerentes com o sistema (Infinity: sem UPR04, TZPR no lugar de TZPR04)
-function kitComposicaoTxt(){ return isInfinitySistema() ? '1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04' : '1 kit = 1×TZPR04 + 1×CINTA + 2×TRAVAS + 1×FONTE04'; }
+function isKitMat(m){ return /^KIT(-TZPR|-UPR)?$/i.test(String(m||'').trim()); }
+function kitTipoDe(m){ return String(m||'').toUpperCase()==='KIT-UPR' ? 'upr' : 'tzpr'; }
+function kitComposicaoTxt(kit){
+  const k=String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  if(k==='upr') return '1 kit = 1×UPR04 + 1×FONTE04';
+  return isInfinitySistema() ? '1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04' : '1 kit = 1×TZPR04 + 1×CINTA + 2×TRAVAS + 1×FONTE04';
+}
+function kitSerialMat(kit){
+  const k=String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  if(k==='upr') return 'UPR04';
+  return isInfinitySistema() ? 'TZPR' : 'TZPR04';
+}
 function syncEstMaterialOptions(){
   const inf=isInfinitySistema();
   const mapa={ estMaterial: inf?'TZPR':'TZPR04', estTransMaterial: inf?'TZPR':'TZPR04' };
@@ -8667,8 +8678,8 @@ function syncEstMaterialOptions(){
     const atual=sel.value;
     const lista=inf?MATERIAIS_EST_INFINITY:MATERIAIS_EST_SPACECOM;
     if(id==='estMaterial'){
-      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('')+'<option value="KIT">🎁 KIT COMPLETO</option>';
-      sel.value=(atual==='KIT'||lista.includes(atual))?atual:padrao;
+      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('')+'<option value="KIT-TZPR">Kit completo TZPR</option>'+(inf?'':'<option value="KIT-UPR">Kit completo UPR</option>');
+      sel.value=(isKitMat(atual)&&(!inf||kitTipoDe(atual)!=='upr')||lista.includes(atual))?atual:padrao;
     } else {
       sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('');
       sel.value=lista.includes(atual)?atual:padrao;
@@ -8683,14 +8694,16 @@ function syncEstMaterialOptions(){
 }
 function toggleEstSeriais(){
   const mat=document.getElementById('estMaterial')?.value||'';
-  const isKit=String(mat).toUpperCase()==='KIT';
+  const isKit=isKitMat(mat);
+  const kit=kitTipoDe(mat);
+  const serialMat=isKit ? kitSerialMat(kit) : mat;
   const wrap=document.getElementById('estSeriaisWrap');
   if(wrap) wrap.classList.toggle('hidden', !(temSerialEst(mat) || isKit));
   const lbl=document.getElementById('estSeriaisLabel');
-  if(lbl) lbl.textContent = isKit ? `SERIAIS TZPR DO KIT (1 por kit — QTD = nº de kits) *` : (temSerialEst(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *');
+  if(lbl) lbl.textContent = isKit ? `SERIAIS ${serialMat} DO KIT (1 por kit — QTD = nº de kits) *` : (temSerialEst(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *');
   const hint=document.getElementById('estKitHint');
   if(hint){
-    if(isKit){ hint.textContent='🎁 '+kitComposicaoTxt()+' — QTD = nº de kits (máx 250). Seriais: 1 TZPR por kit.'; hint.classList.remove('hidden'); }
+    if(isKit){ hint.textContent='📦 '+kitComposicaoTxt(kit)+' — QTD = nº de kits (máx 250). Seriais: 1 '+serialMat+' por kit.'; hint.classList.remove('hidden'); }
     else hint.classList.add('hidden');
   }
   syncEstSeriaisQtd();
@@ -8720,7 +8733,7 @@ function syncEstSeriaisQtd(){
   if(cnt) cnt.textContent=list.length+' seriais';
   const qtdEl=document.getElementById('estQtd');
   const mat=document.getElementById('estMaterial')?.value||'';
-  const isKit=String(mat).toUpperCase()==='KIT';
+  const isKit=isKitMat(mat);
   if((temSerialEst(mat) || isKit) && list.length && !qtdEl.value){
     qtdEl.value=list.length;
   }
@@ -9327,9 +9340,9 @@ async function movimentarEstoque(){
   const qtd=Number(document.getElementById('estQtd').value);
   const motivo=document.getElementById('estMotivo').value.trim();
   if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (String(material).toUpperCase()==='KIT' ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
-  if(String(material).toUpperCase()==='KIT' && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
-  if(String(material).toUpperCase()!=='KIT' && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (isKitMat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
+  if(isKitMat(material) && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
+  if(!isKitMat(material) && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
   if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
   if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
@@ -9337,16 +9350,20 @@ async function movimentarEstoque(){
   const tagTipo = TIPO_TAG[tipo] || '';
   const motivoFinal = (tagTipo && !/^\[(triagem|manutencao|outros)\]/i.test(motivo)) ? (tagTipo + ' ' + motivo).slice(0,120) : motivo;
   const sinalNegativo = ['saida','manutencao','outros_saida'].includes(tipo);
-  // KIT completo: 1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04 (+ serial por kit)
-  if(String(material).toUpperCase()==='KIT'){
+  // KIT completo TZPR: 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04 | KIT UPR: 1×UPR04 + 1×FONTE04 (+ serial por kit)
+  if(isKitMat(material)){
+    const kit=kitTipoDe(material);
+    const serialMat=kitSerialMat(kit);
+    if(kit==='upr' && isInfinitySistema()) return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
     const txt=document.getElementById('estSeriais')?.value||'';
     const seriaisKit=parseSeriais(txt);
-    if(seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> TZPR (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
+    if(seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
     if(new Set(seriaisKit).size !== seriaisKit.length) return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
     try{
-      const r=await api('/api/estoque/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, kits: Math.abs(qtd), tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
+      const r=await api('/api/estoque/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
       const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
-      toast(`✅ ${unidade}: ${r.kits} KIT${r.kits>1?'s':''} (${detalhe})`);
+      const kitNome=String(r.kit||'tzpr').toLowerCase()==='upr' ? 'KIT-UPR' : 'KIT-TZPR';
+      toast(`✅ ${unidade}: ${r.kits} ${kitNome}${r.kits>1?'s':''} (${detalhe})`);
       document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const stk=document.getElementById('estSeriais'); if(stk) stk.value=''; document.getElementById('estSeriaisList').innerHTML='';
       loadEstoque();
     }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
