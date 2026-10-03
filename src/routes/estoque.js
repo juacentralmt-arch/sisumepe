@@ -165,9 +165,11 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   res.json(r);
 }));
 
-// KIT completo por unidade: 1 kit = 1×TZPR04 (spacecom) ou 1×TZPR (infinity) + 1×CINTA + 2×TRAVAS + 1×FONTE04.
-// Aplica os 4 itens em sequência (com rollback automático se algum falhar) e exige
-// 1 serial TZPR por kit (mesma regra do lote avulso).
+// KIT completo por unidade (param `kit`: 'tzpr' ou 'upr'):
+// - TZPR: 1×TZPR04 (spacecom) ou 1×TZPR (infinity) + 1×CINTA + 2×TRAVAS + 1×FONTE04.
+// - UPR:  1×UPR04 + 1×FONTE04 (só spacecom).
+// Aplica os itens em sequência (com rollback automático se algum falhar) e exige
+// 1 serial por kit (TZPR ou UPR04, mesma regra do lote avulso).
 const KIT_POR_SISTEMA = {
   spacecom: [
     { material: 'TZPR04', porKit: 1, comSerial: true },
@@ -183,7 +185,7 @@ const KIT_POR_SISTEMA = {
   ]
 };
 router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade, kits, tipo, motivo, seriais, sistema } = req.body||{};
+  const { contrato, unidade, kits, tipo, motivo, seriais, sistema, kit } = req.body||{};
   const n = Math.floor(Number(kits));
   if(!Number.isFinite(n) || n < 1) return res.status(400).json({ error: 'Informe a quantidade de kits (mín. 1)' });
   if(n > 250) return res.status(400).json({ error: 'Máximo 250 kits por movimentação (limite do lote)' });
@@ -195,7 +197,17 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
   if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
   if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
   if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
-  const composicao = effectiveSistema==='infinity' ? KIT_POR_SISTEMA.infinity : KIT_POR_SISTEMA.spacecom;
+  const kitTipo = String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  let composicao;
+  if(kitTipo==='upr'){
+    if(effectiveSistema==='infinity') return res.status(400).json({ error: 'Kit UPR indisponível no Infinity (sem UPR04)' });
+    composicao = [
+      { material: 'UPR04', porKit: 1, comSerial: true },
+      { material: 'FONTE04', porKit: 1 }
+    ];
+  } else {
+    composicao = effectiveSistema==='infinity' ? KIT_POR_SISTEMA.infinity : KIT_POR_SISTEMA.spacecom;
+  }
   const motivoKit = String(motivo).trim() + ' [KIT x' + n + ']';
   const feitos = [];
   try{
@@ -227,7 +239,7 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
   }
   invalidateEstoqueCache();
   shared.broadcast();
-  res.json({ ok: true, kits: n, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
+  res.json({ ok: true, kits: n, kit: kitTipo, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
 }));
 
 // Estorno de movimentação (inverte operação)
