@@ -426,6 +426,41 @@ async function getAuthedClientForUser(user){
   });
   return o;
 }
+// Google Drive — Arquivos compartilhados (conta única conectada).
+// Pasta padrão: https://drive.google.com/drive/folders/1BBLOtCz9vxswiDPMQ-fwTuXqn8nxiM2M
+const DRIVE_FOLDER_DEFAULT = '1BBLOtCz9vxswiDPMQ-fwTuXqn8nxiM2M';
+function getDriveFolderId(){
+  return (process.env.GOOGLE_DRIVE_FOLDER_ID || DRIVE_FOLDER_DEFAULT).trim();
+}
+function getDriveUser(){
+  return (process.env.GOOGLE_DRIVE_USER || 'admin').toLowerCase().trim();
+}
+async function getDriveClient(){
+  const cfg = getGoogleConfig();
+  if(!cfg){
+    const e = new Error('Google não configurado. Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no servidor.');
+    e.status = 500; throw e;
+  }
+  const o = await getAuthedClientForUser(getDriveUser());
+  if(!o){
+    const e = new Error('Conta do Drive não conectada. Conecte o Google em Arquivos compartilhados.');
+    e.status = 424; throw e;
+  }
+  const { google: gapi } = require('googleapis');
+  return gapi.drive({ version: 'v3', auth: o });
+}
+function mapDriveError(e){
+  const code = e && (e.code || (e.response && e.response.status));
+  if(code === 403 || code === 401){
+    const err = new Error('Sem permissão no Drive — reconecte a conta do Google (com acesso ao Drive e à pasta).');
+    err.status = 403; return err;
+  }
+  if(code === 404){
+    const err = new Error('Arquivo ou pasta não encontrado no Drive (confira o compartilhamento).');
+    err.status = 404; return err;
+  }
+  return e;
+}
 async function syncAgendaToGoogle(user, ev, opts){
   // opts: { isDelete, isUpdate }
   const client = await getAuthedClientForUser(user);
@@ -467,5 +502,6 @@ module.exports = {
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,
   PERSON_LABELS, MOTIVOS_OK,
   getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle,
+  getDriveClient, getDriveFolderId, getDriveUser, mapDriveError, DRIVE_FOLDER_DEFAULT,
   pendingGoogleStates
 };
