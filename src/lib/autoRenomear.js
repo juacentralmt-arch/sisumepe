@@ -49,16 +49,37 @@ function detectarTipo(texto) {
 }
 
 // Rótulos que antecedem o nome da pessoa nos documentos oficiais
-// precompile regex for name labels
-const ROTULOS_NOME_REGEX = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \t]{3,90})','gi');
+const ROTULOS_NOME = [
+  'nome do monitorado', 'monitorado\\(a\\)', 'monitorado', 'monitorada', 'nome completo',
+  'nome do assistido', 'assistido', 'nome do reeducando', 'reeducando',
+  'nome do paciente', 'paciente', 'nome do declarante', 'declarante',
+  'nome do requerente', 'requerente', 'interessado\\(a\\)', 'interessados?',
+  'nome\\s+depositante', 'nome\\s+da\\s+m[ãa]e', 'nome\\s+do\\s+pai',
+  // "…monitoramento eletrônico imposta a FULANO…" (declaração de devolução)
+  'imposta\\s+a',
+  // "nome" genérico NÃO pode casar rótulos compostos (ex: NOME DEPOSITANTE, NOME DA MÃE)
+  '\\bnome\\b(?!\\s+(?:depositante|da\\s+m[ãa]e|do\\s+pai|completo))'
+];
+const ROTULOS_NOME_REGEX = new RegExp("(?:" + ROTULOS_NOME.join("|") + ")[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9'´`. \t]{3,90})","gi");
 
-function separarNome(s){
-  // Insert spaces before capital letters (camel case) and after common particles if missing
-  let out = s.replace(/([a-z])([A-Z])/g, '$1 $2');
-  // ensure particles separated
-  out = out.replace(/\b(da|de|do|das|dos)\b/gi, ' $1 ');
-  // collapse multiple spaces
-  return out.replace(/\s+/g, ' ').trim();
+function limparNome(s) {
+  let v = String(s || '').replace(/\s+/g, ' ').trim();
+  // corta em localidade (quando o extrator junta linhas: "Fulano Juazeiro do Norte, 10 de...")
+  v = v.split(/\b(juazeiro\s+do\s+norte|fortaleza|crat[oó]|cariri|jardim|cear[áa]|juizado|comarca|vara\s+[úú]nica)\b/i)[0].trim();
+  // corta em rótulos de campo (quando o extrator junta linhas: "...Silva Data: 28/...")
+  // ATENÇÃO: "nascimento" sozinho NÃO pode cortar — é sobrenome comum
+  // ("...do Nascimento Matos"). Só corta como rótulo com dois-pontos
+  // ("Nascimento: 22/06/2026"); "Data de Nascimento" já corta em "data".
+  v = v.split(/\b(data|cpf|cnpj|r\.?g\.?\b|orgao\s+expedidor|endereco|telefone|celular|processo|vara|nome\s+da\s+m[ãa]e|nome\s+do\s+pai|estado\s+civil|naturalidade|profiss[ãa]o|assinatura)\b|nascimento\s*:/i)[0].trim();
+  // corta em CPF, RG, vírgula, ponto-e-vírgula, parêntese ou "nascid"
+  v = v.split(/,|;|\(|cpf|r\.?g\.?\b|nascid|brasileir|casad|solteir|residente|\d{3}\.?\d{3}\.?\.?/i)[0].trim();
+  // corta dígitos residuais do fim (ruído de data colada: "Silva 28")
+  v = v.replace(/\s+\d[\d\s/.\-]*$/,'').trim();
+  // corta letra solta do fim (ruído de "R$" colado: "Chagas R")
+  v = v.replace(/\s+[A-Za-z]$/,'').trim();
+  // remove pontuação residual nas bordas
+  v = v.replace(/^[.\-–:]+|[.\-–:]+$/g,'').trim();
+  return v;
 }
 
 function tituloProprio(s) {
