@@ -174,6 +174,8 @@ async function gerarTermoPDF(termo){
   // Destinatário - x=170.09, y=558.91 (com quebra de linha para textos longos)
   page.drawText('Destinatário', { x: 170.09, y: 558.91, size: 12, font: fontTimesBold, color: rgb(0,0,0) });
   const destVal = (termo.destinatario || '').trim();
+  console.log('[PDF DEBUG] destinatario recebido:', JSON.stringify(termo.destinatario));
+  console.log('[PDF DEBUG] destinatario trimmed:', JSON.stringify(destVal));
   if(destVal){
     const maxW = 595.32 - 235.25 - 40;
     let dSize = 12;
