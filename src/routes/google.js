@@ -12,7 +12,7 @@ router.get('/api/auth/google', authAgenda(), ah(async (req,res)=>{
   const state = crypto.randomBytes(16).toString('hex');
   pendingGoogleStates.set(state, { user: req.auth.user, exp: Date.now()+10*60e3 });
   setTimeout(()=> pendingGoogleStates.delete(state), 10*60e3);
-  const url = o.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ['https://www.googleapis.com/auth/calendar'], state });
+  const url = o.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive'], state });
   res.json({ url });
 }));
 router.get('/api/auth/google/callback', ah(async (req,res)=>{
@@ -28,7 +28,7 @@ router.get('/api/auth/google/callback', ah(async (req,res)=>{
     const { tokens } = await o.getToken(String(code));
     await store.googleTokens.set(rec.user, tokens);
     // redireciona para o app com sucesso
-    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>✅ Google Agenda vinculada!</h2><p>Conta <b>${rec.user}</b> conectada com sucesso.</p><p>Você pode fechar esta janela e voltar ao SISUMEPE.</p><script>setTimeout(()=>window.close(),1200); setTimeout(()=>location.href='/',1500);</script></body></html>`);
+    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:40px"><h2>✅ Google vinculado! (Agenda + Drive)</h2><p>Conta <b>${rec.user}</b> conectada com sucesso.</p><p>Você pode fechar esta janela e voltar ao SISUMEPE.</p><script>setTimeout(()=>window.close(),1200); setTimeout(()=>location.href='/',1500);</script></body></html>`);
   }catch(e){
     console.error(e);
     res.status(500).send('Falha ao vincular Google: ' + (e.message||'erro'));
