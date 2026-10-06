@@ -18,6 +18,9 @@
     "seed:estoque:300d": "node scripts/seed-estoque-60d.js --dias=300"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.4.3",
+    "@capacitor/core": "^8.5.2",
     "@napi-rs/canvas": "^1.0.9",
     "@supabase/supabase-js": "^2.44.0",
     "bcryptjs": "^3.0.3",
@@ -35,5 +38,9 @@
     "pdfjs-dist": "^5.4.149",
     "sharp": "^0.35.4",
     "tesseract.js": "^5.1.1"
+  },
+  "allowScripts": {
+    "canvas@3.2.3": true,
+    "tesseract.js@5.1.1": true
   }
 }

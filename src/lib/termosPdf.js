@@ -176,10 +176,36 @@ async function gerarTermoPDF(termo){
   const destVal = (termo.destinatario || '').trim();
   if(destVal){
     const dSize = 8;
+    const maxW = 595.32 - 235.25 - 40;
     const dTxt = ': ' + destVal;
-    page.drawText(dTxt, { x: 235.25, y: 558.91, size: dSize, font: fontTimes, color: rgb(0,0,0) });
-    const fullW = fontTimes.widthOfTextAtSize(dTxt, dSize);
-    page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fullW + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+    if(fontTimes.widthOfTextAtSize(dTxt, dSize) <= maxW){
+      page.drawText(dTxt, { x: 235.25, y: 558.91, size: dSize, font: fontTimes, color: rgb(0,0,0) });
+      const fullW = fontTimes.widthOfTextAtSize(dTxt, dSize);
+      page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fullW + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+    } else {
+      // Quebra CONTÍGUA em 2 linhas (ordem das palavras preservada):
+      // linha 1 = maior prefixo que cabe; linha 2 = restante na ordem original.
+      // (O algoritmo guloso anterior distribuía palavras entre as linhas e
+      // embaralhava a ordem — ex.: "Contra a da de / Mulher Comarca Crato".)
+      const words = destVal.split(/\s+/);
+      let l1 = ': ';
+      let idx = 0;
+      for(; idx < words.length; idx++){
+        const cand = l1 === ': ' ? ': ' + words[idx] : l1 + ' ' + words[idx];
+        if(fontTimes.widthOfTextAtSize(cand, dSize) <= maxW) l1 = cand;
+        else break;
+      }
+      let l2 = words.slice(idx).join(' ');
+      if(l1 === ': '){ l1 = dTxt; l2 = ''; }
+      page.drawText(l1, { x: 235.25, y: 558.91, size: dSize, font: fontTimes, color: rgb(0,0,0) });
+      page.drawLine({ start: {x: 235.25, y: 556.5}, end: {x: 235.25 + fontTimes.widthOfTextAtSize(l1, dSize) + 10, y: 556.5}, thickness: 0.6, color: rgb(0,0,0) });
+      if(l2){
+        let l2Size = dSize;
+        while(l2Size > 6.5 && fontTimes.widthOfTextAtSize(l2, l2Size) > maxW) l2Size -= 0.5;
+        page.drawText(l2, { x: 235.25, y: 545.5, size: l2Size, font: fontTimes, color: rgb(0,0,0) });
+        page.drawLine({ start: {x: 235.25, y: 543.5}, end: {x: 235.25 + fontTimes.widthOfTextAtSize(l2, l2Size) + 10, y: 543.5}, thickness: 0.6, color: rgb(0,0,0) });
+      }
+    }
   } else {
     page.drawText(': _____________________________', { x: 235.25, y: 558.91, size: 12, font: fontTimes, color: rgb(0,0,0) });
   }

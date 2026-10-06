@@ -281,7 +281,7 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
     
     try {
       // Usar Visão Computacional Multimodal para extrair texto e campos estruturados
-      const visionResult = await visaoService.analyzeDocument(f.buffer, original);
+      visionResult = await visaoService.analyzeDocument(f.buffer, original);
       
       if (visionResult && visionResult.full_text) {
         texto = visionResult.full_text;
@@ -653,7 +653,7 @@ router.post('/api/termos/visao-analisar', auth(['tecnico', 'psico', 'admin']), s
     if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
     
     try {
-      let visionResult = null;
+let visionResult = null; const visaoService = require('../services/visaoComputacional');
       
       if (isPdf) {
         // Para PDF, converter páginas para imagens e processar

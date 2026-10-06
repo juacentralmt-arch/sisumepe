@@ -1,0 +1,10 @@
+{
+  "appId": "com.sistema.atendimento",
+  "appName": "Sistema Atendimento",
+  "webDir": "public",
+  "server": {
+    "url": "https://sisumepe.onrender.com",
+    "cleartext": false,
+    "allowNavigation": ["sisumepe.onrender.com"]
+  }
+}
