@@ -11,6 +11,7 @@ const suites = [
   'test/estoqueIA.test.js',
   'test/autoRenomear.test.js',
   'test/ocrServidor.test.js',
+  'test/autorenomearOcr.test.js',
   'test/termos.routes.test.js',
   'test/tickets.audio.test.js',
   'test/pdfTools.test.js',
