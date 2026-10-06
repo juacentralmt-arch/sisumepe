@@ -6329,7 +6329,7 @@ function sugestaoLocal(it){
   const mExt = String((it && it.arquivo) || '').toLowerCase().match(/\.(pdf|jpe?g|png)$/);
   const ext = (mExt ? mExt[0] : '.pdf').replace('jpeg', 'jpg');
   const tp = ((it && it.tipo) || 'Documento').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Documento';
-  const skip = it && it.tipoId === 'recolhimento';
+  const skip = it && it.tipoId === 'recolhimento' && !it.nome;
   const nm = String((it && it.nome) || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
   const dt = String((it && it.data) || '').trim() || 'SEM DATA';
   const base = tp + (skip ? '' : ' - ' + (nm || 'SEM NOME')) + ' - ' + dt;

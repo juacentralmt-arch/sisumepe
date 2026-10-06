@@ -49,8 +49,11 @@ function desenharPagina() {
     return;
   }
   const n = String(textoImg).toLowerCase();
+  const nColado = n.replace(/\s+/g, '');
   assert(n.includes('monitorado'), 'imagem: lê rótulo MONITORADO');
-  assert(n.includes('maria da silva'), 'imagem: lê nome impresso — trecho: "' + String(textoImg).replace(/\s+/g, ' ').slice(0, 80) + '"');
+  // Tesseract às vezes cola os espaços ("MariadaSilva") — o motor rn7
+  // separa depois; aqui basta o nome estar presente, com ou sem espaços.
+  assert(nColado.includes('mariadasilva'), 'imagem: lê nome impresso — trecho: "' + String(textoImg).replace(/\s+/g, ' ').slice(0, 80) + '"');
   assert(/28\/08\/2026/.test(textoImg), 'imagem: lê data do conteúdo');
 
   // 2) fim a fim: texto do OCR alimenta o sugerirNome

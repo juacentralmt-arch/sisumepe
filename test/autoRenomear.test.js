@@ -239,7 +239,73 @@ console.log('\n=== TESTES AUTORENOMEAR — formato da sugestão e helpers ===');
 // Marcador de versão do motor presente (a9ed2cb) — prova qual código gerou:
 {
   const r = sugerirNome('MONITORADO: Teste Da Silva\nData: 01/01/2026', 'doc.pdf');
-  assert(r.motor === 'rn6', 'motor: versão rn6 (recolhimento com nome + MONITORADO prioritário) — "' + r.motor + '"');
+  assert(r.motor === 'rn7', 'motor: versão rn7 (separarNome restaurado + data-arquivo isolada) — "' + r.motor + '"');
+}
+
+console.log('\n=== TESTES AUTORENOMEAR — termos de recolhimento reais (núcleo Juazeiro) ===');
+
+// Textos simulando a extração (pdf-parse/OCR) dos 5 termos enviados:
+// layout MONITORADO(A) + Data/Hora + Nº do dispositivo + assinatura + CPF.
+{
+  const r = sugerirNome(
+    'POLÍCIA PENAL Coordenadoria de Monitoração Eletronica de Pessoas - COMEP\nTERMO DE RECOLHIMENTO\nUNIDADE DE MONITORAMENTO ELETRONICO DE PESSOAS – NUCLEO JUAZEIRO\nMONITORADO(A): Enrickson Rafael da Cunha Data/Hora: 28/08/2026 De 08:10h às 20:15h\n1) INSPEÇÃO NO DISPOSITIVO Nº: 4212090807\nPor ser verdade, firmo o presente.\nASSINATURA CPF/RG 488.954.388-09\nJoanderson Vitor / Mat 1334 Técnico responsável',
+    'termo.pdf'
+  );
+  assert(r.tipoId === 'recolhimento', 'doc1: tipo recolhimento');
+  assert(r.nome === 'Enrickson Rafael da Cunha', 'doc1: nome — "' + r.nome + '"');
+  assert(r.dataISO === '2026-08-28', 'doc1: data do campo Data/Hora');
+  assert(r.sugestao === 'Termo de recolhimento - Enrickson Rafael da Cunha - 28-08-2026.pdf', 'doc1: sugestão — "' + r.sugestao + '"');
+  assert(r.confianca === 'alta', 'doc1: confiança alta');
+}
+{
+  const r = sugerirNome(
+    'TERMO DE RECOLHIMENTO\nUNIDADE DE MONITORAMENTO ELETRONICO DE PESSOAS – NUCLEO JUAZEIRO\nMONITORADO(A): Francisco Jose Gomes Rodrigues\nData/Hora: 28/08/2026 De 08:10h às 20:15h\nNº: 4213040487\nASSINATURA CPF/RG 759.309.603-30',
+    'termo2.pdf'
+  );
+  assert(r.nome === 'Francisco Jose Gomes Rodrigues', 'doc2: nome — "' + r.nome + '"');
+  assert(r.dataISO === '2026-08-28', 'doc2: data');
+  assert(r.sugestao === 'Termo de recolhimento - Francisco Jose Gomes Rodrigues - 28-08-2026.pdf', 'doc2: sugestão — "' + r.sugestao + '"');
+}
+{
+  const r = sugerirNome(
+    'TERMO DE RECOLHIMENTO\nMONITORADO(A): Francisco Roberto Cornélio Silva de Souza\nData/Hora: 28/08/2026 De 08:10h às 19:10h\nNº: 4314033784\nASSINATURA CPF/RG 131.475.533-10',
+    'termo3.pdf'
+  );
+  assert(r.nome === 'Francisco Roberto Cornélio Silva de Souza', 'doc3: nome com acento e 6 partes — "' + r.nome + '"');
+  assert(r.dataISO === '2026-08-28', 'doc3: data');
+  assert(r.sugestao === 'Termo de recolhimento - Francisco Roberto Cornélio Silva de Souza - 28-08-2026.pdf', 'doc3: sugestão — "' + r.sugestao + '"');
+}
+// Armadilha real do layout: "Monitorado desde: 05/03/2026 // Desativado desde:
+// 28/08/2026" — a data do documento é a do campo Data/Hora, e "desde" não é nome.
+{
+  const r = sugerirNome(
+    'TERMO DE RECOLHIMENTO\nMONITORADO(A): Joaquim Menadel Salviano Rodrigues\nData/Hora: 28/08/2026 De 08:10h às 16:30h\nNº: 4315094058\nMonitorado desde: 05/03/2026 // Desativado desde: 28/08/2026\nASSINATURA CPF/RG 076.039.503-92',
+    'termo4.pdf'
+  );
+  assert(r.nome === 'Joaquim Menadel Salviano Rodrigues', 'doc4: nome — "' + r.nome + '"');
+  assert(r.dataISO === '2026-08-28', 'doc4: Data/Hora vence "Monitorado desde" — "' + r.dataISO + '"');
+  assert(r.sugestao === 'Termo de recolhimento - Joaquim Menadel Salviano Rodrigues - 28-08-2026.pdf', 'doc4: sugestão — "' + r.sugestao + '"');
+  assert(r.confianca === 'alta', 'doc4: confiança alta');
+}
+// OCR que cola os espaços ("MariadaSilva", como no teste do Tesseract):
+{
+  const r = sugerirNome('TERMO DE RECOLHIMENTO\nMONITORADO(A):MariadaSilva\nData/Hora:28/08/2026\nN: 4212024905', 'scan.jpg');
+  assert(r.nome === 'Maria da Silva', 'doc5: partícula colada separada — "' + r.nome + '"');
+  assert(r.dataISO === '2026-08-28', 'doc5: data');
+  assert(r.confianca === 'alta', 'doc5: confiança alta');
+}
+// Serial do dispositivo no NOME DO ARQUIVO não pode virar data:
+{
+  assert(extrairDataArquivo('scan_4212090807.pdf') === '', 'data arquivo: serial 10 dígitos não vira data');
+  assert(extrairDataArquivo('termo_488.954.388-09.pdf') === '', 'data arquivo: CPF pontuado não vira data');
+  assert(extrairDataArquivo('victor_260925_133554.pdf') === '2025-09-26', 'data arquivo: grupo isolado continua valendo');
+}
+// separarNome: unidade direta —
+{
+  const { separarNome } = require('../src/lib/autoRenomear');
+  assert(separarNome('MariadaSilva') === 'Maria da Silva', 'separarNome: partícula colada');
+  assert(separarNome('MariaSilva') === 'Maria Silva', 'separarNome: camelCase');
+  assert(separarNome('Maria da Silva') === 'Maria da Silva', 'separarNome: já separado não mexe');
 }
 
 console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
