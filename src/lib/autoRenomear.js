@@ -89,6 +89,19 @@ function tituloProprio(s) {
     .join(' ');
 }
 
+// Separa nome colado por extração/OCR sem espaços:
+//  1) partícula colada entre nome e sobrenome ("MariadaSilva" -> "Maria da Silva");
+//  2) camelCase genérico ("MariaSilva" -> "Maria Silva");
+//  3) partículas sempre minúsculas ("Das Neves" -> "das Neves").
+function separarNome(s) {
+  let out = String(s || '');
+  out = out.replace(/([A-Za-zÀ-ÖØ-öø-ÿ]{2,})(das|dos|da|de|do)([A-ZÀ-Ö][a-zà-öø-ÿ]{2,})/g,
+    (m, stem, part, rest) => stem + ' ' + part.toLowerCase() + ' ' + rest);
+  out = out.replace(/([a-zà-öø-ÿ])([A-ZÀ-Ö])/g, '$1 $2');
+  out = out.replace(/\b(da|de|do|das|dos)\b/gi, m => ' ' + m.toLowerCase() + ' ');
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 // Inícios que nunca são nome (evita "Monitorado desde 01/02/2020" → "desde")
 const STOP_INICIO_NOME = /^(desde|at[ée]|ao|aos|de|do|da|para|com|por|em|no|na|e|ou|jogo)\b/i;
 function extrairNome(texto) {
@@ -102,7 +115,7 @@ function extrairNome(texto) {
   for (const src of [t, tOcr]) {
     const mMon = src.match(/MONITORADO\s*\(\s*A\s*\)\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'´`. \t]{2,90}?)(?=\s*\n|\s*Data\/Hora|\s*Data\s*:|$)/i);
     if (mMon && mMon[1]) {
-      const nome = separarNome(tituloProprio(limparNome(mMon[1])));
+      const nome = tituloProprio(separarNome(limparNome(mMon[1])));
       if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length >= 3 && !STOP_INICIO_NOME.test(nome)) return nome;
     }
   }
@@ -114,7 +127,7 @@ function extrairNome(texto) {
   }
   cands.sort((a, b) => a.idx - b.idx);
   for (const c of cands) {
-    const nome = separarNome(tituloProprio(limparNome(c.cap)));
+    const nome = tituloProprio(separarNome(limparNome(c.cap)));
 
     if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length < 3) continue;
     if (STOP_INICIO_NOME.test(nome)) continue;
@@ -158,9 +171,11 @@ function extrairDataConteudo(texto) {
 // Fallback: data embutida no nome do arquivo (ex: victor_260925_133554.pdf -> 26/09/2025).
 // Quebra-galho para a sugestão inicial — NÃO conta como achado de confiança,
 // pois pode divergir da data real do documento.
+// Só vale grupo de 6 dígitos ISOLADO (sem dígito colado antes/depois): seriais
+// longos ("Nº 4212090807", CPFs) nunca viram data falsa.
 function extrairDataArquivo(nomeOriginal) {
   if (!nomeOriginal) return '';
-  const fnMatch = String(nomeOriginal).match(/(\d{2})(\d{2})(\d{2})/);
+  const fnMatch = String(nomeOriginal).match(/(?<!\d)(\d{2})(\d{2})(\d{2})(?!\d)/);
   if (fnMatch) {
     const dd = fnMatch[1], mm = fnMatch[2], aa = '20' + fnMatch[3];
     if (Number(mm) >= 1 && Number(mm) <= 12 && Number(dd) >= 1 && Number(dd) <= 31) return aa + '-' + mm + '-' + dd;
@@ -227,8 +242,10 @@ function sugerirNome(texto, nomeOriginal) {
     // rn4 = detectarTipo tolera 0/O + rótulo Interessado (ofícios),
     // rn5 = recEquip vira Declaração de Devolução + rótulo "imposta a",
     // rn6 = recolhimento sem semNome + regex dedicada MONITORADO(A) prioritária.
-    motor: 'rn6'
+    // rn7 = separarNome restaurado + partículas coladas ("MariadaSilva") +
+    //       data-arquivo só em grupo isolado (seriais longos não viram data).
+    motor: 'rn7'
   };
 }
 
-module.exports = { TIPOS, detectarTipo, extrairNome, extrairDataISO, extrairDataConteudo, extrairDataArquivo, sanitizar, sugerirNome };
+module.exports = { TIPOS, detectarTipo, extrairNome, extrairDataISO, extrairDataConteudo, extrairDataArquivo, sanitizar, separarNome, sugerirNome };
