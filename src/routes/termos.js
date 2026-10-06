@@ -433,11 +433,23 @@ router.post('/api/termos/autorenomear-ocr', auth(['tecnico', 'psico', 'admin']),
   const arquivo = String((req.body && req.body.arquivo) || 'documento.pdf');
   if(!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 imagem da página (JPG ou PNG)' });
   const ocr = require('../lib/ocrServidor');
+  const { sugerirNome } = require('../lib/autoRenomear');
+  // Early-exit: o navegador envia 1º o recorte do cabeçalho (MONITORADO +
+  // Data + Nº) — se ele já rende tipo+nome+data do conteúdo, pula as
+  // demais imagens em vez de processar até 3 sempre.
   const textos = [];
+  let lidas = 0;
   try{
     for(const f of req.files.slice(0, 3)){
       const t = await ocr.comTimeout(ocr.ocrImagem(f.buffer), 150000, 'timeout no OCR servidor');
+      lidas++;
       if(t) textos.push(t);
+      const parcial = textos.join('\n');
+      if(parcial.replace(/\s/g, '').length >= 20){
+        const p = sugerirNome(parcial.slice(0, 8000), arquivo);
+        const dataDoConteudo = p.dataISO && !p.avisos.some(a => /nome do arquivo/i.test(a));
+        if(p.nome && p.tipoId !== 'documento' && dataDoConteudo) break;
+      }
     }
   }catch(e){
     if(/timeout/i.test(e.message || '')) { try { await ocr.resetOcrServidor(); } catch (_) {} }
@@ -445,9 +457,8 @@ router.post('/api/termos/autorenomear-ocr', auth(['tecnico', 'psico', 'admin']),
   }
   const texto = textos.join('\n');
   if(texto.replace(/\s/g, '').length < 20) return res.status(502).json({ error: 'OCR no servidor não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });
-  const { sugerirNome } = require('../lib/autoRenomear');
   const r = sugerirNome(texto.slice(0, 8000), arquivo);
-  res.json({ arquivo, ...r, ocr: 'servidor', trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
+  res.json({ arquivo, ...r, ocr: 'servidor', imagensProcessadas: lidas, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
 }));
 
 router.get('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>{

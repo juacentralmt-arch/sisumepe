@@ -150,6 +150,16 @@ store.users.ensureSeeded()
   .then(r => { if (r && r.created && r.created.length) console.log('Seed: usuários criados no banco:', r.created.join(', ')); })
   .catch(() => {});
 
+// Pre-warm OCR servidor: cria o worker Tesseract em background após o boot
+// (a 1ª criação baixa ~2MB de dados `por` e leva segundos) para a primeira
+// requisição de OCR não pagar o custo a frio. Falha silenciosa: sem worker,
+// o endpoint cria sob demanda como antes.
+setTimeout(() => {
+  require('./src/lib/ocrServidor').getWorker()
+    .then(() => console.log('OCR servidor pré-aquecido'))
+    .catch(e => console.warn('OCR pre-warm adiado (sob demanda):', e.message));
+}, 30000).unref();
+
 // Expiração de anexos de tickets fechados (padrão 24h, via FILES_TTL_HOURS)
 setTimeout(() => { store.cleanupExpiredFiles().catch(() => {}); }, 60e3).unref();
 setInterval(() => { store.cleanupExpiredFiles().catch(() => {}); }, 3600e3).unref();
