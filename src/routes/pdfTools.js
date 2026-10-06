@@ -276,16 +276,30 @@ router.post('/api/pdf/text', shared.auth(['tecnico','psico','admin']), shared.up
   res.send(txt);
 }));
 
-// Dividir em ZIP: 1 PDF por página (limite 60 páginas por vez)
+// Dividir em ZIP: 1 PDF por página (limite 60 páginas por vez).
+// Aceita seleção opcional pages="1,3,5-7" ou from/to — cada página
+// selecionada vira 1 PDF dentro do ZIP. Sem seleção, divide todas.
 router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const src = await PDFDocument.load(req.file.buffer);
   const total = src.getPageCount();
-  if(total < 2) return res.status(400).json({ error: 'PDF tem só 1 página — use Dividir' });
-  if(total > 60) return res.status(400).json({ error: 'Máximo 60 páginas por vez' });
+  const { pages, from, to } = req.body || {};
+  let indices = [];
+  if(pages) {
+    indices = parsePaginas(pages, total);
+  } else if(from || to) {
+    const s = parseInt(from || 1, 10), e = parseInt(to || total, 10);
+    const a = Math.min(s, e), b = Math.max(s, e);
+    for(let i = a; i <= b; i++) if(i >= 1 && i <= total) indices.push(i - 1);
+  } else {
+    if(total < 2) return res.status(400).json({ error: 'PDF tem só 1 página — use Dividir' });
+    indices = src.getPageIndices();
+  }
+  if(!indices.length) return res.status(400).json({ error: 'Nenhuma página válida. Ex: 1,3,5-7 (ou deixe vazio para todas)' });
+  if(indices.length > 60) return res.status(400).json({ error: 'Máximo 60 páginas por vez' });
   const files = [];
-  for(let i=0;i<total;i++){
+  for(const i of indices){
     const out = await PDFDocument.create();
     const [p] = await out.copyPages(src, [i]);
     out.addPage(p);

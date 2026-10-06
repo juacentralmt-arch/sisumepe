@@ -136,6 +136,23 @@ async function postPdf(path, pdfBuf, fields) {
     const res = await fetch(BASE + '/api/pdf/split-zip', { method: 'POST', body: fd });
     assert(res.status === 400, 'split-zip 1 página: 400');
   }
+  // split-zip com seleção: 5 páginas, pede "2,4-5" -> zip com 3 entradas
+  {
+    const pdf5sel = await makePdf(5);
+    const r = await postPdf('/api/pdf/split-zip', pdf5sel, { pages: '2,4-5' });
+    assert(r.status === 200, 'split-zip seleção: 200');
+    assert(/application\/zip/.test(r.ct), 'split-zip seleção: content-type zip');
+    const names = (r.buf.toString('binary').match(/pagina-\d+\.pdf/g) || []);
+    const uniq = [...new Set(names)].sort();
+    assert(uniq.length === 3, 'split-zip seleção: 3 entradas');
+    assert(uniq.join(',') === 'pagina-02.pdf,pagina-04.pdf,pagina-05.pdf', 'split-zip seleção: páginas 02,04,05');
+  }
+  // split-zip com seleção inválida -> 400
+  {
+    const pdf5inv = await makePdf(5);
+    const r = await postPdf('/api/pdf/split-zip', pdf5inv, { pages: '99' });
+    assert(r.status === 400, 'split-zip seleção inválida: 400');
+  }
 
   server.close();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
