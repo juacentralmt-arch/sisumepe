@@ -4,7 +4,7 @@ const calendly = require('../lib/calendly');
 const { store, ah, authAgenda } = shared;
 const router = express.Router();
 
-// ============ CALENDLY (parte do módulo Agenda: andre, daniel e admin) ============
+// ============ CALENDLY (parte do módulo Agenda: todos, exceto recepção) ============
 
 // Situação da conexão + conta vinculada
 router.get('/api/agenda/calendly/status', authAgenda(), ah(async (req, res) => {
