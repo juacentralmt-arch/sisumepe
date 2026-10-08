@@ -91,7 +91,7 @@ function speak(text){
     const v = pickVoice();
     if(v) u.voice = v;
     u.lang = (v && v.lang) || 'pt-BR';
-    u.rate = 0.85; u.volume = 1; u.pitch = 1.1;
+    u.rate = 0.9; u.volume = 1; u.pitch = 1.2;
     speechSynthesis.speak(u);
   }catch(e){}
 }
