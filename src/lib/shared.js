@@ -100,17 +100,17 @@ function auth(roles) {
 }
 const isHash = p => typeof p === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(p);
 
-// Agenda restrita: só admin + andre/daniel (por usuário, independente do perfil).
+// Agenda liberada: todos os perfis, exceto recepção.
+// (Legado: antes era só admin + andre/daniel; AGENDA_USERS mantido por compat.)
 const AGENDA_USERS = ['andre', 'daniel'];
 function isAgendaUser(s){
   if(!s) return false;
-  if(s.role === 'admin') return true;
-  return AGENDA_USERS.includes(String(s.user || '').toLowerCase().trim());
+  return String(s.role || '').toLowerCase().trim() !== 'recepcao';
 }
 function authAgenda() {
   return (req, res, next) => {
     auth()(req, res, () => {
-      if(!isAgendaUser(req.auth)) return res.status(403).json({ error: 'Agenda restrita a andre, daniel e admin.' });
+      if(!isAgendaUser(req.auth)) return res.status(403).json({ error: 'Agenda indisponível para o perfil recepção.' });
       next();
     });
   };

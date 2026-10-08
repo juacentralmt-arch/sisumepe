@@ -466,7 +466,7 @@
       <div class="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
           <h2 class="font-display font-bold text-xl">Agenda</h2>
-          <p class="text-xs text-slate-500 mt-0.5">Agendamentos locais + Calendly (andre, daniel e admin)</p>
+          <p class="text-xs text-slate-500 mt-0.5">Agendamentos locais + Calendly (todos os perfis, exceto recepção)</p>
         </div>
         <div class="flex gap-2">
           <button id="googleConnectBtn" onclick="googleConnect()" class="hidden btn btn-ghost text-xs px-3.5 py-2">🔗 Conectar Google</button>
@@ -2362,7 +2362,7 @@ function paintUser(){
     const t = b.dataset.tab;
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
-    else if(r === 'psico') show = ['fila', 'checkin', 'psico'].includes(t);
+    else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'agenda'].includes(t);
     else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     b.classList.toggle('hidden', !show);
@@ -2511,7 +2511,7 @@ function enterApp(){
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
   setTimeout(preloadOCR, 1200);
 }
-function agendaUser(){ return session && (session.role==='admin' || ['andre','daniel'].includes(String(session.user||'').toLowerCase().trim())); }
+function agendaUser(){ return session && String(session.role||'').toLowerCase().trim() !== 'recepcao'; }
 function canSee(t){
   if(!session) return false;
   if(t==='agenda') return agendaUser();
