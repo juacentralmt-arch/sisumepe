@@ -47,7 +47,7 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 
 - **Chat e chamadas privados**: mensagens diretas e sinalização WebRTC (SSE) chegam somente ao autor e ao destinatário — nunca a toda a equipe.
 - **`db.json` à prova de crash**: gravação atômica (arquivo temporário + rename) — um desligamento abrupto nunca corrompe o banco local.
-- **Painel TV sem sobrenome**: `/api/tv` exibe apenas primeiro nome + inicial (ex. `Daniel R.`), reduzindo exposição de dados pessoais em tela pública (LGPD).
+- **Painel TV com nome completo**: `/api/tv` exibe e anuncia o nome completo do atendido (texto + voz).
 - **Graceful shutdown**: em redeploys (SIGTERM), o servidor responde o que está em voo antes de sair.
 - **Heartbeat SSE** a cada 25s, evitando cortes de conexão por proxies ociosos.
 - **Rotas `/api/*` desconhecidas** retornam 404 JSON (não caem na SPA).
