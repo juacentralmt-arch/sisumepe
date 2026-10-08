@@ -109,10 +109,8 @@ async function gerarTermoPDF(termo){
   // Logo oficial Governo do Ceará (brasão + texto) - arquivo local, sem depender de internet
   let logoImage = null;
   try{
-    const logoPath = path.join(ROOT, 'public', 'logo-governo-ce.png');
-    if(fs.existsSync(logoPath)){
-      logoImage = await pdfDoc.embedPng(fs.readFileSync(logoPath));
-    }
+    const buf = pngBuffer('logo-governo-ce.png');
+    if(buf) logoImage = await pdfDoc.embedPng(buf);
   }catch(e){}
   if(!logoImage){
     try{
@@ -380,16 +378,16 @@ async function gerarTermoRecolhimentoPDF(termo){
   const M = 32;
   let badgePP = null, logoCE = null, brasao = null;
   try{
-    const p = path.join(ROOT, 'public', 'logo-policia-penal-badge.png');
-    if(fs.existsSync(p)) badgePP = await pdfDoc.embedPng(fs.readFileSync(p));
+    const b = pngBuffer('logo-policia-penal-badge.png');
+    if(b) badgePP = await pdfDoc.embedPng(b);
   }catch(e){}
   try{
-    const p = path.join(ROOT, 'public', 'logo-ceara-header.png');
-    if(fs.existsSync(p)) logoCE = await pdfDoc.embedPng(fs.readFileSync(p));
+    const b = pngBuffer('logo-ceara-header.png');
+    if(b) logoCE = await pdfDoc.embedPng(b);
   }catch(e){}
   try{
-    const p = path.join(ROOT, 'public', 'brasao-ceara.png');
-    if(fs.existsSync(p)) brasao = await pdfDoc.embedPng(fs.readFileSync(p));
+    const b = pngBuffer('brasao-ceara.png');
+    if(b) brasao = await pdfDoc.embedPng(b);
   }catch(e){}
   const eqList = Array.isArray(d.equipamentos) ? d.equipamentos : [];
   const CHECKS = [
@@ -574,8 +572,8 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   const GOLD = rgb(0.85,0.65,0.1);
   const SLATE = rgb(0.23,0.32,0.38);
   let badgePP = null, brasao = null;
-  try{ const p = path.join(ROOT,'public','logo-policia-penal-badge.png'); if(fs.existsSync(p)) badgePP = await pdfDoc.embedPng(fs.readFileSync(p)); }catch(e){}
-  try{ const p = path.join(ROOT,'public','brasao-ceara.png'); if(fs.existsSync(p)) brasao = await pdfDoc.embedPng(fs.readFileSync(p)); }catch(e){}
+  try{ const b = pngBuffer('logo-policia-penal-badge.png'); if(b) badgePP = await pdfDoc.embedPng(b); }catch(e){}
+  try{ const b = pngBuffer('brasao-ceara.png'); if(b) brasao = await pdfDoc.embedPng(b); }catch(e){}
   const v = (x)=>(x==null?'':String(x)).trim();
   const has = (x)=>v(x)!=='';
   const sn = (x)=> x==='sim' ? 'sim' : x==='nao' ? 'nao' : null;
@@ -600,7 +598,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
     pg.drawText('Eletrônica de Pessoas - COMEP',{x:M,y:yTop-38,size:8,font:fontBold,color:BLACK});
   }
   let logoCE = null;
-  try{ const p = path.join(ROOT,'public','logo-ceara-header.png'); if(fs.existsSync(p)) logoCE = await pdfDoc.embedPng(fs.readFileSync(p)); }catch(e){}
+  try{ const b = pngBuffer('logo-ceara-header.png'); if(b) logoCE = await pdfDoc.embedPng(b); }catch(e){}
   if(logoCE){
     const hh=56, ww=hh*(logoCE.width/logoCE.height);
     pg.drawImage(logoCE,{x:PW-M-ww,y:yTop-hh,width:ww,height:hh});
@@ -1001,8 +999,8 @@ async function psiDocStart() {
   const fontOb = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
   let brasao = null;
   try {
-    const bp = path.join(ROOT, 'public', 'brasao-ceara.png');
-    if (fs.existsSync(bp)) brasao = await pdfDoc.embedPng(fs.readFileSync(bp));
+    const b = pngBuffer('brasao-ceara.png');
+    if (b) brasao = await pdfDoc.embedPng(b);
   } catch (e) {}
   const PW = 595.32, PH = 841.92, M = 60;
   const pg = pdfDoc.addPage([PW, PH]);
