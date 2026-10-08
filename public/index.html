@@ -4257,12 +4257,12 @@ function refreshScanPreview(){
 }
 
 // --- CORRIGIR / CANCELAR / REABRIR TICKET ---
-let editTicketId = null, ticketModelo = '';
+let editTicketId = null, ticketModelo = '', editAnexosNovos = false;
 function pickTicketModelo(m){ ticketModelo = (ticketModelo === m) ? '' : m; paintModelBoxes('data-tmodelo', ticketModelo); }
 function openTicketEdit(id){
   const t = tickets.find(x => x.id === id);
   if(!t) return;
-  editTicketId = id; ticketModelo = t.modeloTornozeleira || '';
+  editTicketId = id; ticketModelo = t.modeloTornozeleira || ''; editAnexosNovos = false;
   document.getElementById('teCode').textContent = t.code;
   document.getElementById('teMotivo').value = t.motivo;
   document.getElementById('teDesc').value = t.descricao || '';
@@ -4297,24 +4297,26 @@ async function purgeAnexosExpirados(boxId){
 }
 let editAnexosBusy = false;
 async function editAddAnexos(inputId){
-  if(editAnexosBusy) return;
+  if(editAnexosBusy) return false;
   const inp = document.getElementById(inputId);
-  if(!inp || !inp.files.length) return toast('⚠️ Selecione arquivos');
+  if(!inp || !inp.files.length){ toast('⚠️ Selecione arquivos'); return false; }
   // Conta só anexos ativos: marcadores expirados não ocupam vaga (podem ser purgados).
   const ativos = editTicketAnexos(editTicketId).filter(a => a && !a.expired).length;
-  if(inp.files.length + ativos > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
-  if(!loteAnexosOk(inp.files)) return;
+  if(inp.files.length + ativos > 20){ toast('⚠️ Máximo de 20 anexos por ticket'); return false; }
+  if(!loteAnexosOk(inp.files)) return false;
   editAnexosBusy = true;
   const fd = new FormData();
   for(const f of inp.files) fd.append('anexos', f);
   try{
     await api('/api/tickets/' + editTicketId + '/anexos', { method: 'POST', body: fd });
     inp.value = '';
+    editAnexosNovos = true;
     toast('📎 Anexos adicionados');
     await loadAll();
     renderEditAnexos('teAnexos');
     renderEditAnexos('tecAnexos');
-  }catch(e){ toast('⚠️ ' + e.message); }
+    return true;
+  }catch(e){ toast('⚠️ ' + e.message); return false; }
   finally{ editAnexosBusy = false; }
 }
 async function editRemoveAnexo(url, boxId){
@@ -4331,6 +4333,7 @@ function openTecEdit(id){
   const t = tickets.find(x => x.id === id);
   if(!t || t.status !== 'em_atendimento') return toast('⚠️ Só é possível editar em atendimento');
   editTicketId = id;
+  editAnexosNovos = false;
   document.getElementById('tecEditCode').textContent = t.code;
   document.getElementById('tecEditDesc').value = t.descricao || '';
   document.getElementById('tecEditErr').classList.add('hidden');
@@ -4341,9 +4344,20 @@ function closeTecEdit(){ document.getElementById('modalTecEdit').classList.add('
 async function saveTecEdit(){
   const err = document.getElementById('tecEditErr');
   err.classList.add('hidden');
+  // Envia arquivos selecionados mas ainda não adicionados (vale como alteração).
+  const pend = document.getElementById('tecFiles');
+  if(pend && pend.files.length){
+    const ok = await editAddAnexos('tecFiles');
+    if(!ok) return;
+  }
   const t = tickets.find(x => x.id === editTicketId);
   const desc = document.getElementById('tecEditDesc').value;
-  if(t && desc === (t.descricao || '')){ closeTecEdit(); loadAll(); return; }
+  if(t && desc === (t.descricao || '')){
+    closeTecEdit();
+    if(editAnexosNovos) toast('📎 Correção salva (anexos adicionados)!');
+    loadAll();
+    return;
+  }
   try{
     await api('/api/tickets/' + editTicketId + '/edit-atendimento', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ descricao: desc }) });
     closeTecEdit(); toast('✅ Atendimento atualizado'); loadAll();
@@ -4354,10 +4368,24 @@ async function saveTicketEdit(){
   const err = document.getElementById('teErr');
   const mot = document.getElementById('teMotivo').value;
   if(!mot){ err.textContent='⚠️ Selecione o motivo'; err.classList.remove('hidden'); return; }
+  err.classList.add('hidden');
+  // Envia arquivos selecionados mas ainda não adicionados (vale como alteração).
+  const pend = document.getElementById('teFiles');
+  if(pend && pend.files.length){
+    const ok = await editAddAnexos('teFiles');
+    if(!ok) return;
+  }
   try{
     await api('/api/tickets/' + editTicketId + '/edit', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: session.user, motivo: mot, modeloTornozeleira: ticketModelo, descricao: document.getElementById('teDesc').value, prioridadeLegal: document.getElementById('tePrio').checked }) });
     closeTicketEdit(); toast('Ticket corrigido!'); loadAll();
-  }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+  }catch(e){
+    // Correção só com anexos (sem mexer no texto): o servidor acusa
+    // "Nenhuma alteração detectada" nos campos — mas os arquivos já entraram.
+    if(/Nenhuma altera/i.test(e.message || '') && editAnexosNovos){
+      closeTicketEdit(); toast('📎 Correção salva (anexos adicionados)!'); loadAll(); return;
+    }
+    err.textContent='⚠️ ' + e.message; err.classList.remove('hidden');
+  }
 }
 async function cancelTicket(id, code){
   if(!confirm('Cancelar o ticket ' + code + '? Ele sai da fila (registrado em auditoria).')) return;
