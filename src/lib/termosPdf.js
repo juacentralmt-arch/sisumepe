@@ -4,6 +4,18 @@ const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { saveDeterministico } = require('./pdfDeterministico');
 const ROOT = path.join(__dirname, '..', '..');
 
+// Logos do cabeçalho lidos do disco UMA vez e reutilizados (o preview gera um
+// PDF por tecla/aba — reler + existsSync a cada request bloqueia o event loop).
+const imgBufCache = {};
+function pngBuffer(name){
+  if(Object.prototype.hasOwnProperty.call(imgBufCache, name)) return imgBufCache[name];
+  try{
+    const p = path.join(ROOT, 'public', name);
+    imgBufCache[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+  }catch(e){ imgBufCache[name] = null; }
+  return imgBufCache[name];
+}
+
 // PDF Termos
 
 function gerarTermoHTML(termo){
@@ -812,15 +824,19 @@ async function gerarTermoEnderecoPDF(termo){
   const GRAY = rgb(0.45, 0.45, 0.45);
   const GREEN = rgb(0.16, 0.5, 0.27);
   const SLATE = rgb(0.23, 0.32, 0.38);
-  // Imagens do cabeçalho (fallbacks em texto quando ausentes)
-  let brasao = null, badgePP = null;
+  // Imagens do cabeçalho (artes combinadas no modelo oficial; texto como fallback)
+  let brasao = null, badgePP = null, logoCE = null;
   try{
-    const bp = path.join(ROOT, 'public', 'brasao-ceara.png');
-    if(fs.existsSync(bp)) brasao = await pdfDoc.embedPng(fs.readFileSync(bp));
+    const b = pngBuffer('brasao-ceara.png');
+    if(b) brasao = await pdfDoc.embedPng(b);
   }catch(e){}
   try{
-    const pp = path.join(ROOT, 'public', 'logo-policia-penal.png');
-    if(fs.existsSync(pp)) badgePP = await pdfDoc.embedPng(fs.readFileSync(pp));
+    const b = pngBuffer('logo-policia-penal-badge.png');
+    if(b) badgePP = await pdfDoc.embedPng(b);
+  }catch(e){}
+  try{
+    const b = pngBuffer('logo-ceara-header.png');
+    if(b) logoCE = await pdfDoc.embedPng(b);
   }catch(e){}
   const has = v => v != null && String(v).trim() !== '';
   // Valor preenchido: preto normal; vazio: placeholder cinza itálico (como no modelo)
@@ -833,31 +849,38 @@ async function gerarTermoEnderecoPDF(termo){
   const ano = S(d.ano, String(new Date().getFullYear()));
   const numero = S(d.numero, '_______');
   let pg = pdfDoc.addPage([PW, PH]);
-  // ---- Cabeçalho: esquerda Polícia Penal / direita brasão + CEARÁ ----
+  // ---- Cabeçalho no modelo oficial: esquerda = distintivo + POLÍCIA PENAL +
+  // Coordenadoria COMEP (imagem combinada) / direita = brasão + bloco CEARÁ ----
   const yTop = PH - 36;
-  let txL = M;
   if(badgePP){
-    const bh = 62, bw = bh * (badgePP.width / badgePP.height);
+    let bh = 58, bw = bh * (badgePP.width / badgePP.height);
+    const maxW = 260;
+    if(bw > maxW){ bw = maxW; bh = bw / (badgePP.width / badgePP.height); }
     pg.drawImage(badgePP, { x: M, y: yTop - bh, width: bw, height: bh });
-    txL = M + bw + 8;
+  } else {
+    pg.drawText('POLÍCIA PENAL', { x: M, y: yTop - 15, size: 15, font: fontBold, color: BLACK });
+    pg.drawText('Coordenadoria de Monitoração', { x: M, y: yTop - 28, size: 8, font: fontBold, color: BLACK });
+    pg.drawText('Eletrônica de Pessoas - COMEP', { x: M, y: yTop - 38, size: 8, font: fontBold, color: BLACK });
   }
-  pg.drawText('POLÍCIA PENAL', { x: txL, y: yTop - 15, size: 15, font: fontBold, color: BLACK });
-  pg.drawText('Coordenadoria de Monitoração', { x: txL, y: yTop - 28, size: 8, font: fontBold, color: BLACK });
-  pg.drawText('Eletrônica de Pessoas - COMEP', { x: txL, y: yTop - 38, size: 8, font: fontBold, color: BLACK });
-  const cea = 'CEARÁ';
-  const ceaW = fontBold.widthOfTextAtSize(cea, 22);
-  const g1 = 'GOVERNO DO ESTADO', g1W = fontBold.widthOfTextAtSize(g1, 9);
-  const g2 = 'SECRETARIA DA ADMINISTRAÇÃO', g2W = font.widthOfTextAtSize(g2, 7);
-  const g3 = 'PENITENCIÁRIA E RESSOCIALIZAÇÃO', g3W = font.widthOfTextAtSize(g3, 7);
-  const txtW = Math.max(ceaW, g1W, g2W, g3W);
-  if(brasao){
-    const brH = 64, brW = brH * (brasao.width / brasao.height);
-    pg.drawImage(brasao, { x: PW - M - txtW - 8 - brW, y: yTop - brH, width: brW, height: brH });
+  if(logoCE){
+    const hh = 56, ww = hh * (logoCE.width / logoCE.height);
+    pg.drawImage(logoCE, { x: PW - M - ww, y: yTop - hh, width: ww, height: hh });
+  } else {
+    const cea = 'CEARÁ';
+    const ceaW = fontBold.widthOfTextAtSize(cea, 22);
+    const g1 = 'GOVERNO DO ESTADO', g1W = fontBold.widthOfTextAtSize(g1, 9);
+    const g2 = 'SECRETARIA DA ADMINISTRAÇÃO', g2W = font.widthOfTextAtSize(g2, 7);
+    const g3 = 'PENITENCIÁRIA E RESSOCIALIZAÇÃO', g3W = font.widthOfTextAtSize(g3, 7);
+    const txtW = Math.max(ceaW, g1W, g2W, g3W);
+    if(brasao){
+      const brH = 64, brW = brH * (brasao.width / brasao.height);
+      pg.drawImage(brasao, { x: PW - M - txtW - 8 - brW, y: yTop - brH, width: brW, height: brH });
+    }
+    pg.drawText(cea, { x: PW - M - ceaW, y: yTop - 22, size: 22, font: fontBold, color: SLATE });
+    pg.drawText(g1, { x: PW - M - g1W, y: yTop - 36, size: 9, font: fontBold, color: BLACK });
+    pg.drawText(g2, { x: PW - M - g2W, y: yTop - 47, size: 7, font: font, color: BLACK });
+    pg.drawText(g3, { x: PW - M - g3W, y: yTop - 57, size: 7, font: font, color: BLACK });
   }
-  pg.drawText(cea, { x: PW - M - ceaW, y: yTop - 22, size: 22, font: fontBold, color: SLATE });
-  pg.drawText(g1, { x: PW - M - g1W, y: yTop - 36, size: 9, font: fontBold, color: BLACK });
-  pg.drawText(g2, { x: PW - M - g2W, y: yTop - 47, size: 7, font: font, color: BLACK });
-  pg.drawText(g3, { x: PW - M - g3W, y: yTop - 57, size: 7, font: font, color: BLACK });
   // filete verde
   let y = 728;
   pg.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 1.3, color: GREEN });
