@@ -67,6 +67,10 @@ function pickVoice(){
     const MASC = ['antonio', 'antônio', 'daniel', 'david', 'alex', 'male', 'masculino', 'masculina', 'homem'];
     const NATURAL = ['natural', 'neural', 'online', 'premium', 'wavenet'];
     const ROBOT = ['espeak', 'festival', 'robot', 'robótica', 'robotica'];
+    // Voz suave feminina: prefere voz pt-BR com nome feminino; cai para a
+    // melhor pt disponível quando o aparelho não oferece opção feminina.
+    const femPool = pool.filter(v => FEM.some(k => (v.name || '').toLowerCase().includes(k)));
+    const ordered = (femPool.length ? femPool : pool);
     const score = v => {
       const n = (v.name || '').toLowerCase();
       let s = 10;
@@ -76,7 +80,7 @@ function pickVoice(){
       if(ROBOT.some(k => n.includes(k))) s -= 50;
       return s;
     };
-    return [...pool].sort((a, b) => score(b) - score(a))[0] || null;
+    return [...ordered].sort((a, b) => score(b) - score(a))[0] || null;
   }catch(e){ return null; }
 }
 function speak(text){
@@ -87,7 +91,7 @@ function speak(text){
     const v = pickVoice();
     if(v) u.voice = v;
     u.lang = (v && v.lang) || 'pt-BR';
-    u.rate = 0.9; u.volume = 1; u.pitch = 1.0;
+    u.rate = 0.85; u.volume = 1; u.pitch = 1.1;
     speechSynthesis.speak(u);
   }catch(e){}
 }
