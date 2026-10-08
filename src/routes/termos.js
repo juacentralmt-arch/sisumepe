@@ -1,10 +1,24 @@
 const express = require('express');
+const crypto = require('crypto');
 const { gerarTermoPDF, gerarTermoRecolhimentoPDF, gerarTermoRecolhimentoEquipamentoPDF, gerarTermoEnderecoPDF, gerarDeclaracaoPDF, gerarRelFrequenciaPDF, gerarRelTecnicoPDF, gerarOficioEncaminhamentoPDF } = require('../lib/termosPdf');
 const { gerarAtivacaoPDF } = require('../lib/ativacoesPdf');
 const shared = require('../lib/shared');
 const visaoService = require('../services/visaoComputacional');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, sortQueue, enrich, enrichAll, ticketOwnerOf, infinityBlocked, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
 const router = express.Router();
+
+// Cache curto do preview (auto-digitado/abas): corpo idêntico → PDF idêntico,
+// sem regerar. LRU simples: 50 entradas, TTL 60s (cada PDF tem ~60–160KB).
+const previewCache = new Map();
+const PREVIEW_CACHE_MAX = 50, PREVIEW_CACHE_TTL_MS = 60e3;
+function previewCacheStore(key, pdf){
+  const buf = Buffer.isBuffer(pdf) ? pdf : Buffer.from(pdf);
+  previewCache.set(key, { buf, exp: Date.now() + PREVIEW_CACHE_TTL_MS });
+  while(previewCache.size > PREVIEW_CACHE_MAX){
+    const oldest = previewCache.keys().next().value;
+    previewCache.delete(oldest);
+  }
+}
 
 // Documentos psicossociais (prontuário/relatórios do perfil psico)
 const PSI_DOCS = ['declaracao', 'relfreq', 'reltec', 'oficioenc'];
@@ -594,11 +608,24 @@ router.get('/api/termos/:id/pdf', auth(['tecnico', 'psico']), ah(async (req,res)
 }));
 router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
+  // Cache curto de previews: digitar/clicar com o mesmo payload devolve o PDF
+  // na hora, sem regerar. Chave = sha1(usuário + body); geração é determinística,
+  // logo o cache nunca diverge do PDF final (mesma entrada → mesmos bytes).
+  // (O usuário entra na chave porque o preview psi usa o nome de quem prevê.)
+  const cacheKey = crypto.createHash('sha1').update((req.auth && req.auth.user ? String(req.auth.user) : '') + '\n' + JSON.stringify(req.body || {})).digest('hex');
+  const nowMs = Date.now();
+  const hit = previewCache.get(cacheKey);
+  if(hit && hit.exp > nowMs){
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
+    return res.send(hit.buf);
+  }
   // Tipos com normalização dedicada montam o MESMO registro do POST e delegam
   // ao termoPDFFromRecord — preview e PDF final passam pelo mesmo caminho, e
   // qualquer mudança de layout aparece no preview automaticamente.
   const enviarPdf = async (registro) => {
     const pdf = await termoPDFFromRecord(registro);
+    previewCacheStore(cacheKey, pdf);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
     return res.send(Buffer.from(pdf));
@@ -647,6 +674,7 @@ router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req
   };
   while(termo.equipamentos.length<5) termo.equipamentos.push({ tzpr04:'', fonte04:'', cinta:'', trava:'' });
   const pdf = await gerarTermoPDF(termo);
+  previewCacheStore(cacheKey, pdf);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'inline; filename="termo-preview.pdf"');
   res.send(Buffer.from(pdf));
