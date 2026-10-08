@@ -366,10 +366,18 @@ async function gerarTermoRecolhimentoPDF(termo){
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const PW = 595.32, PH = 841.92;
   const M = 32;
-  let logoPng = null;
+  let badgePP = null, logoCE = null, brasao = null;
   try{
-    const logoPath = path.join(ROOT, 'public', 'logo-governo-ce.png');
-    if(fs.existsSync(logoPath)) logoPng = await pdfDoc.embedPng(fs.readFileSync(logoPath));
+    const p = path.join(ROOT, 'public', 'logo-policia-penal-badge.png');
+    if(fs.existsSync(p)) badgePP = await pdfDoc.embedPng(fs.readFileSync(p));
+  }catch(e){}
+  try{
+    const p = path.join(ROOT, 'public', 'logo-ceara-header.png');
+    if(fs.existsSync(p)) logoCE = await pdfDoc.embedPng(fs.readFileSync(p));
+  }catch(e){}
+  try{
+    const p = path.join(ROOT, 'public', 'brasao-ceara.png');
+    if(fs.existsSync(p)) brasao = await pdfDoc.embedPng(fs.readFileSync(p));
   }catch(e){}
   const eqList = Array.isArray(d.equipamentos) ? d.equipamentos : [];
   const CHECKS = [
@@ -416,24 +424,40 @@ async function gerarTermoRecolhimentoPDF(termo){
     return h;
   }
   function drawHeader(pg){
-    let y = PH - 34;
-    pg.drawText('POLÍCIA PENAL', { x: M, y, size: 13, font: fontBold, color: rgb(0,0,0) });
-    pg.drawText('Coordenadoria de Monitoração', { x: M, y: y - 11, size: 7.5, font: fontBold, color: rgb(0,0,0) });
-    pg.drawText('Eletrônica de Pessoas - COMEP', { x: M, y: y - 20, size: 7.5, font: fontBold, color: rgb(0,0,0) });
-    if(logoPng){
-      const lw = 58, lh = lw * (logoPng.height / logoPng.width);
-      pg.drawImage(logoPng, { x: PW - M - 168, y: y - 4 - lh + 14, width: lw, height: lh });
+    // ---- Cabeçalho no modelo oficial: esquerda = distintivo + POLÍCIA PENAL +
+    // Coordenadoria COMEP (imagem combinada) / direita = brasão + bloco CEARÁ ----
+    const BLACK = rgb(0,0,0), SLATE = rgb(0.23,0.32,0.38);
+    const yTop = PH - 34;
+    if(badgePP){
+      let bh = 58, bw = bh * (badgePP.width / badgePP.height);
+      const maxW = 260;
+      if(bw > maxW){ bw = maxW; bh = bw / (badgePP.width / badgePP.height); }
+      pg.drawImage(badgePP, { x: M, y: yTop - bh, width: bw, height: bh });
+    } else {
+      pg.drawText('POLÍCIA PENAL', { x: M, y: yTop - 15, size: 15, font: fontBold, color: BLACK });
+      pg.drawText('Coordenadoria de Monitoração', { x: M, y: yTop - 28, size: 8, font: fontBold, color: BLACK });
+      pg.drawText('Eletrônica de Pessoas - COMEP', { x: M, y: yTop - 38, size: 8, font: fontBold, color: BLACK });
     }
-    const ceara = 'CEARÁ';
-    const cearaW = fontBold.widthOfTextAtSize(ceara, 20);
-    pg.drawText(ceara, { x: PW - M - cearaW, y, size: 20, font: fontBold, color: rgb(0.18,0.28,0.36) });
-    const g1 = 'GOVERNO DO ESTADO';
-    pg.drawText(g1, { x: PW - M - fontBold.widthOfTextAtSize(g1, 7.5), y: y - 11, size: 7.5, font: fontBold, color: rgb(0,0,0) });
-    const g2 = 'SECRETARIA DA ADMINISTRAÇÃO';
-    pg.drawText(g2, { x: PW - M - font.widthOfTextAtSize(g2, 6), y: y - 19, size: 6, font, color: rgb(0,0,0) });
-    const g3 = 'PENITENCIÁRIA E RESSOCIALIZAÇÃO';
-    pg.drawText(g3, { x: PW - M - font.widthOfTextAtSize(g3, 6), y: y - 26, size: 6, font, color: rgb(0,0,0) });
-    y -= 44;
+    if(logoCE){
+      const hh = 56, ww = hh * (logoCE.width / logoCE.height);
+      pg.drawImage(logoCE, { x: PW - M - ww, y: yTop - hh, width: ww, height: hh });
+    } else {
+      const cea = 'CEARÁ';
+      const ceaW = fontBold.widthOfTextAtSize(cea, 22);
+      const g1 = 'GOVERNO DO ESTADO', g1W = fontBold.widthOfTextAtSize(g1, 9);
+      const g2 = 'SECRETARIA DA ADMINISTRAÇÃO', g2W = font.widthOfTextAtSize(g2, 7);
+      const g3 = 'PENITENCIÁRIA E RESSOCIALIZAÇÃO', g3W = font.widthOfTextAtSize(g3, 7);
+      const txtW = Math.max(ceaW, g1W, g2W, g3W);
+      if(brasao){
+        const brH = 64, brW = brH * (brasao.width / brasao.height);
+        pg.drawImage(brasao, { x: PW - M - txtW - 8 - brW, y: yTop - brH, width: brW, height: brH });
+      }
+      pg.drawText(cea, { x: PW - M - ceaW, y: yTop - 22, size: 22, font: fontBold, color: SLATE });
+      pg.drawText(g1, { x: PW - M - g1W, y: yTop - 36, size: 9, font: fontBold, color: BLACK });
+      pg.drawText(g2, { x: PW - M - g2W, y: yTop - 47, size: 7, font, color: BLACK });
+      pg.drawText(g3, { x: PW - M - g3W, y: yTop - 57, size: 7, font, color: BLACK });
+    }
+    let y = yTop - 72;
     const t1 = 'TERMO DE RECOLHIMENTO ENTREGUES PELAS UNIDADES PENAIS';
     pg.drawText(t1, { x: (PW - fontBold.widthOfTextAtSize(t1, 10.5))/2, y, size: 10.5, font: fontBold, color: rgb(0,0,0) });
     y -= 12;
