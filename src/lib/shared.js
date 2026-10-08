@@ -196,7 +196,14 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 const uploadLarge = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024, files: 20 } });
 async function mapFiles(files) {
   const out = [];
-  for (const f of (files || [])) out.push(await store.saveFileUpload(f));
+  try {
+    for (const f of (files || [])) out.push(await store.saveFileUpload(f));
+  } catch (e) {
+    // Rollback: sem isso, um lote com 1 arquivo ruim (ex.: 2º de 5) deixava
+    // os anteriores órfãos em disco/bucket, sem vínculo com nenhum registro.
+    for (const a of out) { try { await store.deleteStoredFile(a && a.url); } catch {} }
+    throw e;
+  }
   return out;
 }
 

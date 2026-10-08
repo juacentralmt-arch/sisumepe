@@ -1776,6 +1776,7 @@ const store = {
     const isWav = head.startsWith('RIFF') && buf.slice(8,12).toString() === 'WAVE';
     const isWebm = buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3;
     const isOgg = head.startsWith('OggS');
+    const isMp4box = buf.slice(4, 8).toString() === 'ftyp'; // mp4/mov: tamanho(4B) + 'ftyp'
     if (['jpg', 'jpeg'].includes(ext) && !isJpg) { const e = new Error('Arquivo JPG inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'png' && !isPng) { const e = new Error('Arquivo PNG inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'gif' && !isGif) { const e = new Error('Arquivo GIF inválido: ' + orig); e.status = 400; throw e; }
@@ -1786,13 +1787,16 @@ const store = {
     if (ext === 'wav' && !isWav) { const e = new Error('Arquivo WAV inválido: ' + orig); e.status = 400; throw e; }
     if (ext === 'webm' && !isWebm) { const e = new Error('Arquivo WEBM inválido: ' + orig); e.status = 400; throw e; }
     if (['ogg','oga','m4a'].includes(ext) && !(isOgg || isMp3 || isWebm || head.startsWith('ftyp'))) { /* m4a é MP4 */ }
+    if (ext === 'mp4' && !isMp4box) { const e = new Error('Arquivo MP4 inválido: ' + orig); e.status = 400; throw e; }
+    if (ext === 'mov' && !isMp4box) { const e = new Error('Arquivo MOV inválido: ' + orig); e.status = 400; throw e; }
     // bloqueia imagens muito grandes (DoS via decompressão)
     if (['jpg','jpeg','png','webp','gif'].includes(ext) && file.size > 8*1024*1024) { const e=new Error('Imagem muito grande (máx 8MB)'); e.status=400; throw e; }
-    const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'webm', 'mp3', 'ogg', 'm4a', 'mp4', 'wav', 'oga'];
+    const okExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'webm', 'mp3', 'ogg', 'm4a', 'mp4', 'mov', 'wav', 'oga'];
     const okMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
       'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain', 'text/csv', 'audio/webm', 'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/wave', 'audio/x-wav'];
+      'text/plain', 'text/csv', 'audio/webm', 'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/wave', 'audio/x-wav',
+      'video/mp4', 'video/quicktime'];
     if (!okExt.includes(ext) || !okMime.includes(file.mimetype)) {
       const e = new Error('Tipo de arquivo não permitido: ' + orig);
       e.status = 400;

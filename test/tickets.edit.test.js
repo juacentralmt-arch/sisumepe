@@ -84,8 +84,15 @@ console.log('\n=== TICKETS — anexos (adicionar/remover) ===');
   assert(r === null, 'abaixo do teto permite');
 }
 {
-  const r = ed.validarAdicao(new Array(19), [{}, {}]);
+  const atual = Array.from({ length: 19 }, (_, i) => ({ url: '/u/' + i, name: i + '.pdf' }));
+  const r = ed.validarAdicao(atual, [{ name: 'a.pdf' }, { name: 'b.pdf' }]);
   assert(r && r.status === 400, 'teto de 20 anexos bloqueia');
+}
+{
+  // Marcadores expirados (arquivo já apagado) não ocupam vaga no teto.
+  const atual = Array.from({ length: 20 }, (_, i) => ({ name: 'a' + i + '.webm', expired: true }));
+  const r = ed.validarAdicao(atual, [{ name: 'novo.pdf' }]);
+  assert(r === null, 'fantasmas expirados não contam no teto');
 }
 {
   const anx = [{ url: '/u/a', name: 'a.pdf' }, { url: '/u/b', name: 'b.pdf' }];

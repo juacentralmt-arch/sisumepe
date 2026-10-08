@@ -64,21 +64,37 @@ function aplicarEdicao(ticket, entry) {
 }
 
 // Filtra anexos a remover (por url). Retorna {mantidos, removidos}.
-function separarAnexos(anexos, urls) {
+// Com purgeExpired=true, marcadores expirados (sem url, arquivo já apagado
+// pela limpeza) também saem do registro — sem isso eles eram eternos.
+function separarAnexos(anexos, urls, purgeExpired) {
   const alvo = new Set((urls || []).map(u => String(u)));
   const mantidos = [], removidos = [];
   for (const a of (anexos || [])) {
     if (a && a.url && alvo.has(String(a.url))) removidos.push(a);
+    else if (purgeExpired && a && a.expired) removidos.push(a);
     else mantidos.push(a);
   }
   return { mantidos, removidos };
 }
 
-// Valida adição de anexos (teto 20 por ticket, como na criação).
+// Valida adição de anexos (teto 20 ATIVOS por ticket, como na criação).
+// Marcadores expirados não contam: o arquivo já sumiu e eles podem ser
+// purgados — contar fantasmas travava o ticket para sempre no teto.
 function validarAdicao(atual, novos) {
-  const n = (atual || []).length + (novos || []).length;
+  const ativos = (atual || []).filter(a => a && !a.expired).length;
+  const n = ativos + (novos || []).length;
   if (n > MAX_ANEXOS) return { status: 400, error: `Máximo de ${MAX_ANEXOS} anexos por ticket` };
   return null;
 }
 
-module.exports = { MAX_ANEXOS, MAX_EDICOES, checarPermissao, camposPermitidos, montarEdicao, aplicarEdicao, separarAnexos, validarAdicao };
+// Teto de tamanho total por lote. O multer limita por arquivo (15MB); sem teto
+// de lote, 20 arquivos estouram a RAM (memoryStorage) e derrubam o processo.
+const MAX_LOTE_MB = 100;
+function validarTamanhoLote(files) {
+  const total = (files || []).reduce((s, f) => s + (Number(f && f.size) || 0), 0);
+  if (total > MAX_LOTE_MB * 1024 * 1024)
+    return { status: 400, error: `Lote muito grande (${Math.round(total / 1048576)}MB). Máximo de ${MAX_LOTE_MB}MB por envio — divida em lotes menores.` };
+  return null;
+}
+
+module.exports = { MAX_ANEXOS, MAX_EDICOES, MAX_LOTE_MB, checarPermissao, camposPermitidos, montarEdicao, aplicarEdicao, separarAnexos, validarAdicao, validarTamanhoLote };
