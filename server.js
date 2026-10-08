@@ -108,14 +108,15 @@ app.use(require('./src/routes/psico'));
 app.use(require('./src/routes/arquivos'));
 
 // Painel TV público (sem login): só o mínimo necessário à chamada.
-// Nome exibido em primeiro nome + inicial (LGPD: menos exposição em tela pública).
+// Exibe e anuncia o nome completo do atendido (texto + voz).
 app.get('/api/tv', shared.ah(async (req, res) => {
   const all = await store.tickets.all();
   const persons = await store.persons.all();
   const queue = shared.sortQueue(all.filter(t => t.status === 'aguardando')).map(t => {
     const p = persons.find(x => String(x.id) === String(t.personId));
+    const nomeCompleto = (p && p.nome ? String(p.nome).trim() : '') || '-';
     return {
-      id: t.id, code: t.code, nome: shared.shortName(p ? p.nome : '-'),
+      id: t.id, code: t.code, nome: nomeCompleto,
       motivo: t.motivo || '', modelo: t.modeloTornozeleira || '',
       prioridade: !!t.prioridadeLegal,
       called: !!t.called, calledAt: t.calledAt || null, createdAt: t.createdAt
