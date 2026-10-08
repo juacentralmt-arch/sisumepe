@@ -14,6 +14,7 @@ const suites = [
   'test/autorenomearOcr.test.js',
   'test/termos.routes.test.js',
   'test/tickets.audio.test.js',
+  'test/tickets.anexos.test.js',
   'test/pdfTools.test.js',
   'test/tickets.edit.test.js',
   'test/admin.dashboard.test.js',

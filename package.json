@@ -13,6 +13,7 @@
     "test": "node test/run-all.js",
     "test:autorenomear": "node test/autoRenomear.test.js",
     "test:termos": "node test/termos.routes.test.js",
+    "test:anexos": "node test/tickets.anexos.test.js",
     "backup": "node -e \"require('./store').backup().then(b=>require('fs').writeFileSync('backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(b)))\"",
     "seed:estoque": "node scripts/seed-estoque-60d.js",
     "seed:estoque:300d": "node scripts/seed-estoque-60d.js --dias=300"

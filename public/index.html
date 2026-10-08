@@ -2044,7 +2044,7 @@
     <label class="lbl">ANEXOS DO TICKET</label>
     <div id="teAnexos" class="mt-1 mb-2 space-y-1.5"></div>
     <div class="flex gap-2 mb-2.5">
-      <input id="teFiles" type="file" multiple class="inp flex-1 text-xs">
+      <input id="teFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,audio/*,video/*" class="inp flex-1 text-xs">
       <button onclick="editAddAnexos('teFiles')" class="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">➕ Adicionar</button>
     </div>
     <p id="teErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
@@ -2065,7 +2065,7 @@
     <label class="lbl">ANEXOS DO TICKET</label>
     <div id="tecAnexos" class="mt-1 mb-2 space-y-1.5"></div>
     <div class="flex gap-2 mb-2.5">
-      <input id="tecFiles" type="file" multiple class="inp flex-1 text-xs">
+      <input id="tecFiles" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,audio/*,video/*" class="inp flex-1 text-xs">
       <button onclick="editAddAnexos('tecFiles')" class="btn btn-ghost text-xs px-3 py-2 whitespace-nowrap">➕ Adicionar</button>
     </div>
     <p id="tecEditErr" class="hidden text-xs text-rose-600 font-semibold mt-1"></p>
@@ -3196,20 +3196,23 @@ async function compressImageFile(f){
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
     if(bmp.close) bmp.close();
-    const id = ctx.getImageData(0, 0, cv.width, cv.height);
-    const px = id.data;
-    for(let i = 0; i < px.length; i += 4){
-      let g = px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
-      g = (g - 128) * 1.7 + 128 + 10;
-      g = g < 0 ? 0 : g > 255 ? 255 : g;
-      px[i] = px[i + 1] = px[i + 2] = g;
-    }
-    ctx.putImageData(id, 0, 0);
+    // NOTA: sem conversão para P&B — fotos de evidência preservam a cor.
+    // (Só reduz dimensão + JPEG 0.82 para o upload.)
     const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.82));
     if(!blob) return f;
     const base = String(f.name || 'foto').replace(/\.[^.]+$/, '');
     return new File([blob], (base || 'foto') + '.jpg', { type: 'image/jpeg' });
   }catch(e){ return f; }
+}
+// Teto de lote: o servidor limita 15MB/arquivo e 100MB/lote. Checar antes
+// evita upload longo que termina em 400 (e pico de RAM no servidor).
+function loteAnexosOk(files, maxMB){
+  const total = [...files].reduce((s, f) => s + (Number(f && f.size) || 0), 0);
+  if(total > (maxMB || 100) * 1024 * 1024){
+    toast('⚠️ Lote muito grande (' + Math.round(total / 1048576) + 'MB). Máximo de ' + (maxMB || 100) + 'MB por envio — divida em lotes menores.');
+    return false;
+  }
+  return true;
 }
 async function compressPhotoFiles(list){
   return Promise.all([...list].map(compressImageFile));
@@ -3240,6 +3243,7 @@ async function abrirTicket(){
   const ticketPhotoFiles = [...document.getElementById('tFiles').files];
   const ticketAudioFiles = ticketAudioFile ? [ticketAudioFile] : [];
   if(ticketPhotoFiles.length + ticketAudioFiles.length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
+  if(!loteAnexosOk([...ticketPhotoFiles, ...ticketAudioFiles])) return;
   setAbrirTicketBusy(true);
   const fd=new FormData();
   fd.append('personId',selPersonId); fd.append('motivo',motivoSel);
@@ -4272,12 +4276,27 @@ function renderEditAnexos(boxId){
   box.innerHTML = list.length ? list.map(a=>{
     if(a.expired) return `<span class="text-[11px] text-slate-400 italic">🗑️ ${esc(a.name||'arquivo')} (expirado)</span>`;
     return `<div class="flex items-center gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5"><span class="flex-1 truncate font-semibold" title="${esc(a.name||'arquivo')}">📎 ${esc(a.name||'arquivo')}</span><a href="${esc(a.url||'')}" target="_blank" class="text-indigo-600 underline font-semibold">ver</a><button onclick="editRemoveAnexo('${esc(a.url||'')}', '${boxId}')" class="text-rose-600 font-bold px-1" title="Remover anexo">✕</button></div>`;
-  }).join('') : '<p class="text-[11px] text-slate-400">Nenhum anexo.</p>';
+  }).join('') + (list.some(a => a && a.expired) ? `<button onclick="purgeAnexosExpirados('${boxId}')" class="w-full mt-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700">🧹 Limpar expirados (libera espaço)</button>` : '') : '<p class="text-[11px] text-slate-400">Nenhum anexo.</p>';
 }
+async function purgeAnexosExpirados(boxId){
+  if(!confirm('Remover do registro os anexos já expirados? Os arquivos já foram apagados; isto só limpa a lista.')) return;
+  try{
+    await api('/api/tickets/' + editTicketId + '/anexos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: [], purgeExpired: true }) });
+    toast('🧹 Expirados removidos');
+    await loadAll();
+    renderEditAnexos(boxId || 'teAnexos');
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+let editAnexosBusy = false;
 async function editAddAnexos(inputId){
+  if(editAnexosBusy) return;
   const inp = document.getElementById(inputId);
   if(!inp || !inp.files.length) return toast('⚠️ Selecione arquivos');
-  if(inp.files.length + editTicketAnexos(editTicketId).length > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
+  // Conta só anexos ativos: marcadores expirados não ocupam vaga (podem ser purgados).
+  const ativos = editTicketAnexos(editTicketId).filter(a => a && !a.expired).length;
+  if(inp.files.length + ativos > 20) return toast('⚠️ Máximo de 20 anexos por ticket');
+  if(!loteAnexosOk(inp.files)) return;
+  editAnexosBusy = true;
   const fd = new FormData();
   for(const f of inp.files) fd.append('anexos', f);
   try{
@@ -4288,6 +4307,7 @@ async function editAddAnexos(inputId){
     renderEditAnexos('teAnexos');
     renderEditAnexos('tecAnexos');
   }catch(e){ toast('⚠️ ' + e.message); }
+  finally{ editAnexosBusy = false; }
 }
 async function editRemoveAnexo(url, boxId){
   if(!confirm('Remover este anexo do ticket? Fica registrado no histórico.')) return;
@@ -8424,9 +8444,11 @@ async function confirmFinish(){
   if(!tec.trim()){ err.textContent='Informe o nome do técnico.'; err.classList.remove('hidden'); return; }
   if(!rel.trim()){ err.textContent='Informe o relatório da ação realizada.'; err.classList.remove('hidden'); return; }
   try{
+    const fotos = [...document.getElementById('mFotos').files].slice(0,20);
+    if(!loteAnexosOk(fotos)) return;
     const fd=new FormData();
     fd.append('relatorio',rel); fd.append('tecnico',tec); fd.append('requestedBy',session?session.user:'');
-    for(const f of await compressPhotoFiles([...document.getElementById('mFotos').files].slice(0,20))) fd.append('fotos',f);
+    for(const f of await compressPhotoFiles(fotos)) fd.append('fotos',f);
     const r=await authFetch('/api/tickets/'+finishId+'/finish',{method:'PATCH',body:fd});
     const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error||'Erro ao finalizar');

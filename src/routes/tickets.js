@@ -1,7 +1,7 @@
 const express = require('express');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, issueToken, loginRateLimit, isHash, upload, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo, sortQueue, enrich, enrichAll, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, PERSON_LABELS, MOTIVOS_OK, getGoogleConfig, makeOAuthClient, getAuthedClientForUser, syncAgendaToGoogle, pendingGoogleStates, ROOT, PORT } = shared;
-const { checarPermissao, montarEdicao, aplicarEdicao, separarAnexos, validarAdicao } = require('../lib/ticketEdicao');
+const { checarPermissao, montarEdicao, aplicarEdicao, separarAnexos, validarAdicao, validarTamanhoLote } = require('../lib/ticketEdicao');
 const router = express.Router();
 
 // Anexa edição ao histórico do ticket (quem + o quê + quando). Best-effort no
@@ -95,6 +95,8 @@ router.post('/api/tickets', auth(), upload.array('anexos', 20), ah(async (req, r
     }
   }catch(e){}
   const pdfPrefix = pdfPrefixForMotivo(motivo);
+  const lote = validarTamanhoLote(req.files);
+  if (lote) return res.status(lote.status).json({ error: lote.error });
   const consolidated = await consolidateTicketFiles(req.files, pdfPrefix);
   const files = await mapFiles(consolidated.files);
   const creator = await store.users.byName(req.auth.user);
@@ -192,17 +194,25 @@ router.patch('/api/tickets/:id/finish', auth(['tecnico']), upload.array('fotos',
   if (finisher && finisher.role === 'admin') return res.status(403).json({ error: 'Painel Técnico restrito ao Setor Técnico.' });
   if (t.status !== 'em_atendimento') return res.status(400).json({ error: 'Só é possível finalizar tickets em atendimento.' });
   const finishPrefix = pdfPrefixForMotivo(t.motivo, 'fotos-servico');
+  const loteFin = validarTamanhoLote(req.files);
+  if (loteFin) return res.status(loteFin.status).json({ error: loteFin.error });
   const consolidatedPos = await consolidateTicketFiles(req.files, finishPrefix);
   const mergedPosName = consolidatedPos.merged && consolidatedPos.files[0] ? consolidatedPos.files[0].originalname : null;
   const pos = (await mapFiles(consolidatedPos.files)).map(a =>
     (mergedPosName && a.name === mergedPosName) ? { ...a, name: finishPrefix + '-' + t.code + '.pdf' } : a
   );
+  // Teto de 20 fotos: as excedentes (mais antigas) saem do registro E do disco.
+  const todasFotos = (t.fotosPos || []).concat(pos);
+  const excedentes = todasFotos.length > 20 ? todasFotos.slice(0, todasFotos.length - 20) : [];
+  for (const a of excedentes) {
+    if (a && a.url && !a.expired) await store.deleteStoredFile(a.url);
+  }
   const upd = await store.tickets.patch(t.id, {
     status: 'finalizado',
     relatorio: relatorio.trim(),
     tecnico: t.tecnico,
     ...(cl ? { checklist: { sinal: !!cl.sinal, bateria: !!cl.bateria, pulseira: !!cl.pulseira, orientacao: !!cl.orientacao } } : {}),
-    fotosPos: (t.fotosPos || []).concat(pos).slice(-20),
+    fotosPos: todasFotos.slice(-20),
     finishedAt: new Date().toISOString()
   });
   const person = await store.persons.byId(t.personId);
@@ -275,6 +285,8 @@ router.post('/api/tickets/:id/anexos', auth(['recepcao', 'admin', 'tecnico']), u
   if (!g) return;
   const { t, actor } = g;
   if (!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 arquivo' });
+  const lote = validarTamanhoLote(req.files);
+  if (lote) return res.status(lote.status).json({ error: lote.error });
   const lim = validarAdicao(t.anexos, req.files);
   if (lim) return res.status(lim.status).json({ error: lim.error });
   const novos = await mapFiles(req.files);
@@ -293,13 +305,19 @@ router.post('/api/tickets/:id/anexos', auth(['recepcao', 'admin', 'tecnico']), u
 }));
 
 // Remover anexos do ticket (mesmas regras de quem/quando).
+// Apaga também o arquivo físico (antes só saía a referência, órfão eterno).
+// Com purgeExpired:true, limpa ainda os marcadores expirados (sem url).
 router.delete('/api/tickets/:id/anexos', auth(['recepcao', 'admin', 'tecnico']), ah(async (req, res) => {
   const g = await guardaAnexos(req, res);
   if (!g) return;
   const { t, actor } = g;
-  const { urls } = req.body || {};
-  if (!Array.isArray(urls) || !urls.length) return res.status(400).json({ error: 'Informe os anexos a remover' });
-  const { mantidos, removidos } = separarAnexos(t.anexos, urls);
+  const { urls, purgeExpired } = req.body || {};
+  if ((!Array.isArray(urls) || !urls.length) && !purgeExpired) return res.status(400).json({ error: 'Informe os anexos a remover' });
+  const { mantidos, removidos } = separarAnexos(t.anexos, urls, purgeExpired);
+  if (!removidos.length) return res.status(400).json({ error: 'Nenhum anexo encontrado' });
+  for (const a of removidos) {
+    if (a && a.url && !a.expired) await store.deleteStoredFile(a.url);
+  }
   if (!removidos.length) return res.status(400).json({ error: 'Nenhum anexo encontrado' });
   let upd = await store.tickets.patch(t.id, { anexos: mantidos });
   const changes = [{ field: 'anexos', label: 'Anexos removidos', from: removidos.map(a => a.name).join(', '), to: '' }];
