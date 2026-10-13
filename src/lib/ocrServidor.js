@@ -91,9 +91,9 @@ async function redimensionar(buffer, maxW) {
   return buffer;
 }
 
-// OCR de UMA imagem (buffer JPEG/PNG) -> texto.
-// Via nativa primeiro (binário tesseract, quando instalado via apt):
-// bem mais rápida que WASM. Falhou/ausente → cai para o WASM abaixo.
+// OCR de UMA imagem (buffer JPEG/PNG) -> texto. Ordem: binário nativo
+// (mais rápido), nuvem gratuita (se OCR_SPACE_KEY; melhor em scan ruidoso),
+// WASM local (sempre disponível). Cada etapa só vale com 20+ chars úteis.
 async function ocrImagem(buffer, opts) {
   const o = opts || {};
   const src = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
@@ -104,9 +104,16 @@ async function ocrImagem(buffer, opts) {
         o.timeoutMs || 90000, 'timeout no OCR nativo'
       );
       if (String(t || '').replace(/\s/g, '').length >= 20) return t;
-      // pouco texto: tenta o WASM com filtros completos antes de desistir
-    } catch (e) { /* cai para o WASM */ }
+    } catch (e) { /* próxima via */ }
   }
+  try {
+    const { ocrImagemNuvem } = require('./ocrNuvem');
+    const tNuvem = await comTimeout(
+      ocrImagemNuvem(src, o),
+      o.timeoutMs || 90000, 'timeout no OCR nuvem'
+    );
+    if (String(tNuvem || '').replace(/\s/g, '').length >= 20) return tNuvem;
+  } catch (e) { /* cai para o WASM */ }
   const w = await getWorker(o.logger);
   // Melhor configuração para documentos formulários
   await w.setParameters({
