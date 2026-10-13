@@ -19,7 +19,8 @@ const suites = [
   'test/tickets.edit.test.js',
   'test/admin.dashboard.test.js',
   'test/estoqueFluxo.test.js',
-  'test/estoqueConciliacao.test.js'
+  'test/estoqueConciliacao.test.js',
+  'test/estoqueTransferForcado.test.js'
 ];
 
 const failed = [];

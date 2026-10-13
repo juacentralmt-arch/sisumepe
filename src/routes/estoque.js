@@ -253,9 +253,11 @@ router.post('/api/estoque/estornar', shared.auth(['tecnico','admin']), shared.ah
   res.json(r);
 }));
 
-// Transferência entre unidades (atômica) — lote TZPR suportado
+// Transferência entre unidades (atômica) — lote TZPR suportado.
+// Com forcarDisponivel:true, os seriais viajam mesmo fora de disponibilidade
+// na origem e chegam como DISPONÍVEIS no destino ("disponível para uso").
 router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, sistema } = req.body||{};
+  const { contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, sistema, forcarDisponivel } = req.body||{};
   if(!unidadeOrigem || !unidadeDestino) return res.status(400).json({ error: 'Informe unidadeOrigem e unidadeDestino' });
   const errQ=validaQtd(qtd); if(errQ) return res.status(400).json({ error: errQ });
   const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
@@ -267,6 +269,7 @@ router.post('/api/estoque/transferir', shared.auth(['tecnico','admin']), shared.
   const errTM=validaMaterial(material, effectiveSistema); if(errTM) return res.status(400).json({ error: errTM });
   const r = await shared.store.estoque.transferir({
     sistema: effectiveSistema, contrato: contratoNorm, material, qtd: Math.abs(Number(qtd)), unidadeOrigem, unidadeDestino, motivo, seriais,
+    forcarDisponivel: forcarDisponivel === true || String(forcarDisponivel) === '1',
     user: req.auth.user, userName: req.auth.name
   });
   invalidateEstoqueCache();
