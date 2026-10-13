@@ -38,7 +38,7 @@ git branch -M main; git push -u origin main
 ## PARTE 3 — Render (backend), ~10 min
 
 1. Conta em **https://render.com** (GitHub/Google, **sem cartão**) → **New → Web Service** → conecte o repositório `sisumepe`.
-2. Configurações: **Runtime Node**, **Build** `npm install`, **Start** `node server.js`, plano **Free**.
+2. Configurações: **Runtime Node**, **Build** `apt-get update -qq && apt-get install -y -qq tesseract-ocr tesseract-ocr-por || true; npm install` (OCR nativo rápido; o `|| true` garante o build mesmo sem apt), **Start** `node server.js`, plano **Free**. (Ou use o `render.yaml` da raiz, que já traz esse build.)
 3. Em **Environment**, adicione `SUPABASE_URL` e `SUPABASE_KEY` (valores da Parte 1).
 4. **Deploy**. URL final: `https://sisumepe.onrender.com` (TV em `/tv`).
 

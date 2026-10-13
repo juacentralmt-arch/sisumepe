@@ -268,7 +268,9 @@ async function extractTextAutoRenomear(buffer){
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf), disableWorker: true, disableFontFace: true, isEvalSupported: false, useWorkerFetch: false });
   const pdf = await loadingTask.promise;
   let fullText = '';
-  const maxPages = Math.min(pdf.numPages, 5);
+  // Só as 2 primeiras páginas: tipo/nome/data estão no cabeçalho; o resto é
+  // custo puro (antes lia até 5).
+  const maxPages = Math.min(pdf.numPages, 2);
   for(let i = 1; i <= maxPages; i++){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
@@ -277,25 +279,73 @@ async function extractTextAutoRenomear(buffer){
   return fullText;
 }
 
+// Python (visão) fora do ar? Descobre 1x e pula a tentativa por arquivo em
+// vez de pagar timeout/conexão em cada um do lote. TTL 60s no "fora".
+let visaoDownAte = 0;
+async function visaoDisponivelRapido(){
+  if(Date.now() < visaoDownAte) return false;
+  try{
+    const ok = await visaoService.checkServiceHealth();
+    if(!ok) visaoDownAte = Date.now() + 60e3;
+    return !!ok;
+  }catch(e){ visaoDownAte = Date.now() + 60e3; return false; }
+}
+
+// Cache de análise por conteúdo: re-analisar o mesmo arquivo (mesmos bytes +
+// mesmo nome) devolve na hora, sem reprocessar. LRU 50, TTL 10min.
+const renomearCache = new Map();
+const RENOMEAR_CACHE_MAX = 50, RENOMEAR_CACHE_TTL_MS = 600e3;
+function renomearCacheGet(key){
+  const h = renomearCache.get(key);
+  if(!h) return null;
+  if(h.exp < Date.now()){ renomearCache.delete(key); return null; }
+  renomearCache.delete(key); renomearCache.set(key, h);
+  return h.item;
+}
+function renomearCacheSet(key, item){
+  renomearCache.set(key, { item, exp: Date.now() + RENOMEAR_CACHE_TTL_MS });
+  while(renomearCache.size > RENOMEAR_CACHE_MAX){
+    renomearCache.delete(renomearCache.keys().next().value);
+  }
+}
+
+// Paralelismo limitado (sem dependência): N workers consomem a fila.
+// Preserva a ordem (o frontend casa resposta↔arquivo por índice).
+async function poolRenomear(itens, fn, n){
+  const out = new Array(itens.length);
+  let i = 0;
+  const workers = Array.from({ length: Math.min(n || 3, itens.length) }, async () => {
+    while(i < itens.length){ const k = i++; out[k] = await fn(itens[k], k); }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 // AutoRenomear: recebe arquivos (PDF com texto ou imagem) e sugere
 // "<Tipo> - <Nome da pessoa> - <Data do documento>" a partir do conteúdo.
 // Usa Visão Computacional Multimodal (OCR/ICR/Layout Analysis) local.
 router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), shared.upload.array('arquivos', 20), ah(async (req,res)=>{
   if(!req.files || !req.files.length) return res.status(400).json({ error: 'Selecione ao menos 1 arquivo (PDF, JPG ou PNG)' });
   const { sugerirNome } = require('../lib/autoRenomear');
-  const out = [];
-  for(const f of req.files){
+  const crypto = require('crypto');
+  // Saúde do Python 1x por request (não por arquivo) + lote em paralelo (3).
+  const visaoOn = await visaoDisponivelRapido();
+  const processarArquivo = async (f) => {
     const original = f.originalname || 'arquivo';
     const isPdf = /\.pdf$/i.test(original) || f.mimetype === 'application/pdf';
     const isImg = /\.(jpe?g|png)$/i.test(original) || /^image\/(jpeg|png)$/.test(f.mimetype || '');
-    if(!isPdf && !isImg){ out.push({ arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }); continue; }
+    if(!isPdf && !isImg){ return { arquivo: original, erro: 'Tipo não suportado (use PDF, JPG ou PNG)' }; }
+    const cacheKey = 'rn:' + crypto.createHash('sha1').update(f.buffer).update('|').update(original).digest('hex');
+    const hit = renomearCacheGet(cacheKey);
+    if(hit) return hit;
     
     let visionResult = null;
     let texto = '';
     
     try {
       // Usar Visão Computacional Multimodal para extrair texto e campos estruturados
-      visionResult = await visaoService.analyzeDocument(f.buffer, original);
+      // (só tenta se o serviço respondeu ao health-check — evita timeout por arquivo)
+      visionResult = visaoOn ? await visaoService.analyzeDocument(f.buffer, original) : null;
       
       if (visionResult && visionResult.full_text) {
         texto = visionResult.full_text;
@@ -380,10 +430,10 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
           avisosFinal.unshift('Extraído com Visão Computacional Multimodal (OCR/ICR/Layout Analysis)');
         }
         
-        out.push({ 
-          arquivo: original, 
-          tamanho: f.size, 
-          sugestao: sugestaoFinal, 
+        const itemVisao = {
+          arquivo: original,
+          tamanho: f.size,
+          sugestao: sugestaoFinal,
           tipo: visionResult.document_type || 'documento',
           tipoId: visionResult.document_type || 'documento',
           nome: nomeFinal,
@@ -393,11 +443,13 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
           avisos: avisosFinal,
           visao: true,
           trecho: (visionResult.full_text || '').replace(/\s+/g, ' ').trim().slice(0, 1500)
-        });
-        continue;
+        };
+        renomearCacheSet(cacheKey, itemVisao);
+        return itemVisao;
       }
     } catch (visionError) {
       console.warn('[AutoRenomear] Visão computacional falhou, fallback para método tradicional:', visionError.message);
+      visaoDownAte = Date.now() + 60e3; // não insiste nos próximos do lote
       // Fallback para método tradicional
     }
     
@@ -406,26 +458,26 @@ router.post('/api/termos/autorenomear', auth(['tecnico', 'psico', 'admin']), sha
       try {
         texto = await extractTextAutoRenomear(f.buffer);
       } catch (e) {
-        out.push({ arquivo: original, erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido') });
-        continue;
+        return { arquivo: original, erro: 'Não foi possível ler o PDF: ' + (e.message || 'arquivo inválido') };
       }
-      
+
       if (texto.replace(/\s/g, '').length < 20) {
         // PDF escaneado (sem camada de texto): sinaliza que precisa de OCR no cliente
-        out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual', needsOcr: true,
-          avisos: ['PDF escaneado (sem texto selecionável) — OCR automático será tentado'], trecho: '' });
-        continue;
+        return { arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual', needsOcr: true,
+          avisos: ['PDF escaneado (sem texto selecionável) — OCR automático será tentado'], trecho: '' };
       }
-      
+
       const r = sugerirNome(texto.slice(0, 8000), original);
-      out.push({ arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) });
-      continue;
+      const itemPdf = { arquivo: original, tamanho: f.size, ...r, trecho: texto.replace(/\s+/g, ' ').trim().slice(0, 1500) };
+      renomearCacheSet(cacheKey, itemPdf);
+      return itemPdf;
     }
-    
+
     // Imagem sem OCR local - precisa de visão computacional
-    out.push({ arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
-      avisos: ['Imagem sem texto extraível — use Visão Computacional (requer serviço Python OCR)'], trecho: '' });
-  }
+    return { arquivo: original, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual',
+      avisos: ['Imagem sem texto extraível — use Visão Computacional (requer serviço Python OCR)'], trecho: '' };
+  };
+  const out = await poolRenomear(req.files, processarArquivo, 3);
   res.json({ total: out.length, itens: out });
 }));
 
@@ -437,6 +489,24 @@ router.post('/api/termos/autorenomear-texto', auth(['tecnico', 'psico', 'admin']
   const { sugerirNome } = require('../lib/autoRenomear');
   const r = sugerirNome(t.slice(0, 8000), arquivo || 'documento.pdf');
   res.json({ arquivo: arquivo || 'texto', ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 1500) });
+}));
+
+// AutoRenomear via texto EM LOTE: o navegador extrai o texto dos PDFs com
+// PDF.js local (rápido, sem upload) e manda só os textos de uma vez.
+// Mesmo motor do endpoint avulso — mesma resposta, sem reenviar arquivos.
+router.post('/api/termos/autorenomear-texto-lote', auth(['tecnico', 'psico', 'admin']), ah(async (req,res)=>{
+  const itens = Array.isArray(req.body && req.body.itens) ? req.body.itens.slice(0, 100) : [];
+  if(!itens.length) return res.status(400).json({ error: 'Envie itens:[{texto, arquivo}]' });
+  const { sugerirNome } = require('../lib/autoRenomear');
+  res.json({ total: itens.length, itens: itens.map((it) => {
+    const arquivo = String((it && it.arquivo) || 'documento.pdf');
+    const t = String((it && it.texto) || '').trim().slice(0, 8000);
+    if(t.replace(/\s/g, '').length < 20)
+      return { arquivo, sugestao: '', tipo: '', nome: '', data: '', dataISO: '', confianca: 'manual', needsOcr: true,
+        avisos: ['Texto curto demais — envie o arquivo para OCR'], trecho: '' };
+    const r = sugerirNome(t, arquivo);
+    return { arquivo, ...r, trecho: t.replace(/\s+/g, ' ').trim().slice(0, 1500) };
+  }) });
 }));
 
 // AutoRenomear via OCR no SERVIDOR: recebe até 3 imagens (páginas já
