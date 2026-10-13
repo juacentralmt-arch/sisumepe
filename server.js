@@ -71,13 +71,18 @@ app.use('/uploads', shared.auth(), express.static(path.join(ROOT, 'uploads'), {
   }
 }));
 
-app.get('/api/health', (req, res) => res.json({
-  ok: true, store: store.mode,
-  version: require('./package.json').version || '1.0.0',
-  uptime_s: Math.round(process.uptime()),
-  sse_clients: shared.sseClients.length,
-  now: new Date().toISOString()
-}));
+app.get('/api/health', (req, res) => {
+  let ocrNuvem = false;
+  try { ocrNuvem = require('./src/lib/ocrNuvem').chaveConfigurada(); } catch {}
+  res.json({
+    ok: true, store: store.mode,
+    version: require('./package.json').version || '1.0.0',
+    uptime_s: Math.round(process.uptime()),
+    sse_clients: shared.sseClients.length,
+    ocrNuvem,
+    now: new Date().toISOString()
+  });
+});
 
 app.get('/api/events', shared.auth(), (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
