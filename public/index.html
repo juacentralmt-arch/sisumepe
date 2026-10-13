@@ -7253,18 +7253,58 @@ function ensurePdfJsAtiv(){
     document.head.appendChild(s);
   });
 }
-async function ativTentarOcr(){
-  const f=ativLastFile || (document.getElementById('ativPdfFile') && document.getElementById('ativPdfFile').files[0]);
-  if(!f) return toast('⚠️ Selecione o PDF novamente');
-  const prog=document.getElementById('ativProgress');
-  const txt=document.getElementById('ativProgressTxt');
-  const bar=document.getElementById('ativProgressBar');
-  const resBox=document.getElementById('ativResult');
-  prog.classList.remove('hidden'); resBox.classList.add('hidden');
-  if(bar) bar.style.width='10%';
+// Rasteriza até N páginas do PDF no navegador para o OCR do servidor
+// (páginas inteiras — os campos da ativação espalham-se pela folha).
+async function ativPaginasParaJPEG(f, maxPags){
+  await ensurePdfJsAtiv();
+  const buf = await f.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const imgs = [];
   try{
-    if(txt) txt.textContent='Carregando OCR...';
-    await ensureTesseract();
+    const n = Math.min(pdf.numPages, maxPags || 2);
+    for(let p = 1; p <= n; p++){
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      let blob = await new Promise(res => { try{ canvas.toBlob(res, 'image/jpeg', 0.8); }catch(e){ res(null); } });
+      if(blob && blob.size > 950 * 1024){
+        const c2 = document.createElement('canvas');
+        c2.width = 1400; c2.height = Math.round(canvas.height * (1400 / canvas.width));
+        c2.getContext('2d').drawImage(canvas, 0, 0, c2.width, c2.height);
+        blob = (await new Promise(res => { try{ c2.toBlob(res, 'image/jpeg', 0.75); }catch(e){ res(null); } })) || blob;
+      }
+      if(blob) imgs.push(new File([blob], 'pagina' + p + '.jpg', { type: 'image/jpeg' }));
+    }
+  }finally{ try{ if(pdf && pdf.destroy) await pdf.destroy(); }catch(e){} }
+  return imgs;
+}
+// OCR no SERVIDOR (nativo → nuvem gratuita → WASM): rápido, sem travar a
+// tela. Retorna '' se falhar — aí o chamador cai para o OCR local.
+async function ativOcrServidor(f, ui){
+  const { txt, bar } = ui || {};
+  try{
+    if(txt) txt.textContent = 'Enviando páginas ao servidor...';
+    const imgs = await ativPaginasParaJPEG(f, 2);
+    if(!imgs.length) return '';
+    const fd = new FormData();
+    imgs.forEach(b => fd.append('imagens', b));
+    fd.append('arquivo', f.name || 'documento.pdf');
+    if(txt) txt.textContent = 'Lendo no servidor...';
+    if(bar) bar.style.width = '45%';
+    const rs = await authFetch('/api/ativacoes/ocr', { method: 'POST', body: fd });
+    const js = await rs.json().catch(() => ({}));
+    if(!rs.ok) return '';
+    const t = String((js && js.texto) || '');
+    return t.replace(/\s/g, '').length >= 20 ? t : '';
+  }catch(e){ return ''; }
+}
+// OCR LOCAL no navegador (fallback quando o servidor não resolve).
+async function ativOcrNavegador(f, ui){
+  const { txt, bar } = ui || {};
+  if(txt) txt.textContent='Carregando OCR...';
+  await ensureTesseract();
     const worker=await getDocWorker(m=>{
       if(m.status==='recognizing text' && m.progress!=null){
         if(bar) bar.style.width=Math.round(15 + m.progress*70)+'%';
@@ -7289,6 +7329,27 @@ async function ativTentarOcr(){
       const { data:{ text } } = await worker.recognize(canvas);
       fullText+='\n'+text;
     }
+    return fullText;
+}
+async function ativTentarOcr(){
+  const f=ativLastFile || (document.getElementById('ativPdfFile') && document.getElementById('ativPdfFile').files[0]);
+  if(!f) return toast('⚠️ Selecione o PDF novamente');
+  const prog=document.getElementById('ativProgress');
+  const txt=document.getElementById('ativProgressTxt');
+  const bar=document.getElementById('ativProgressBar');
+  const resBox=document.getElementById('ativResult');
+  prog.classList.remove('hidden'); resBox.classList.add('hidden');
+  if(bar) bar.style.width='10%';
+  try{
+    // Servidor primeiro (nativo → nuvem → WASM): rápido, sem travar a tela.
+    // Se não resolver, cai para o OCR local no navegador.
+    const ui = { txt, bar };
+    let fullText = await ativOcrServidor(f, ui);
+    if(fullText.replace(/\s/g, '').length < 20){
+      if(txt) txt.textContent='Servidor não resolveu — tentando OCR local...';
+      fullText = await ativOcrNavegador(f, ui);
+    }
+    if(fullText.replace(/\s/g, '').length < 10) throw new Error('OCR não encontrou texto — confira a qualidade da imagem ou preencha manualmente');
     if(txt) txt.textContent='Interpretando dados...';
     if(bar) bar.style.width='85%';
     const r=await authFetch('/api/ativacoes/parse-text', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ texto: fullText }) });
@@ -7362,7 +7423,7 @@ async function ativAnalisar(){
       if(txt) txt.textContent='PDF escaneado — iniciando OCR automático...';
       if(bar) bar.style.width='100%';
       resBox.className='mt-3 rounded-xl border p-3 text-xs bg-amber-50 border-amber-300 text-amber-900';
-      resBox.innerHTML=`⚠️ <b>PDF sem texto selecionável</b> — imagem escaneada. Iniciando OCR automático (15-30s, 100% local, sem envio externo)...<br><span class="text-[11px]">Aguarde, o sistema está lendo a imagem.</span><div class="mt-2 flex gap-2"><button onclick="ativTentarOcr()" class="btn btn-dark flex-1 py-2 text-xs">📷 Tentar OCR agora</button><button onclick="document.getElementById('ativNome').focus()" class="btn btn-ghost flex-1 py-2 text-xs">✍️ Manual</button></div>`;
+      resBox.innerHTML=`⚠️ <b>PDF sem texto selecionável</b> — imagem escaneada. Iniciando OCR automático (servidor; pode usar nuvem gratuita se configurada)...<br><span class="text-[11px]">Aguarde, o sistema está lendo a imagem.</span><div class="mt-2 flex gap-2"><button onclick="ativTentarOcr()" class="btn btn-dark flex-1 py-2 text-xs">📷 Tentar OCR agora</button><button onclick="document.getElementById('ativNome').focus()" class="btn btn-ghost flex-1 py-2 text-xs">✍️ Manual</button></div>`;
       resBox.classList.remove('hidden');
       toast('⚠️ PDF escaneado — OCR automático em 1s');
       setTimeout(()=>{ try{ ativTentarOcr(); }catch(e){} }, 900);

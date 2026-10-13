@@ -74,6 +74,31 @@ router.post('/api/ativacoes/parse-text', shared.auth(['tecnico','psico','admin']
   res.json({ ok:true, dados, score, warnings, textoExtraido: texto.slice(0,8000) });
 }));
 
+// POST /api/ativacoes/ocr — OCR de páginas rasterizadas no navegador
+// (PDF escaneado/foto). Cadeia completa: nativo → nuvem gratuita
+// (se OCR_SPACE_KEY) → WASM local. Sem persistência — só extração de
+// texto para o auto-preenchimento.
+router.post('/api/ativacoes/ocr', shared.auth(['tecnico','psico','admin']), shared.upload.array('imagens', 2), shared.ah(async (req,res)=>{
+  if(!req.files || !req.files.length) return res.status(400).json({ error: 'Envie ao menos 1 imagem da página (JPG ou PNG)' });
+  const ocr = require('../lib/ocrServidor');
+  const textos = [];
+  try{
+    for(const f of req.files.slice(0, 2)){
+      const t = await ocr.comTimeout(ocr.ocrImagem(f.buffer), 150000, 'timeout no OCR');
+      if(t) textos.push(t);
+      // early-exit: os campos da ativação concentram-se no início; com texto
+      // suficiente, pula a 2ª página em vez de processar sempre.
+      if(textos.join('\n').replace(/\s/g, '').length >= 500) break;
+    }
+  }catch(e){
+    if(/timeout/i.test(e.message || '')) { try { await ocr.resetOcrServidor(); } catch (_) {} }
+    return res.status(502).json({ error: 'OCR falhou: ' + (e.message || 'erro desconhecido') });
+  }
+  const texto = textos.join('\n');
+  if(texto.replace(/\s/g, '').length < 20) return res.status(502).json({ error: 'OCR não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });
+  res.json({ texto: texto.slice(0, 12000) });
+}));
+
 // Opcional: preview PDF de ativação sem salvar
 router.post('/api/ativacoes/pdf-preview', shared.auth(['tecnico','psico','admin']), shared.ah(async (req,res)=>{
   const { dados } = req.body||{};
