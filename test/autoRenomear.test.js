@@ -239,7 +239,7 @@ console.log('\n=== TESTES AUTORENOMEAR — formato da sugestão e helpers ===');
 // Marcador de versão do motor presente (a9ed2cb) — prova qual código gerou:
 {
   const r = sugerirNome('MONITORADO: Teste Da Silva\nData: 01/01/2026', 'doc.pdf');
-  assert(r.motor === 'rn7', 'motor: versão rn7 (separarNome restaurado + data-arquivo isolada) — "' + r.motor + '"');
+  assert(r.motor === 'rn8', 'motor: versão rn8 (fallback sem rótulo + junta-letras OCR) — "' + r.motor + '"');
 }
 
 console.log('\n=== TESTES AUTORENOMEAR — termos de recolhimento reais (núcleo Juazeiro) ===');
@@ -306,6 +306,41 @@ console.log('\n=== TESTES AUTORENOMEAR — termos de recolhimento reais (núcleo
   assert(separarNome('MariadaSilva') === 'Maria da Silva', 'separarNome: partícula colada');
   assert(separarNome('MariaSilva') === 'Maria Silva', 'separarNome: camelCase');
   assert(separarNome('Maria da Silva') === 'Maria da Silva', 'separarNome: já separado não mexe');
+}
+
+console.log('\n=== TESTES AUTORENOMEAR — DAE com rótulo ilegível (rn8) ===');
+const DAE_BASE = 'ESTADO DO CEARA SECRETARIA DA FAZENDA DAE - Documento de Arrecadacao Estadual 2 - DATA VENCIMENTO 25/09/2026 11 - IDENTIFICACAO DO CONTRIBUINTE CNPJ: 27.416.842/0001-85 ';
+{
+  // OCR destruiu o rótulo ("NOME DEPOSITANTE" ilegível): fallback sem rótulo
+  // acha o nome em caixa alta, com aviso e confiança limitada a média.
+  const r = sugerirNome(DAE_BASE + 'XXXXXX.: FABRICIA SAYONARA MONTEIRO DOS SANTOS 12 - INFORMACOES COMPLEMENTARES', 'victor_260925_160547.pdf');
+  assert(r.tipoId === 'dae', 'dae sem rótulo: tipo detectado');
+  assert(r.nome === 'Fabricia Sayonara Monteiro dos Santos', 'dae sem rótulo: nome via fallback — "' + r.nome + '"');
+  assert(r.confianca === 'média', 'dae sem rótulo: confiança limitada a média — "' + r.confianca + '"');
+  assert(r.avisos.some(a => /sem rótulo/i.test(a)), 'dae sem rótulo: aviso de conferência');
+  assert(r.sugestao === 'DAE - Fabricia Sayonara Monteiro dos Santos - 25-09-2026.pdf', 'dae sem rótulo: sugestão — "' + r.sugestao + '"');
+}
+{
+  // Rótulo legível continua ganhando do fallback (sem aviso extra).
+  const r = sugerirNome(DAE_BASE + 'NOME DEPOSITANTE.: FABRICIA SAYONARA MONTEIRO DOS SANTOS 12 - INFORMACOES', 'dae.pdf');
+  assert(r.nome === 'Fabricia Sayonara Monteiro dos Santos', 'dae com rótulo: nome rotulado — "' + r.nome + '"');
+  assert(!r.avisos.some(a => /sem rótulo/i.test(a)), 'dae com rótulo: sem aviso de fallback');
+  assert(r.confianca === 'alta', 'dae com rótulo: confiança alta');
+}
+{
+  // Letras espaçadas pelo OCR ("FABRICIA S A Y O N A R A") são juntadas.
+  const r = sugerirNome('TERMO DE RECOLHIMENTO\nMONITORADO(A): FABRICIA S A Y O N A R A\nData/Hora: 28/08/2026', 'esp.pdf');
+  assert(r.nome === 'Fabricia Sayonara', 'espaçado parcial: nome juntado — "' + r.nome + '"');
+}
+{
+  // Rótulo espaçado ("M O N I T O R A D O") também é recuperado.
+  const r = sugerirNome('M O N I T O R A D O (A): JOAO SILVA\nData: 01/01/2026', 'esp2.pdf');
+  assert(r.nome === 'Joao Silva', 'rótulo espaçado: nome extraído — "' + r.nome + '"');
+}
+{
+  // Cabeçalho puro sem pessoa continua SEM NOME (fallback não inventa).
+  const r = sugerirNome('AUTO DE RECOLHIMENTO\nITENS RECEBIDOS\nENTREGUES PELAS UNIDADES PENAIS\nData: 28/09/2026', 'rec.pdf');
+  assert(r.nome === '', 'só cabeçalho: nome continua vazio — "' + r.nome + '"');
 }
 
 console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
