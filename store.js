@@ -1073,10 +1073,13 @@ const store = {
       const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
       return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
     },
-    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit }){
+    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit, skipSerialCheck }){
       // `at`: grava a movimentação com data histórica (usado pelos seeds de 60 dias).
       // `skipAudit`: não escreve na trilha de auditoria — dados de demonstração não
       // podem empurrar os registros reais para fora do limite de 500.
+      // `skipSerialCheck`: pula a exigência de serial disponível + o toque nas
+      // linhas de serial (usado só pela saída da transferência forçada, que move
+      // os seriais manualmente). Validação de formato/duplicidade continua.
       const quando=(at && !isNaN(new Date(at))) ? new Date(at).toISOString() : new Date().toISOString();
       const auditar=e=> skipAudit ? Promise.resolve(null) : store.audit.insert(e);
       sistema=normalizeSistema(sistema)||DEFAULT_SISTEMA;
@@ -1120,7 +1123,7 @@ const store = {
       const saldoAntes=Number(row.saldo||0);
       const saldoDepois=saldoAntes+qtd;
       if(saldoDepois<0) throw Object.assign(new Error(`Saldo insuficiente em ${unidade} (${saldoAntes} disponível)`),{status:400});
-      if(temSerial(material) && serialList.length){
+      if(temSerial(material) && serialList.length && !skipSerialCheck){
         if(qtd>0){
           for(const s of serialList){
             const existsFile = (MODE==='file' ? mem.estoqueSerial.find(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema) : null);
@@ -1169,7 +1172,7 @@ const store = {
           if(idx>=0) mem.estoque[idx]=row;
         }
       }
-      if(temSerial(material) && serialList.length){
+      if(temSerial(material) && serialList.length && !skipSerialCheck){
         if(qtd>0){
           for(const s of serialList){
             const idxExist = MODE==='file' ? mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema) : -1;
@@ -1234,7 +1237,10 @@ const store = {
         }
       }
     },
-    async transferir({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, user, userName, sistema, at, skipAudit }){
+    async transferir({ contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais, user, userName, sistema, at, skipAudit, forcarDisponivel }){
+      // `forcarDisponivel`: transfere os seriais mesmo fora de disponibilidade na
+      // origem (ex.: em_uso, em manutenção) e os entrega como DISPONÍVEIS no
+      // destino — "disponível para uso". O saldo da origem continua exigido.
       // `at`/`skipAudit`: mesmo sentido do adjust (usado pelos seeds históricos).
       const quando=(at && !isNaN(new Date(at))) ? new Date(at).toISOString() : new Date().toISOString();
       const auditar=e=> skipAudit ? Promise.resolve(null) : store.audit.insert(e);
@@ -1266,8 +1272,9 @@ const store = {
       // verifica saldo origem antes para falhar rápido
       const rowOrig = await store.estoque.get(contrato, material, unidadeOrigem, sistema);
       if(!rowOrig || Number(rowOrig.saldo||0) < qtd) throw Object.assign(new Error(`Saldo insuficiente em ${unidadeOrigem} (${rowOrig?rowOrig.saldo:0} disponível)`),{status:400});
-      // saida origem
-      const out = await store.estoque.adjust({ sistema, contrato, material, unidade: unidadeOrigem, qtd: -qtd, motivo: motivo ? `${motivo} → transf. p/ ${unidadeDestino}` : `Transferência p/ ${unidadeDestino}`, user, userName, seriais: serialList, at: quando, skipAudit });
+      // saida origem (no modo forçado, sem exigir serial disponível: os seriais
+      // são movidos manualmente abaixo, direto para disponível no destino)
+      const out = await store.estoque.adjust({ sistema, contrato, material, unidade: unidadeOrigem, qtd: -qtd, motivo: motivo ? `${motivo} → transf. p/ ${unidadeDestino}` : `Transferência p/ ${unidadeDestino}`, user, userName, seriais: serialList, at: quando, skipAudit, skipSerialCheck: !!forcarDisponivel });
       // Para materiais com serial (TZPR04/UPR04), os seriais saíram como em_uso; reativar diretamente em destino:
       // faz update direto de unidade/status para evitar re-inserção bloqueada
       let inn;
@@ -1282,16 +1289,28 @@ const store = {
         const saldoDepois=saldoAntes+qtd;
         if(MODE==='file'){ rowDest.saldo=saldoDepois; rowDest.updatedAt=new Date().toISOString(); }
         else { try{ const r=must(await supa.from('estoque').update({ saldo: saldoDepois, updatedat: new Date().toISOString() }).eq('id', Number(rowDest.id)).select().single(),'estoque.patchDest'); rowDest=appEST(r);}catch(e){ rowDest.saldo=saldoDepois; const idx=mem.estoque.findIndex(x=>String(x.id)===String(rowDest.id)); if(idx>=0) mem.estoque[idx]=rowDest; }}
-        // move seriais: em_uso -> disponivel + unidadeDestino (por sistema)
+        // move seriais para disponivel + unidadeDestino (por sistema).
+        // Normal: só sai de em_uso (a saída acima já marcou). Forçado: move de
+        // QUALQUER status (inclusive em_uso em outra unidade) — sem duplicar a
+        // linha; serial inédito é cadastrado direto como disponível no destino.
+        const matchSerial = (s) => (x) =>
+          String(x.contrato).toUpperCase() === contrato && String(x.serial) === s &&
+          normalizeSistema(x.sistema || DEFAULT_SISTEMA) === sistema &&
+          (forcarDisponivel ? true : x.status === 'em_uso');
         for(const s of serialList){
           if(MODE==='file'){
-            const idx=mem.estoqueSerial.findIndex(x=> String(x.contrato).toUpperCase()===contrato && String(x.serial)===s && x.status==='em_uso' && normalizeSistema(x.sistema||DEFAULT_SISTEMA)===sistema);
+            const idx = mem.estoqueSerial.findIndex(matchSerial(s));
             if(idx>=0){ mem.estoqueSerial[idx].status='disponivel'; mem.estoqueSerial[idx].unidade=unidadeDestino; mem.estoqueSerial[idx].sistema=sistema; mem.estoqueSerial[idx].updatedAt=new Date().toISOString(); }
             else {
               mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:quando, updatedAt:quando });
             }
           } else {
-            try{ must(await supa.from('estoque_serial').update({ status:'disponivel', unidade: unidadeDestino, sistema, updatedat: new Date().toISOString() }).eq('contrato',contrato).eq('serial',s).eq('status','em_uso').eq('sistema',sistema),'estoqueSerial.move'); }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:quando, updatedAt:quando }); }
+            try{
+              const upd = { status:'disponivel', unidade: unidadeDestino, sistema, updatedat: new Date().toISOString() };
+              let q = supa.from('estoque_serial').update(upd).eq('contrato',contrato).eq('serial',s).eq('sistema',sistema);
+              if(!forcarDisponivel) q = q.eq('status','em_uso');
+              must(await q,'estoqueSerial.move');
+            }catch(e){ mem.estoqueSerial.push({ id: mem.seqEstoqueSerial++, sistema, contrato, serial: s, unidade: unidadeDestino, status:'disponivel', createdAt:quando, updatedAt:quando }); }
           }
         }
         if(MODE==='file') saveFile();
