@@ -3,7 +3,7 @@ services:
     name: sisumepe
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: apt-get update -qq && apt-get install -y -qq tesseract-ocr tesseract-ocr-por || true; npm install
     startCommand: node server.js
     healthCheckPath: /api/health
     envVars:

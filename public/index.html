@@ -3738,7 +3738,7 @@ async function getDocWorker(logger){
   await ensureTesseract();
   if(docWorker && docWorkerReady) return docWorker;
   const w = await Tesseract.createWorker('por', 1, { logger, cacheMethod: 'refresh', gzip: true });
-  await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' });
+  await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1', tessedit_ocr_engine_mode: '1' });
   docWorker = w; docWorkerReady = true;
   return w;
 }
@@ -6408,6 +6408,36 @@ function ocrStatusHTML(t){
   if(/^⚠️/.test(s)) return esc(s);
   return '<span class="inline-flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin"></span>' + esc(s) + '</span>';
 }
+// Extrai o texto de um PDF no próprio navegador (PDF.js, 2 primeiras págs).
+// PDFs digitais resolvem aqui em milissegundos, sem upload. Retorna '' se
+// falhar ou sem texto (escaneado) — aí segue o fluxo de upload/OCR.
+async function extrairTextoPdfLocal(file, maxPags){
+  await ensurePdfJsAtiv();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  let txt = '';
+  try{
+    const n = Math.min(pdf.numPages, maxPags || 2);
+    for(let p = 1; p <= n; p++){
+      try{
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        txt += '\n' + ((content.items || []).map(it => it.str || '').join(' '));
+        if(txt.replace(/\s/g, '').length >= 2000) break;
+      }catch(e){}
+    }
+  }finally{ try{ if(pdf && pdf.destroy) await pdf.destroy(); }catch(e){} }
+  return txt;
+}
+function renomearPushTexto(it, r){
+  const base = { file: it.file || null, arquivo: it.arquivo, ...(r || {}) };
+  if(!base.sugestao) base.sugestao = sugestaoLocal(base) || it.arquivo;
+  base.nome = base.nome || '';
+  base.motor = base.motor || '';
+  base.dataDoArquivo = !!((base.avisos || []).some(a => /nome do arquivo/i.test(a)));
+  base.ocrMsg = ''; base.srvMsg = '';
+  renomearCache.push(base);
+}
 async function analisarRenomear(){
   if(renomearAnalisando) return toast('⏳ Análise em andamento — aguarde');
   const err = document.getElementById('renomearErr');
@@ -6423,9 +6453,44 @@ async function analisarRenomear(){
     renomearCache = [];
     renderRenomear();
     const pick = document.getElementById('renomearPick');
-    for(let ini = 0; ini < files.length; ini += RENOMEAR_LOTE){
-      const lote = files.slice(ini, ini + RENOMEAR_LOTE);
-      pick.textContent = `🔍 Analisando ${Math.min(ini + RENOMEAR_LOTE, files.length)}/${files.length}...`;
+    // FASE A — texto local: PDFs digitais resolvem no navegador (PDF.js),
+    // sem upload. Só o texto (leve) viaja, em 1 request por bloco de 50.
+    const pendUpload = [];
+    const pendTexto = [];
+    let pdfJsOk = true;
+    for(let k = 0; k < files.length; k++){
+      const f = files[k];
+      pick.textContent = `🔍 Lendo ${k + 1}/${files.length}...`;
+      let feito = false;
+      if(pdfJsOk && /\.pdf$/i.test(f.name || '')){
+        try{
+          const txt = await extrairTextoPdfLocal(f, 2);
+          if(txt.replace(/\s/g, '').length >= 20){
+            pendTexto.push({ file: f, arquivo: f.name, texto: txt.slice(0, 8000) });
+            feito = true;
+          }
+        }catch(e){ pdfJsOk = false; }
+      }
+      if(!feito) pendUpload.push(f);
+      if((k + 1) % 10 === 0) renderRenomear();
+    }
+    for(let ini = 0; ini < pendTexto.length; ini += 50){
+      const bloco = pendTexto.slice(ini, ini + 50);
+      pick.textContent = `🔍 Analisando ${Math.min(ini + 50, pendTexto.length)}/${pendTexto.length} (texto local)...`;
+      try{
+        const r = await authFetch('/api/termos/autorenomear-texto-lote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itens: bloco.map(b => ({ texto: b.texto, arquivo: b.arquivo })) }) });
+        const j = await r.json().catch(() => ({}));
+        if(!r.ok) throw new Error(j.error || 'Erro ao analisar');
+        (j.itens || []).forEach((it, k) => { if(bloco[k]) renomearPushTexto(bloco[k], it); });
+      }catch(e){
+        bloco.forEach(b => pendUpload.push(b.file));
+      }
+      renderRenomear();
+    }
+    // FASE B — upload só do restante (imagens + PDFs escaneados), em lotes.
+    for(let ini = 0; ini < pendUpload.length; ini += RENOMEAR_LOTE){
+      const lote = pendUpload.slice(ini, ini + RENOMEAR_LOTE);
+      pick.textContent = `🔍 Analisando ${Math.min(ini + RENOMEAR_LOTE, pendUpload.length)}/${pendUpload.length} (envio)...`;
       const fd = new FormData();
       for(const f of lote) fd.append('arquivos', f);
       try{

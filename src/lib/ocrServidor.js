@@ -1,9 +1,10 @@
 // =====================================================================
-//  OCR Servidor — Tesseract via WebAssembly puro, rodando NO SERVIDOR.
-//  Desenhado para caber no plano free do Render (512MB RAM, sem GPU):
-//   - sem binários nativos, sem apt, sem Python, sem GPU;
-//   - só JS + ~2MB de dados de português baixados na 1ª execução;
-//   - worker único reutilizado (singleton) entre requisições.
+//  OCR Servidor — Tesseract rodando NO SERVIDOR, em duas vias:
+//   1) binário NATIVO (`tesseract-ocr`, via apt no build) quando instalado:
+//      2-5x mais rápido que WASM, multithread, sem baixar traineddata;
+//   2) fallback WebAssembly puro (tesseract.js), que cabe no plano free do
+//      Render (512MB RAM, sem GPU): só JS + ~2MB de português na 1ª execução.
+//  Worker único WASM reutilizado (singleton) entre requisições.
 //  Recebe IMAGENS (JPEG/PNG). Páginas de PDF são rasterizadas NO NAVEGADOR
 //  (que renderiza perfeitamente) e enviadas prontas pelo endpoint
 //  /api/termos/autorenomear-ocr — rasterizar no servidor é inviável
@@ -14,6 +15,10 @@
 // =====================================================================
 
 const sharp = require('sharp');
+const { execFile } = require('child_process');
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
 
 let worker = null;
 let workerPronto = false;
@@ -87,12 +92,21 @@ async function redimensionar(buffer, maxW) {
 }
 
 // OCR de UMA imagem (buffer JPEG/PNG) -> texto.
-// Via rápida primeiro (só reduz + JPEG): suficiente p/ imagem limpa e bem
-// mais rápida. Se sair pouco texto (<20 chars), repete com os filtros
-// completos (normalize/sharpen) para scans ruidosos — precisão preservada.
+// Via nativa primeiro (binário tesseract, quando instalado via apt):
+// bem mais rápida que WASM. Falhou/ausente → cai para o WASM abaixo.
 async function ocrImagem(buffer, opts) {
   const o = opts || {};
   const src = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (await temTesseractNativo()) {
+    try {
+      const t = await comTimeout(
+        ocrImagemNativo(await redimensionar(src, o.maxW || 1600), o),
+        o.timeoutMs || 90000, 'timeout no OCR nativo'
+      );
+      if (String(t || '').replace(/\s/g, '').length >= 20) return t;
+      // pouco texto: tenta o WASM com filtros completos antes de desistir
+    } catch (e) { /* cai para o WASM */ }
+  }
   const w = await getWorker(o.logger);
   // Melhor configuração para documentos formulários
   await w.setParameters({
@@ -110,6 +124,36 @@ async function ocrImagem(buffer, opts) {
   return String((r.data && r.data.text) || '').trim();
 }
 
+// Disponibilidade do binário nativo, detectada 1x por boot (cache).
+// Ausente (ex.: ambiente sem apt) → WASM, sem quebrar nada.
+let nativoOk = null;
+function temTesseractNativo() {
+  if (nativoOk !== null) return Promise.resolve(nativoOk);
+  return new Promise((res) => {
+    execFile('tesseract', ['--version'], { timeout: 8000 }, (e) => {
+      nativoOk = !e;
+      res(nativoOk);
+    });
+  });
+}
+
+// OCR via binário `tesseract` (stdin por arquivo temporário; argv sem shell).
+// Mesmos parâmetros do WASM (PSM 4, LSTM, espaços preservados).
+function ocrImagemNativo(buffer) {
+  const src = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const tmp = path.join(os.tmpdir(), 'ocr-' + Date.now() + '-' + Math.round(Math.random() * 1e9) + '.jpg');
+  return fs.promises.writeFile(tmp, src).then(() => new Promise((res, rej) => {
+    execFile('tesseract', [tmp, 'stdout', '-l', 'por', '--psm', '4', '--oem', '1',
+      '-c', 'preserve_interword_spaces=1'],
+      { timeout: 90000, maxBuffer: 4 * 1024 * 1024 },
+      (e, stdout) => {
+        fs.promises.unlink(tmp).catch(() => {});
+        if (e) return rej(e);
+        res(String(stdout || '').trim());
+      });
+  })).catch((e) => { fs.promises.unlink(tmp).catch(() => {}); throw e; });
+}
+
 // pdfjs-dist v5 (ESM) — importa dinamicamente para CJS funcionar
 async function carregarPdfjs() {
   try { return require('pdfjs-dist/legacy/build/pdf.js'); } catch (_) {
@@ -118,4 +162,4 @@ async function carregarPdfjs() {
   }
 }
 
-module.exports = { ocrImagem, comTimeout, resetOcrServidor, getWorker, carregarPdfjs };
+module.exports = { ocrImagem, ocrImagemNativo, temTesseractNativo, comTimeout, resetOcrServidor, getWorker, carregarPdfjs };
