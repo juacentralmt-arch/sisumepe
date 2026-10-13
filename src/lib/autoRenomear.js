@@ -104,34 +104,73 @@ function separarNome(s) {
 
 // Inícios que nunca são nome (evita "Monitorado desde 01/02/2020" → "desde")
 const STOP_INICIO_NOME = /^(desde|at[ée]|ao|aos|de|do|da|para|com|por|em|no|na|e|ou|jogo)\b/i;
+
+// Junta letras isoladas de OCR espaçado ("F A B R I C I A" -> "FABRICIA").
+// Só maiúsculas (minúsculas como "e o" são texto normal e ficam intactas);
+// "R TTE" não junta (TTE tem 3 letras). Roda até estabilizar.
+function despacar(s) {
+  let v = String(s || ''), ant = '';
+  while (v !== ant) { ant = v; v = v.replace(/\b([A-ZÀ-Ö])\s(?=[A-ZÀ-Ö]\b)/g, '$1'); }
+  return v;
+}
+
+// Vocabulário de documento (cabeçalhos/rótulos/endereços): sequência em caixa
+// alta contendo QUALQUER uma destas palavras nunca é nome de pessoa.
+const NOME_STOPLIST = new Set((
+  'TERMO RECOLHIMENTO EQUIPAMENTO EQUIPAMENTOS ENTREGUE ENTREGUES UNIDADE UNIDADES ' +
+  'PENAL PENAIS PENITENCIARIO PENITENCIARIA MONITORAMENTO MONITORACAO ELETRONICO ELETRONICA ' +
+  'DECLARACAO DEVOLUCAO OFICIO RELATORIO LISTAGEM ATIVACAO RETIRADA MANUTENCAO DESATIVACAO ' +
+  'INSPECAO INSPECIONADO DANIFICADO AUTO ITENS RECEBIDOS REBIDOS DESCRICAO NUCLEO COMARCA VARA ' +
+  'ESTADO CEARA SECRETARIA FAZENDA DOCUMENTO ARRECADACAO ESTADUAL CODIGO RECEITA VENCIMENTO ' +
+  'PAGAMENTO NUMERO NOSSO PERIODO REFERENCIA VALOR PRINCIPAL MULTA JUROS DESCONTOS TOTAL ' +
+  'RECOLHER VIA CONTRIBUINTE AUTENTICACAO VERSO BARRAS BARRA NUMERACAO PIX PAGAR INFORMACOES ' +
+  'COMPLEMENTARES IMPRESSO SITE ORGAO PRODUTO PROCESSO FUNPEN DEPOSITANTE IDENTIFICACAO ' +
+  'POLICIA COORDENADORIA PESSOAS COMEP GOVERNO ADMINISTRACAO RESSOCIALIZACAO SAC CHRONOS ' +
+  'SISTEMA APRESENTACAO DESLIGADO LIGADO INTERNO EXTERNO LADO CINTA FIXACAO TRAVAS TRAVA ' +
+  'FONTE ABA DIREITA ESQUERDA DISPOSITIVO MIGRACAO PLATAFORMA INFINITY ASSINATURA VERDADE ' +
+  'PRESENTE FIRMO MATRICULA TECNICO RESPONSAVEL POLICIAL CPF RG CNPJ DATA HORA NOME ' +
+  'MONITORADO MONITORADA INTERESSADO INTERESSADA DECLARANTE REQUERENTE PACIENTE ASSISTIDO ' +
+  'REEDUCANDO ANTES DEPOIS CRATO JUAZEIRO FORTALEZA CARIRI JARDIM NORTE RUA AVENIDA AV ' +
+  'TRAVESSA RODOVIA BAIRRO CENTRO NUMERO CEP CASA LOTE QUADRA SITIO POVOADO DISTRITO ' +
+  'MUNICIPIO CIDADE ENDERECO ANO MES DIA FOLHA PAGINA ASSUNTO EXCELENCIA MERITISSIMO JUIZ ' +
+  'DIREITO DOUTOR DOUTORA SENHOR SENHORA SEGUNDA PRIMEIRA SEGUNDO PRIMEIRO CARTORIO TABELIAO'
+).split(/\s+/));
+
+// Último recurso: nome em CAIXA ALTA sem rótulo legível (OCR destruiu o rótulo,
+// ex. DAE com "NOME DEPOSITANTE" ilegível). Pega a maior sequência 2-8 palavras
+// sem nenhuma palavra de documento; dígitos quebram a sequência. Só entra quando
+// a busca rotulada falhou — nunca compete com ela.
+function extrairNomeSemRotulo(texto) {
+  const t = String(texto || '').replace(/0/g, 'O').replace(/1/g, 'I').slice(0, 8000);
+  const re = /\b([A-ZÀ-Ö]{2,}(?:\s+[A-ZÀ-Ö]{1,}){1,7})\b/g;
+  let best = null, m;
+  while ((m = re.exec(t))) {
+    const words = m[1].split(/\s+/);
+    if (words.length < 2) continue;
+    if (!/^[A-ZÀ-Ö]{2,}/.test(words[0])) continue;
+    if (words.filter(w => w.length >= 2).length < 2) continue;
+    if (words.some(w => NOME_STOPLIST.has(w))) continue;
+    const score = words.length;
+    if (!best || score > best.score) best = { words, score };
+  }
+  if (!best) return '';
+  const nome = tituloProprio(separarNome(limparNome(best.words.join(' '))));
+  if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length < 3 || STOP_INICIO_NOME.test(nome)) return '';
+  return nome;
+}
 function extrairNome(texto) {
   const t = String(texto || '').slice(0, 8000);
   // cópia com confusão clássica de OCR normalizada (0→O, ex: MONITORAD0):
   // troca 1:1, então as posições são idênticas às do original
   const tOcr = t.replace(/0/g, 'O');
-  // PRIORIDADE 1: rótulo exato "MONITORADO(A):" (Termo de Recolhimento do núcleo).
-  // Regex flexível a espaços OCR: "MONITORADO ( A ) : Nome" / "MONITORADO(A):Nome".
-  // Para em quebra de linha ou no início de "Data/Hora" (campo seguinte no layout).
-  for (const src of [t, tOcr]) {
-    const mMon = src.match(/MONITORADO\s*\(\s*A\s*\)\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'´`. \t]{2,90}?)(?=\s*\n|\s*Data\/Hora|\s*Data\s*:|$)/i);
-    if (mMon && mMon[1]) {
-      const nome = tituloProprio(separarNome(limparNome(mMon[1])));
-      if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length >= 3 && !STOP_INICIO_NOME.test(nome)) return nome;
-    }
-  }
-  // após o rótulo, pula até 12 chars não-nome ("(A): ", "(A); ", ": ") — tolera OCR
-  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'gi');
-  const cands = [];
-  for (const src of [t, tOcr]) {
-    for (const m of src.matchAll(padrao)) cands.push({ idx: m.index, cap: m[1] });
-  }
-  cands.sort((a, b) => a.idx - b.idx);
-  for (const c of cands) {
-    const nome = tituloProprio(separarNome(limparNome(c.cap)));
-
-    if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length < 3) continue;
-    if (STOP_INICIO_NOME.test(nome)) continue;
-    return nome;
+  const achado = buscarNomeRotulado([t, tOcr]);
+  if (achado) return achado;
+  // OCR espaçou as letras ("F A B R I C I A"): junta e tenta os rótulos de novo.
+  // Só vale resultado com 2+ palavras (junção total vira 1 token colado).
+  const tDes = despacar(t), tDesOcr = despacar(tOcr);
+  if (tDes !== t || tDesOcr !== tOcr) {
+    const achadoDes = buscarNomeRotulado([tDes, tDesOcr]);
+    if (achadoDes && achadoDes.split(/\s+/).length >= 2) return achadoDes;
   }
   // fallback: "Eu, NOME COMPLETO," (comum em declarações)
   for (const src of [t, tOcr]) {
@@ -140,6 +179,47 @@ function extrairNome(texto) {
       const nome = tituloProprio(limparNome(m2[1]));
       if (nome.split(/\s+/).length >= 2) return nome;
     }
+  }
+  return '';
+}
+
+// Pós-processamento de captura com letras espaçadas ("FABRICIA S A Y O N A R A"):
+// junta ANTES do limparNome (que cortaria a letra solta do fim como ruído).
+// Só vale se restarem 2+ palavras — junção total ("FABRICIASILVA") é
+// irrecuperável e mantém o fluxo original. Retorna null quando não há o que juntar.
+function juntarEspacadoPrimeiro(cap) {
+  if (!/(\b[A-ZÀ-Ö]\s){2,}[A-ZÀ-Ö]\b/.test(cap || '')) return null;
+  const d = despacar(cap);
+  return d.split(/\s+/).length >= 2 ? d : null;
+}
+// Busca rotulada (PRIORIDADE 1 MONITORADO(A) + rótulos gerais). Extraída do
+// corpo do extrairNome para reutilizar nas variantes de texto (OCR/despace).
+function buscarNomeRotulado(fontes) {
+  // PRIORIDADE 1: rótulo exato "MONITORADO(A):" (Termo de Recolhimento do núcleo).
+  // Regex flexível a espaços OCR: "MONITORADO ( A ) : Nome" / "MONITORADO(A):Nome".
+  // Para em quebra de linha ou no início de "Data/Hora" (campo seguinte no layout).
+  for (const src of fontes) {
+    const mMon = src.match(/MONITORADO\s*\(\s*A\s*\)\s*:\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'´`. \t]{2,90}?)(?=\s*\n|\s*Data\/Hora|\s*Data\s*:|$)/i);
+    if (mMon && mMon[1]) {
+      const cap0 = juntarEspacadoPrimeiro(mMon[1]) || mMon[1];
+      const nome = tituloProprio(separarNome(limparNome(cap0)));
+      if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length >= 3 && !STOP_INICIO_NOME.test(nome)) return nome;
+    }
+  }
+  // após o rótulo, pula até 12 chars não-nome ("(A): ", "(A); ", ": ") — tolera OCR
+  const padrao = new RegExp('(?:' + ROTULOS_NOME.join('|') + ')[^A-Za-zÀ-ÖØ-öø-ÿ0-9]{0,12}([A-Za-zÀ-ÖØ-öø-ÿ0-9\'´`. \\t]{3,90})', 'gi');
+  const cands = [];
+  for (const src of fontes) {
+    for (const m of src.matchAll(padrao)) cands.push({ idx: m.index, cap: m[1] });
+  }
+  cands.sort((a, b) => a.idx - b.idx);
+  for (const c of cands) {
+    const cap0 = juntarEspacadoPrimeiro(c.cap) || c.cap;
+    const nome = tituloProprio(separarNome(limparNome(cap0)));
+
+    if (nome.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '').length < 3) continue;
+    if (STOP_INICIO_NOME.test(nome)) continue;
+    return nome;
   }
   return '';
 }
@@ -209,7 +289,14 @@ function extensaoDe(nomeOriginal) {
 function sugerirNome(texto, nomeOriginal) {
   const tipo = detectarTipo(texto);
   const skipNome = tipo.semNome === true;
-  const nome = skipNome ? '' : extrairNome(texto);
+  let nome = skipNome ? '' : extrairNome(texto);
+  // Último recurso (rótulo ilegível no OCR, ex. DAE): nome em caixa alta sem
+  // rótulo. Vem marcado: aviso próprio + confiança nunca 'alta'.
+  let nomeSemRotulo = false;
+  if (!skipNome && !nome) {
+    nome = extrairNomeSemRotulo(texto);
+    nomeSemRotulo = !!nome;
+  }
   const dataConteudo = extrairDataConteudo(texto);
   const dataISO = dataConteudo || extrairDataArquivo(nomeOriginal);
   const dataDoArquivo = !dataConteudo && !!dataISO;
@@ -221,9 +308,11 @@ function sugerirNome(texto, nomeOriginal) {
   const avisos = [];
   if (tipo.id === 'documento') avisos.push('Tipo não identificado — verifique o título do documento');
   if (!skipNome && !nome) avisos.push('Nome não encontrado — complete manualmente');
+  if (nomeSemRotulo) avisos.push('Nome localizado sem rótulo no documento — confira');
   if (!dataISO) avisos.push('Data não encontrada — complete manualmente');
   else if (dataDoArquivo) avisos.push('Data extraída do nome do arquivo — confira no documento');
   let confianca = achados === 3 ? 'alta' : (achados === 2 ? 'média' : 'baixa');
+  if (nomeSemRotulo && confianca === 'alta') confianca = 'média';
   // Tipo com nome esperado mas nada legível no conteúdo: provavelmente PDF
   // escaneado com extração ruim — 'manual' aciona o OCR local no navegador.
   if (!skipNome && !nome && !dataConteudo) confianca = 'manual';
@@ -244,8 +333,10 @@ function sugerirNome(texto, nomeOriginal) {
     // rn6 = recolhimento sem semNome + regex dedicada MONITORADO(A) prioritária.
     // rn7 = separarNome restaurado + partículas coladas ("MariadaSilva") +
     //       data-arquivo só em grupo isolado (seriais longos não viram data).
-    motor: 'rn7'
+    // rn8 = buscarNomeRotulado reutilizável + junta-letras OCR ("F A B R I C I A") +
+    //       fallback sem rótulo (caixa alta, stoplist de documento, aviso + teto média).
+    motor: 'rn8'
   };
 }
 
-module.exports = { TIPOS, detectarTipo, extrairNome, extrairDataISO, extrairDataConteudo, extrairDataArquivo, sanitizar, separarNome, sugerirNome };
+module.exports = { TIPOS, detectarTipo, extrairNome, extrairNomeSemRotulo, despacar, extrairDataISO, extrairDataConteudo, extrairDataArquivo, sanitizar, separarNome, sugerirNome };
