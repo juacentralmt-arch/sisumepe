@@ -34,7 +34,7 @@ class SaldoHandler extends BaseHandler {
       };
     }
     
-    let all = await getOrFetch('estoque', {}, () => store.estoque.all());
+    let all = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     let filtroDesc = [];
 
     if (contrato) { all = all.filter(e => String(e.contrato).toUpperCase() === contrato); filtroDesc.push(contrato); }

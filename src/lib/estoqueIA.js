@@ -27,6 +27,9 @@ async function answer(query, store, opts = {}) {
   const qExpanded = expandQuery(qRaw);
   const q = norm(qExpanded);
   const user = opts.user || 'global';
+  // Escopo do módulo ('e2' no Estoque 2): isola cache/leituras da IA por
+  // módulo. Sem ns, comportamento idêntico ao original.
+  const ns = opts.ns || '';
 
   // 1. Extrair entidades
   let contratoRaw = extractContrato(qRaw);
@@ -83,6 +86,7 @@ async function answer(query, store, opts = {}) {
   // 7. Contexto para handlers
   const ctx = {
     store,
+    ns,
     helpers: { MATERIAIS, MATERIAIS_SERIAL, LIMITES, UNIDADES, CONTRATO_INFINITY, matTZPR, matsProntos, labelContrato, normContrato, extractUnidade },
     qRaw,
     q,
@@ -166,6 +170,7 @@ module.exports = {
   normContrato, labelContrato, matTZPR, matsProntos, norm, findUsuario,
   // Cache controls
   invalidateCache: () => invalidate('estoque'),
+  invalidateNsCache: (ns) => { invalidate('estoque', ns); invalidate('estoqueMov', ns); invalidate('seriais', ns); },
   clearCache: () => require('./cache').clear(),
   invalidateAllCache: () => require('./cache').invalidateAll(),
   // Metrics

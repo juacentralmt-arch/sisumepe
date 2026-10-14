@@ -29,12 +29,12 @@ class MediaConsumoHandler extends BaseHandler {
     let linhas = [];
     let totSaidas = 0;
     for (const mat of mats) {
-      const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: cNorm, material: mat, unidade: uni, sistema: sis, dias }, () => store.estoqueMov.all({ limit: 'all', contrato: cNorm, material: mat, unidade: uni, sistema: sis }));
+      const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: cNorm, material: mat, unidade: uni, sistema: sis, dias }, () => store.estoqueMov.all({ limit: 'all', contrato: cNorm, material: mat, unidade: uni, sistema: sis }), ctx.ns);
       const saidas = movs.filter(m => m.tipo === 'saida' && new Date(m.createdAt) >= ini);
       const totalSaidas = saidas.reduce((s, m) => s + Number(m.qtd || 0), 0);
       totSaidas += totalSaidas;
       const mediaDiaria = totalSaidas / dias;
-      const allEstoque = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis));
+      const allEstoque = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis), ctx.ns);
       const saldo = allEstoque
         .filter(e => String(e.contrato).toUpperCase() === cNorm && String(e.material).toUpperCase() === mat && (!uni || String(e.unidade) === uni))
         .reduce((s, e) => s + Number(e.saldo || 0), 0);

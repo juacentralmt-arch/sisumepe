@@ -14,7 +14,7 @@ class EstoqueAtualHandler extends BaseHandler {
     const uni = unidade || 'UMEPE Juazeiro';
     const cLabel = labelContrato(cNorm, store);
 
-    const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis));
+    const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis), ctx.ns);
     const matT = matTZPR(sis);
     const tzpr = all.find(e => String(e.contrato).toUpperCase() === cNorm && String(e.material).toUpperCase() === matT && String(e.unidade) === uni);
     const upr = sis === 'infinity' ? null : all.find(e => String(e.contrato).toUpperCase() === cNorm && String(e.material).toUpperCase() === 'UPR04' && String(e.unidade) === uni);

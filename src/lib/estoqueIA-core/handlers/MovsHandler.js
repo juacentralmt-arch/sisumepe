@@ -22,7 +22,7 @@ class MovsHandler extends BaseHandler {
     const cFat = ceGeral ? null : contrato;
     const completo = usuario || data;
     const lim = completo ? 'all' : 50;
-    let movs = await getOrFetch('estoqueMov', { limit: lim, contrato: cFat, unidade, material, usuario: usuario && usuario.user, data, periodo }, () => store.estoqueMov.all({ limit: lim, contrato: cFat, unidade, material }));
+    let movs = await getOrFetch('estoqueMov', { limit: lim, contrato: cFat, unidade, material, usuario: usuario && usuario.user, data, periodo }, () => store.estoqueMov.all({ limit: lim, contrato: cFat, unidade, material }), ctx.ns);
 
     if (usuario) {
       const alvo = norm(`${usuario.user} ${usuario.name || ''}`);

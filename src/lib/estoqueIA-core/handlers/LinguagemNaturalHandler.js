@@ -20,13 +20,13 @@ class LinguagemNaturalHandler extends BaseHandler {
       const mat = material || 'TZPR04';
       const c = contrato || 'CE01';
       const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade }, () => 
-        store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade }));
+        store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade }), ctx.ns);
       
       const saidas30 = movs.filter(m => m.tipo === 'saida' && new Date(m.createdAt) >= new Date(Date.now() - 30 * 86400000));
       const totalSaidas = saidas30.reduce((s, m) => s + Number(m.qtd || 0), 0);
       const mediaDiaria = totalSaidas / 30;
       
-      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
       const saldoAtual = allEstoque
         .filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat && (!unidade || String(e.unidade) === unidade))
         .reduce((s, e) => s + Number(e.saldo || 0), 0);
@@ -60,7 +60,7 @@ class LinguagemNaturalHandler extends BaseHandler {
       const c = contrato || 'CE01';
       const limite = LIMITES[mat] || 5;
       
-      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
       const saldoAtual = allEstoque
         .filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat)
         .reduce((s, e) => s + Number(e.saldo || 0), 0);
@@ -82,7 +82,7 @@ class LinguagemNaturalHandler extends BaseHandler {
     // "o que está faltando?" / "itens em falta"
     if (/faltando|em falta|zerado|o que falta/.test(n)) {
       const c = contrato || null;
-      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
       
       const faltantes = allEstoque
         .filter(e => !c || String(e.contrato).toUpperCase() === c)
@@ -124,7 +124,7 @@ class LinguagemNaturalHandler extends BaseHandler {
       }
 
       const c = contrato || 'CE01';
-      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
       const item = allEstoque.find(e => 
         String(e.contrato).toUpperCase() === c && 
         String(e.material).toUpperCase() === mat && 

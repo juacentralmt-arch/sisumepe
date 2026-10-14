@@ -14,7 +14,7 @@ class ConsumoHandler extends BaseHandler {
     const uni = unidade;
     const dias = periodo || 30;
 
-    const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }));
+    const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }), ctx.ns);
     
     const agora = Date.now();
     const inicioAtual = agora - dias * 86400000;
@@ -28,7 +28,7 @@ class ConsumoHandler extends BaseHandler {
     const media = totalSaidas / dias;
     const mediaAnterior = totalSaidasAnterior / dias;
     
-    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     const saldoAtual = allEstoque
       .filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat && (!uni || String(e.unidade) === uni))
       .reduce((s, e) => s + Number(e.saldo || 0), 0);
