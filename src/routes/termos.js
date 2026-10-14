@@ -81,10 +81,43 @@ function normRecolhimentoDados(src){
   };
 }
 
+// Histórico permanente de versões: cada PATCH com mudança real empilha o
+// estado anterior em dados._historico (sem TTL, sem trim por tempo — fica
+// para sempre, viaja no backup/restore e não precisa de migração SQL pois
+// usa a coluna jsonb `dados` já existente). Teto anti-crescimento: 100.
+const TERMO_HIST_MAX = 100;
+function stripHist(dados){
+  const d = (dados && typeof dados === 'object') ? Object.assign({}, dados) : {};
+  delete d._historico;
+  return d;
+}
+function termoCore(t){
+  return {
+    dataEnvio: t.dataEnvio || null,
+    destinatario: t.destinatario || '',
+    equipamentos: t.equipamentos || [],
+    respEntrega: t.respEntrega || '',
+    respRecebimento: t.respRecebimento || '',
+    dados: stripHist(t.dados)
+  };
+}
+const deepCopy = (o) => JSON.parse(JSON.stringify(o == null ? null : o));
+function histList(t){
+  const h = t && t.dados && t.dados._historico;
+  return Array.isArray(h) ? h : [];
+}
+
 // Termos - Listagem de Equipamentos
 router.get('/api/termos', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const list = await store.termos.allByUser(req.auth.user);
-  res.json(list);
+  // A lista não carrega os snapshots (evita payload gigante após muitas
+  // edições) — expõe só a contagem; o detalhe sai em /:id/historico.
+  res.json(list.map(t => {
+    const d = Object.assign({}, (t.dados && typeof t.dados === 'object') ? t.dados : {});
+    const n = Array.isArray(d._historico) ? d._historico.length : 0;
+    delete d._historico;
+    return Object.assign({}, t, { dados: d, versoes: n });
+  }));
 }));
 
 // Normalização para Ativações (formulário completo de monitorado)
@@ -555,6 +588,7 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
+  const antes = deepCopy(termoCore(t));
   const { dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};
   const patch={};
   if(dataEnvio !== undefined) patch.dataEnvio = dataEnvio ? new Date(dataEnvio).toISOString().slice(0,10) : null;
@@ -643,6 +677,25 @@ router.patch('/api/termos/:id', auth(['tecnico', 'psico']), ah(async (req,res)=>
   }
   if(respEntrega!=null) patch.respEntrega = String(respEntrega).trim().slice(0,80);
   if(respRecebimento!=null) patch.respRecebimento = String(respRecebimento).trim().slice(0,80);
+  // Versionamento: se algo substancial mudou, empilha o estado anterior.
+  // Comparação sobre o núcleo (sem _historico) para não gerar ruído.
+  const candidato = Object.assign({}, antes);
+  ['dataEnvio','destinatario','equipamentos','respEntrega','respRecebimento'].forEach(k=>{ if(patch[k]!==undefined) candidato[k]=patch[k]; });
+  if(patch.dados!==undefined) candidato.dados = stripHist(patch.dados);
+  if(JSON.stringify(candidato)!==JSON.stringify(antes)){
+    const hist = histList(t).concat([Object.assign(
+      { v: histList(t).length+1, at: new Date().toISOString(), byUser: req.auth.user, byName: req.auth.name||'' },
+      antes
+    )]).slice(-TERMO_HIST_MAX);
+    const baseDados = (patch.dados && typeof patch.dados==='object') ? patch.dados : stripHist(t.dados);
+    patch.dados = Object.assign({}, baseDados, { _historico: hist });
+  } else if(patch.dados!==undefined){
+    // Sem mudança substancial: o norm acima reconstrói `dados` do zero (sem
+    // _historico) — sem este carry-forward, qualquer PATCH/re-save zeraria o
+    // histórico. Preserva o que já existe.
+    const keep = histList(t);
+    if(keep.length) patch.dados = Object.assign({}, patch.dados, { _historico: keep });
+  }
   const upd = await store.termos.patch(t.id, patch);
   broadcast();
   res.json(upd);
@@ -671,10 +724,55 @@ router.get('/api/termos/:id/pdf', auth(['tecnico', 'psico']), ah(async (req,res)
   const t = await store.termos.byId(req.params.id);
   if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
   if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
-  const pdf = await termoPDFFromRecord(t);
+  // ?v=N: PDF de uma versão anterior do histórico (fidelidade total, pois o
+  // snapshot guarda o registro completo já normalizado).
+  let rec = t;
+  const v = parseInt(req.query.v || '0', 10);
+  if(v >= 1){
+    const snap = histList(t)[v-1];
+    if(!snap) return res.status(404).json({ error: 'Versão não encontrada' });
+    rec = Object.assign({}, t, {
+      dataEnvio: snap.dataEnvio, destinatario: snap.destinatario,
+      equipamentos: snap.equipamentos, respEntrega: snap.respEntrega,
+      respRecebimento: snap.respRecebimento, dados: snap.dados
+    });
+  }
+  const pdf = await termoPDFFromRecord(rec);
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}.pdf"`);
+  res.setHeader('Content-Disposition', `inline; filename="termo-${t.id}${v>=1?'-v'+v:''}.pdf"`);
   res.send(Buffer.from(pdf));
+}));
+// Histórico de versões de um termo (metadados; snapshots completos ficam no
+// registro e saem no PDF com ?v=N). Sem TTL: vale para qualquer data.
+router.get('/api/termos/:id/historico', auth(['tecnico', 'psico']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
+  const hist = histList(t);
+  res.json({ id: t.id, tipo: t.tipo || 'listagem', total: hist.length, versoes: hist.map(h=>({ v: h.v, at: h.at, byUser: h.byUser, byName: h.byName })) });
+}));
+// Restaurar versão: empilha o estado atual (nada se perde) e aplica a versão.
+router.post('/api/termos/:id/restaurar', auth(['tecnico', 'psico']), ah(async (req,res)=>{
+  const t = await store.termos.byId(req.params.id);
+  if(!t) return res.status(404).json({ error: 'Termo não encontrado' });
+  if(t.user !== req.auth.user) return res.status(403).json({ error: 'Sem permissão' });
+  const v = parseInt((req.body && req.body.v) || '0', 10);
+  const hist = histList(t);
+  const snap = hist[v-1];
+  if(!snap) return res.status(404).json({ error: 'Versão não encontrada' });
+  const antes = deepCopy(termoCore(t));
+  const hist2 = hist.concat([Object.assign(
+    { v: hist.length+1, at: new Date().toISOString(), byUser: req.auth.user, byName: req.auth.name||'', restauracaoDe: v },
+    antes
+  )]).slice(-TERMO_HIST_MAX);
+  const upd = await store.termos.patch(t.id, {
+    dataEnvio: snap.dataEnvio, destinatario: snap.destinatario,
+    equipamentos: deepCopy(snap.equipamentos),
+    respEntrega: snap.respEntrega, respRecebimento: snap.respRecebimento,
+    dados: Object.assign({}, deepCopy(snap.dados), { _historico: hist2 })
+  });
+  broadcast();
+  res.json(upd);
 }));
 router.post('/api/termos/pdf-preview', auth(['tecnico', 'psico']), ah(async (req,res)=>{
   const { tipo, dataEnvio, destinatario, equipamentos, respEntrega, respRecebimento, dados, modelo } = req.body||{};

@@ -14,6 +14,7 @@ const suites = [
   'test/ocrNuvem.test.js',
   'test/autorenomearOcr.test.js',
   'test/termos.routes.test.js',
+  'test/termos.historico.test.js',
   'test/tickets.audio.test.js',
   'test/tickets.anexos.test.js',
   'test/pdfTools.test.js',
