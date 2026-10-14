@@ -14,7 +14,7 @@ class PrevisaoRupturaHandler extends BaseHandler {
     const uni = unidade;
 
     // Buscar últimos 90 dias de saídas
-    const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }));
+    const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }), ctx.ns);
     const corte = new Date(Date.now() - 90 * 86400000);
     const saidas = movs.filter(m => m.tipo === 'saida' && new Date(m.createdAt) >= corte);
 
@@ -53,7 +53,7 @@ class PrevisaoRupturaHandler extends BaseHandler {
       projecao30d.push({ dia: i, consumo: consumoDia.toFixed(2) });
     }
 
-    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     const saldoAtual = allEstoque
       .filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat && (!uni || String(e.unidade) === uni))
       .reduce((s, e) => s + Number(e.saldo || 0), 0);

@@ -13,7 +13,7 @@ class FichaHandler extends BaseHandler {
     const mat = material || 'TZPR04';
     const uni = unidade || 'UMEPE Juazeiro';
 
-    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+    const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     const row = allEstoque.find(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat && String(e.unidade) === uni);
 
     if (!row) {

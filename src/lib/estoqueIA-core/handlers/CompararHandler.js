@@ -11,7 +11,7 @@ class CompararHandler extends BaseHandler {
     const { store, helpers, contrato, material, unidade, qRaw } = ctx;
     const c = contrato || 'CE01';
     const mats = material ? [material] : MATERIAIS;
-    const todas = await getOrFetch('estoque', {}, () => store.estoque.all());
+    const todas = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     const filtradas = todas.filter(e => String(e.contrato).toUpperCase() === c);
 
     const partes = qRaw.split(/vs|versus|comparar/i).map(s => s.trim()).filter(Boolean);

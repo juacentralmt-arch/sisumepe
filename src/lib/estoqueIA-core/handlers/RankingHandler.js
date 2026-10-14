@@ -11,7 +11,7 @@ class RankingHandler extends BaseHandler {
     const mat = material || 'TZPR04';
     const c = contrato || 'CE01';
 
-    const all = await getOrFetch('estoque', {}, () => store.estoque.all());
+    const all = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
     const rows = all.filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat);
 
     if (!rows.length) return { intent: 'ranking', text: `Sem dados para ${mat} ${c}` };

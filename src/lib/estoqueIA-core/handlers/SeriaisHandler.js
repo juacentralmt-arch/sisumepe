@@ -16,7 +16,7 @@ class SeriaisHandler extends BaseHandler {
       };
     }
 
-    let ser = await getOrFetch('estoqueSerial', { contrato, unidade }, () => store.estoqueSerial.all({ contrato, unidade }));
+    let ser = await getOrFetch('estoqueSerial', { contrato, unidade }, () => store.estoqueSerial.all({ contrato, unidade }), ctx.ns);
     const matSerial = material && MATERIAIS_SERIAL.includes(material) ? material : null;
 
     const disponiveis = ser.filter(s => s.status === 'disponivel');

@@ -21,12 +21,12 @@ class SugestaoCompraHandler extends BaseHandler {
 
     for (const mat of mats) {
       // Consumo médio 30d
-      const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }));
+      const movs = await getOrFetch('estoqueMov', { limit: 'all', contrato: c, material: mat, unidade: uni }, () => store.estoqueMov.all({ limit: 'all', contrato: c, material: mat, unidade: uni }), ctx.ns);
       const saidas30 = movs.filter(m => m.tipo === 'saida' && new Date(m.createdAt) >= new Date(Date.now() - 30 * 86400000));
       const mediaDiaria = saidas30.reduce((s, m) => s + Number(m.qtd || 0), 0) / 30;
 
       // Saldo atual
-      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all());
+      const allEstoque = await getOrFetch('estoque', {}, () => store.estoque.all(), ctx.ns);
       const saldoAtual = allEstoque
         .filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat && (!uni || String(e.unidade) === uni))
         .reduce((s, e) => s + Number(e.saldo || 0), 0);

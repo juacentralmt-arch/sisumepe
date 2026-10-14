@@ -12,7 +12,7 @@ class SerialHandler extends BaseHandler {
     const qSer = String(serial).replace(/\D/g, '');
     const isExata = qSer.length === 10;
 
-    const allSer = await getOrFetch('estoqueSerial', { contrato }, () => store.estoqueSerial.all(contrato ? { contrato } : undefined));
+    const allSer = await getOrFetch('estoqueSerial', { contrato }, () => store.estoqueSerial.all(contrato ? { contrato } : undefined), ctx.ns);
 
     if (isExata) {
       const found = allSer.find(s => String(s.serial) === qSer);

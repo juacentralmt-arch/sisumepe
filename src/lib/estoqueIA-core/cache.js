@@ -11,7 +11,10 @@ const TTL_POR_PREFIXO = {
 };
 
 function getTTL(prefix) {
-  return TTL_POR_PREFIXO[prefix] || CACHE_TTL_MS;
+  if (TTL_POR_PREFIXO[prefix] != null) return TTL_POR_PREFIXO[prefix];
+  // Escopo com namespace (ex.: 'e2:estoque') herda o TTL do prefixo base
+  const base = String(prefix).replace(/^[^:]+:/, '');
+  return TTL_POR_PREFIXO[base] || CACHE_TTL_MS;
 }
 
 function makeKey(prefix, params) {
@@ -20,17 +23,21 @@ function makeKey(prefix, params) {
   return `${prefix}:${sorted}:${Date.now() / ttl | 0}`;
 }
 
-async function getOrFetch(prefix, params, fetcher) {
-  const key = makeKey(prefix, params);
+async function getOrFetch(prefix, params, fetcher, ns) {
+  // ns (ex.: 'e2') isola o cache por módulo: mesma query em módulos
+  // diferentes nunca compartilha entrada. Sem ns, comportamento idêntico.
+  const eff = ns ? ns + ':' + prefix : prefix;
+  const key = makeKey(eff, params);
   if (cache.has(key)) return cache.get(key);
   const data = await fetcher();
   cache.set(key, data);
   return data;
 }
 
-function invalidate(prefix) {
+function invalidate(prefix, ns) {
+  const eff = ns ? ns + ':' + prefix : prefix;
   for (const key of cache.keys()) {
-    if (key.startsWith(prefix + ':')) cache.delete(key);
+    if (key.startsWith(eff + ':')) cache.delete(key);
   }
 }
 

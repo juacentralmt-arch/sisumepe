@@ -10,7 +10,7 @@
 //    • adições (recebimento de lote) por local;
 //    • transferências entre locais (com seriais quando o material tem);
 //    • saídas (instalação, troca, uso em manutenção);
-//    • datas históricas gravadas via store.estoque.adjust/transferir
+//    • datas históricas gravadas via EST.adjust/transferir
 //      ({ at, skipAudit }) — a trilha de auditoria real não é poluída.
 //
 //  É repetível: continua a numeração de serial existente e nunca deixa
@@ -75,6 +75,10 @@ async function popularEstoque(opts = {}) {
   const user = opts.user || 'seed-estoque';
   const userName = opts.userName || `Seed ${dias} dias`;
   const log = typeof opts.log === 'function' ? opts.log : () => {};
+  // Escopo do módulo (Estoque 2 passa opts.estoque/estoqueSerial próprios):
+  // sem opts, comportamento idêntico ao original (store.estoque).
+  const EST = opts.estoque || store.estoque;
+  const ESTSER = opts.estoqueSerial || store.estoqueSerial;
   const rnd = mulberry32(Math.round(Number(opts.semente) || 20260925));
   const randInt = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const pick = arr => arr[Math.floor(rnd() * arr.length)];
@@ -88,12 +92,13 @@ async function popularEstoque(opts = {}) {
   // ---- espelho do estado atual: evita saldo negativo e serial repetido ----
   const saldos = new Map();
   const disponiveis = new Map();
-  for (const e of await store.estoque.all()) {
+  for (const e of await EST.all()) {
     saldos.set(chave(e.sistema, e.contrato, e.material, e.unidade), Number(e.saldo || 0));
   }
   // limit:'all' — o espelho precisa ver a tabela inteira, senão seriais antigos
   // ficam fora do cálculo e o seed geraria números já existentes (skip em massa).
-  const seriaisAntes = await store.estoqueSerial.all({ limit: 'all' });
+  // seriaisExtras (só leitura): evita colisão de numeração com outro módulo.
+  const seriaisAntes = [...await ESTSER.all({ limit: 'all' }), ...(opts.seriaisExtras || [])];
   for (const s of seriaisAntes) {
     if (String(s.status) !== 'disponivel') continue;
     const mat = materialDoSerial(s.serial, s.sistema || 'spacecom');
@@ -148,7 +153,7 @@ async function popularEstoque(opts = {}) {
       : `Recebimento de lote ${material} — ${unidade}`;
     if (!dry) {
       try {
-        await store.estoque.adjust({
+        await EST.adjust({
           sistema: combo.sistema, contrato: combo.contrato, material, unidade, qtd,
           motivo, seriais: novos, user, userName, at: quando, skipAudit: true,
         });
@@ -175,7 +180,7 @@ async function popularEstoque(opts = {}) {
     }
     if (!dry) {
       try {
-        await store.estoque.adjust({
+        await EST.adjust({
           sistema: combo.sistema, contrato: combo.contrato, material, unidade, qtd: -qtd,
           motivo: `${MOTIVO_SAIDA[material]} — ${unidade}`, seriais,
           user, userName, at: quando, skipAudit: true,
@@ -203,7 +208,7 @@ async function popularEstoque(opts = {}) {
     }
     if (!dry) {
       try {
-        await store.estoque.transferir({
+        await EST.transferir({
           sistema: combo.sistema, contrato: combo.contrato, material, qtd,
           unidadeOrigem: origem, unidadeDestino: destino,
           motivo: `Transferência ${material}`, seriais,
@@ -311,12 +316,12 @@ async function popularEstoque(opts = {}) {
   // ------------------------------ relatório ------------------------------
   const resumoCombos = [];
   for (const combo of COMBOS) {
-    const r = await store.estoque.resumo({ contrato: combo.contrato, sistema: combo.sistema });
+    const r = await EST.resumo({ contrato: combo.contrato, sistema: combo.sistema });
     resumoCombos.push({ sistema: combo.sistema, contrato: combo.contrato, total: r.total, porMaterial: r.porMaterial || {} });
   }
   const porUnidade = new Map();
   let negativos = 0;
-  for (const e of await store.estoque.all()) {
+  for (const e of await EST.all()) {
     porUnidade.set(e.unidade, (porUnidade.get(e.unidade) || 0) + Number(e.saldo || 0));
     if (Number(e.saldo || 0) < 0) negativos++;
   }

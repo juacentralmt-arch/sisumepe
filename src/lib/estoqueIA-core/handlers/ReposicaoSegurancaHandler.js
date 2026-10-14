@@ -19,7 +19,7 @@ class ReposicaoSegurancaHandler extends BaseHandler {
     if (material && helpers.MATERIAIS.includes(material)) itens = res.itens.filter(r => r.material === material);
 
     if (!itens.length) {
-      const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis));
+      const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis), ctx.ns);
       const matT = matTZPR(sis);
       const tzpr = all.find(e => String(e.contrato).toUpperCase() === cNorm && e.material === matT && e.unidade === uni);
       const upr = sis === 'infinity' ? null : all.find(e => String(e.contrato).toUpperCase() === cNorm && e.material === 'UPR04' && e.unidade === uni);

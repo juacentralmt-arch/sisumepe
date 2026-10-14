@@ -14,7 +14,7 @@ class TransferenciaSugeridaHandler extends BaseHandler {
     const sis = sistema;
     const mat = material || (sis === 'infinity' ? 'TZPR' : 'TZPR04');
 
-    const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis));
+    const all = await getOrFetch('estoque', { sistema: sis }, () => store.estoque.all(sis), ctx.ns);
     const filtrados = all.filter(e => String(e.contrato).toUpperCase() === c && String(e.material).toUpperCase() === mat);
 
     if (filtrados.length < 2) {

@@ -22,7 +22,8 @@ const suites = [
   'test/admin.dashboard.test.js',
   'test/estoqueFluxo.test.js',
   'test/estoqueConciliacao.test.js',
-  'test/estoqueTransferForcado.test.js'
+  'test/estoqueTransferForcado.test.js',
+  'test/estoque2.independencia.test.js'
 ];
 
 const failed = [];
