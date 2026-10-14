@@ -421,15 +421,22 @@ async function gerarTermoRecolhimentoPDF(termo){
     const h = 108;
     const yBot = yTop - h;
     pg.drawRectangle({ x, y: yBot, width: w, height: h, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
-    const headTxt = 'N°:' + (ev.numero || '') + (ev.danificado ? ' DANIFICADO' : '');
+    const headTxt = 'N°:' + (ev.numero || '');
     const headW = fontBold.widthOfTextAtSize(headTxt, 8);
     pg.drawText(headTxt, { x: x + (w - headW)/2, y: yTop - 13, size: 8, font: fontBold, color: rgb(0,0,0) });
-    let ry = yTop - 24;
+    // DANOS centralizado sobre a zona dos checkboxes SIM/NÃO (mesma conta do
+    // drawCheckRow: simX = x+w-69 … fim do box NÃO = x+w-14). Substitui o
+    // antigo sufixo "DANIFICADO" do cabeçalho; altura do cartão inalterada.
+    const zoneL = x + w - 69, zoneR = x + w - 14;
+    const danosTxt = 'DANOS';
+    const danosW = fontBold.widthOfTextAtSize(danosTxt, 7.5);
+    pg.drawText(danosTxt, { x: zoneL + (zoneR - zoneL - danosW)/2, y: yTop - 24, size: 7.5, font: fontBold, color: rgb(0,0,0) });
+    let ry = yTop - 35;
     CHECKS.forEach(([k, label])=>{
       const v = ev.checks ? ev.checks[k] : null;
       const vv = (v === true || v === 'sim') ? true : (v === false || v === 'nao') ? false : null;
       drawCheckRow(pg, x + 7, ry, w - 14, label, vv);
-      ry -= 13.2;
+      ry -= 12.4;
     });
     return h;
   }
