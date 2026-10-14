@@ -154,6 +154,74 @@ async function postPdf(path, pdfBuf, fields) {
     assert(r.status === 400, 'split-zip seleção inválida: 400');
   }
 
+  console.log('\n=== PDF TOOLS — merge / split / rotate / compress / jpg-to-pdf ===');
+  // merge: 2 PDFs de 2 págs -> 4 págs; 1 arquivo -> 400
+  {
+    const a = await makePdf(2), b = await makePdf(2);
+    const fd = new FormData();
+    fd.append('files', new Blob([a], { type: 'application/pdf' }), 'a.pdf');
+    fd.append('files', new Blob([b], { type: 'application/pdf' }), 'b.pdf');
+    const res = await fetch(BASE + '/api/pdf/merge', { method: 'POST', body: fd });
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert(res.status === 200, 'merge: 200');
+    assert((await PDFDocument.load(buf)).getPageCount() === 4, 'merge: 2+2 -> 4 páginas');
+  }
+  {
+    const a = await makePdf(1);
+    const fd = new FormData();
+    fd.append('files', new Blob([a], { type: 'application/pdf' }), 'a.pdf');
+    const res = await fetch(BASE + '/api/pdf/merge', { method: 'POST', body: fd });
+    assert(res.status === 400, 'merge 1 arquivo: 400');
+  }
+  // split: "3,1" preserva a ordem pedida; sem param -> 400; invertido "5-4" vale
+  {
+    const pdf5 = await makePdf(5);
+    const r = await postPdf('/api/pdf/split', pdf5, { pages: '2,4-5' });
+    assert(r.status === 200, 'split: 200');
+    assert((await PDFDocument.load(r.buf)).getPageCount() === 3, 'split 2,4-5: 3 páginas');
+  }
+  {
+    const pdf5 = await makePdf(5);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf5], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/split', { method: 'POST', body: fd });
+    assert(res.status === 400, 'split sem páginas: 400');
+  }
+  {
+    const pdf5 = await makePdf(5);
+    const r = await postPdf('/api/pdf/extract', pdf5, { pages: '5-4' });
+    assert(r.status === 200, 'extract invertido 5-4: 200');
+    assert((await PDFDocument.load(r.buf)).getPageCount() === 2, 'extract 5-4: 2 páginas');
+  }
+  // rotate: 90 ok; 0 agora é 400 (front só oferece 90/180/270)
+  {
+    const pdf2 = await makePdf(2);
+    const r = await postPdf('/api/pdf/rotate', pdf2, { angle: '90' });
+    assert(r.status === 200, 'rotate 90: 200');
+    assert((await PDFDocument.load(r.buf)).getPageCount() === 2, 'rotate: mantém 2 páginas');
+    const r0 = await postPdf('/api/pdf/rotate', pdf2, { angle: '0' });
+    assert(r0.status === 400, 'rotate 0: 400');
+  }
+  // compress: 200 + header metadata-only honesto
+  {
+    const pdf2 = await makePdf(2);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf2], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/compress', { method: 'POST', body: fd });
+    assert(res.status === 200, 'compress: 200');
+    assert(res.headers.get('x-compress-note') === 'metadata-only', 'compress: header metadata-only');
+  }
+  // jpg-to-pdf: 1 PNG 1x1 -> 1 página
+  {
+    const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    const fd = new FormData();
+    fd.append('files', new Blob([png1x1], { type: 'image/png' }), 'p.png');
+    const res = await fetch(BASE + '/api/pdf/jpg-to-pdf', { method: 'POST', body: fd });
+    const buf = Buffer.from(await res.arrayBuffer());
+    assert(res.status === 200, 'jpg-to-pdf: 200');
+    assert((await PDFDocument.load(buf)).getPageCount() === 1, 'jpg-to-pdf: 1 imagem -> 1 página');
+  }
+
   server.close();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   process.exit(failed ? 1 : 0);

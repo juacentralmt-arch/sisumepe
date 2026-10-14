@@ -583,7 +583,7 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   const titulo2 = isUPR ? 'PREVENÇÃO À VIOLÊNCIA DOMÉSTICA' : 'MONITORAÇÃO ELETRÔNICA';
   const q1label = isUPR ? 'UPR/“botão do pânico” danificado?' : 'Equipamento de monitoração eletrônica danificado?';
   const obsLabel = isUPR ? 'Outras observações: ' : 'Outras observações ';
-  const pg = pdfDoc.addPage([PW, PH]);
+  let pg = pdfDoc.addPage([PW, PH]);
   // ---- Cabeçalho: esquerda = logo combinado (distintivo + POLÍCIA PENAL +
   // Coordenadoria COMEP numa imagem só) / direita = bloco CEARÁ combinado ----
   const yTop = PH - 36;
@@ -741,31 +741,68 @@ async function gerarTermoRecolhimentoEquipamentoPDF(termo){
   }
   simNaoRow(q1label, sn(d.eqDanificado), y); y -= 20;
   simNaoRow('Fonte de energia elétrica danificada?', sn(d.fonteDanificada), y); y -= 26;
-  // ---- Outras observações (2 linhas) ----
+  // ---- Outras observações (altura dinâmica, sem perda) ----
+  // Antes: 2 linhas fixas com corte silencioso (while slice) — texto além de
+  // ~140 chars era descartado. Agora: quebra por palavras em N linhas
+  // (1ª estreita ao lado do label, demais largura total), respeita \n e pagina
+  // se necessário. Nada é descartado (teto continua o do backend: 1000 chars).
   const obsSize=11;
   const obsL=obsLabel;
+  const ensureObsSpace = (need) => {
+    if (y - need < 150) { pg = pdfDoc.addPage([PW, PH]); y = PH - 48; }
+  };
+  const wrapParaObs = (text, startW, fullW) => {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const out = [];
+    let cur = '', maxW = startW;
+    const pushCur = () => { if (cur) { out.push(cur); cur = ''; } maxW = fullW; };
+    for (const w of words) {
+      const cand = cur ? cur + ' ' + w : w;
+      if (font.widthOfTextAtSize(cand, obsSize) <= maxW) { cur = cand; continue; }
+      pushCur();
+      if (font.widthOfTextAtSize(w, obsSize) <= maxW) { cur = w; continue; }
+      // palavra única mais larga que a linha: quebra dura por caractere
+      let part = '';
+      for (const ch of w) {
+        if (font.widthOfTextAtSize(part + ch, obsSize) <= maxW) part += ch;
+        else { if (part) out.push(part); part = ch; }
+      }
+      cur = part;
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
   pg.drawText(obsL,{x:M,y,size:obsSize,font,color:BLACK});
   const ox=M+font.widthOfTextAtSize(obsL,obsSize);
   pg.drawLine({start:{x:ox,y:y-3},end:{x:PW-M,y:y-3},thickness:0.8,color:BLACK});
-  let rest=v(d.observacoes);
-  if(rest){
-    let c1t=rest;
-    const w1=(PW-M)-ox-6;
-    while(c1t.length>4 && font.widthOfTextAtSize(c1t,obsSize)>w1) c1t=c1t.slice(0,-1);
-    const cut=c1t.replace(/\s+\S*$/,'');
-    const head=(cut.length>10?cut:c1t).trim();
-    pg.drawText(head,{x:ox+3,y,size:obsSize,font,color:BLACK});
-    rest=rest.slice(head.length).trim();
+  const rawObs=v(d.observacoes);
+  const w1=(PW-M)-ox-6;
+  const wFull=W-4;
+  let obsLines=[];
+  if (rawObs) {
+    let firstLine = true;
+    for (const para of String(rawObs).split(/\r?\n/)) {
+      if (!String(para).trim()) { obsLines.push(''); firstLine = false; continue; }
+      const wl = wrapParaObs(para, firstLine ? w1 : wFull, wFull);
+      if (!wl.length) obsLines.push('');
+      else obsLines.push(...wl);
+      firstLine = false;
+    }
   }
-  y -= 20;
-  pg.drawLine({start:{x:M,y:y-3},end:{x:PW-M,y:y-3},thickness:0.8,color:BLACK});
-  if(rest){
-    let l2=rest;
-    const w2=W-4;
-    while(l2.length>4 && font.widthOfTextAtSize(l2,obsSize)>w2) l2=l2.slice(0,-1);
-    pg.drawText(l2.trim(),{x:M+2,y,size:obsSize,font,color:BLACK});
+  if (obsLines.length && obsLines[0]) pg.drawText(obsLines[0],{x:ox+3,y,size:obsSize,font,color:BLACK});
+  // Garante o mínimo de 2 pautas (layout original) mesmo com texto curto/vazio
+  const totalObsLines = Math.max(obsLines.length, 2);
+  for (let i=1; i<totalObsLines; i++) {
+    y -= 20;
+    ensureObsSpace(20);
+    pg.drawLine({start:{x:M,y:y-3},end:{x:PW-M,y:y-3},thickness:0.8,color:BLACK});
+    const t = obsLines[i];
+    if (t) pg.drawText(t,{x:M+2,y,size:obsSize,font,color:BLACK});
   }
   y -= 26;
+  // Se as observações empurraram o cursor para perto do rodapé, continua o
+  // restante do documento numa página nova em vez de sobrepor o rodapé.
+  if (y < 220) { pg = pdfDoc.addPage([PW, PH]); y = PH - 48; }
   // ---- Fecho + data por extenso ----
   drawPara([{t:'Por ser verdade, firmo o presente.'}],11,16,0,false);
   y -= 12;
