@@ -498,7 +498,7 @@ async function gerarTermoRecolhimentoPDF(termo){
       const boxH = 26;
       const leftW = PW - 2*M - 150;
       pg.drawRectangle({ x: M, y: y - boxH, width: leftW, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
-      pg.drawText('Itens Rebidos: ' + (d.itensRecebidos || ''), { x: M + 6, y: y - 17, size: 8.5, font, color: rgb(0,0,0) });
+      pg.drawText('Itens Recebidos: ' + (d.itensRecebidos || ''), { x: M + 6, y: y - 17, size: 8.5, font, color: rgb(0,0,0) });
       pg.drawRectangle({ x: M + leftW + 8, y: y - boxH, width: 142, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
       const dhW = font.widthOfTextAtSize(dhTxt, 8.5);
       pg.drawText(dhTxt, { x: M + leftW + 8 + (142 - dhW)/2, y: y - 17, size: 8.5, font, color: rgb(0,0,0) });
