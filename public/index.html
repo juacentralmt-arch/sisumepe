@@ -650,8 +650,8 @@
             </select></div>
             <div><label class="lbl">AUTOR DA DEVOLUÇÃO — DOCUMENTO</label><input id="reqAutorDoc" placeholder="RG/CPF de quem devolveu" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
           </div>
-          <label class="lbl">OUTRAS OBSERVAÇÕES</label>
-          <textarea id="reqObs" rows="2" placeholder="Estado dos equipamentos, avarias, faltas..." class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></textarea>
+          <label class="lbl">OUTRAS OBSERVAÇÕES <span class="font-normal text-slate-400">(até 1000 caracteres — quebra automática no PDF)</span></label>
+          <textarea id="reqObs" rows="2" maxlength="1000" placeholder="Estado dos equipamentos, avarias, faltas..." class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></textarea>
           <div><label class="lbl">MATRÍCULA RECEBEDOR (policial/servidor)</label><input id="reqMatricula" placeholder="Matrícula de quem recebeu" class="inp mt-1 mb-2.5" oninput="scheduleRecEqPreview()"></div>
           <div class="flex gap-2 mt-2">
             <button onclick="previewTermoPDF()" class="btn btn-ghost flex-1 py-2.5 text-xs">👁️ Visualizar / Baixar PDF</button>
@@ -5844,7 +5844,7 @@ async function pdfCompress(){
     if(r.ok){
       const orig = r.headers.get('X-Original-Size');
       const comp = r.headers.get('X-Compressed-Size');
-      if(orig && comp){ const ratio = Math.round((1 - comp/orig)*100); toast(`✅ Comprimido: ${Math.round(orig/1024)}KB → ${Math.round(comp/1024)}KB (${ratio}% redução)`); }
+      if(orig && comp){ const ratio = Math.round((1 - comp/orig)*100); if(ratio<=0) toast(`ℹ️ Sem redução (${Math.round(orig/1024)}KB → ${Math.round(comp/1024)}KB): esta compressão remove só metadados — escaneados precisam de reamostragem`); else toast(`✅ Comprimido: ${Math.round(orig/1024)}KB → ${Math.round(comp/1024)}KB (${ratio}% redução)`); }
     }
     await pdfHandleResponse(r,'comprimido.pdf'); 
   }catch(e){ const m=document.getElementById('pdfToolMsg'); if(m){ m.textContent='⚠️ '+e.message; m.className='text-xs font-bold text-rose-600 mt-2'; m.classList.remove('hidden'); } }finally{ setBtnLoading(btn, false); }

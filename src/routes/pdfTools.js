@@ -7,6 +7,17 @@ const router = express.Router();
 // helper para validar PDFs
 function isPdf(buf){ return buf && buf.length>4 && buf.slice(0,4).toString()==='%PDF'; }
 
+// Tetos anti-DoS no plano free (Render 512MB): PDFs gigantes (milhares de
+// páginas ou zip-bomb) estourariam RAM/CPU no pdf-lib, que é síncrono e
+// bloqueia o event loop. O multer já limita bytes (200MB); aqui limitamos
+// páginas após o load, antes de processar.
+const MAX_PDF_PAGES_IN = 500;   // páginas do PDF de entrada
+const MAX_MERGE_PAGES_OUT = 300; // páginas do PDF resultante do merge
+function tooBig(total){
+  const e = new Error(`PDF com páginas demais (${total}). Máximo ${MAX_PDF_PAGES_IN} por vez.`);
+  e.status = 400; throw e;
+}
+
 // ZIP mínimo (stored, sem compressão) — evita dependência extra no servidor
 const ZIP_CRC_T = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
 function zipCrc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=ZIP_CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
@@ -49,9 +60,13 @@ function zipStore(files){
 router.post('/api/pdf/merge', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.array('files', 10), shared.ah(async (req,res)=>{
   if(!req.files || req.files.length<2) return res.status(400).json({ error: 'Envie ao menos 2 PDFs para mesclar' });
   const pdfDoc = await PDFDocument.create();
+  let totalOut = 0;
   for(const f of req.files){
     if(!isPdf(f.buffer)) return res.status(400).json({ error: 'Arquivo inválido: '+f.originalname+' não é PDF' });
     const src = await PDFDocument.load(f.buffer);
+    if(src.getPageCount() > MAX_PDF_PAGES_IN) tooBig(src.getPageCount());
+    totalOut += src.getPageCount();
+    if(totalOut > MAX_MERGE_PAGES_OUT) return res.status(400).json({ error: `Resultado com páginas demais. Máximo ${MAX_MERGE_PAGES_OUT} no merge.` });
     const pages = await pdfDoc.copyPages(src, src.getPageIndices());
     pages.forEach(p=> pdfDoc.addPage(p));
   }
@@ -68,27 +83,21 @@ router.post('/api/pdf/split', shared.auth(['tecnico','psico','admin']), shared.u
   const { pages, from, to } = req.body||{};
   const src = await PDFDocument.load(req.file.buffer);
   const total = src.getPageCount();
+  if(total > MAX_PDF_PAGES_IN) tooBig(total);
   let indices=[];
   if(pages){
-    // ex: "1,3,5-7" 1-based
-    String(pages).split(',').forEach(part=>{
-      const m=part.trim().match(/^(\d+)-(\d+)$/);
-      if(m){ const s=parseInt(m[1],10), e=parseInt(m[2],10); for(let i=s;i<=e;i++) if(i>=1&&i<=total) indices.push(i-1); }
-      else { const n=parseInt(part.trim(),10); if(n>=1&&n<=total) indices.push(n-1); }
-    });
+    // "1,3,5-7" 1-based, preservando a ordem pedida (permite reordenar: "3,1")
+    indices = parsePaginasOrdered(pages, total);
   } else if(from || to){
     const s=parseInt(from||1,10), e=parseInt(to||total,10);
-    for(let i=s;i<=e;i++) if(i>=1&&i<=total) indices.push(i-1);
+    const a=Math.min(s,e), b=Math.max(s,e);
+    for(let i=a;i<=b;i++) if(i>=1&&i<=total) indices.push(i-1);
   } else {
-    // sem param: retorna zip com cada página? por simplicidade retorna 1 PDF com todas (mesmo que original)
-    indices = src.getPageIndices();
+    return res.status(400).json({ error: 'Informe as páginas. Ex: 1,3,5-7' });
   }
   if(!indices.length) return res.status(400).json({ error: 'Nenhuma página válida. Ex: 1,3,5-7' });
   // Se pediu 1 intervalo contínuo, devolve 1 PDF; se múltiplos não-contínuos, devolve 1 PDF com as páginas selecionadas
-  const out = await PDFDocument.create();
-  const copied = await out.copyPages(src, indices);
-  copied.forEach(p=> out.addPage(p));
-  const bytes = await out.save();
+  const bytes = await copiarPaginas(src, indices);
   res.setHeader('Content-Type','application/pdf');
   res.setHeader('Content-Disposition','attachment; filename="dividido.pdf"');
   res.send(Buffer.from(bytes));
@@ -111,6 +120,10 @@ router.post('/api/pdf/compress', shared.auth(['tecnico','psico','admin']), share
   res.setHeader('Content-Disposition','attachment; filename="comprimido.pdf"');
   res.setHeader('X-Original-Size', String(req.file.buffer.length));
   res.setHeader('X-Compressed-Size', String(bytes.length));
+  // Honestidade: esta compressão remove só metadados/reempacota objetos —
+  // PDF escaneado (só imagens) quase não encolhe. O frontend avisa quando
+  // a redução é nula/negativa em vez de prometer o que não entrega.
+  res.setHeader('X-Compress-Note', 'metadata-only');
   res.send(Buffer.from(bytes));
 }));
 
@@ -140,9 +153,10 @@ router.post('/api/pdf/rotate', shared.auth(['tecnico','psico','admin']), shared.
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const angle = parseInt(req.body.angle||'90',10);
-  const allowed=[0,90,180,270];
+  const allowed=[90,180,270];
   if(!allowed.includes(angle)) return res.status(400).json({ error: 'Ângulo deve ser 90, 180 ou 270' });
   const doc = await PDFDocument.load(req.file.buffer);
+  if(doc.getPageCount() > MAX_PDF_PAGES_IN) tooBig(doc.getPageCount());
   doc.getPages().forEach(p=> p.setRotation(degrees(p.getRotation().angle + angle)));
   const bytes = await doc.save();
   res.setHeader('Content-Type','application/pdf');
@@ -150,31 +164,50 @@ router.post('/api/pdf/rotate', shared.auth(['tecnico','psico','admin']), shared.
   res.send(Buffer.from(bytes));
 }));
 
-// Extract pages as single PDF (alias de split)
+// Extract pages as single PDF (alias de split — mesma ordem pedida)
 router.post('/api/pdf/extract', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
   if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
   const pages = String(req.body.pages||'').trim();
   if(!pages) return res.status(400).json({ error: 'Informe as páginas. Ex: 1,3,5-7' });
-  req.body.pages=pages;
   // reutiliza lógica do split
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const src = await PDFDocument.load(req.file.buffer);
   const total=src.getPageCount();
-  let indices=[];
-  String(pages).split(',').forEach(part=>{
-    const m=part.trim().match(/^(\d+)-(\d+)$/);
-    if(m){ const s=parseInt(m[1],10), e=parseInt(m[2],10); for(let i=s;i<=e;i++) if(i>=1&&i<=total) indices.push(i-1); }
-    else { const n=parseInt(part.trim(),10); if(n>=1&&n<=total) indices.push(n-1); }
-  });
+  if(total > MAX_PDF_PAGES_IN) tooBig(total);
+  const indices = parsePaginasOrdered(pages, total);
   if(!indices.length) return res.status(400).json({ error: 'Nenhuma página válida' });
-  const out=await PDFDocument.create();
-  const copied=await out.copyPages(src, indices);
-  copied.forEach(p=> out.addPage(p));
-  const bytes=await out.save();
+  const bytes = await copiarPaginas(src, indices);
   res.setHeader('Content-Type','application/pdf');
   res.setHeader('Content-Disposition','attachment; filename="extraido.pdf"');
   res.send(Buffer.from(bytes));
 }));
+
+// "1,3,5-7" (1-based) -> índices 0-based na ORDEM pedida (permite "3,1"),
+// sem duplicadas, com intervalos invertidos ("7-5" == "5-7").
+function parsePaginasOrdered(str, total){
+  const out = [];
+  const seen = new Set();
+  String(str||'').split(',').forEach(part=>{
+    const m = part.trim().match(/^(\d+)-(\d+)$/);
+    if(m){
+      const s = parseInt(m[1],10), e = parseInt(m[2],10);
+      const a = Math.min(s,e), b = Math.max(s,e);
+      for(let i=a;i<=b;i++) if(i>=1 && i<=total && !seen.has(i-1)){ seen.add(i-1); out.push(i-1); }
+    } else {
+      const n = parseInt(part.trim(),10);
+      if(n>=1 && n<=total && !seen.has(n-1)){ seen.add(n-1); out.push(n-1); }
+    }
+  });
+  return out;
+}
+
+// Copia as páginas nos índices dados para um PDF novo (ordem preservada).
+async function copiarPaginas(src, indices){
+  const out = await PDFDocument.create();
+  const copied = await out.copyPages(src, indices);
+  copied.forEach(p=> out.addPage(p));
+  return out.save();
+}
 
 // helper: "1,3,5-7" (1-based) -> índices 0-based válidos
 function parsePaginas(str, total){
@@ -201,6 +234,7 @@ router.post('/api/pdf/watermark', shared.auth(['tecnico','psico','admin']), shar
   if(!text) return res.status(400).json({ error: 'Informe o texto da marca d\'água' });
   const pos = req.body.pos === 'rodape' ? 'rodape' : 'centro';
   const doc = await PDFDocument.load(req.file.buffer);
+  if(doc.getPageCount() > MAX_PDF_PAGES_IN) tooBig(doc.getPageCount());
   const font = await doc.embedFont(StandardFonts.HelveticaBold);
   doc.getPages().forEach(p=>{
     const { width, height } = p.getSize();
@@ -228,6 +262,7 @@ router.post('/api/pdf/pagenumber', shared.auth(['tecnico','psico','admin']), sha
   const pos = req.body.pos === 'direita' ? 'direita' : 'centro';
   const inicio = Math.max(1, parseInt(req.body.inicio||'1',10) || 1);
   const doc = await PDFDocument.load(req.file.buffer);
+  if(doc.getPageCount() > MAX_PDF_PAGES_IN) tooBig(doc.getPageCount());
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const size = 10;
   doc.getPages().forEach((p,i)=>{
@@ -251,6 +286,7 @@ router.post('/api/pdf/remove-pages', shared.auth(['tecnico','psico','admin']), s
   if(!pages) return res.status(400).json({ error: 'Informe as páginas a remover. Ex: 1,3,5-7' });
   const doc = await PDFDocument.load(req.file.buffer);
   const total = doc.getPageCount();
+  if(total > MAX_PDF_PAGES_IN) tooBig(total);
   const idx = parsePaginas(pages, total);
   if(!idx.length) return res.status(400).json({ error: 'Nenhuma página válida. Ex: 1,3,5-7' });
   if(idx.length >= total) return res.status(400).json({ error: 'Não é possível remover todas as páginas' });
@@ -284,6 +320,7 @@ router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shar
   if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
   const src = await PDFDocument.load(req.file.buffer);
   const total = src.getPageCount();
+  if(total > MAX_PDF_PAGES_IN) tooBig(total);
   const { pages, from, to } = req.body || {};
   let indices = [];
   if(pages) {
