@@ -584,6 +584,12 @@
             </div>
             <button type="button" onclick="addTermoEquipRow()" class="ml-auto btn btn-ghost text-xs px-3 py-1.5">＋ Adicionar linha</button>
           </div>
+          <div id="termoKitRow" class="flex items-center gap-2 mt-1 mb-2 flex-wrap">
+            <label class="lbl">KITS COMPLETOS <span class="font-normal text-slate-400">(1 fonte + 1 cinta + 2 travas por kit — falta só o TZPR04)</span></label>
+            <input id="termoKitQtd" type="number" min="1" max="30" value="1" title="Qtd de kits" class="inp !w-20 text-center !py-1.5">
+            <button type="button" onclick="addTermoKits()" class="btn btn-ghost text-xs px-3 py-1.5">📦 Gerar kits</button>
+            <button type="button" onclick="copyTermoTZPRs()" class="btn btn-ghost text-xs px-3 py-1.5">📋 Copiar TZPRs</button>
+          </div>
           <div class="overflow-x-auto mt-1 mb-2.5">
             <table class="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
               <thead id="termoEquipHead"></thead>
@@ -608,9 +614,13 @@
             <div><label class="lbl">DATA / HORA *</label><input id="termoRecDataHora" type="datetime-local" class="inp mt-1 mb-2.5" oninput="scheduleRecPreview()" onchange="scheduleRecPreview()"></div>
             <div><label class="lbl">DESCRIÇÃO</label><input id="termoRecDescCurta" placeholder="Resumo (opcional)" class="inp mt-1 mb-2.5" oninput="document.getElementById('termoRecDescricao').value=this.value;scheduleRecPreview()"></div>
           </div>
-          <div class="flex items-center justify-between mt-1 mb-2">
+          <div class="flex items-center justify-between mt-1 mb-2 gap-2 flex-wrap">
             <label class="lbl">EQUIPAMENTOS * (toque SIM/NÃO em cada item)</label>
-            <button onclick="addRecEquip()" class="btn btn-ghost text-xs px-3 py-1.5">+ Adicionar equipamento</button>
+            <div class="flex items-center gap-1.5">
+              <input id="termoRecQtd" type="number" min="1" max="60" value="1" title="Qtd de equipamentos" class="inp !w-16 text-center !py-1.5">
+              <button onclick="addRecEquipsBulk()" class="btn btn-ghost text-xs px-3 py-1.5">+ Adicionar</button>
+              <button onclick="copyRecNumeros()" class="btn btn-ghost text-xs px-3 py-1.5">📋 Copiar N°s</button>
+            </div>
           </div>
           <div id="termoRecEquips" class="space-y-2.5 mb-2.5"></div>
           <label class="lbl">DESCRIÇÃO GERAL</label>
@@ -5173,6 +5183,8 @@ function paintTermoEquipHead(){
   const on = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-white', off = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-slate-500';
   if(bT){ bT.className = termoModelo === 'tzpr' ? on : off; bT.style.background = termoModelo === 'tzpr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
   if(bU){ bU.className = termoModelo === 'upr' ? on : off; bU.style.background = termoModelo === 'upr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
+  const kitRow = document.getElementById('termoKitRow');
+  if(kitRow) kitRow.classList.toggle('hidden', termoModelo !== 'tzpr');
 }
 function setTermoModelo(m){
   m = (m === 'upr') ? 'upr' : 'tzpr';
@@ -5210,6 +5222,27 @@ function addTermoEquipRow(){
   cur.push({});
   renderTermoEquipRows(cur);
   scheduleListagemPreview();
+}
+function addTermoKits(){
+  if(termoModelo !== 'tzpr') return toast('⚠️ Kits disponíveis apenas no modelo TZPR');
+  let n = parseInt((document.getElementById('termoKitQtd') || {}).value || '1', 10);
+  if(!Number.isFinite(n) || n < 1) n = 1;
+  n = Math.min(n, TERMO_MAX_ROWS);
+  const cur = getTermoEquipamentos();
+  const space = TERMO_MAX_ROWS - cur.length;
+  if(space <= 0) return toast('⚠️ Máximo de ' + TERMO_MAX_ROWS + ' linhas');
+  const add = Math.min(n, space);
+  for(let i = 0; i < add; i++) cur.push({ tzpr04: '', fonte04: '1', cinta: '1', trava: '2' });
+  renderTermoEquipRows(cur);
+  scheduleListagemPreview();
+  toast(`📦 ${add} kit(s) — falta só preencher o TZPR04`);
+}
+function copyTermoTZPRs(){
+  const key = termoModelo === 'upr' ? 'upr04' : 'tzpr04';
+  const vals = getTermoEquipamentos().map(r => (r[key] || '').trim()).filter(Boolean);
+  if(!vals.length) return toast('⚠️ Nenhum serial preenchido');
+  const txt = vals.join('\n');
+  (navigator.clipboard?.writeText(txt) || Promise.reject()).then(() => toast(`📋 ${vals.length} seriais copiados`)).catch(() => toast(txt.slice(0, 120)));
 }
 function removeTermoEquipRow(i){
   const cur = getTermoEquipamentos().filter((_, j) => j !== i);
@@ -5440,8 +5473,26 @@ function setTermoTipo(t){
 }
 function recCheckState(eq, k){ const v = eq.checks ? eq.checks[k] : null; return v === true ? 'sim' : v === false ? 'nao' : ''; }
 function addRecEquip(data){
-  recEquips.push(Object.assign({ numero: '', danificado: false, checks: {} }, data||{}));
+  recEquips.push(Object.assign({ numero: '', danificado: true, checks: {} }, data||{}));
   renderRecEquips();
+}
+function addRecEquipsBulk(){
+  let n = parseInt((document.getElementById('termoRecQtd') || {}).value || '1', 10);
+  if(!Number.isFinite(n) || n < 1) n = 1;
+  n = Math.min(n, 60);
+  for(let i = 0; i < n; i++){
+    if(recEquips.length >= 60) break;
+    recEquips.push({ numero: '', danificado: true, checks: {} });
+  }
+  if(recEquips.length >= 60 && n > 1) toast('⚠️ Máximo de 60 equipamentos');
+  renderRecEquips();
+  if(n > 1) toast(`📦 ${n} equipamento(s) — DANIFICADO já marcado`);
+}
+function copyRecNumeros(){
+  const vals = recEquips.map(e => (e.numero || '').trim()).filter(Boolean);
+  if(!vals.length) return toast('⚠️ Nenhum número preenchido');
+  const txt = vals.join('\n');
+  (navigator.clipboard?.writeText(txt) || Promise.reject()).then(() => toast(`📋 ${vals.length} números copiados`)).catch(() => toast(txt.slice(0, 120)));
 }
 function removeRecEquip(i){ recEquips.splice(i,1); renderRecEquips(); }
 function setRecCheck(i, k, v){
@@ -5543,6 +5594,7 @@ function renderTermos(){
         <button onclick="editTermo(${t.id})" class="btn btn-ghost flex-1 py-1.5 text-[11px]">✏️ Editar</button>
         <button onclick="downloadTermoPDF(${t.id})" class="btn btn-primary flex-1 py-1.5 text-[11px]">⬇ PDF</button>
       </div>
+      ${(t.versoes > 0) ? `<button onclick="toggleTermoHist(${t.id})" class="w-full mt-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800">🕓 Versões anteriores (${t.versoes})</button><div id="thist-${t.id}" class="hidden mt-1.5 border-t border-slate-100 pt-1.5"></div>` : ''}
       <button onclick="deleteTermo(${t.id})" class="w-full mt-1.5 text-[11px] font-bold text-rose-600 hover:text-rose-800">🗑️ Excluir</button>
     </div>`;
   }).join('');
@@ -7195,6 +7247,45 @@ async function editTermo(id){
 async function deleteTermo(id){
   if(!confirm('Excluir o termo #' + id + '?')) return;
   try{ await api('/api/termos/'+id, { method:'DELETE' }); toast('🗑️ Termo excluído'); loadTermos(); }catch(e){ toast('⚠️ '+e.message); }
+}
+async function toggleTermoHist(id){
+  const box = document.getElementById('thist-' + id);
+  if(!box) return;
+  if(!box.classList.contains('hidden')){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = '<p class="text-[11px] text-slate-400 py-2">Carregando versões...</p>';
+  try{
+    const h = await api('/api/termos/' + id + '/historico');
+    if(!h.total){ box.innerHTML = '<p class="text-[11px] text-slate-400 py-2">Sem alterações registradas.</p>'; return; }
+    box.innerHTML = '<p class="lbl mb-1">VERSÕES ANTERIORES (permanentes — sem prazo)</p>' + [...h.versoes].reverse().map(v => {
+      const dt = v.at ? new Date(v.at).toLocaleString('pt-BR') : '-';
+      return `<div class="flex items-center gap-2 py-1 border-b border-slate-100 last:border-0">
+        <span class="text-[11px] font-extrabold text-indigo-600">v${v.v}</span>
+        <span class="text-[11px] text-slate-500 flex-1 truncate">${esc(dt)} • ${esc(v.byName || v.byUser || '-')}</span>
+        <button onclick="termoHistPDF(${id},${v.v})" class="btn btn-ghost text-[10px] px-2 py-1">👁️ PDF</button>
+        <button onclick="termoHistRestore(${id},${v.v})" class="btn btn-ghost text-[10px] px-2 py-1">↩ Restaurar</button>
+      </div>`;
+    }).join('');
+  }catch(e){ box.innerHTML = '<p class="text-[11px] text-rose-500 py-2">⚠️ ' + esc(e.message) + '</p>'; }
+}
+async function termoHistPDF(id, v){
+  try{
+    const res = await authFetch('/api/termos/' + id + '/pdf?v=' + v);
+    if(!res.ok) throw new Error('Erro');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'termo-' + id + '-v' + v + '.pdf'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }catch(e){ toast('⚠️ ' + e.message); }
+}
+async function termoHistRestore(id, v){
+  if(!confirm(`Restaurar o termo #${id} para a versão v${v}? (o estado atual será guardado como nova versão)`)) return;
+  try{
+    await api('/api/termos/' + id + '/restaurar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ v }) });
+    toast('↩ Versão restaurada');
+    loadTermos();
+  }catch(e){ toast('⚠️ ' + e.message); }
 }
 // ================= ATIVAÇÕES - AUTO PREENCHER (Termos > Ativações) =================
 function toTitleCaseInput(el){
