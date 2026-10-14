@@ -585,9 +585,9 @@
             <button type="button" onclick="addTermoEquipRow()" class="ml-auto btn btn-ghost text-xs px-3 py-1.5">＋ Adicionar linha</button>
           </div>
           <div id="termoKitRow" class="flex items-center gap-2 mt-1 mb-2 flex-wrap">
-            <label class="lbl">KITS COMPLETOS <span class="font-normal text-slate-400">(1 fonte + 1 cinta + 2 travas por kit — falta só o TZPR04)</span></label>
+            <label class="lbl">KITS <span class="font-normal text-slate-400">(adiciona N linhas em branco para preencher)</span></label>
             <input id="termoKitQtd" type="number" min="1" max="30" value="1" title="Qtd de kits" class="inp !w-20 text-center !py-1.5">
-            <button type="button" onclick="addTermoKits()" class="btn btn-ghost text-xs px-3 py-1.5">📦 Gerar kits</button>
+            <button type="button" onclick="addTermoKits()" class="btn btn-ghost text-xs px-3 py-1.5">📦 Adicionar kits</button>
             <button type="button" onclick="copyTermoTZPRs()" class="btn btn-ghost text-xs px-3 py-1.5">📋 Copiar TZPRs</button>
           </div>
           <div class="overflow-x-auto mt-1 mb-2.5">
@@ -5183,8 +5183,6 @@ function paintTermoEquipHead(){
   const on = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-white', off = 'text-[11px] font-extrabold px-2.5 py-1 rounded-md text-slate-500';
   if(bT){ bT.className = termoModelo === 'tzpr' ? on : off; bT.style.background = termoModelo === 'tzpr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
   if(bU){ bU.className = termoModelo === 'upr' ? on : off; bU.style.background = termoModelo === 'upr' ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : ''; }
-  const kitRow = document.getElementById('termoKitRow');
-  if(kitRow) kitRow.classList.toggle('hidden', termoModelo !== 'tzpr');
 }
 function setTermoModelo(m){
   m = (m === 'upr') ? 'upr' : 'tzpr';
@@ -5224,7 +5222,8 @@ function addTermoEquipRow(){
   scheduleListagemPreview();
 }
 function addTermoKits(){
-  if(termoModelo !== 'tzpr') return toast('⚠️ Kits disponíveis apenas no modelo TZPR');
+  // Apenas adiciona N linhas EM BRANCO (igual ao "Adicionar linha") — nada
+  // muda no termo/PDF gerado; o preenchimento continua todo manual.
   let n = parseInt((document.getElementById('termoKitQtd') || {}).value || '1', 10);
   if(!Number.isFinite(n) || n < 1) n = 1;
   n = Math.min(n, TERMO_MAX_ROWS);
@@ -5232,10 +5231,10 @@ function addTermoKits(){
   const space = TERMO_MAX_ROWS - cur.length;
   if(space <= 0) return toast('⚠️ Máximo de ' + TERMO_MAX_ROWS + ' linhas');
   const add = Math.min(n, space);
-  for(let i = 0; i < add; i++) cur.push({ tzpr04: '', fonte04: '1', cinta: '1', trava: '2' });
+  for(let i = 0; i < add; i++) cur.push({});
   renderTermoEquipRows(cur);
   scheduleListagemPreview();
-  toast(`📦 ${add} kit(s) — falta só preencher o TZPR04`);
+  if(add > 1) toast(`📦 ${add} linhas adicionadas`);
 }
 function copyTermoTZPRs(){
   const key = termoModelo === 'upr' ? 'upr04' : 'tzpr04';
