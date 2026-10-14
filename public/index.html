@@ -174,6 +174,9 @@
     <button data-tab="estoque" onclick="go('estoque')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
       Estoque <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TÉCNICO</span></button>
+    <button data-tab="estoque2" onclick="go('estoque2')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Estoque 2 <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TESTE</span></button>
     <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       Arquivos</button>
@@ -223,6 +226,7 @@
       <button data-tab="usuarios" onclick="go('usuarios')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Usuários</button>
       <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Auditoria</button>
       <button data-tab="estoque" onclick="go('estoque')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque</button>
+      <button data-tab="estoque2" onclick="go('estoque2')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque 2</button>
       <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📁 Arquivos</button>
     </div>
   </header>
@@ -1567,6 +1571,286 @@
         </div>
       </div>
     </section>
+    <section id="tab-estoque2" class="hidden fade">
+          <div class="rounded-2xl p-3 mb-3" style="background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(59,130,246,.12));border:1px solid rgba(16,185,129,.35)">
+            <p class="text-xs font-bold text-emerald-700">🧪 Estoque 2 — módulo de teste (independente do Estoque)</p>
+          </div>
+      <div class="mb-4">
+        <div class="flex items-center gap-3">
+          <h2 class="font-display font-bold text-xl">Estoque2 por unidade</h2>
+          <span id="estoque2ContratoBadge" class="text-[11px] font-bold px-2.5 py-1 rounded-full border hidden"></span>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5" id="estoque2Subtitulo">Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por contrato em cada unidade</p>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <div id="estoque2ContratoBtns" class="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+          <button id="estoque2BtnCE01" onclick="switchEstoque2Contrato('CE01')" class="btn text-xs px-4 py-2">CE01</button>
+          <button id="estoque2BtnCE02" onclick="switchEstoque2Contrato('CE02')" class="btn text-xs px-4 py-2">CE02</button>
+        </div>
+        <select id="estoque2SistemaFiltro" onchange="switchEstoque2Sistema(this.value)" class="inp !w-auto text-xs py-2 font-bold">
+          <option value="spacecom">🔵 Spacecom</option>
+          <option value="infinity">🟣 Infinity</option>
+          <option value="all">👁️ Ambos (Admin)</option>
+        </select>
+        <select id="estoque2UnidadeFiltro" onchange="switchEstoque2Unidade(this.value)" class="inp !w-auto text-xs py-2">
+          <option value="">Todas as unidades</option>
+          <option value="UMEPE Juazeiro" selected>UMEPE Juazeiro</option>
+          <option value="UP-Juazeiro">UP-Juazeiro</option>
+          <option value="UP-Cariri">UP-Cariri</option>
+          <option value="UP-Crato">UP-Crato</option>
+          <option value="Fórum de Crato">Fórum de Crato</option>
+          <option value="Fórum de Jardim">Fórum de Jardim</option>
+        </select>
+        <button onclick="loadEstoque2()" class="btn btn-ghost text-xs px-3 py-2">↻ Atualizar</button>
+        <button onclick="toggleEst2SeriaisPanel(true)" class="btn btn-ghost text-xs px-3 py-2">🔢 Seriais</button>
+        <button onclick="toggleEst2FluxoPanel(true)" class="btn btn-ghost text-xs px-3 py-2">📊 Entradas × Saídas</button>
+        <button onclick="toggleEst2ConcPanel(true)" class="btn btn-ghost text-xs px-3 py-2">⚖️ Conciliação</button>
+        <button onclick="gerarRelatorioEstoque2()" class="btn btn-ghost text-xs px-3 py-2">📊 Relatório</button>
+        <button onclick="exportEstoque2CSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        <button onclick="exportEstoque2PDF()" class="btn btn-primary text-xs px-4 py-2">⬇ PDF</button>
+        <button onclick="backupEstoque2()" class="btn btn-ghost text-xs px-3 py-2" title="Baixar backup completo (saldo + movimentações + seriais)">💾 Backup</button>
+        <input id="restoreEstoque2File" type="file" accept=".json" class="hidden" onchange="restoreEstoque2(this)">
+        <button onclick="document.getElementById('restoreEstoque2File').click()" class="btn btn-ghost text-xs px-3 py-2" title="Restaurar estoque a partir de backup">📥 Restaurar</button>
+      </div>
+      <div id="estoque2UnidadeResumo" class="hidden mb-3 text-xs"></div>
+      <div id="estoque2Alertas" class="mb-3"></div>
+      <div id="estoque2Cards" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4"></div>
+      <div id="estoque2PorUnidade" class="hidden card p-4 mb-4"></div>
+      <div id="est2SeriaisPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">🔢 Seriais cadastrados — TZPR04 / UPR04</h3>
+          <button onclick="toggleEst2SeriaisPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Lista os seriais de 10 dígitos cadastrados no contrato/sistema ativo, com unidade e situação. <span id="est2SeriaisResumo" class="font-semibold text-slate-600"></span></p>
+        <div class="flex flex-wrap gap-2 mb-2">
+          <select id="est2SerMat" class="inp !w-auto text-xs" onchange="loadEst2Seriais()">
+            <option value="">TZPR04 + UPR04</option>
+            <option value="TZPR04">TZPR04</option>
+            <option value="UPR04">UPR04</option>
+            <option value="OUTROS">OUTROS (fora do padrão)</option>
+          </select>
+          <select id="est2SerUnd" class="inp !w-auto text-xs" onchange="loadEst2Seriais()">
+            <option value="">Todas as unidades</option>
+            <option>UMEPE Juazeiro</option>
+            <option>UP-Juazeiro</option>
+            <option>UP-Cariri</option>
+            <option>UP-Crato</option>
+            <option>Fórum de Crato</option>
+            <option>Fórum de Jardim</option>
+          </select>
+          <select id="est2SerStatus" class="inp !w-auto text-xs" onchange="loadEst2Seriais()">
+            <option value="" selected>Disponíveis + em uso</option>
+            <option value="disponivel">Somente disponíveis</option>
+            <option value="em_uso">Somente em uso</option>
+          </select>
+          <input id="est2SerBusca" placeholder="Buscar serial (ex: 4315023...)" class="inp !w-auto text-xs font-mono" onkeydown="if(event.key==='Enter') loadEst2Seriais()">
+          <button onclick="loadEst2Seriais()" class="btn btn-primary text-xs px-4 py-2">🔍 Listar</button>
+          <button onclick="est2SeriaisCopy()" class="btn btn-ghost text-xs px-3 py-2">📋 Copiar</button>
+          <button onclick="est2SeriaisCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <p id="est2SerCount" class="text-[11px] font-bold text-slate-500 mb-2"></p>
+        <div id="est2SerList" class="max-h-[320px] overflow-y-auto border border-slate-100 rounded-xl"></div>
+      </div>
+      <div id="est2FluxoPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">📊 Entradas × Saídas por unidade <span id="est2FluxoSub" class="text-[11px] font-normal text-slate-400"></span></h3>
+          <button onclick="toggleEst2FluxoPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Soma de todas as movimentações por unidade e material, no contrato/sistema ativo. Deixe o período vazio para todo o histórico.</p>
+        <div class="flex flex-wrap gap-2 mb-3 items-end">
+          <div><label class="lbl">DE</label><input id="est2FluxoFrom" type="date" class="inp !w-auto text-xs mt-1"></div>
+          <div><label class="lbl">ATÉ</label><input id="est2FluxoTo" type="date" class="inp !w-auto text-xs mt-1"></div>
+          <button onclick="loadEst2Fluxo()" class="btn btn-primary text-xs px-4 py-2">🔍 Listar</button>
+          <button onclick="est2FluxoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <div class="rounded-xl border border-teal-200 bg-teal-50/50 p-3 mb-3">
+          <div class="flex flex-wrap gap-2 items-end">
+            <div><label class="lbl">FECHAMENTO DO DIA</label><input id="est2FechData" type="date" class="inp !w-auto text-xs mt-1"></div>
+            <div><label class="lbl">UNIDADE</label><select id="est2FechUnidade" class="inp !w-auto text-xs mt-1"><option value="">Todas as unidades</option><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+            <div><label class="lbl">MATERIAL</label><select id="est2FechMat" class="inp !w-auto text-xs mt-1" onchange="renderFechamento2()"><option value="">Todos os materiais</option></select></div>
+            <button onclick="loadEst2Fechamento()" class="btn btn-primary text-xs px-4 py-2">📅 Fechamento do dia</button>
+            <button onclick="est2FechamentoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1.5">Estoque2 inicial do dia (fim do dia anterior) + entradas (destacando triagem) − saídas = estoque final, por material e unidade.</p>
+          <div id="est2FechamentoBody" class="mt-2"></div>
+        </div>
+        <div id="est2FluxoBody" class="space-y-5"></div>
+      </div>
+      <div id="est2ConcPanel" class="hidden card p-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-display font-bold text-sm">⚖️ Conciliação saldo × seriais <span id="est2ConcSub" class="text-[11px] font-normal text-slate-400"></span></h3>
+          <button onclick="toggleEst2ConcPanel(false)" class="btn btn-ghost text-[11px] px-2 py-1">✖ Fechar</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-2">Compara o saldo de cada material/unidade com os seriais cadastrados. <b>Sem serial</b> = unidades que entraram sem número de série (não aparecem na lista).</p>
+        <div class="flex flex-wrap gap-2 mb-3 items-end">
+          <button onclick="loadEst2Conc()" class="btn btn-primary text-xs px-4 py-2">🔍 Atualizar</button>
+          <button onclick="est2ConcCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
+        </div>
+        <div id="est2ConcBody" class="mb-4"></div>
+        <h4 class="font-bold text-sm mb-1">➕ Cadastrar seriais avulsos</h4>
+        <p class="text-xs text-slate-500 mb-2">Registra seriais como <b>disponíveis sem mexer no saldo</b> — para regularizar unidades que entraram sem série. Um por linha (10 dígitos).</p>
+        <div class="grid sm:grid-cols-[220px_1fr_auto] gap-2 items-end mb-2">
+          <div><label class="lbl">UNIDADE</label>
+            <select id="est2ConcUnd" class="inp text-xs mt-1">
+              <option>UMEPE Juazeiro</option>
+              <option>UP-Juazeiro</option>
+              <option>UP-Cariri</option>
+              <option>UP-Crato</option>
+              <option>Fórum de Crato</option>
+              <option>Fórum de Jardim</option>
+            </select>
+          </div>
+          <div><label class="lbl">SERIAIS (um por linha)</label><textarea id="est2ConcSeriais" rows="2" placeholder="4315023601&#10;4315023602" class="inp text-xs mt-1 font-mono"></textarea></div>
+          <button onclick="est2ConcAvulso()" class="btn btn-primary text-xs px-4 py-2">➕ Cadastrar</button>
+        </div>
+        <p id="est2ConcMsg" class="hidden text-xs font-semibold mt-1"></p>
+        <h4 class="font-bold text-sm mt-4 mb-1">📥 Últimas entradas sem serial <span class="text-[11px] font-normal text-slate-400">(origem das diferenças)</span></h4>
+        <div id="est2ConcSemSerial" class="space-y-1.5 max-h-[220px] overflow-y-auto"></div>
+      </div>
+      <div class="grid lg:grid-cols-3 gap-4 items-start">
+        <div class="card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📦 Movimentar estoque (por unidade) — lote TZPR/UPR</h3>
+<div class="grid grid-cols-2 gap-2.5">
+             <div><label class="lbl">CONTRATO *</label><select id="est2Contrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
+             <div><label class="lbl">UNIDADE *</label><select id="est2Unidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+             <div><label class="lbl">MATERIAL *</label><select id="est2Material" class="inp mt-1" onchange="toggleEst2Seriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT-TZPR">Kit completo TZPR</option><option value="KIT-UPR">Kit completo UPR</option></select></div>
+             <div><label class="lbl">TIPO *</label><select id="est2Tipo" class="inp mt-1" onchange="toggleEst2MovTipo()"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option><option value="movimentacao">Movimentação</option><option value="triagem">Triagem (+) — adiciona ao estoque</option><option value="manutencao">Manutenção (−) — reduz do estoque</option><option value="outros_entrada">Outros (+) — adiciona</option><option value="outros_saida">Outros (−) — reduz</option></select></div>
+             <div id="est2MovOrigemWrap" class="hidden"><label class="lbl">ORIGEM *</label><select id="est2MovOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+              <div id="est2MovDestinoWrap" class="hidden"><label class="lbl">DESTINO *</label><select id="est2MovDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
+              <div id="est2ForcarWrap" class="hidden col-span-2"><label class="flex items-start gap-2 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-xl px-2.5 py-2 cursor-pointer"><input id="est2Forcar" type="checkbox" class="w-4 h-4 mt-0.5 accent-teal-600"> <span>✅ Disponível para uso — transfere os seriais mesmo fora de disponibilidade na origem; chegam disponíveis no destino</span></label></div>
+            <div class="col-span-2"><label class="lbl">QTD *</label><input id="est2Qtd" type="number" min="1" max="500" placeholder="Ex: 25 (lote até 500)" class="inp mt-1" oninput="syncEst2SeriaisQtd()"></div>
+          </div>
+          <p id="est2KitHint" class="hidden mt-2 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-2"></p>
+          <p id="est2TipoHint" class="hidden mt-2 text-[11px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-xl px-2.5 py-2"></p>
+          <div id="est2SeriaisWrap" class="mt-2.5">
+            <label class="lbl flex items-center justify-between"><span id="est2SeriaisLabel">SERIAIS TZPR04/UPR04 (lote — 10 dígitos, um por linha / vírgula) *</span> <span id="est2SeriaisCount" class="text-[11px] font-bold text-slate-500">0 seriais</span></label>
+            <textarea id="est2Seriais" rows="4" placeholder="Cole o lote:&#10;1234567890&#10;0987654321&#10;... (quantidade deve bater com QTD — deixe QTD vazio para auto-preencher)" class="inp mt-1 font-mono text-xs" oninput="syncEst2SeriaisQtd()"></textarea>
+            <div class="flex gap-2 mt-2">
+              <label class="btn btn-ghost text-xs px-3 py-1.5 cursor-pointer">📎 Importar CSV <input type="file" accept=".csv,.txt" class="hidden" onchange="importSeriais2CSV(this)"></label>
+              <button onclick="document.getElementById('est2Seriais').value=''; syncEst2SeriaisQtd()" class="btn btn-ghost text-xs px-3 py-1.5">🗑 Limpar</button>
+            </div>
+            <div id="est2SeriaisList" class="mt-2 flex flex-wrap gap-1 max-h-[120px] overflow-y-auto"></div>
+          </div>
+          <label class="lbl mt-2.5 block">MOTIVO *</label>
+          <input id="est2Motivo" placeholder="Ex: Recebimento lote 123 em lote, ajuste inventário" class="inp mt-1">
+          <button onclick="movimentarEstoque2()" class="btn btn-primary w-full py-2.5 text-sm mt-3">✓ Confirmar movimentação na unidade</button>
+          <p id="est2Err" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
+
+        </div>
+        <div class="lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-3">📋 Últimas movimentações <span id="est2MovCount" class="text-xs font-normal text-slate-400"></span></h3>
+          <div class="flex flex-wrap gap-2 mb-2 items-end">
+            <select id="est2MovMatFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todos os materiais</option></select>
+            <select id="est2MovTipoFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todas</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="cat:triagem">🔬 Triagem</option><option value="cat:manutencao">🔧 Manutenção</option><option value="cat:outros">📦 Outros</option></select>
+            <select id="est2MovUserFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todos os usuários</option></select>
+            <input id="est2MovFrom" type="date" title="De" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()">
+            <input id="est2MovTo" type="date" title="Até" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()">
+            <input id="est2MovBusca" placeholder="🔎 motivo, usuário..." class="inp !w-auto flex-1 min-w-[140px] text-xs py-1.5" onkeydown="if(event.key==='Enter')loadEstoque2Mov()">
+            <button onclick="limparFiltrosMov2()" class="btn btn-ghost text-xs px-3 py-1.5" title="Limpar filtros">↺</button>
+          </div>
+          <div id="est2MovList" class="space-y-2 max-h-[380px] overflow-y-auto"></div>
+          <h3 class="font-display font-bold text-sm mt-4 mb-2">📜 Auditoria de estoque</h3>
+          <div id="est2AuditList" class="space-y-1.5 max-h-[260px] overflow-y-auto text-xs"></div>
+        </div>
+      </div>
+      <div id="est2Relatorio" class="hidden card p-5 mt-4"></div>
+      <div class="card p-5 mt-4">
+        <h3 class="font-display font-bold text-sm mb-2">📅 Histórico — estoque em determinada data por unidade</h3>
+        <p class="text-xs text-slate-500 mb-2">Selecione unidade + data para ver saldo reconstruído até 23:59 (por unidade ou total geral)</p>
+        <div class="flex flex-wrap gap-2">
+          <select id="est2HistUnidade" class="inp !w-auto text-xs"><option value="">Todas (total geral)</option><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select>
+          <input id="est2HistData" type="date" class="inp !w-auto">
+          <button onclick="mostrarEstoque2Data()" class="btn btn-ghost text-xs px-3 py-2">👁 Ver na data</button>
+          <button onclick="mostrarEstoque2DataDetalha()" class="btn btn-ghost text-xs px-3 py-2">📊 Detalhado por unidade</button>
+          <button onclick="exportHistorico2CSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV histórico</button>
+        </div>
+        <div id="est2HistResult" class="mt-3 hidden"></div>
+      </div>
+      <!-- CHAT IA ESTOQUE (on-prem) - APRIMORADO -->
+      <div class="card p-0 mt-4 border-2 border-indigo-100 overflow-hidden">
+        <div class="bg-gradient-to-r from-indigo-600 to-violet-600 p-4 flex items-center justify-between text-white">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-lg">🤖</div>
+            <div>
+              <h3 class="font-display font-bold text-sm leading-none">Chat IA — Estoque2</h3>
+              <p class="text-[11px] text-white/80">On-prem • UMEPE Juazeiro • CE01/CE02</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="hidden sm:inline text-[11px] bg-white/20 backdrop-blur px-2.5 py-1 rounded-full font-bold">100% local</span>
+            <button onclick="est2IAClear()" class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-xs" title="Limpar conversa">🗑️</button>
+          </div>
+        </div>
+        <div class="p-4">
+          <p class="text-xs text-slate-500 mb-3">Pergunte em linguagem natural. Novos comandos: <b>reposição</b>, <b>comparar</b>, <b>evolução 7 dias</b>, <b>ontem</b>.</p>
+          <div id="est2IAQuick" class="flex flex-wrap gap-1.5 mb-3">
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">🚀 Principais</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="est2IAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
+                <button onclick="est2IAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
+                <button onclick="est2IAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
+                <button onclick="est2IAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+                <button onclick="est2IAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+              </div>
+            </div>
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📊 Análise & Relatórios</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="est2IAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+                <button onclick="est2IAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+                <button onclick="est2IAAsk('consumo médio 30 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 consumo médio</button>
+                <button onclick="est2IAAsk('previsão ruptura TZPR04 UMEPE 30 dias')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔮 ruptura</button>
+                <button onclick="est2IAAsk('sugestão pedido compra CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+              </div>
+            </div>
+            <div class="w-full mb-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📦 Operações & Estoque2</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="est2IAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+                <button onclick="est2IAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+                <button onclick="est2IAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+                <button onclick="est2IAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+                <button onclick="est2IAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+                <button onclick="est2IAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="est2IAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+                <button onclick="est2IAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
+              </div>
+            </div>
+            <div class="w-full">
+              <button id="est2IAMoreBtn" onclick="toggleEst2IAMore()" class="btn btn-ghost text-[11px] px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50" style="width:100%">
+                <span id="est2IAMoreText">Mais opções...</span>
+                <svg id="est2IAMoreIcon" class="inline-block w-3 h-3 ml-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+            </div>
+            <div id="est2IAExtra" class="hidden flex flex-wrap gap-1.5 mt-1">
+              <p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1 w-full">🔧 Ferramentas & Avançado</p>
+              <div class="flex flex-wrap gap-1.5 w-full">
+                <button onclick="est2IAAsk('transferência sugerida UMEPE → UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔁 transferir</button>
+                <button onclick="est2IAAsk('sugestão pedido compra CE01 próximo mês')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+                <button onclick="est2IAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="est2IAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+                <button onclick="est2IAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+                <button onclick="est2IAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+                <button onclick="est2IAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>
+                <button onclick="est2IAAsk('exportar CSV CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📤 exportar</button>
+              </div>
+            </div>
+          </div>
+          <div id="est2IAMessages" class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-[340px] overflow-y-auto space-y-3 text-sm">
+            <div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2.5 text-xs text-slate-700 max-w-[85%] leading-relaxed">Olá! Sou a IA do estoque — <b>100% on-prem</b>.<br><br><b>1️⃣ Estoque2 Atual:</b> “estoque atual UMEPE Juazeiro CE01” — TZPR e UPR prontos<br><b>2️⃣ Média Mensal:</b> “média de consumo mensal UMEPE CE01” — previsão 30d<br><b>3️⃣ Reposição:</b> “necessidade de reposição UMEPE CE01” — faltas para segurança<br><br>Outros: “saldo TZPR04”, “reposição CE01”, “comparar UMEPE vs UP-Cariri”, “evolução 7 dias”, “buscar 1234567890”.</div></div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <input id="est2IAInput" placeholder="Ex: reposição CE01, comparar UMEPE vs UP-Cariri, saldo TZPR04..." class="inp flex-1 text-sm" onkeydown="if(event.key==='Enter') est2IASend()" autocomplete="off">
+            <button onclick="est2IASend()" class="btn btn-primary text-sm px-6">Enviar ➤</button>
+          </div>
+          <div class="flex items-center justify-between mt-2">
+            <p class="text-[11px] text-slate-400">Enter para enviar • Shift+Enter para nova linha • Nenhum dado sai do servidor</p>
+            <button onclick="est2IAExport()" class="text-[11px] text-indigo-600 hover:underline">⬇ Exportar conversa</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- ARQUIVOS COMPARTILHADOS (Google Drive) -->
     <section id="tab-arquivos" class="hidden fade">
@@ -2374,7 +2658,7 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
     else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'agenda'].includes(t);
-    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'fila', 'auditoria', 'usuarios'].includes(t);
+    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     b.classList.toggle('hidden', !show);
   });
@@ -2384,9 +2668,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'arquivos', 'fila', 'auditoria', 'usuarios'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'arquivos', 'fila', 'auditoria', 'usuarios'],
   psico: ['fila', 'checkin', 'psico', 'arquivos', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'arquivos', 'visao', 'dash'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'arquivos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'arquivos', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
@@ -2518,6 +2802,7 @@ function enterApp(){
   document.getElementById('loginOverlay').classList.add('hidden');
   try{ applySidebarState(); }catch(e){}
   initEstoqueSistema();
+  try{ initEstoque2Sistema(); }catch(e){}
   paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
   setTimeout(preloadOCR, 1200);
@@ -2533,7 +2818,7 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
@@ -2545,6 +2830,7 @@ function go(tab){
   if(tab==='usuarios') loadUsersAdmin();
   if(tab==='auditoria') loadAuditoria();
   if(tab==='estoque') loadEstoque();
+  if(tab==='estoque2') loadEstoque2();
   if(tab==='arquivos') loadArquivos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -10239,6 +10525,1147 @@ async function estIASend(){
   }catch(e){
     document.getElementById(loadingId)?.remove();
     estIAAppend('bot', '⚠️ '+e.message);
+  }
+}
+function isInfinity2Sistema(){ return estoque2SistemaAtivo==='infinity'; }
+function getEstoque2ContratoEfetivo(){ return isInfinity2Sistema() ? 'INF' : estoque2ContratoAtivo; }
+function updateEstoque2ContratoUI(){
+  const btns=document.getElementById('estoque2ContratoBtns');
+  const badge=document.getElementById('estoque2ContratoBadge');
+  const sub=document.getElementById('estoque2Subtitulo');
+  const selForm=document.getElementById('est2Contrato');
+  const infinito=isInfinity2Sistema();
+  if(btns) btns.classList.toggle('hidden', infinito || estoque2SistemaAtivo==='all');
+  if(badge){
+    if(infinito){
+      badge.textContent='🟣 Estoque2 Infinity — unificado';
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-violet-50 text-violet-700 border-violet-200';
+      badge.classList.remove('hidden');
+    } else if(estoque2SistemaAtivo==='all'){
+      badge.textContent='👁️ Ambos os sistemas';
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200';
+      badge.classList.remove('hidden');
+    } else {
+      badge.textContent=estoque2ContratoAtivo;
+      badge.className='text-[11px] font-bold px-2.5 py-1 rounded-full border bg-white text-slate-700 border-slate-200';
+      badge.classList.remove('hidden');
+    }
+  }
+  if(sub){
+    if(infinito) sub.textContent='Estoque2 unificado Infinity (sem CE01/CE02) — TZPR com lote 10 dígitos, FONTE04, CINTA, TRAVAS (sem UPR04)';
+    else sub.textContent='Gerencie TZPR04 e UPR04 (lote por seriais 10 dígitos), FONTE04, CINTA, TRAVAS por CE01/CE02 em cada unidade';
+  }
+  if(selForm){
+    selForm.innerHTML = infinito
+      ? '<option value="INF">Estoque2 Infinity</option>'
+      : '<option value="CE01">CE01</option><option value="CE02">CE02</option>';
+    selForm.value = infinito ? 'INF' : estoque2ContratoAtivo;
+    selForm.disabled = infinito;
+    selForm.classList.toggle('opacity-60', infinito);
+  }
+}
+function initEstoque2Sistema(){
+  const sel=document.getElementById('estoque2SistemaFiltro');
+  if(!sel) return;
+  const optAll=sel.querySelector('option[value="all"]');
+  if(optAll) optAll.hidden = !(session && session.role==='admin');
+  if(session && session.role==='admin'){
+    estoque2SistemaAtivo = estoque2SistemaAtivo || 'all';
+    if(!['spacecom','infinity','all'].includes(estoque2SistemaAtivo)) estoque2SistemaAtivo='all';
+  } else if(session && session.sistema){
+    estoque2SistemaAtivo = session.sistema;
+  } else if(session){
+    const u=String(session.user||'').toLowerCase();
+    if(['julio','marcelo'].includes(u)) estoque2SistemaAtivo='infinity';
+    else estoque2SistemaAtivo='spacecom';
+  }
+  sel.value=estoque2SistemaAtivo;
+  if(session && session.role!=='admin'){
+    sel.disabled=true;
+    sel.classList.add('opacity-60','cursor-not-allowed');
+    sel.title='Seu estoque: '+(estoque2SistemaAtivo==='infinity'?'Infinity':'Spacecom');
+  } else {
+    sel.disabled=false;
+    sel.classList.remove('opacity-60','cursor-not-allowed');
+    sel.title='Admin: escolha Spacecom, Infinity ou Ambos';
+  }
+  updateEstoque2ContratoUI();
+}
+// --- ESTOQUE 2 (TESTE) — clone independente do Estoque: mesmos recursos,
+// coleções próprias (mem.estoque2*) e endpoints /api/estoque2/*.
+// --- ESTOQUE (TÉCNICO) por unidade + lote TZPR/UPR + sistema Spacecom/Infinity ---
+let estoque2ContratoAtivo='CE01';
+let estoque2UnidadeAtiva='UMEPE Juazeiro'; // pré-selecionado
+let estoque2SistemaAtivo='spacecom';
+let estoque2Cache=[], estoque2MovCache=[];
+const UNIDADES_EST2=['UMEPE Juazeiro','UP-Juazeiro','UP-Cariri','UP-Crato','Fórum de Crato','Fórum de Jardim'];
+const LIMITES_EST2={ TZPR04:5, TZPR:5, UPR04:5, FONTE04:5, CINTA:10, TRAVAS:20 };
+const MATERIAIS_SERIAL_EST2=['TZPR04','TZPR','UPR04'];
+const MATERIAIS_EST2_SPACECOM=['TZPR04','UPR04','FONTE04','CINTA','TRAVAS'];
+const MATERIAIS_EST2_INFINITY=['TZPR','FONTE04','CINTA','TRAVAS'];
+function matsEstoque2Ativo(){ return isInfinity2Sistema()?MATERIAIS_EST2_INFINITY:MATERIAIS_EST2_SPACECOM; }
+function temSerialEst2(m){ return MATERIAIS_SERIAL_EST2.includes(String(m||'').toUpperCase()); }
+// Mantém os selects de material coerentes com o sistema (Infinity: sem UPR04, TZPR no lugar de TZPR04)
+function isKit2Mat(m){ return /^KIT(-TZPR|-UPR)?$/i.test(String(m||'').trim()); }
+function kit2TipoDe(m){ return String(m||'').toUpperCase()==='KIT-UPR' ? 'upr' : 'tzpr'; }
+function kit2ComposicaoTxt(kit){
+  const k=String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  if(k==='upr') return '1 kit = 1×UPR04 + 1×FONTE04';
+  return isInfinity2Sistema() ? '1 kit = 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04' : '1 kit = 1×TZPR04 + 1×CINTA + 2×TRAVAS + 1×FONTE04';
+}
+function kit2SerialMat(kit){
+  const k=String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  if(k==='upr') return 'UPR04';
+  return isInfinity2Sistema() ? 'TZPR' : 'TZPR04';
+}
+function syncEst2MaterialOptions(){
+  const inf=isInfinity2Sistema();
+  const mapa={ est2Material: inf?'TZPR':'TZPR04', est2TransMaterial: inf?'TZPR':'TZPR04' };
+  for(const [id, padrao] of Object.entries(mapa)){
+    const sel=document.getElementById(id); if(!sel) continue;
+    const atual=sel.value;
+    const lista=inf?MATERIAIS_EST2_INFINITY:MATERIAIS_EST2_SPACECOM;
+    if(id==='est2Material'){
+      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('')+'<option value="KIT-TZPR">Kit completo TZPR</option>'+(inf?'':'<option value="KIT-UPR">Kit completo UPR</option>');
+      sel.value=(isKit2Mat(atual)&&(!inf||kit2TipoDe(atual)!=='upr')||lista.includes(atual))?atual:padrao;
+    } else {
+      sel.innerHTML=lista.map(m=>`<option>${m}</option>`).join('');
+      sel.value=lista.includes(atual)?atual:padrao;
+    }
+  }
+  const serM=document.getElementById('est2SerMat'); if(serM){
+    const atual=serM.value;
+    serM.innerHTML=`<option value="">${inf?'TZPR':"TZPR04 + UPR04"}</option>`+(inf?`<option value="TZPR">TZPR</option>`:`<option value="TZPR04">TZPR04</option><option value="UPR04">UPR04</option>`);
+    serM.value=(atual==='TZPR04'&&inf)?'':atual;
+  }
+  try{ toggleEst2Seriais(); toggleTrans2Seriais(); }catch(e){}
+}
+function toggleEst2Seriais(){
+  const mat=document.getElementById('est2Material')?.value||'';
+  const isKit=isKit2Mat(mat);
+  const kit=kit2TipoDe(mat);
+  const serialMat=isKit ? kit2SerialMat(kit) : mat;
+  const wrap=document.getElementById('est2SeriaisWrap');
+  if(wrap) wrap.classList.toggle('hidden', !(temSerialEst2(mat) || isKit));
+  const lbl=document.getElementById('est2SeriaisLabel');
+  if(lbl) lbl.textContent = isKit ? `SERIAIS ${serialMat} DO KIT (1 por kit — QTD = nº de kits) *` : (temSerialEst2(mat) ? `SERIAIS ${mat} (lote — 10 dígitos, um por linha / vírgula) *` : 'SERIAIS (lote — 10 dígitos) *');
+  const hint=document.getElementById('est2KitHint');
+  if(hint){
+    if(isKit){ hint.textContent='📦 '+kit2ComposicaoTxt(kit)+' — QTD = nº de kits (máx 250). Seriais: 1 '+serialMat+' por kit.'; hint.classList.remove('hidden'); }
+    else hint.classList.add('hidden');
+  }
+  syncEst2SeriaisQtd();
+}
+function toggleTrans2Seriais(){
+  const mat=document.getElementById('est2TransMaterial')?.value||'';
+  const wrap=document.getElementById('est2TransSeriaisWrap');
+  if(wrap) wrap.classList.toggle('hidden', !temSerialEst2(mat));
+  const lbl=document.getElementById('est2TransSeriaisLabel');
+  if(lbl) lbl.textContent = temSerialEst2(mat) ? `SERIAIS ${mat} (lote) *` : 'SERIAIS (lote) *';
+  syncTrans2SeriaisQtd();
+}
+function parseSeriais2(txt){
+  const s=String(txt||'');
+  // captura exatamente 10 dígitos contínuos, ignora formatação (espaços, vírgulas, quebras, traços)
+  // usa \b para evitar pegar 10 dígitos dentro de número maior (ex: 11 dígitos)
+  const m=s.match(/\b\d{10}\b/g);
+  if(m && m.length) return m;
+  // fallback: extrai sequências de 10 dígitos mesmo sem borda (ex: colado sem separador claro)
+  const m2=s.match(/\d{10}/g);
+  return m2||[];
+}
+function syncEst2SeriaisQtd(){
+  const txt=document.getElementById('est2Seriais')?.value||'';
+  const list=parseSeriais2(txt);
+  const cnt=document.getElementById('est2SeriaisCount');
+  if(cnt) cnt.textContent=list.length+' seriais';
+  const qtdEl=document.getElementById('est2Qtd');
+  const mat=document.getElementById('est2Material')?.value||'';
+  const isKit=isKit2Mat(mat);
+  if((temSerialEst2(mat) || isKit) && list.length && !qtdEl.value){
+    qtdEl.value=list.length;
+  }
+  // se já tem QTD e lote tem tamanho diferente, apenas avisa visualmente (sem confirm)
+  if((temSerialEst2(mat) || isKit) && list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
+    if(cnt) cnt.textContent=list.length+' seriais ⚠️ diverge de QTD='+qtdEl.value;
+    cnt?.classList.add('text-amber-600');
+  } else {
+    cnt?.classList.remove('text-amber-600');
+  }
+  const el=document.getElementById('est2SeriaisList');
+  if(el) el.innerHTML = list.length ? list.slice(0,120).map(s=> `<span class="text-[11px] font-mono bg-white border border-slate-200 rounded-full px-2 py-0.5">${esc(s)}</span>`).join('') + (list.length>120?`<span class="text-[11px] text-slate-400">+${list.length-120}...</span>`:'') : `<span class="text-[11px] text-slate-400">0 seriais detectados — cole o lote (10 dígitos cada)</span>`;
+}
+function syncTrans2SeriaisQtd(){
+  const txt=document.getElementById('est2TransSeriais')?.value||'';
+  const list=parseSeriais2(txt);
+  const cnt=document.getElementById('est2TransSeriaisCount');
+  if(cnt) cnt.textContent=list.length+' seriais';
+  const qtdEl=document.getElementById('est2TransQtd');
+  if(list.length && !qtdEl.value){
+    qtdEl.value=list.length;
+  }
+  if(list.length && qtdEl.value && Number(qtdEl.value)!==list.length){
+    if(cnt) cnt.textContent=list.length+' seriais ⚠️ diverge de QTD='+qtdEl.value;
+    cnt?.classList.add('text-amber-600');
+  } else {
+    cnt?.classList.remove('text-amber-600');
+  }
+}
+function importSeriais2CSV(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const txt=String(e.target.result||'');
+    const cur=document.getElementById('est2Seriais')?.value||'';
+    document.getElementById('est2Seriais').value=(cur?cur+'\n':'')+txt;
+    syncEst2SeriaisQtd();
+  };
+  r.readAsText(f); input.value='';
+}
+function switchEstoque2Contrato(c){
+  if(isInfinity2Sistema()){
+    estoque2ContratoAtivo='INF';
+    document.getElementById('estoque2BtnCE01')?.classList.remove('btn-primary');
+    document.getElementById('estoque2BtnCE02')?.classList.remove('btn-primary');
+    const sel=document.getElementById('est2Contrato'); if(sel) sel.value='INF';
+    return;
+  }
+  estoque2ContratoAtivo = (c==='CE02'?'CE02':'CE01');
+  document.getElementById('estoque2BtnCE01')?.classList.toggle('btn-primary', estoque2ContratoAtivo==='CE01');
+  document.getElementById('estoque2BtnCE02')?.classList.toggle('btn-primary', estoque2ContratoAtivo==='CE02');
+  const sel=document.getElementById('est2Contrato'); if(sel) sel.value=estoque2ContratoAtivo;
+  renderEstoque2();
+  loadEstoque2();
+}
+function switchEstoque2Sistema(s){
+  const v=String(s||'').toLowerCase();
+  if(v==='all' || v==='todos'){
+    if(session && session.role!=='admin'){ toast('🔒 Apenas admin vê ambos os estoques'); return; }
+    estoque2SistemaAtivo='all';
+  } else {
+    estoque2SistemaAtivo = (v==='infinity' ? 'infinity' : 'spacecom');
+    if(estoque2SistemaAtivo==='infinity') estoque2ContratoAtivo='INF';
+    else if(!['CE01','CE02'].includes(estoque2ContratoAtivo)) estoque2ContratoAtivo='CE01';
+  }
+  const sel=document.getElementById('estoque2SistemaFiltro'); if(sel) sel.value=estoque2SistemaAtivo;
+  syncEst2MaterialOptions();
+  updateEstoque2ContratoUI();
+  renderEstoque2();
+  loadEstoque2();
+}
+function switchEstoque2Unidade(u){
+  estoque2UnidadeAtiva = String(u||'');
+  const sel=document.getElementById('estoque2UnidadeFiltro'); if(sel) sel.value=estoque2UnidadeAtiva;
+  const formSel=document.getElementById('est2Unidade'); if(formSel && estoque2UnidadeAtiva) formSel.value=estoque2UnidadeAtiva;
+  renderEstoque2();
+  loadEstoque2Mov();
+}
+async function loadEstoque2(){
+  try{
+    const contratoReq = estoque2SistemaAtivo==='all' ? '' : getEstoque2ContratoEfetivo();
+    const urlContrato = contratoReq ? '?contrato='+encodeURIComponent(contratoReq) : '';
+    const sep = urlContrato ? '&' : '?';
+    // usa sistema ativo (spacecom/infinity/all) - admin pode ver ambos, tecnico só o seu
+    const all=await api('/api/estoque2'+urlContrato+sep+'sistema='+encodeURIComponent(estoque2SistemaAtivo));
+    estoque2Cache=all;
+    renderEstoque2();
+    loadEstoque2Mov();
+    loadEstoque2Audit();
+    loadEstoque2Alertas();
+    // garante que o campo de seriais apareça corretamente para TZPR04/UPR04 (lote)
+    toggleEst2Seriais(); toggleTrans2Seriais();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+// --- Backup / Restore Estoque2 ---
+async function backupEstoque2(){
+  try{
+    const response = await fetch('/api/estoque2/backup', { headers: authHeaders() });
+    if(!response.ok){
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`Falha ao baixar backup (${response.status}): ${errorText || 'Verifique se você é admin e está logado'}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estoque-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('✅ Backup baixado');
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+
+async function restoreEstoque2(input){
+  const file = input.files?.[0];
+  if(!file) return;
+  input.value = '';
+  try{
+    const text = await file.text();
+    const dump = JSON.parse(text);
+    if(!dump || !Array.isArray(dump.estoque) || !Array.isArray(dump.estoque2Mov) || !Array.isArray(dump.estoque2Serial)){
+      return toast('⚠️ Arquivo inválido (esperado: estoque, estoque2Mov, estoque2Serial)');
+    }
+    const confirmMsg = `⚠️ ATENÇÃO: Isso vai SOBRESCREVER todos os dados atuais de estoque (${dump.estoque?.length||0} saldos, ${dump.estoque2Mov?.length||0} movimentações, ${dump.estoque2Serial?.length||0} seriais).\n\nContinuar?`;
+    if(!confirm(confirmMsg)) return;
+    const response = await api('/api/estoque2/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dump) });
+    toast('✅ Estoque2 restaurado com sucesso');
+    loadEstoque2();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+// Inicialização: garante visibilidade do campo seriais ao carregar (default TZPR04/UPR04 = com lote)
+try{ toggleEst2Seriais(); toggleTrans2Seriais(); }catch(e){}
+document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEst2Seriais(); toggleTrans2Seriais(); document.getElementById('estoque2UnidadeFiltro').value=estoque2UnidadeAtiva; document.getElementById('est2Unidade').value=estoque2UnidadeAtiva; }catch(e){} });
+setTimeout(()=>{ try{ toggleEst2Seriais(); toggleTrans2Seriais(); const s=document.getElementById('estoque2UnidadeFiltro'); if(s) s.value=estoque2UnidadeAtiva; const f=document.getElementById('est2Unidade'); if(f) f.value=estoque2UnidadeAtiva; }catch(e){} }, 300);
+async function loadEstoque2Alertas(){
+  try{
+    const cParam = getEstoque2ContratoEfetivo();
+    let url='/api/estoque2/alertas?contrato='+encodeURIComponent(cParam)+'&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    if(estoque2UnidadeAtiva) url+='&unidade='+encodeURIComponent(estoque2UnidadeAtiva);
+    const data=await api(url);
+    const el=document.getElementById('estoque2Alertas');
+    if(!el) return;
+    const labelC = isInfinity2Sistema() ? 'Estoque2 Infinity' : getEstoque2ContratoEfetivo();
+    if(!data.total){
+      el.innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700">✅ Nenhum alerta — estoque acima do mínimo em ${esc(labelC)}${estoque2UnidadeAtiva?' • '+esc(estoque2UnidadeAtiva):''}</div>`;
+      return;
+    }
+    el.innerHTML=`<div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center justify-between"><b class="text-amber-800">⚠️ ${data.total} itens abaixo do mínimo${data.criticos?` • ${data.criticos} zerados 🔴`:''}</b><span class="text-amber-600 text-[11px]">${esc(labelC)}${estoque2UnidadeAtiva?' • '+esc(estoque2UnidadeAtiva):''} • ${estoque2SistemaAtivo==='infinity'?'Infinity': estoque2SistemaAtivo==='all'?'Ambos':estoque2ContratoAtivo}</span></div><div class="mt-1.5 flex flex-wrap gap-1.5">${data.itens.slice(0,12).map(r=>`<span class="bg-white border ${r.saldo===0?'border-rose-200 text-rose-700':'border-amber-200 text-amber-700'} rounded-full px-2 py-0.5 font-mono text-[11px]">${esc(r.material)} ${esc(r.unidade)}: ${r.saldo}/${r.limite}</span>`).join('')}${data.itens.length>12?`<span class="text-slate-500 text-[11px]">+${data.itens.length-12}...</span>`:''}</div></div>`;
+  }catch(e){ /* silencioso */ }
+}
+function renderEstoque2(){
+  const cont=document.getElementById('estoque2Cards');
+  const resumo=document.getElementById('estoque2UnidadeResumo');
+  const porUnidadeEl=document.getElementById('estoque2PorUnidade');
+  if(!cont) return;
+  const mats=matsEstoque2Ativo();
+  const icons={ TZPR04:'<img src="/tzpr.png?v=6" alt="TZPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', UPR04:'<img src="/upr.png?v=7" alt="UPR04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', FONTE04:'<img src="/fonte.png?v=9" alt="FONTE04" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">', CINTA:'<img src="/cinta.png?v=5" alt="CINTA" class="w-16 h-10 mx-auto object-contain bg-white rounded-lg" loading="lazy">', TRAVAS:'<img src="/travas.png?v=5" alt="TRAVAS" class="w-12 h-12 mx-auto object-contain bg-white rounded-lg" loading="lazy">' };
+  const contratoFiltro = getEstoque2ContratoEfetivo();
+  let list=estoque2Cache.filter(e=> String(e.contrato).toUpperCase()===contratoFiltro);
+  // Visão por unidade: restringe às linhas da unidade ativa (antes pegava a 1ª unidade da lista)
+  if(estoque2UnidadeAtiva) list=list.filter(e=> String(e.unidade)===String(estoque2UnidadeAtiva));
+  // se filtro Todas, mostrar agregado por material (soma unidades)
+  let agg=[];
+  if(!estoque2UnidadeAtiva){
+    agg=mats.map(m=>{
+      const rows=list.filter(x=> String(x.material).toUpperCase()===m);
+      const saldo=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
+      const limite=LIMITES_EST2[m]||5;
+      return { material:m, saldo, rows, limite };
+    });
+      cont.innerHTML = agg.map(a=>{
+      const m=a.material; const saldo=a.saldo; const limite=a.limite;
+      const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      const alerta= saldo<limite ? (saldo===0?' 🔴 ZERADO':' ⚠️ BAIXO') : '';
+      const labelC = isInfinity2Sistema() ? 'Estoque2 Infinity' : getEstoque2ContratoEfetivo();
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] text-slate-500">${isInfinity2Sistema()?'Estoque2 Infinity':'total '+labelC} <span class="text-[10px]">(mín ${limite})</span>${alerta?`<br><span class="text-[11px] font-bold ${saldo===0?'text-rose-600':'text-amber-600'}">${alerta}</span>`:''}</p><p class="text-[10px] text-slate-400">${a.rows.length} localidades</p>${(m==='TZPR04'||m==='TZPR'||m==='UPR04')?`<button onclick="verSeriais2Cadastrados('${m}')" class="mt-1 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
+    }).join('');
+    if(resumo) resumo.classList.add('hidden');
+    // tabela por unidade
+    if(porUnidadeEl){
+      porUnidadeEl.classList.remove('hidden');
+      const totalGeral=agg.reduce((s,a)=>s+a.saldo,0);
+      const labelC2 = isInfinity2Sistema() ? 'Estoque2 Infinity' : getEstoque2ContratoEfetivo();
+      porUnidadeEl.innerHTML=`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">📍 Saldo por unidade — ${esc(labelC2)} <span class="font-normal text-slate-500">Total geral: ${totalGeral}</span></h4><span class="text-[11px] text-slate-400">${UNIDADES_EST2.length} localidades</span></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${UNIDADES_EST2.map(u=>{
+        const rowMats=mats.map(m=>{
+          const r=list.find(x=> String(x.unidade)===u && String(x.material)===m);
+          const v=r?Number(r.saldo||0):0;
+          const cls=v===0?'text-slate-300':v<3?'text-amber-600 font-bold':'text-emerald-700 font-bold';
+          return `<td class="text-center py-1.5 px-2 ${cls}">${v}</td>`;
+        }).join('');
+        const tot=mats.reduce((s,m)=>{ const r=list.find(x=> String(x.unidade)===u && String(x.material)===m); return s+Number(r?r.saldo:0); },0);
+        return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${rowMats}<td class="text-center py-1.5 px-2 font-extrabold">${tot}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    }
+  } else {
+    cont.innerHTML = mats.map(m=>{
+      const row=list.find(x=> String(x.material).toUpperCase()===m);
+      const saldo=row?Number(row.saldo||0):0;
+      const limite=LIMITES_EST2[m]||5;
+      const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
+      const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
+      const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoque2UnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque2('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque2('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button></div>${(m==='TZPR04'||m==='TZPR'||m==='UPR04')?`<button onclick="verSeriais2Cadastrados('${m}')" class="mt-1.5 text-[11px] font-bold text-indigo-600 hover:underline">🔢 ver seriais</button>`:''}</div>`;
+    }).join('');
+    if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); const lab=isInfinity2Sistema()?'Estoque2 Infinity':estoque2ContratoAtivo; resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoque2UnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${esc(lab)}</span>`; }
+    if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
+  }
+  if(!isInfinity2Sistema()){
+    document.getElementById('estoque2BtnCE01')?.classList.toggle('btn-primary', estoque2ContratoAtivo==='CE01');
+    document.getElementById('estoque2BtnCE02')?.classList.toggle('btn-primary', estoque2ContratoAtivo==='CE02');
+  }
+  updateEstoque2ContratoUI();
+}
+function limparFiltrosMov2(){
+  const mat=document.getElementById('est2MovMatFiltro'); if(mat) mat.value='';
+  const tipo=document.getElementById('est2MovTipoFiltro'); if(tipo) tipo.value='';
+  const usr=document.getElementById('est2MovUserFiltro'); if(usr) usr.value='';
+  const from=document.getElementById('est2MovFrom'); if(from) from.value='';
+  const to=document.getElementById('est2MovTo'); if(to) to.value='';
+  const q=document.getElementById('est2MovBusca'); if(q) q.value='';
+  loadEstoque2Mov();
+}
+// Miniatura do material (mesmas imagens dos cards do estoque)
+const MAT_IMG2_SRC = { TZPR04:'/tzpr.png?v=6', TZPR:'/tzpr.png?v=6', UPR04:'/upr.png?v=7', UPR:'/upr.png?v=7', FONTE04:'/fonte.png?v=9', CINTA:'/cinta.png?v=5', TRAVAS:'/travas.png?v=5' };
+function matImg2(m, cls){
+  const src = MAT_IMG2_SRC[String(m||'').toUpperCase()];
+  if(!src) return '📦';
+  return `<img src="${src}" alt="${esc(String(m||''))}" class="${cls||'w-6 h-6 object-contain'}" loading="lazy">`;
+}
+async function loadEstoque2Mov(){
+  try{
+    // Opções de material conforme o sistema ativo
+    try{
+      const sel=document.getElementById('est2MovMatFiltro');
+      if(sel){
+        const atual=sel.value;
+        const mats=(typeof matsEstoque2Ativo==='function')?matsEstoque2Ativo():[];
+        sel.innerHTML='<option value="">Todos os materiais</option>'+mats.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+        if(mats.includes(atual)) sel.value=atual;
+      }
+    }catch(e){}
+    let url='/api/estoque2-mov?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&limit=50&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    if(estoque2UnidadeAtiva) url+='&unidade='+encodeURIComponent(estoque2UnidadeAtiva);
+    const mat=document.getElementById('est2MovMatFiltro')?.value||'';
+    const tipo=document.getElementById('est2MovTipoFiltro')?.value||'';
+    const from=document.getElementById('est2MovFrom')?.value||'';
+    const to=document.getElementById('est2MovTo')?.value||'';
+    const q=document.getElementById('est2MovBusca')?.value.trim()||'';
+    try{
+      const usel=document.getElementById('est2MovUserFiltro');
+      if(usel){
+        const uatual=usel.value;
+        const users=Array.isArray(allUsers)?allUsers.filter(u=>u&&u.user&&u.active!==false):[];
+        usel.innerHTML='<option value="">Todos os usuários</option>'+users.map(u=>`<option value="${esc(u.user)}">${esc(u.name||u.user)} (${esc(u.user)})</option>`).join('');
+        if(users.some(u=>String(u.user)===String(uatual))) usel.value=uatual;
+      }
+    }catch(e){}
+    const usr=document.getElementById('est2MovUserFiltro')?.value||'';
+    if(usr) url+='&usuario='+encodeURIComponent(usr);
+    if(mat) url+='&material='+encodeURIComponent(mat);
+    if(tipo){
+      if(tipo.startsWith('cat:')) url+='&categoria='+encodeURIComponent(tipo.slice(4));
+      else url+='&tipo='+encodeURIComponent(tipo);
+    }
+    if(from) url+='&from='+encodeURIComponent(from);
+    if(to) url+='&to='+encodeURIComponent(to);
+    if(q) url+='&q='+encodeURIComponent(q);
+    const resp=await api(url);
+    const list=Array.isArray(resp) ? resp : (resp.items||[]);
+    const total=Array.isArray(resp) ? list.length : (resp.total||list.length);
+    estoque2MovCache=list;
+    document.getElementById('est2MovCount').textContent=`${total} movimentações${estoque2UnidadeAtiva?' em '+estoque2UnidadeAtiva:''}${total>list.length?` • mostrando ${list.length}`:''}`;
+    document.getElementById('est2MovList').innerHTML = list.length ? list.map(m=>{
+      const isEntrada=m.tipo==='entrada';
+      const motivoMov=String(m.motivo||'').trim();
+      const isTriagem=/^\[triagem\]/i.test(motivoMov);
+      const isManut=/^\[manutencao\]/i.test(motivoMov);
+      const isOutros=/^\[outros\]/i.test(motivoMov);
+      const unidadeTxt=esc(m.unidade||'') + (m.unidadeDestino ? ` → ${esc(m.unidadeDestino)}` : '');
+      const estornado=m.estornado ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">ESTORNADO</span>' : '';
+      const triBadge=isTriagem ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">🔬 TRIAGEM</span>' : '';
+      const manBadge=isManut ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">🔧 MANUTENÇÃO</span>' : '';
+      const outBadge=isOutros ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">📦 OUTROS</span>' : '';
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${matImg2(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov2(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}</span></div>`;
+    }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
+  }catch(e){ document.getElementById('est2MovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
+}
+let est2SeriaisCache=[];
+function toggleEst2SeriaisPanel(abrir){
+  const p=document.getElementById('est2SeriaisPanel'); if(!p) return;
+  const show = abrir==null ? p.classList.contains('hidden') : !!abrir;
+  p.classList.toggle('hidden', !show);
+  if(show){ loadEst2Seriais(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+function verSeriais2Cadastrados(material){
+  const m=document.getElementById('est2SerMat'); if(m) m.value=material||'';
+  const u=document.getElementById('est2SerUnd'); if(u) u.value='';
+  const b=document.getElementById('est2SerBusca'); if(b) b.value='';
+  toggleEst2SeriaisPanel(true);
+}
+async function loadEst2Seriais(){
+  const listEl=document.getElementById('est2SerList'); const cntEl=document.getElementById('est2SerCount');
+  try{
+    const mat=document.getElementById('est2SerMat')?.value||'';
+    const und=document.getElementById('est2SerUnd')?.value||'';
+    const st=document.getElementById('est2SerStatus')?.value||'';
+    const q=document.getElementById('est2SerBusca')?.value.trim()||'';
+    let url='/api/estoque2/seriais?limit=all&sistema='+encodeURIComponent(estoque2SistemaAtivo)+'&contrato='+encodeURIComponent(getEstoque2ContratoEfetivo());
+    if(mat) url+='&material='+encodeURIComponent(mat);
+    if(und) url+='&unidade='+encodeURIComponent(und);
+    if(st) url+='&status='+encodeURIComponent(st);
+    if(q) url+='&q='+encodeURIComponent(q);
+    const list=await api(url);
+    est2SeriaisCache=Array.isArray(list)?list:[];
+    if(cntEl){ const nd=est2SeriaisCache.filter(s=>String(s.status)==='disponivel').length; cntEl.textContent=`${est2SeriaisCache.length} seriais (${nd} disponíveis • ${est2SeriaisCache.length-nd} em uso)${est2SeriaisCache.length>=2000?' (limite de 2000 — refine material/unidade/busca)':''}`; }
+    listEl.innerHTML = est2SeriaisCache.length ? `<table class="min-w-full text-xs"><thead class="sticky top-0 bg-slate-50"><tr><th class="text-left py-2 px-3">Serial</th><th class="text-left py-2 px-3">Material</th><th class="text-left py-2 px-3">Unidade</th><th class="text-left py-2 px-3">Situação</th></tr></thead><tbody>${est2SeriaisCache.map(s=>{
+      const stBadge=String(s.status)==='disponivel' ? '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">disponível</span>' : '<span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">em uso</span>';
+      return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-3 font-mono font-bold">${esc(s.serial)}</td><td class="py-1.5 px-3">${esc(s.material||'')}</td><td class="py-1.5 px-3">${esc(s.unidade||'')}</td><td class="py-1.5 px-3">${stBadge}</td></tr>`;
+    }).join('')}</tbody></table>` : '<p class="text-xs text-slate-400 text-center py-4">Nenhum serial encontrado para este filtro</p>';
+    try{
+      const r=await api('/api/estoque2/seriais/resumo?sistema='+encodeURIComponent(estoque2SistemaAtivo)+'&contrato='+encodeURIComponent(getEstoque2ContratoEfetivo()));
+      const el=document.getElementById('est2SeriaisResumo');
+      if(el && r && r.porMaterial) el.textContent=Object.entries(r.porMaterial).map(([m,v])=>`${m}: ${v.disponivel} disp.`).join(' • ')+` (total ${r.total})`;
+    }catch(e){}
+  }catch(e){ if(listEl) listEl.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar seriais</p>'; }
+}
+function est2SeriaisCopy(){
+  if(!est2SeriaisCache.length) return toast('⚠️ Liste os seriais primeiro');
+  const txt=est2SeriaisCache.map(s=>s.serial).join('\n');
+  (navigator.clipboard?.writeText(txt)||Promise.reject()).then(()=>toast(`✅ ${est2SeriaisCache.length} seriais copiados`)).catch(()=>toast('⚠️ Não foi possível copiar'));
+}
+function est2SeriaisCSV(){
+  if(!est2SeriaisCache.length) return toast('⚠️ Liste os seriais primeiro');
+  const csv='serial;material;unidade;contrato;sistema;status\n'+est2SeriaisCache.map(s=>[s.serial,s.material,s.unidade,s.contrato,s.sistema,s.status].map(v=>String(v??'')).join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='seriais-estoque.csv'; a.click();
+}
+let est2FluxoCache=null;
+function toggleEst2FluxoPanel(show){
+  const p=document.getElementById('est2FluxoPanel');
+  if(!p) return;
+  p.classList.toggle('hidden', !show);
+  if(show){
+    const fd=document.getElementById('est2FechData');
+    if(fd && !fd.value){ const d=new Date(); fd.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    loadEst2Fluxo(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+function fluxoMatriz2HTML(mats, unidades, dados, cor){
+  const valCls = cor === 'rose' ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold';
+  const rows = unidades.map(u=>{
+    const cells = mats.map(m=>{
+      const v = Number((dados[u] && dados[u][m]) || 0);
+      return `<td class="text-center py-1.5 px-2 ${v===0?'text-slate-300':valCls}">${v}</td>`;
+    }).join('');
+    const tot = mats.reduce((s,m)=> s + Number((dados[u] && dados[u][m]) || 0), 0);
+    return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center py-1.5 px-2 font-extrabold">${tot}</td></tr>`;
+  }).join('');
+  return `<div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${esc(m)}</th>`).join('')}<th class="text-center py-2 px-2">TOTAL</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function loadEst2Fluxo(){
+  const body=document.getElementById('est2FluxoBody'); const sub=document.getElementById('est2FluxoSub');
+  if(!body) return;
+  body.innerHTML='<p class="text-xs text-slate-400 text-center py-4">Carregando movimentações...</p>';
+  try{
+    let url='/api/estoque2/fluxo?sistema='+encodeURIComponent(estoque2SistemaAtivo)+'&contrato='+encodeURIComponent(getEstoque2ContratoEfetivo());
+    const from=document.getElementById('est2FluxoFrom')?.value||'';
+    const to=document.getElementById('est2FluxoTo')?.value||'';
+    if(from) url+='&from='+encodeURIComponent(from);
+    if(to) url+='&to='+encodeURIComponent(to);
+    const r=await api(url);
+    est2FluxoCache=r;
+    const label=r.contratoLabel||r.contrato||'';
+    const periodo=(r.from||r.to)?` • ${r.from?new Date(r.from+'T12:00:00').toLocaleDateString('pt-BR'):'início'} → ${r.to?new Date(r.to+'T12:00:00').toLocaleDateString('pt-BR'):'hoje'}`:' • todo o histórico';
+    if(sub) sub.textContent=`— ${label} (${r.movimentacoes} movimentações${periodo})`;
+    const head=(titulo,total,cor)=>`<div class="flex items-center justify-between mb-2"><h4 class="font-bold text-sm">${titulo} — ${esc(label)} <span class="font-normal text-slate-500">Total: ${total}</span></h4><span class="text-[11px] text-slate-400">${r.unidades.length} localidades</span></div>`;
+    body.innerHTML =
+      `<div>${head('📈 ENTRADAS', r.totalEntradas, 'emerald')}${fluxoMatriz2HTML(r.materiais, r.unidades, r.entradas, 'emerald')}</div>` +
+      `<div>${head('📉 SAÍDAS', r.totalSaidas, 'rose')}${fluxoMatriz2HTML(r.materiais, r.unidades, r.saidas, 'rose')}</div>`;
+  }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar fluxo</p>'; }
+}
+function est2FluxoCSV(){
+  if(!est2FluxoCache) return toast('⚠️ Liste o fluxo primeiro');
+  const r=est2FluxoCache;
+  const csv='unidade;material;entradas;saidas;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
+    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
+    return [u,m,e,s,e-s].map(v=>String(v??'')).join(';');
+  }).join('\n')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
+}
+let est2FechamentoCache=null;
+// Materiais que exibem triagem no fechamento por material (só os com serial/lote)
+const FECH2_COM_TRIAGEM = ['TZPR', 'TZPR04', 'UPR', 'UPR04'];
+function fluxoFech2PorMaterialHTML(mats, unidades, get){
+  return mats.map(m=>{
+    let ini=0, ent=0, tri=0, sai=0;
+    unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); });
+    const fin=ini+ent-sai;
+    const comTriagem=FECH2_COM_TRIAGEM.includes(String(m).toUpperCase());
+    const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center flex-1 min-w-[86px]"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-base font-extrabold ${cls}">${v}</p></div>`;
+    const seq = comTriagem
+      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700')
+      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700');
+    return `<div class="mb-2.5"><p class="text-[11px] font-extrabold text-slate-600 mb-1">${esc(m)}</p><div class="flex flex-wrap gap-1.5">${seq}</div></div>`;
+  }).join('');
+}
+async function loadEst2Fechamento(){
+  const body=document.getElementById('est2FechamentoBody');
+  if(!body) return;
+  let data=document.getElementById('est2FechData')?.value||'';
+  if(!data){ const d=new Date(); data=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; document.getElementById('est2FechData').value=data; }
+  body.innerHTML='<p class="text-xs text-slate-400 text-center py-3">Calculando fechamento do dia...</p>';
+  try{
+    let url='/api/estoque2/fluxo?sistema='+encodeURIComponent(estoque2SistemaAtivo)+'&contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&data='+encodeURIComponent(data);
+    const und=document.getElementById('est2FechUnidade')?.value||'';
+    if(und) url+='&unidade='+encodeURIComponent(und);
+    const r=await api(url);
+    est2FechamentoCache=r;
+    try{
+      const msel=document.getElementById('est2FechMat');
+      if(msel){
+        const mant=msel.value;
+        msel.innerHTML='<option value="">Todos os materiais</option>'+r.materiais.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+        msel.value=(mant && (mant==='' || r.materiais.includes(mant))) ? mant : (r.materiais[0] || '');
+      }
+    }catch(e){}
+    renderFechamento2();
+  }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-3">Erro ao calcular fechamento: '+esc(e.message)+'</p>'; }
+}
+function renderFechamento2(){
+  const r=est2FechamentoCache;
+  const body=document.getElementById('est2FechamentoBody');
+  if(!r || !body) return;
+  const label=r.contratoLabel||r.contrato||'';
+  const dt=new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR');
+  const undTxt=r.unidade ? ' • ' + r.unidade : ' • todas as unidades';
+  const msel=document.getElementById('est2FechMat')?.value||'';
+  const mats=(msel && r.materiais.includes(msel))?[msel]:r.materiais;
+  const subMat=mats.length===1 ? ('Por material — ' + mats[0]) : 'Por material (total geral)';
+  const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-lg font-extrabold ${cls}">${v}</p></div>`;
+  body.innerHTML =
+    `<p class="text-[11px] font-bold text-slate-600 mb-2">📅 Fechamento ${dt} — ${esc(label)}${esc(undTxt)} (${r.movimentacoes} movimentações no dia)</p>` +
+    `<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">` +
+      card('INICIAL', r.totalInicial, '') +
+      card('🔬 TRIAGEM', '+' + r.totalEntradasTriagem, 'text-teal-600') +
+      card('ENTRADAS', '+' + r.totalEntradas, 'text-emerald-600') +
+      card('SAÍDAS', '−' + r.totalSaidas, 'text-rose-600') +
+      card('FINAL', r.totalFinal, 'text-indigo-700') +
+    `</div>` +
+    `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 mb-1">${subMat} — Final = Inicial + Entradas − Saídas</p>${fluxoFech2PorMaterialHTML(mats, r.unidades, r)}</div>` +
+    `<div><p class="text-[11px] font-bold text-slate-500 mb-1">Estoque2 final por unidade</p>${fluxoMatriz2HTML(mats, r.unidades, r.final, 'emerald')}</div>`;
+}
+function est2FechamentoCSV(){
+  if(!est2FechamentoCache) return toast('⚠️ Calcule o fechamento primeiro');
+  const r=est2FechamentoCache;
+  const csv='unidade;material;inicial;entradas;entradas_triagem;saidas;final\n'+r.unidades.map(u=>r.materiais.map(m=>{
+    const ini=Number((r.inicial[u]&&r.inicial[u][m])||0), e=Number((r.entradas[u]&&r.entradas[u][m])||0),
+      tri=Number((r.entradasTriagem[u]&&r.entradasTriagem[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
+    return [u,m,ini,e,tri,s,ini+e-s].map(v=>String(v??'')).join(';');
+  }).join('\n')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`fechamento-estoque-${r.data}.csv`; a.click();
+}
+let est2ConcCache=null;
+function toggleEst2ConcPanel(show){
+  const p=document.getElementById('est2ConcPanel');
+  if(!p) return;
+  p.classList.toggle('hidden', !show);
+  if(show){ loadEst2Conc(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+async function loadEst2Conc(){
+  const body=document.getElementById('est2ConcBody'); const sub=document.getElementById('est2ConcSub');
+  const semBox=document.getElementById('est2ConcSemSerial');
+  if(!body) return;
+  body.innerHTML='<p class="text-xs text-slate-400 text-center py-4">Calculando conciliação...</p>';
+  try{
+    const url='/api/estoque2/conciliacao?sistema='+encodeURIComponent(estoque2SistemaAtivo)+'&contrato='+encodeURIComponent(getEstoque2ContratoEfetivo());
+    const r=await api(url);
+    est2ConcCache=r;
+    const label=r.contratoLabel||r.contrato||'';
+    if(sub) sub.textContent=`— ${label} • ${r.totalSemSerial} un. sem serial`;
+    const rows=r.linhas.filter(l=>l.saldo!==0||l.disponivel!==0||l.emUso!==0).map(l=>{
+      const sem=l.semSerial;
+      const semHtml=sem===0?'<span class="text-slate-300">0</span>':sem>0?`<span class="text-amber-600 font-bold">faltam ${sem}</span>`:`<span class="text-rose-600 font-bold">sobram ${-sem}</span>`;
+      return `<tr class="border-b hover:bg-slate-50"><td class="py-1.5 px-2 font-semibold">${esc(l.unidade)}</td><td class="py-1.5 px-2">${esc(l.material)}</td><td class="text-center py-1.5 px-2 font-extrabold">${l.saldo}</td><td class="text-center py-1.5 px-2 text-emerald-700 font-bold">${l.disponivel}</td><td class="text-center py-1.5 px-2 text-slate-500">${l.emUso}</td><td class="text-center py-1.5 px-2">${semHtml}</td></tr>`;
+    }).join('');
+    body.innerHTML=`<div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th><th class="text-left py-2 px-2">Material</th><th class="text-center py-2 px-2">Saldo</th><th class="text-center py-2 px-2">Seriais disp.</th><th class="text-center py-2 px-2">Em uso</th><th class="text-center py-2 px-2">Sem serial</th></tr></thead><tbody>${rows||'<tr><td colspan="6" class="text-center py-4 text-slate-400">Sem divergências e sem movimento.</td></tr>'}</tbody></table></div>`;
+    if(semBox){
+      semBox.innerHTML=(r.entradasSemSerial||[]).length?(r.entradasSemSerial||[]).map(m=>{
+        const dt=new Date(m.createdAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+        return `<div class="flex gap-2 items-center text-xs bg-amber-50/60 border border-amber-100 rounded-lg px-2 py-1.5"><span class="text-slate-400 whitespace-nowrap">${dt}</span><b>${esc(m.material)}</b><span class="text-slate-500">${esc(m.unidade)} • qtd ${m.qtd}</span><span class="flex-1 truncate text-slate-400">${esc(m.motivo||'')}</span></div>`;
+      }).join(''):'<p class="text-xs text-slate-400">Nenhuma entrada sem serial. ✅</p>';
+    }
+  }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao calcular conciliação</p>'; }
+}
+async function est2ConcAvulso(){
+  const msg=document.getElementById('est2ConcMsg');
+  const und=document.getElementById('est2ConcUnd')?.value||'';
+  const txt=document.getElementById('est2ConcSeriais')?.value||'';
+  if(!txt.trim()) return toast('⚠️ Cole os seriais (um por linha)');
+  if(!confirm(`Cadastrar seriais avulsos em ${und} sem alterar o saldo?`)) return;
+  try{
+    if(msg){ msg.textContent='⏳ Cadastrando...'; msg.className='text-xs font-bold text-indigo-600 mt-1'; msg.classList.remove('hidden'); }
+    const r=await api('/api/estoque2/seriais/avulso',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contrato: getEstoque2ContratoEfetivo(), unidade: und, seriais: txt }) });
+    const det=(r.erros||[]).length?` • erros: ${(r.erros||[]).map(e=>e.serial+': '+e.erro).join('; ')}`:'';
+    if(msg){ msg.textContent=`✅ ${r.total} seriais cadastrados${det}`; msg.className='text-xs font-bold text-emerald-600 mt-1'; msg.classList.remove('hidden'); }
+    document.getElementById('est2ConcSeriais').value='';
+    toast(`✅ ${r.total} seriais cadastrados`);
+    await loadEst2Conc(); loadEst2Seriais();
+  }catch(e){ if(msg){ msg.textContent='⚠️ '+e.message; msg.className='text-xs font-bold text-rose-600 mt-1'; msg.classList.remove('hidden'); } }
+}
+function est2ConcCSV(){
+  if(!est2ConcCache) return toast('⚠️ Atualize a conciliação primeiro');
+  const r=est2ConcCache;
+  const csv='unidade;material;saldo;disponivel;em_uso;sem_serial\n'+r.linhas.map(l=>[l.unidade,l.material,l.saldo,l.disponivel,l.emUso,l.semSerial].map(v=>String(v??'')).join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='conciliacao-estoque.csv'; a.click();
+}
+async function estornarMov2(id){
+  const motivo=prompt('Motivo do estorno (mín. 3 caracteres):');
+  if(!motivo || motivo.trim().length<3) return toast('⚠️ Motivo obrigatório');
+  if(!confirm('Confirma estorno da movimentação #'+id+'? Isso reverte o saldo.')) return;
+  try{ await api('/api/estoque2/estornar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ movId: id, motivo })}); toast('✅ Estorno realizado'); loadEstoque2(); }catch(e){ toast('⚠️ '+e.message); }
+}
+async function loadEstoque2Audit(){
+  try{
+    const r=await api('/api/audit/search?kind=estoque&limit=50');
+    const list=r.items||r||[];
+    document.getElementById('est2AuditList').innerHTML = list.length ? list.map(a=>{
+      const dt=new Date(a.at).toLocaleString('pt-BR');
+      return `<div class="flex gap-2"><span class="text-slate-500 whitespace-nowrap">${dt}</span><span class="flex-1"><b>${esc(a.byUser||'')}</b> ${esc(a.action)} <b>${esc(a.ref||'')}</b><br><span class="text-slate-500">${esc(a.summary||'')}</span> ${a.changes&&a.changes.length?`<br><span class="text-[11px]">${a.changes.map(c=>`${esc(c.label)}: ${esc(String(c.from))} → ${esc(String(c.to))}`).join(' | ')}</span>`:''}</span></div>`;
+    }).join('') : '<p class="text-xs text-slate-400">Sem auditoria</p>';
+  }catch(e){ document.getElementById('est2AuditList').innerHTML=''; }
+}
+async function quickEstoque2(material, delta){
+  const mat = String(material || '').toUpperCase();
+  const unidade = estoque2UnidadeAtiva || document.getElementById('est2Unidade')?.value || 'UMEPE Juazeiro';
+  const contrato = getEstoque2ContratoEfetivo();
+  // Materiais com serial (TZPR04/TZPR/UPR04) exigem lote de 10 dígitos: só preenche o form
+  if(temSerialEst2(mat)){
+    document.getElementById('est2Contrato').value = contrato;
+    const uSel = document.getElementById('est2Unidade'); if(uSel && estoque2UnidadeAtiva) uSel.value = estoque2UnidadeAtiva;
+    document.getElementById('est2Material').value = material;
+    toggleEst2Seriais();
+    document.getElementById('est2Tipo').value = delta > 0 ? 'entrada' : 'saida';
+    document.getElementById('est2Qtd').value = Math.abs(delta);
+    toast('⌨️ ' + mat + ' exige serial: informe o lote abaixo e confirme');
+    document.getElementById('est2Seriais')?.focus();
+    return;
+  }
+  // FONTE04/CINTA/TRAVAS: ajuste imediato + atualização automática do contador
+  const qtd = delta > 0 ? Math.abs(delta) : -Math.abs(delta);
+  // Otimista: atualiza o contador na hora
+  try{
+    const row = estoque2Cache.find(e => String(e.contrato).toUpperCase() === String(contrato).toUpperCase() && String(e.material).toUpperCase() === mat && String(e.unidade) === String(unidade));
+    if(row) row.saldo = Number(row.saldo || 0) + qtd;
+    renderEstoque2();
+  }catch(e){}
+  try{
+    await api('/api/estoque2/movimentar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, unidade, material: mat, qtd, motivo: 'Ajuste rápido ' + (qtd > 0 ? '+' : '') + qtd + ' via card', seriais: [] }) });
+    toast('✅ ' + unidade + ': ' + mat + ' ' + (qtd > 0 ? '+' : '') + qtd);
+  }catch(e){
+    toast('⚠️ ' + e.message);
+    // Reverte o otimista em caso de erro
+    try{
+      const row = estoque2Cache.find(e => String(e.contrato).toUpperCase() === String(contrato).toUpperCase() && String(e.material).toUpperCase() === mat && String(e.unidade) === String(unidade));
+      if(row) row.saldo = Number(row.saldo || 0) - qtd;
+      renderEstoque2();
+    }catch(_){}
+    return;
+  }
+  await loadEstoque2();
+}
+function toggleEst2MovTipo(){
+  const tipo = document.getElementById('est2Tipo')?.value;
+  const on = tipo === 'movimentacao';
+  document.getElementById('est2MovOrigemWrap')?.classList.toggle('hidden', !on);
+  document.getElementById('est2MovDestinoWrap')?.classList.toggle('hidden', !on);
+  document.getElementById('est2ForcarWrap')?.classList.toggle('hidden', !on);
+  if(on) toggleEst2Seriais();
+  const hint = document.getElementById('est2TipoHint');
+  if(hint){
+    const hints = {
+      movimentacao: '🔁 Movimentação: transfere de um local para outro. Marque "Disponível para uso" para levar os seriais mesmo fora de disponibilidade na origem — chegam disponíveis no destino.',
+      triagem: '🔬 Triagem: adiciona os materiais ao estoque da unidade e marca a entrada como [TRIAGEM] (aparece separada no fechamento do dia).',
+      manutencao: '🔧 Manutenção: reduz o item do estoque da unidade e marca a saída como [MANUTENCAO].',
+      outros_entrada: '➕ Outros: adiciona os materiais ao estoque e marca a entrada como [OUTROS].',
+      outros_saida: '➖ Outros: reduz o estoque e marca a saída como [OUTROS].'
+    };
+    if(hints[tipo]){
+      hint.textContent = hints[tipo];
+      hint.classList.remove('hidden');
+    } else {
+      hint.classList.add('hidden');
+    }
+  }
+}
+async function movimentarEstoque2(){
+  const err=document.getElementById('est2Err');
+  err.classList.add('hidden');
+  const contrato=isInfinity2Sistema() ? 'INF' : document.getElementById('est2Contrato').value;
+  const unidade=document.getElementById('est2Unidade').value;
+  const material=document.getElementById('est2Material').value;
+  const tipo=document.getElementById('est2Tipo').value;
+  const origem=document.getElementById('est2MovOrigem')?.value || unidade;
+  const destino=document.getElementById('est2MovDestino')?.value || unidade;
+  if(tipo==='movimentacao' && origem===destino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  const qtd=Number(document.getElementById('est2Qtd').value);
+  const motivo=document.getElementById('est2Motivo').value.trim();
+  if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
+  if(isKit2Mat(material) && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
+  if(!isKit2Mat(material) && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
+  if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
+  const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]' };
+  const tagTipo = TIPO_TAG[tipo] || '';
+  const motivoFinal = (tagTipo && !/^\[(triagem|manutencao|outros)\]/i.test(motivo)) ? (tagTipo + ' ' + motivo).slice(0,120) : motivo;
+  const sinalNegativo = ['saida','manutencao','outros_saida'].includes(tipo);
+  // KIT completo TZPR: 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04 | KIT UPR: 1×UPR04 + 1×FONTE04 (+ serial por kit)
+  if(isKit2Mat(material)){
+    const kit=kit2TipoDe(material);
+    const serialMat=kit2SerialMat(kit);
+    if(kit==='upr' && isInfinity2Sistema()) return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
+    const txt=document.getElementById('est2Seriais')?.value||'';
+    const seriaisKit=parseSeriais2(txt);
+    if(seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length) return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    try{
+      const r=await api('/api/estoque2/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
+      const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
+      const kitNome=String(r.kit||'tzpr').toLowerCase()==='upr' ? 'KIT-UPR' : 'KIT-TZPR';
+      toast(`✅ ${unidade}: ${r.kits} ${kitNome}${r.kits>1?'s':''} (${detalhe})`);
+      document.getElementById('est2Qtd').value=''; document.getElementById('est2Motivo').value=''; const stk=document.getElementById('est2Seriais'); if(stk) stk.value=''; document.getElementById('est2SeriaisList').innerHTML='';
+      loadEstoque2();
+    }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+    return;
+  }
+  const delta = sinalNegativo ? -Math.abs(qtd) : Math.abs(qtd);
+  let seriais=[];
+  if(temSerialEst2(material)){
+    const txt=document.getElementById('est2Seriais')?.value||'';
+    seriais=parseSeriais2(txt);
+    if(seriais.length !== Math.abs(qtd)){
+      const dica = seriais.length===0 ? ' — verifique se colou 10 dígitos por linha (ex: 1234567890) ou use Importar CSV' : ` — você colou ${seriais.length}, mas QTD=${Math.abs(qtd)}`;
+      err.innerHTML=`⚠️ ${material} lote exige <b>${Math.abs(qtd)} seriais</b> de 10 dígitos (encontrado ${seriais.length})${dica}<br><span class="text-[11px]">Dica: QTD é ajustado automaticamente se deixar em branco.</span>`;
+      err.classList.remove('hidden');
+      return;
+    }
+    if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
+  }
+  try{
+    if(tipo==='movimentacao'){
+      const forcar = document.getElementById('est2Forcar')?.checked && temSerialEst2(material);
+      await api('/api/estoque2/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, material, qtd: Math.abs(qtd), motivo, unidadeOrigem: origem, unidadeDestino: destino, seriais, forcarDisponivel: !!forcar }) });
+      toast('✅ '+material+' transferido: '+origem+' → '+destino+(seriais.length?` (${seriais.length} seriais)`:'')+(forcar?' ✅ disponível para uso':'')+' ['+estoque2SistemaAtivo+']');
+    } else {
+      await api('/api/estoque2/movimentar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato: contrato, unidade, material, qtd: delta, motivo: motivoFinal, seriais }) });
+      toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoque2SistemaAtivo+']');
+    }
+    document.getElementById('est2Qtd').value=''; document.getElementById('est2Motivo').value=''; const st=document.getElementById('est2Seriais'); if(st) st.value=''; document.getElementById('est2SeriaisList').innerHTML=''; const fc=document.getElementById('est2Forcar'); if(fc) fc.checked=false;
+    loadEstoque2();
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function transferirEstoque2(){
+  const err=document.getElementById('est2TransErr'); err.classList.add('hidden');
+  const contrato=getEstoque2ContratoEfetivo();
+  const unidadeOrigem=document.getElementById('est2TransOrigem').value;
+  const unidadeDestino=document.getElementById('est2TransDestino').value;
+  const material=document.getElementById('est2TransMaterial').value;
+  const qtd=Number(document.getElementById('est2TransQtd').value);
+  const motivo=document.getElementById('est2TransMotivo').value.trim();
+  if(unidadeOrigem===unidadeDestino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe QTD (1-500)', err.classList.remove('hidden'));
+  if(qtd>500) return (err.textContent='⚠️ Lote máximo 500', err.classList.remove('hidden'));
+  let seriais=[];
+  if(temSerialEst2(material)){
+    const txt=document.getElementById('est2TransSeriais')?.value||'';
+    seriais=parseSeriais2(txt);
+    if(seriais.length!==Math.abs(qtd)) return (err.innerHTML=`⚠️ ${material} exige <b>${qtd} seriais</b> (encontrado ${seriais.length}) — verifique o lote`, err.classList.remove('hidden'));
+    if(new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados', err.classList.remove('hidden'));
+  }
+  try{
+    await api('/api/estoque2/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, material, qtd, unidadeOrigem, unidadeDestino, motivo, seriais }) });
+    toast(`✅ Transferido ${qtd}x ${material} de ${unidadeOrigem} → ${unidadeDestino} (lote ${seriais.length||qtd}) [${estoque2SistemaAtivo}]`);
+    document.getElementById('est2TransQtd').value=''; document.getElementById('est2TransSeriais').value='';
+    loadEstoque2();
+  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}
+async function gerarRelatorioEstoque2(){
+  let contrato=getEstoque2ContratoEfetivo();
+  const unidade=estoque2UnidadeAtiva;
+  const from=document.getElementById('est2RelFrom')?.value||'';
+  const to=document.getElementById('est2RelTo')?.value||'';
+  try{
+    const params=new URLSearchParams();
+    params.set('contrato', contrato);
+    params.set('sistema', estoque2SistemaAtivo);
+    if(from) params.set('from', from);
+    if(to) params.set('to', to);
+    if(unidade) params.set('unidade', unidade);
+    console.log('[relatorio] GET /api/estoque2/relatorio?'+params.toString());
+    const data=await api('/api/estoque2/relatorio?'+params.toString());
+    const el=document.getElementById('est2Relatorio');
+    el.classList.remove('hidden');
+    const mats=matsEstoque2Ativo();
+    const saldos=data.estoque||[];
+    const totalGeral=saldos.reduce((s,x)=>s+Number(x.saldo||0),0);
+    const tituloUnidade=unidade?` • ${esc(unidade)}`:' • todas as unidades';
+    const labelRel = contrato==='INF' ? 'Estoque2 Infinity' : contrato;
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-sm">📊 Relatório ${esc(labelRel)}${tituloUnidade} ${from||to?`(${from||'...'} → ${to||'...'})`:''}</h3><button onclick="document.getElementById('est2Relatorio').classList.add('hidden')" class="text-xs text-slate-500">✕ Fechar</button></div>
+    <div class="grid grid-cols-5 gap-2 mb-3">${mats.map(m=>{
+      const rows=saldos.filter(x=> String(x.material).toUpperCase()===m);
+      const v=rows.reduce((s,x)=>s+Number(x.saldo||0),0);
+      return `<div class="text-center border rounded-xl p-2.5 bg-white"><b class="text-xs">${m}</b><br><b class="text-lg">${v}</b>${!unidade?`<br><span class="text-[10px] text-slate-400">${rows.length} unid.</span>`:''}</div>`;
+    }).join('')}<div class="text-center border rounded-xl p-2.5 bg-indigo-50 col-span-5"><b>TOTAL GERAL: ${totalGeral} unidades</b> • gerado em ${new Date(data.geradoEm).toLocaleString('pt-BR')}</div></div>
+    ${!unidade?`<div class="mb-3 overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST2.map(u=>{ const row=saldos.filter(x=>String(x.unidade)===u); const cells=mats.map(m=>{ const r=row.find(x=>String(x.material)===m); return `<td class="text-center py-1.5 px-2">${r?r.saldo:0}</td>`; }).join(''); const tot=row.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`:''}
+    <div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Data</th><th>Contrato</th><th>Unidade</th><th>Material</th><th>Tipo</th><th>Qtd</th><th>Saldo</th><th>Motivo</th><th>Usuário</th></tr></thead><tbody>${(data.movimentacoes||[]).map(m=>`<tr class="border-b"><td class="py-1.5 px-2">${new Date(m.createdAt).toLocaleString('pt-BR')}</td><td class="py-1.5 px-2">${esc(m.contrato)}</td><td class="py-1.5 px-2">${esc(m.unidade||'')}${m.unidadeDestino?' → '+esc(m.unidadeDestino):''}</td><td class="py-1.5 px-2 font-bold">${esc(m.material)}</td><td class="py-1.5 px-2"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${esc(m.tipo)}</span></td><td class="py-1.5 px-2 font-bold">${m.qtd}</td><td class="py-1.5 px-2">${m.saldoAntes}→${m.saldoDepois}</td><td class="py-1.5 px-2">${esc(m.motivo||'')} ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,2).map(esc).join(', ')}${m.seriais.length>2?' +'+(m.seriais.length-2):''}</span>`:''}</td><td class="py-1.5 px-2">${esc(m.userName||m.user||'')}</td></tr>`).join('')||'<tr><td colspan="9" class="text-center py-4 text-slate-400">Sem movimentações no período</td></tr>'}</tbody></table></div>
+    <div class="mt-3 flex gap-2"><button onclick="exportEstoque2RelatorioCSV()" class="btn btn-ghost text-xs px-3 py-1.5">⬇ CSV</button><button onclick="window.print()" class="btn btn-ghost text-xs px-3 py-1.5">🖨 Imprimir</button></div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+function exportEstoque2CSV(){
+  if(!estoque2Cache.length) return toast('⚠️ Nada para exportar');
+  let rows=[['Contrato','Unidade','Material','Saldo']];
+  const cCSV=getEstoque2ContratoEfetivo();
+  let list=estoque2Cache.filter(e=> String(e.contrato).toUpperCase()===cCSV);
+  if(estoque2UnidadeAtiva) list=list.filter(e=> String(e.unidade)===estoque2UnidadeAtiva);
+  list.forEach(e=> rows.push([e.contrato, e.unidade, e.material, e.saldo]));
+  const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-'+getEstoque2ContratoEfetivo()+(estoque2UnidadeAtiva?'-'+estoque2UnidadeAtiva.replace(/\s+/g,'_'):'-todas')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+function exportEstoque2RelatorioCSV(){
+  const contrato=getEstoque2ContratoEfetivo();
+  const rows=[['Data','Contrato','Unidade','Material','Tipo','Qtd','Saldo Antes','Saldo Depois','Motivo','Usuário','Seriais']];
+  (estoque2MovCache||[]).forEach(m=> rows.push([new Date(m.createdAt).toLocaleString('pt-BR'), m.contrato, m.unidade||'', m.material, m.tipo, m.qtd, m.saldoAntes, m.saldoDepois, m.motivo, m.userName||m.user, (m.seriais||[]).join(' | ')]));
+  const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-relatorio-'+contrato+(estoque2UnidadeAtiva?'-'+estoque2UnidadeAtiva.replace(/\s+/g,'_'):'')+'-'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+}
+async function exportEstoque2PDF(){
+  try{
+    let url='/api/estoque2/relatorio?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    if(estoque2UnidadeAtiva) url+='&unidade='+encodeURIComponent(estoque2UnidadeAtiva);
+    const data=await api(url);
+    const w=window.open('','_blank');
+    const contratoLbl = getEstoque2ContratoEfetivo()==='INF'?'Estoque2 Infinity':getEstoque2ContratoEfetivo();
+    const unidadeTxt=estoque2UnidadeAtiva?` • ${estoque2UnidadeAtiva}`:' • todas as unidades';
+    const html=`<html><head><meta charset="utf-8"><title>Relatório Estoque2 ${contratoLbl}${unidadeTxt}</title><style>body{font-family:Arial,sans-serif;padding:24px} table{width:100%;border-collapse:collapse;font-size:12px} th,td{border:1px solid #ddd;padding:6px;text-align:left} th{background:#f1f5f9} h2{margin:0 0 8px}</style></head><body><h2>Estoque2 ${contratoLbl}${unidadeTxt} — ${new Date().toLocaleString('pt-BR')}</h2><p>Total: ${data.estoque.reduce((s,x)=>s+Number(x.saldo||0),0)} unidades</p><table><tr><th>Unidade</th><th>Material</th><th>Saldo</th></tr>${data.estoque.map(e=>`<tr><td>${e.unidade}</td><td>${e.material}</td><td>${e.saldo}</td></tr>`).join('')}</table><h3 style="margin-top:16px">Auditoria</h3><table><tr><th>Data</th><th>Ação</th><th>Ref</th><th>Usuário</th><th>Resumo</th></tr>${(data.auditoria||[]).slice(0,100).map(a=>`<tr><td>${new Date(a.at).toLocaleString('pt-BR')}</td><td>${a.action}</td><td>${a.ref}</td><td>${a.byUser}</td><td>${a.summary}</td></tr>`).join('')}</table><script>window.print()<\/script></body></html>`;
+    w.document.write(html); w.document.close();
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function mostrarEstoque2Data(){
+  const data=document.getElementById('est2HistData')?.value;
+  const unidade=document.getElementById('est2HistUnidade')?.value||'';
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    let url='/api/estoque2/historico?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    if(unidade) url+='&unidade='+encodeURIComponent(unidade);
+    const list=await api(url);
+    const el=document.getElementById('est2HistResult');
+    el.classList.remove('hidden');
+     const total=list.reduce((s,x)=>s+Number(x.saldo||0),0);
+    const labelH = getEstoque2ContratoEfetivo()==='INF'?'Estoque2 Infinity':getEstoque2ContratoEfetivo();
+    const titulo=unidade?`${esc(unidade)} em ${new Date(data).toLocaleDateString('pt-BR')}`:`Total geral em ${new Date(data).toLocaleDateString('pt-BR')}`;
+     el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">${titulo} (${esc(labelH)})</b><span class="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold">Total: ${total}</span></div><div class="grid grid-cols-2 md:grid-cols-5 gap-2">${list.map(r=>`<div class="border rounded-xl p-2.5 text-center bg-white"><b class="text-xs">${r.material}${r.unidade&&r.unidade!=='TOTAL'?' • '+esc(r.unidade):''}</b><br><b class="text-lg">${r.saldo}</b>${MATERIAIS_SERIAL_EST2.includes(r.material) && r.seriais && r.seriais.length?`<br><span class="text-[11px] text-slate-500">${r.seriais.length} seriais em lote</span><div class="mt-1 max-h-20 overflow-y-auto text-[10px] font-mono bg-slate-50 rounded p-1 text-left">${r.seriais.slice(0,50).map(s=>esc(s)).join('<br>')}${r.seriais.length>50?'<br>+'+(r.seriais.length-50)+'...':''}</div>`:''}</div>`).join('')}</div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function mostrarEstoque2DataDetalha(){
+  const data=document.getElementById('est2HistData')?.value;
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    const list=await api('/api/estoque2/historico/detalhado?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoque2SistemaAtivo));
+    const el=document.getElementById('est2HistResult');
+    el.classList.remove('hidden');
+    const mats=matsEstoque2Ativo();
+    const labelDet = getEstoque2ContratoEfetivo()==='INF'?'Estoque2 Infinity':getEstoque2ContratoEfetivo();
+    el.innerHTML=`<div class="flex items-center justify-between mb-2"><b class="text-sm">Detalhado por unidade em ${new Date(data).toLocaleDateString('pt-BR')} (${esc(labelDet)})</b><button onclick="exportHistorico2CSV()" class="text-xs text-slate-500">⬇ CSV</button></div><div class="overflow-x-auto"><table class="min-w-full text-xs"><thead class="bg-slate-50"><tr><th class="text-left py-2 px-2">Unidade</th>${mats.map(m=>`<th class="text-center py-2 px-2">${m}</th>`).join('')}<th class="text-center">Total</th></tr></thead><tbody>${UNIDADES_EST2.map(u=>{ const rows=list.filter(x=> String(x.unidade)===u); const cells=mats.map(m=>{ const r=rows.find(x=> String(x.material)===m); const v=r?r.saldo:0; const det=r&&r.seriais&&r.seriais.length?`<br><span class="text-[10px] font-mono text-slate-500">${r.seriais.length} seriais</span>`:''; return `<td class="text-center py-1.5 px-2">${v}${det}</td>`; }).join(''); const tot=rows.reduce((s,x)=>s+Number(x.saldo||0),0); return `<tr class="border-b"><td class="py-1.5 px-2 font-semibold">${esc(u)}</td>${cells}<td class="text-center font-bold">${tot}</td></tr>`; }).join('')}</tbody></table></div>`;
+    el.scrollIntoView({behavior:'smooth'});
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+async function exportHistorico2CSV(){
+  const data=document.getElementById('est2HistData')?.value;
+  const unidade=document.getElementById('est2HistUnidade')?.value||'';
+  if(!data) return toast('⚠️ Selecione a data');
+  try{
+    let url='/api/estoque2/historico?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    if(unidade) url+='&unidade='+encodeURIComponent(unidade);
+    else url='/api/estoque2/historico/detalhado?contrato='+encodeURIComponent(getEstoque2ContratoEfetivo())+'&data='+encodeURIComponent(data)+'&sistema='+encodeURIComponent(estoque2SistemaAtivo);
+    const list=await api(url);
+    const rows=[['Contrato','Unidade','Material','Saldo','Seriais','Data']];
+    list.forEach(r=> rows.push([r.contrato, r.unidade||unidade||'TOTAL', r.material, r.saldo, (r.seriais||[]).join(' | '), r.data]));
+    const csv=rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+    const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+    const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='estoque-historico-'+estoque2ContratoAtivo+(unidade?'-'+unidade.replace(/\s+/g,'_'):'-detalhado')+'-'+data+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),5000);
+  }catch(e){ toast('⚠️ '+e.message); }
+}
+// --- CHAT IA ESTOQUE (on-prem) - APRIMORADO ---
+function est2IAAsk(q){ const el=document.getElementById('est2IAInput'); if(el){ el.value=q; el.focus(); est2IASend(); } }
+let est2IALastCtx=null;
+function toggleEst2IAMore(){
+  const extra=document.getElementById('est2IAExtra');
+  const btn=document.getElementById('est2IAMoreBtn');
+  const txt=document.getElementById('est2IAMoreText');
+  const icon=document.getElementById('est2IAMoreIcon');
+  if(!extra||!btn) return;
+  const open=!extra.classList.contains('hidden');
+  extra.classList.toggle('hidden');
+  btn.classList.toggle('ring-2', !open);
+  btn.classList.toggle('ring-indigo-300', !open);
+  if(txt) txt.textContent=open?'Menos opções':'Mais opções...';
+  if(icon) icon.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+}
+function updateEst2IAQuick(ctx){
+  const quick=document.getElementById('est2IAQuick');
+  if(!quick) return;
+  let html='';
+  if(ctx?.intent==='movs' || /movimenta|hist[oó]rico/.test(ctx?.qRaw||'')){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📋 Histórico</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="est2IAAsk('movimentações de ${est2IALastCtx?.usuario?.user||'joanderson'} ontem CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📋 por usuário</button>
+      <button onclick="est2IAAsk('movimentações ontem CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+      <button onclick="est2IAAsk('movimentações última semana CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 semana</button>
+    </div></div>`;
+  } else if(ctx?.intent==='media_consumo' || /consumo|m[eé]dia/.test(ctx?.qRaw||'')){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📊 Consumo</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="est2IAAsk('consumo médio 15 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 15 dias</button>
+      <button onclick="est2IAAsk('consumo médio 60 dias CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 60 dias</button>
+      <button onclick="est2IAAsk('previsão ruptura TZPR04 UMEPE 30 dias')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔮 ruptura</button>
+    </div>`;
+  } else if(/reposi[cç][aã]o|faltar|comprar/.test((ctx?.qRaw||'').toLowerCase())){
+    html+=`<div class="w-full mb-1"><p class="text-[10px] font-bold tracking-wide text-slate-500 px-1 mb-1">📦 Reposição</p><div class="flex flex-wrap gap-1.5">
+      <button onclick="est2IAAsk('reposição CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 reposição</button>
+      <button onclick="est2IAAsk('sugestão pedido compra CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🛒 pedido compra</button>
+      <button onclick="est2IAAsk('transferência sugerida UMEPE → UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔁 transferir</button>
+    </div>`;
+  }
+  // Always show base buttons
+  const base=`<div class="flex flex-wrap gap-1.5 mb-3" id="est2IAQuickBase">
+    <button onclick="est2IAAsk('estoque atual UMEPE Juazeiro CE01')" class="btn bg-indigo-50 border-indigo-200 text-indigo-800 text-[11px] px-2.5 py-1">1️⃣ estoque atual</button>
+    <button onclick="est2IAAsk('média de consumo mensal UMEPE Juazeiro CE01')" class="btn bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] px-2.5 py-1">2️⃣ média mensal</button>
+    <button onclick="est2IAAsk('necessidade de reposição UMEPE Juazeiro CE01')" class="btn bg-amber-50 border-amber-200 text-amber-800 text-[11px] px-2.5 py-1">3️⃣ reposição segurança</button>
+    <button onclick="est2IAAsk('saldo total CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📦 saldo total</button>
+    <button onclick="est2IAAsk('resumo CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📊 resumo</button>
+    <button onclick="est2IAAsk('comparar UMEPE Juazeiro vs UP-Cariri CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">⚖️ comparar</button>
+    <button onclick="est2IAAsk('evolução 7 dias TZPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">📈 evolução</button>
+    <button onclick="est2IAAsk('seriais UPR04 CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🔢 seriais</button>
+    <button onclick="est2IAAsk('ranking CINTA CE01')" class="btn btn-ghost text-[11px] px-2.5 py-1">🏆 ranking</button>
+    <button onclick="est2IAAsk('histórico ontem')" class="btn btn-ghost text-[11px] px-2.5 py-1">📅 ontem</button>
+    <button onclick="est2IAAsk('ajuda')" class="btn btn-ghost text-[11px] px-2.5 py-1">❓ ajuda</button>`;
+  const quickEl=document.getElementById('est2IAQuick');
+  if(quickEl) quickEl.innerHTML = html + base;
+}
+function est2IAFormatText(t){
+  // markdown leve: **negrito**, `code`, quebras
+  let h=esc(t);
+  h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  h=h.replace(/`(.+?)`/g,'<code class="bg-slate-100 px-1 py-0.5 rounded text-[11px]">$1</code>');
+  h=h.replace(/\n/g,'<br>');
+  // auto-link para seriais 10 digitos
+  h=h.replace(/\b(\d{10})\b/g,'<span class="font-mono bg-amber-50 border border-amber-200 rounded px-1">$1</span>');
+  return h;
+}
+function est2IAAppend(who, text, opts){
+  const box=document.getElementById('est2IAMessages'); if(!box) return;
+  const isUser=who==='user';
+  const avatar=isUser?`<span class="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs shrink-0">👤</span>`:`<span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span>`;
+  const bubble=isUser?`bg-indigo-600 text-white rounded-2xl rounded-tr-sm`:`bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-sm shadow-sm`;
+  const time=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const copyBtn=!isUser ? `<button data-text="${encodeURIComponent(text).replace(/"/g,'&quot;')}" onclick="navigator.clipboard.writeText(decodeURIComponent(this.dataset.text)).then(()=>toast('📋 Copiado'))" class="text-[11px] text-slate-400 hover:text-indigo-600 ml-2" title="Copiar">📋</button>` : '';
+  const html=`<div class="flex gap-2 ${isUser?'justify-end':''} group">${!isUser?avatar:''}<div class="max-w-[85%]"><div class="${bubble} px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words">${est2IAFormatText(text)}${copyBtn}</div><div class="text-[10px] text-slate-400 mt-1 ${isUser?'text-right':''}">${time}</div></div>${isUser?avatar:''}</div>`;
+  box.insertAdjacentHTML('beforeend', html);
+  if(opts && opts.suggestions) {/* handled outside */}
+  box.scrollTop=box.scrollHeight;
+}
+function est2IAClear(){
+  const box=document.getElementById('est2IAMessages');
+  if(!box) return;
+  box.innerHTML=`<div class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2.5 text-xs text-slate-700 max-w-[85%] leading-relaxed">Conversa limpa. Como posso ajudar com o estoque?<br><br>Ex: “reposição CE01”, “comparar UMEPE vs UP-Cariri”, “evolução 7 dias TZPR04”</div></div>`;
+}
+function est2IAExport(){
+  const box=document.getElementById('est2IAMessages');
+  if(!box) return;
+  const lines=[...box.querySelectorAll('.flex.gap-2')].map(el=>{
+    const isUser=el.classList.contains('justify-end');
+    const txt=el.innerText||'';
+    return (isUser?'👤 Você: ':'🤖 IA: ') + txt.replace(/\n/g,' ').trim();
+  }).join('\n\n');
+  const blob=new Blob([lines],{type:'text/plain;charset=utf-8'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download='chat-estoque-'+new Date().toISOString().slice(0,10)+'.txt'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),3000);
+  toast('⬇ Conversa exportada');
+}
+function est2IARenderData(data){
+  if(!data) return '';
+  try{
+    // reposição
+    if(data.itens && data.totalPecas!==undefined){
+      let html='<div class="mt-2 bg-white border rounded-xl overflow-hidden"><div class="bg-amber-50 px-3 py-2 border-b flex justify-between"><b class="text-xs">🛒 Reposição — '+data.totalPecas+' peças</b><span class="text-[11px] text-amber-700">'+data.itens.length+' itens</span></div><div class="divide-y max-h-[220px] overflow-y-auto">';
+      data.itens.slice(0,12).forEach(r=>{ html+=`<div class="flex justify-between items-center px-3 py-2 text-[11px]"><span><b>${esc(r.material)}</b> ${esc(r.unidade)}<br><span class="text-slate-500">${r.contrato} ${r.saldo}/${r.limite} ${r.saldo===0?'🔴':''}</span></span><span class="bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded-full">+${r.qtdSugerida}</span></div>`; });
+      html+='</div></div>';
+      return html;
+    }
+    // comparar
+    if(data.linhas && data.u1){
+      let html='<div class="mt-2 bg-white border rounded-xl overflow-hidden"><div class="bg-indigo-50 px-3 py-2 border-b text-xs font-bold">⚖️ '+esc(data.u1)+' vs '+esc(data.u2)+' — '+esc(data.contrato)+'</div><div class="divide-y">';
+      data.linhas.forEach(l=>{ const win=l.vencedor===data.u1?'bg-emerald-50': l.vencedor===data.u2?'bg-amber-50':''; html+=`<div class="flex justify-between px-3 py-1.5 text-[11px] ${win}"><span>${esc(l.material)}</span><span><b>${l.u1}</b> vs <b>${l.u2}</b> <span class="text-slate-500">(${l.diff>0?'+':''}${l.diff})</span></span></div>`; });
+      html+='</div></div>';
+      return html;
+    }
+    // tendencia
+    if(data.pontos && data.dias){
+      let html='<div class="mt-2 bg-white border rounded-xl p-3"><div class="text-xs font-bold mb-2">📈 Evolução '+esc(data.material||'')+' — '+data.dias+' dias</div><div class="flex items-end gap-1 h-16">';
+      const max=Math.max(...data.pontos.map(p=>p.saldo),1);
+      data.pontos.forEach(p=>{ const h=Math.round((p.saldo/max)*60); html+=`<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full bg-indigo-200 rounded-t" style="height:${h}px"></div><span class="text-[9px]">${p.saldo}</span></div>`; });
+      html+='</div><div class="flex justify-between text-[10px] text-slate-500 mt-1"><span>'+(data.pontos[0]?.data?.slice(5)||'')+'</span><span class="font-bold '+(data.variacao>0?'text-emerald-600':data.variacao<0?'text-rose-600':'')+'">'+(data.variacao>0?'+':'' )+data.variacao+'</span><span>'+(data.pontos[data.pontos.length-1]?.data?.slice(5)||'')+'</span></div></div>';
+      return html;
+    }
+    if(data.itens && Array.isArray(data.itens)){
+      const rows=data.itens.slice(0,20);
+      if(rows[0] && rows[0].unidade!==undefined){
+        const ordem=[...MATERIAIS_EST2_SPACECOM, ...MATERIAIS_EST2_INFINITY.filter(m=>!MATERIAIS_EST2_SPACECOM.includes(m))];
+        const mats=ordem.filter(m=>rows.some(r=>String(r.material)===m));
+        const unidades=[...new Set(rows.map(r=>r.unidade))].slice(0,6);
+        let html='<div class="mt-2 overflow-x-auto"><table class="min-w-full text-[11px] bg-white rounded-lg overflow-hidden border"><thead class="bg-slate-50"><tr><th class="text-left py-1.5 px-2">Unidade</th>'+mats.map(m=>`<th class="text-center py-1.5 px-2">${m}</th>`).join('')+'</tr></thead><tbody>';
+        unidades.forEach(u=>{ html+='<tr class="border-t"><td class="py-1 px-2 font-semibold">'+esc(u)+'</td>'+mats.map(m=>{ const r=rows.find(x=>String(x.unidade)===u && String(x.material)===m); const v=r?r.saldo:0; const cls=v===0?'text-slate-300': v < (LIMITES_EST2[m]||5)?'text-amber-700 font-bold':'text-emerald-700'; return '<td class="text-center py-1 px-2 '+cls+'">'+v+'</td>'; }).join('')+'</tr>'; });
+        html+='</tbody></table></div>';
+        return html;
+      }
+    }
+    if(data.movs && Array.isArray(data.movs)){
+      let html='<div class="mt-2 space-y-1">';
+      data.movs.slice(0,8).forEach(m=>{ html+=`<div class="text-[11px] bg-white border rounded-lg p-2 flex justify-between"><span><b>${esc(m.material)}</b> <span class="text-[10px] px-1.5 py-0.5 rounded-full ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${esc(m.tipo)}</span> ${m.qtd} em ${esc(m.unidade||'')} ${m.unidadeDestino?'→ '+esc(m.unidadeDestino):''}</span><span class="text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')}</span></div>`; });
+      html+='</div>';
+      return html;
+    }
+    if(data.ranking){
+      let html='<div class="mt-2 bg-white border rounded-xl p-2 text-[11px]">'+data.ranking.map((r,i)=>`<div class="flex justify-between py-1 ${i===0?'font-bold text-indigo-700 bg-indigo-50 rounded px-2':''}"><span>${i===0?'🥇':i===1?'🥈':i===2?'🥉':'•'} ${esc(r.unidade)}</span><span>${r.saldo}</span></div>`).join('')+'</div>';
+      return html;
+    }
+    if(data.porUnidade){
+      let html='<div class="mt-2 bg-white border rounded-lg p-2 text-[11px]">'+Object.entries(data.porUnidade).map(([u,c])=>`<div class="flex justify-between"><span>${esc(u)}</span><span class="font-bold">${c}</span></div>`).join('')+'</div>';
+      return html;
+    }
+    // ficha
+    if(data.row && data.movs){
+      let html='<div class="mt-2 bg-white border rounded-xl overflow-hidden"><div class="bg-slate-50 px-3 py-2 border-b text-xs font-bold">📋 '+esc(data.row.material)+' — '+esc(data.row.unidade)+' ('+esc(data.row.contrato)+') — Saldo '+data.row.saldo+'</div><div class="p-2 space-y-1">';
+      if(data.seriais && data.seriais.length) html+=`<div class="text-[11px]"><b>Seriais disp.:</b> ${data.seriais.slice(0,4).map(s=>esc(s.serial)).join(', ')}${data.seriais.length>4?' …':''}</div>`;
+      data.movs.slice(0,4).forEach(m=>{ html+=`<div class="text-[11px] flex justify-between"><span>${esc(m.tipo)} ${m.qtd} — ${esc(m.motivo||'')}</span><span class="text-slate-500">${new Date(m.createdAt).toLocaleDateString('pt-BR')}</span></div>`; });
+      html+='</div></div>';
+      return html;
+    }
+    // consumo
+    if(data.media!==undefined){
+      const diasTxt=data.diasAteAcabar===Infinity?'∞': data.diasAteAcabar+' dias';
+      const cls=data.diasAteAcabar<=3?'text-rose-600': data.diasAteAcabar<=7?'text-amber-600':'text-emerald-600';
+      let html=`<div class="mt-2 bg-white border rounded-xl p-3 text-xs"><div class="flex justify-between"><span>Consumo médio</span><span class="font-bold">${Number(data.media).toFixed(2)}/dia</span></div><div class="flex justify-between"><span>Saldo atual</span><span class="font-bold">${data.saldoAtual}</span></div><div class="flex justify-between ${cls}"><span>Dura</span><span class="font-bold">${diasTxt}</span></div></div>`;
+      return html;
+    }
+  }catch(e){}
+  return '';
+}
+async function est2IASend(){
+  const input=document.getElementById('est2IAInput'); if(!input) return;
+  const q=String(input.value||'').trim(); if(!q) return;
+  est2IAAppend('user', q);
+  input.value='';
+  const box=document.getElementById('est2IAMessages');
+  const loadingId='est2IA-loading-'+Date.now();
+  box.insertAdjacentHTML('beforeend', `<div id="${loadingId}" class="flex gap-2"><span class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs shrink-0">🤖</span><div class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-slate-400 flex items-center gap-2">pensando<span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style="animation-delay:.15s"></span><span class="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style="animation-delay:.3s"></span></div></div>`);
+  box.scrollTop=box.scrollHeight;
+  try{
+    const r=await api('/api/estoque2/ia', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: q, sistema: estoque2SistemaAtivo }) });
+    document.getElementById(loadingId)?.remove();
+    est2IAAppend('bot', r.text||JSON.stringify(r,null,2));
+    const dataHtml=est2IARenderData(r.data);
+    if(dataHtml){ const b=document.getElementById('est2IAMessages'); b.insertAdjacentHTML('beforeend', `<div class="ml-9">${dataHtml}</div>`); b.scrollTop=b.scrollHeight; }
+    if(r.suggestions && r.suggestions.length){
+      const b=document.getElementById('est2IAMessages');
+      b.insertAdjacentHTML('beforeend', `<div class="ml-9 flex flex-wrap gap-1 mt-2">${r.suggestions.slice(0,6).map(s=>`<button onclick='est2IAAsk(${JSON.stringify(s)})' class="text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100 transition">`+esc(s)+`</button>`).join('')}</div>`);
+      b.scrollTop=b.scrollHeight;
+    }
+  }catch(e){
+    document.getElementById(loadingId)?.remove();
+    est2IAAppend('bot', '⚠️ '+e.message);
   }
 }
 
