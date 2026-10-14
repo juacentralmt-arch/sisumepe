@@ -1722,7 +1722,7 @@
              <div><label class="lbl">CONTRATO *</label><select id="est2Contrato" class="inp mt-1"><option value="CE01">CE01</option><option value="CE02">CE02</option></select></div>
              <div><label class="lbl">UNIDADE *</label><select id="est2Unidade" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
              <div><label class="lbl">MATERIAL *</label><select id="est2Material" class="inp mt-1" onchange="toggleEst2Seriais()"><option>TZPR04</option><option>UPR04</option><option>FONTE04</option><option>CINTA</option><option>TRAVAS</option><option value="KIT-TZPR">Kit completo TZPR</option><option value="KIT-UPR">Kit completo UPR</option></select></div>
-             <div><label class="lbl">TIPO *</label><select id="est2Tipo" class="inp mt-1" onchange="toggleEst2MovTipo()"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option><option value="movimentacao">Movimentação</option><option value="triagem">Triagem (+) — adiciona ao estoque</option><option value="manutencao">Manutenção (−) — reduz do estoque</option><option value="outros_entrada">Outros (+) — adiciona</option><option value="outros_saida">Outros (−) — reduz</option></select></div>
+             <div><label class="lbl">TIPO *</label><select id="est2Tipo" class="inp mt-1" onchange="toggleEst2MovTipo()"><option value="entrada">Entrada (+)</option><option value="saida">Saída (-)</option><option value="movimentacao">Movimentação</option><option value="triagem">Triagem (+) — adiciona ao estoque</option><option value="manutencao">Manutenção (−) — reduz do estoque</option><option value="outros_entrada">Outros (+) — adiciona</option><option value="outros_saida">Outros (−) — reduz</option><option value="ativacao">Ativação (−) — reduz do estoque</option></select></div>
              <div id="est2MovOrigemWrap" class="hidden"><label class="lbl">ORIGEM *</label><select id="est2MovOrigem" class="inp mt-1"><option>UMEPE Juazeiro</option><option>UP-Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
               <div id="est2MovDestinoWrap" class="hidden"><label class="lbl">DESTINO *</label><select id="est2MovDestino" class="inp mt-1"><option>UP-Juazeiro</option><option>UMEPE Juazeiro</option><option>UP-Cariri</option><option>UP-Crato</option><option>Fórum de Crato</option><option>Fórum de Jardim</option></select></div>
               <div id="est2ForcarWrap" class="hidden col-span-2"><label class="flex items-start gap-2 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-xl px-2.5 py-2 cursor-pointer"><input id="est2Forcar" type="checkbox" class="w-4 h-4 mt-0.5 accent-teal-600"> <span>✅ Disponível para uso — transfere os seriais mesmo fora de disponibilidade na origem; chegam disponíveis no destino</span></label></div>
@@ -1739,8 +1739,18 @@
             </div>
             <div id="est2SeriaisList" class="mt-2 flex flex-wrap gap-1 max-h-[120px] overflow-y-auto"></div>
           </div>
+          <div id="est2MotivoWrap">
           <label class="lbl">MOTIVO *</label>
           <input id="est2Motivo" placeholder="Ex: Recebimento lote 123 em lote, ajuste inventário" class="inp mt-1">
+          </div>
+          <div id="est2AtivacaoWrap" class="hidden">
+            <label class="lbl">DESTINO DA ATIVAÇÃO *</label>
+            <select id="est2AtivacaoDestino" class="inp mt-1">
+              <option>Réu Solto</option>
+              <option>Núcleo de Custódia</option>
+              <option>Réu Preso Unidade</option>
+            </select>
+          </div>
           <button onclick="movimentarEstoque2()" class="btn btn-primary w-full py-2 text-sm mt-2">✓ Confirmar movimentação na unidade</button>
           <p id="est2Err" class="hidden text-xs font-semibold text-rose-600 mt-2"></p>
 
@@ -11320,6 +11330,9 @@ function toggleEst2MovTipo(){
   document.getElementById('est2MovDestinoWrap')?.classList.toggle('hidden', !on);
   document.getElementById('est2ForcarWrap')?.classList.toggle('hidden', !on);
   if(on) toggleEst2Seriais();
+  const isAtiv = tipo === 'ativacao';
+  document.getElementById('est2MotivoWrap')?.classList.toggle('hidden', isAtiv);
+  document.getElementById('est2AtivacaoWrap')?.classList.toggle('hidden', !isAtiv);
   const hint = document.getElementById('est2TipoHint');
   if(hint){
     const hints = {
@@ -11327,7 +11340,8 @@ function toggleEst2MovTipo(){
       triagem: '🔬 Triagem: adiciona os materiais ao estoque da unidade e marca a entrada como [TRIAGEM] (aparece separada no fechamento do dia).',
       manutencao: '🔧 Manutenção: reduz o item do estoque da unidade e marca a saída como [MANUTENCAO].',
       outros_entrada: '➕ Outros: adiciona os materiais ao estoque e marca a entrada como [OUTROS].',
-      outros_saida: '➖ Outros: reduz o estoque e marca a saída como [OUTROS].'
+      outros_saida: '➖ Outros: reduz o estoque e marca a saída como [OUTROS].',
+      ativacao: '⚡ Ativação: saída do equipamento instalado. O motivo sai sozinho como [ATIVACAO] + destino.'
     };
     if(hints[tipo]){
       hint.textContent = hints[tipo];
@@ -11348,7 +11362,7 @@ async function movimentarEstoque2(){
   const destino=document.getElementById('est2MovDestino')?.value || unidade;
   if(tipo==='movimentacao' && origem===destino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
   const qtd=Number(document.getElementById('est2Qtd').value);
-  const motivo=document.getElementById('est2Motivo').value.trim();
+  const motivo=tipo==='ativacao' ? (document.getElementById('est2AtivacaoDestino')?.value || '').trim() : document.getElementById('est2Motivo').value.trim();
   if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
   if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
   if(isKit2Mat(material) && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
@@ -11356,10 +11370,10 @@ async function movimentarEstoque2(){
   if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
   if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
-  const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]' };
+  const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]', ativacao: '[ATIVACAO]' };
   const tagTipo = TIPO_TAG[tipo] || '';
-  const motivoFinal = (tagTipo && !/^\[(triagem|manutencao|outros)\]/i.test(motivo)) ? (tagTipo + ' ' + motivo).slice(0,120) : motivo;
-  const sinalNegativo = ['saida','manutencao','outros_saida'].includes(tipo);
+  const motivoFinal = (tagTipo && !/^\[(triagem|manutencao|outros|ativacao)\]/i.test(motivo)) ? (tagTipo + ' ' + motivo).slice(0,120) : motivo;
+  const sinalNegativo = ['saida','manutencao','outros_saida','ativacao'].includes(tipo);
   // KIT completo TZPR: 1×TZPR + 1×CINTA + 2×TRAVAS + 1×FONTE04 | KIT UPR: 1×UPR04 + 1×FONTE04 (+ serial por kit)
   if(isKit2Mat(material)){
     const kit=kit2TipoDe(material);
