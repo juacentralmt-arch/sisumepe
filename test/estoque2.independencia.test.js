@@ -88,6 +88,24 @@ async function main() {
     assert(est.status === 200, 'estorno da movimentação de teste: 200');
   }
 
+  console.log('\n=== ESTOQUE 2 — evolução por período ===');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const d3 = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  const evo = await get(`/api/estoque2/fluxo/evolucao?sistema=spacecom&contrato=CE01&de=${d3}&ate=${hoje}`);
+  assert(evo.status === 200 && evo.body.modo === 'evolucao', 'evolução 4 dias: 200');
+  assert(Array.isArray(evo.body.dias) && evo.body.dias.length === 4, `4 dias retornados (${(evo.body.dias || []).length})`);
+  const dk = ['data', 'totalInicial', 'totalEntradas', 'totalSaidas', 'totalFinal', 'movimentacoes', 'inicial', 'final'];
+  assert(evo.body.dias.every(d => dk.every(k => d[k] !== undefined)), 'cada dia com totais + matrizes');
+  assert(evo.body.dias[0].data === d3 && evo.body.dias[3].data === hoje, 'dias em ordem cronológica');
+  const evoUnd = await get(`/api/estoque2/fluxo/evolucao?sistema=spacecom&contrato=CE01&de=${d3}&ate=${hoje}&unidade=${encodeURIComponent(uni)}`);
+  assert(evoUnd.status === 200 && evoUnd.body.unidade === uni, 'filtro por unidade respeitado');
+  const evo31 = await get(`/api/estoque2/fluxo/evolucao?sistema=spacecom&contrato=CE01&de=2026-01-01&ate=2026-02-15`);
+  assert(evo31.status === 400, 'período >31 dias: 400');
+  const evoInv = await get('/api/estoque2/fluxo/evolucao?sistema=spacecom&contrato=CE01&de=xx&ate=' + hoje);
+  assert(evoInv.status === 400, 'data inválida: 400');
+  const dia = await get(`/api/estoque2/fluxo?sistema=spacecom&contrato=CE01&data=${hoje}`);
+  assert(dia.status === 200 && dia.body.modo === 'diario' && dia.body.data === hoje, '?data= segue íntegro após refatoração');
+
   console.log('\n=== ESTOQUE 2 — cache IA isolado por namespace ===');
   const cache = require('../src/lib/estoqueIA-core/cache');
   const a1 = await cache.getOrFetch('estoque', { x: 'nse2teste' }, () => Promise.resolve('MOD1'));

@@ -589,6 +589,50 @@ router.post('/api/estoque2/seed', shared.auth(['admin']), shared.ah(async (req,r
   res.json(rel);
 }));
 
+// Fechamento de UM dia (extraído do modo ?data=): inicial (fim do dia
+// anterior) + entradas/saídas do dia = final, por unidade × material.
+// Reusado pelo modo diário e pela evolução por período.
+function fechamentoDiaE2(movs, mats, unids, diaISO){
+  const iniDia = new Date(diaISO + 'T00:00:00Z');
+  const fimDia = new Date(diaISO + 'T23:59:59.999Z');
+  const diaAnt = new Date(iniDia); diaAnt.setUTCDate(diaAnt.getUTCDate() - 1);
+  const zero = () => { const o = {}; unids.forEach(u=>{ o[u]={}; mats.forEach(m=>{ o[u][m]=0; }); }); return o; };
+  const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), fin = zero();
+  let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalFinal = 0, movsDia = 0;
+  const ehTriagem = m => /^\[triagem\]/i.test(String((m && m.motivo) || '').trim());
+  for(const m of movs){
+    const u = String(m.unidade||'').trim();
+    if(!unids.includes(u)) continue;
+    const mat = String(m.material||'').toUpperCase();
+    if(!mats.includes(mat)) continue;
+    const qtd = Math.abs(Number(m.qtd)||0);
+    const ts = new Date(m.createdAt);
+    if(isNaN(ts)) continue;
+    if(ts < iniDia){
+      // compõe o estoque inicial do dia (fim do dia anterior)
+      if(String(m.tipo)==='saida'){ inicial[u][mat]-=qtd; totalInicial-=qtd; }
+      else { inicial[u][mat]+=qtd; totalInicial+=qtd; }
+    } else if(ts <= fimDia){
+      movsDia++;
+      if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
+      else {
+        entradas[u][mat]+=qtd; totalEntradas+=qtd;
+        if(ehTriagem(m)){ entradasTriagem[u][mat]+=qtd; totalEntradasTriagem+=qtd; }
+      }
+    }
+  }
+  for(const u of unids) for(const m of mats){
+    fin[u][m] = inicial[u][m] + entradas[u][m] - saidas[u][m];
+    totalFinal += fin[u][m];
+  }
+  return {
+    data: diaISO, dataAnterior: diaAnt.toISOString().slice(0,10),
+    unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, final: fin,
+    totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalFinal,
+    movimentacoes: movsDia
+  };
+}
+
 // Fluxo por unidade: ENTRADAS x SAÍDAS agregadas por unidade × material,
 // no mesmo formato da matriz "Saldo por unidade" (para o painel do frontend).
 //   ?contrato=CE01|CE02|INF  ?sistema=spacecom|infinity  ?from=AAAA-MM-DD  ?to=AAAA-MM-DD
@@ -612,47 +656,18 @@ router.get('/api/estoque2/fluxo', shared.auth(['tecnico','admin']), shared.ah(as
     if(und) movs = movs.filter(m=> String(m.unidade)===und);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data).trim())) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
     const dia = String(data).trim();
-    const iniDia = new Date(dia + 'T00:00:00Z');
-    const fimDia = new Date(dia + 'T23:59:59.999Z');
-    if(isNaN(iniDia) || isNaN(fimDia)) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
-    const diaAnt = new Date(iniDia); diaAnt.setUTCDate(diaAnt.getUTCDate() - 1);
+    if(isNaN(new Date(dia + 'T00:00:00Z'))) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
     const mats = materiaisDoSistemaRoute(effectiveSistema);
     const unids = und ? [und] : [...UNIDADES];
-    const zero = () => { const o = {}; unids.forEach(u=>{ o[u]={}; mats.forEach(m=>{ o[u][m]=0; }); }); return o; };
-    const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), fin = zero();
-    let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalFinal = 0, movsDia = 0;
-    const ehTriagem = m => /^\[triagem\]/i.test(String((m && m.motivo) || '').trim());
-    for(const m of movs){
-      const u = String(m.unidade||'').trim();
-      if(!unids.includes(u)) continue;
-      const mat = String(m.material||'').toUpperCase();
-      if(!mats.includes(mat)) continue;
-      const qtd = Math.abs(Number(m.qtd)||0);
-      const ts = new Date(m.createdAt);
-      if(isNaN(ts)) continue;
-      if(ts < iniDia){
-        // compõe o estoque inicial do dia (fim do dia anterior)
-        if(String(m.tipo)==='saida'){ inicial[u][mat]-=qtd; totalInicial-=qtd; }
-        else { inicial[u][mat]+=qtd; totalInicial+=qtd; }
-      } else if(ts <= fimDia){
-        movsDia++;
-        if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
-        else {
-          entradas[u][mat]+=qtd; totalEntradas+=qtd;
-          if(ehTriagem(m)){ entradasTriagem[u][mat]+=qtd; totalEntradasTriagem+=qtd; }
-        }
-      }
-    }
-    for(const u of unids) for(const m of mats){
-      fin[u][m] = inicial[u][m] + entradas[u][m] - saidas[u][m];
-      totalFinal += fin[u][m];
-    }
+    const f = fechamentoDiaE2(movs, mats, unids, dia);
     return res.json({
       modo: 'diario', sistema: effectiveSistema, contrato: cd, contratoLabel: contratoLabel(cd),
-      data: dia, dataAnterior: diaAnt.toISOString().slice(0,10), unidade: und || null,
-      unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, final: fin,
-      totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalFinal,
-      movimentacoes: movsDia,
+      data: f.data, dataAnterior: f.dataAnterior, unidade: und || null,
+      unidades: f.unidades, materiais: f.materiais, inicial: f.inicial, entradas: f.entradas,
+      entradasTriagem: f.entradasTriagem, saidas: f.saidas, final: f.final,
+      totalInicial: f.totalInicial, totalEntradas: f.totalEntradas,
+      totalEntradasTriagem: f.totalEntradasTriagem, totalSaidas: f.totalSaidas,
+      totalFinal: f.totalFinal, movimentacoes: f.movimentacoes,
       geradoEm: new Date().toISOString()
     });
   }
@@ -680,6 +695,41 @@ router.get('/api/estoque2/fluxo', shared.auth(['tecnico','admin']), shared.ah(as
     to: dTo ? dTo.toISOString().slice(0,10) : null,
     unidades: UNIDADES, materiais: mats, entradas, saidas,
     totalEntradas, totalSaidas, movimentacoes: movs.length,
+    geradoEm: new Date().toISOString()
+  });
+}));
+
+// Evolução por período (Estoque 2): fechamento dia a dia de DE até ATÉ
+// (máx. 31 dias), por unidade × material. Ex.: ?de=2026-10-01&ate=2026-10-14
+router.get('/api/estoque2/fluxo/evolucao', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, de, ate, unidade } = req.query;
+  const sistema = req.auth.role==='admin' ? (req.query.sistema ? normalizeSistema(req.query.sistema) : null) : getSistema(req);
+  const effectiveSistema = sistema || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema);
+  if(contrato && c && !contratosValidos(effectiveSistema).includes(c)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  const cd = c || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  if(!contratosValidos(effectiveSistema).includes(cd)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
+  const rx = /^\d{4}-\d{2}-\d{2}$/;
+  if(!de || !rx.test(String(de).trim()) || !ate || !rx.test(String(ate).trim())) return res.status(400).json({ error: 'Informe de=AAAA-MM-DD e ate=AAAA-MM-DD' });
+  const d0 = new Date(String(de).trim() + 'T00:00:00Z'), d1 = new Date(String(ate).trim() + 'T00:00:00Z');
+  if(isNaN(d0) || isNaN(d1) || d1 < d0) return res.status(400).json({ error: 'Período inválido (ate anterior a de)' });
+  const nDias = Math.round((d1 - d0) / 864e5) + 1;
+  if(nDias > 31) return res.status(400).json({ error: 'Período máximo: 31 dias' });
+  let movs = await shared.store.estoque2Mov.all({ sistema: effectiveSistema, limit: 'all' });
+  movs = movs.filter(m=> String(m.contrato).toUpperCase()===cd);
+  const und = unidade ? String(unidade).trim() : null;
+  if(und) movs = movs.filter(m=> String(m.unidade)===und);
+  const mats = materiaisDoSistemaRoute(effectiveSistema);
+  const unids = und ? [und] : [...UNIDADES];
+  const dias = [];
+  for(let i = 0; i < nDias; i++){
+    const dt = new Date(d0); dt.setUTCDate(dt.getUTCDate() + i);
+    dias.push(fechamentoDiaE2(movs, mats, unids, dt.toISOString().slice(0,10)));
+  }
+  res.json({
+    modo: 'evolucao', sistema: effectiveSistema, contrato: cd, contratoLabel: contratoLabel(cd),
+    de: String(de).trim(), ate: String(ate).trim(), unidade: und || null,
+    unidades: unids, materiais: mats, dias,
     geradoEm: new Date().toISOString()
   });
 }));
