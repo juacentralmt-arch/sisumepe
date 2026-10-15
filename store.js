@@ -442,7 +442,8 @@ const EST = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ESTMOV = {
-  id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', tipo: 'tipo', qtd: 'qtd', saldoAntes: 'saldoantes', saldoDepois: 'saldodepois', motivo: 'motivo', user: 'user', userName: 'username', createdAt: 'createdat', seriais: 'seriais', unidadeDestino: 'unidadedestino'
+  id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', tipo: 'tipo', qtd: 'qtd', saldoAntes: 'saldoantes', saldoDepois: 'saldodepois', motivo: 'motivo', user: 'user', userName: 'username', createdAt: 'createdat', seriais: 'seriais', unidadeDestino: 'unidadedestino',
+  estornado: 'estornado', estornadoAt: 'estornadoat', estornadoBy: 'estornadoby'
 };
 const ESTSER = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', serial: 'serial', unidade: 'unidade', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
