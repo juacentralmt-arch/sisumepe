@@ -115,6 +115,18 @@ function normalizeUnidade(u){
   return found||s;
 }
 function isValidUnidade(u){ return UNIDADES.some(x=> x.toLowerCase()===String(u||'').trim().toLowerCase()); }
+// Efeito com sinal de uma movimentação no saldo: saídas subtraem; estornos
+// (correções neutras) valem saldoDepois-saldoAntes; demais somam.
+// Idêntico ao cálculo antigo para entrada/saída — só o estorno muda.
+function efeitoMov(m){
+  const q = Math.abs(Number((m && m.qtd)||0));
+  if(m && String(m.tipo)==='saida') return -q;
+  if(m && String(m.tipo)==='estorno'){
+    const d = Number(m.saldoDepois) - Number(m.saldoAntes);
+    return Number.isFinite(d) ? d : 0;
+  }
+  return q;
+}
 // Migração Infinity (TZPR): renomeia TZPR04→TZPR com merge de saldos e exclui
 // UPR04 em definitivo (estoque + movimentações + seriais 471). Idempotente.
 function migrarInfinityMateriais(){
@@ -1392,14 +1404,14 @@ const store = {
         const result=[];
         for(const mat of mats){
           const movsUnidade = filtered.filter(m=> String(m.unidade)===unidadeFiltro && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          const saldo=movsUnidade.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movsUnidade.reduce((acc,m)=> acc + efeitoMov(m), 0);
           let seriais=[];
           if(temSerial(mat)){
             const active=new Map();
             for(const m of movsUnidade){
               const list=Array.isArray(m.seriais)? m.seriais : [];
               for(const s of list){
-                if(m.tipo==='entrada') active.set(String(s), true);
+                if(efeitoMov(m)>=0) active.set(String(s), true);
                 else active.delete(String(s));
               }
             }
@@ -1412,14 +1424,14 @@ const store = {
       const result=[];
       for(const mat of mats){
         const movs=filtered.filter(m=> m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-        const saldo=movs.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movs.reduce((acc,m)=> acc + efeitoMov(m), 0);
         let seriais=[];
         if(temSerial(mat)){
           const active=new Map();
           for(const m of movs){
             const list=Array.isArray(m.seriais)? m.seriais : [];
             for(const s of list){
-              if(m.tipo==='entrada') active.set(String(s), true);
+              if(efeitoMov(m)>=0) active.set(String(s), true);
               else active.delete(String(s));
             }
           }
@@ -1441,14 +1453,14 @@ const store = {
       for(const u of UNIDADES){
         for(const mat of mats){
           const movsU=filtered.filter(m=> String(m.unidade)===u && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          const saldo=movsU.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movsU.reduce((acc,m)=> acc + efeitoMov(m), 0);
           let seriais=[];
           if(temSerial(mat)){
             const active=new Map();
             for(const m of movsU){
               const list=Array.isArray(m.seriais)? m.seriais : [];
               for(const s of list){
-                if(m.tipo==='entrada') active.set(String(s), true);
+                if(efeitoMov(m)>=0) active.set(String(s), true);
                 else active.delete(String(s));
               }
             }
@@ -1466,9 +1478,15 @@ const store = {
       const all=await store.estoqueMov.all();
       const mov=all.find(m=> Number(m.id)===id);
       if(!mov) throw Object.assign(new Error('Movimentação não encontrada'),{status:404});
-      // estorno é operação inversa - preserva sistema original
-      const qtdEstorno = mov.tipo==='entrada' ? -Number(mov.qtd) : Number(mov.qtd);
-      const res=await store.estoque.adjust({ sistema: mov.sistema||DEFAULT_SISTEMA, contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
+      if(mov.tipo==='estorno') throw Object.assign(new Error('Estorno não pode ser estornado — faça o ajuste manual'),{status:400});
+      if(mov.estornado) throw Object.assign(new Error('Movimentação já estornada'),{status:400});
+      // Correção neutra: inverte o efeito no saldo mas grava tipo 'estorno'
+      // (não entra nas contas de entradas/saídas — só em correções).
+      const mag = Math.abs(Number(mov.qtd));
+      if(!mag) throw Object.assign(new Error('Movimentação sem quantidade'),{status:400});
+      const eraSaida = mov.tipo==='saida' || Number(mov.qtd) < 0;
+      const qtdEstorno = eraSaida ? mag : -mag;
+      const res=await store.estoque.adjust({ sistema: mov.sistema||DEFAULT_SISTEMA, contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, tipo: 'estorno', motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
       // marca mov original como estornada (audit trail)
       if(MODE==='file'){
         const orig=mem.estoqueMov.find(m=> Number(m.id)===id);
@@ -1952,14 +1970,14 @@ const store = {
         const result=[];
         for(const mat of mats){
           const movsUnidade = filtered.filter(m=> String(m.unidade)===unidadeFiltro && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          const saldo=movsUnidade.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movsUnidade.reduce((acc,m)=> acc + efeitoMov(m), 0);
           let seriais=[];
           if(temSerial(mat)){
             const active=new Map();
             for(const m of movsUnidade){
               const list=Array.isArray(m.seriais)? m.seriais : [];
               for(const s of list){
-                if(m.tipo==='entrada') active.set(String(s), true);
+                if(efeitoMov(m)>=0) active.set(String(s), true);
                 else active.delete(String(s));
               }
             }
@@ -1972,14 +1990,14 @@ const store = {
       const result=[];
       for(const mat of mats){
         const movs=filtered.filter(m=> m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-        const saldo=movs.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movs.reduce((acc,m)=> acc + efeitoMov(m), 0);
         let seriais=[];
         if(temSerial(mat)){
           const active=new Map();
           for(const m of movs){
             const list=Array.isArray(m.seriais)? m.seriais : [];
             for(const s of list){
-              if(m.tipo==='entrada') active.set(String(s), true);
+              if(efeitoMov(m)>=0) active.set(String(s), true);
               else active.delete(String(s));
             }
           }
@@ -2001,14 +2019,14 @@ const store = {
       for(const u of UNIDADES){
         for(const mat of mats){
           const movsU=filtered.filter(m=> String(m.unidade)===u && m.material===mat).sort((a,b)=> new Date(a.createdAt)-new Date(b.createdAt));
-          const saldo=movsU.reduce((acc,m)=> acc + (m.tipo==='entrada'? Number(m.qtd): -Number(m.qtd)), 0);
+          const saldo=movsU.reduce((acc,m)=> acc + efeitoMov(m), 0);
           let seriais=[];
           if(temSerial(mat)){
             const active=new Map();
             for(const m of movsU){
               const list=Array.isArray(m.seriais)? m.seriais : [];
               for(const s of list){
-                if(m.tipo==='entrada') active.set(String(s), true);
+                if(efeitoMov(m)>=0) active.set(String(s), true);
                 else active.delete(String(s));
               }
             }

@@ -24,6 +24,7 @@ const suites = [
   'test/estoqueFluxo.test.js',
   'test/estoqueConciliacao.test.js',
   'test/estoqueTransferForcado.test.js',
+  'test/estoque.estorno.test.js',
   'test/estoque2.independencia.test.js'
 ];
 

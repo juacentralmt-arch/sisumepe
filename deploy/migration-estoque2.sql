@@ -53,3 +53,7 @@ create index if not exists idx_estoque2_serial_unidade on estoque2_serial (unida
 alter table estoque2_mov add column if not exists estornado boolean default false;
 alter table estoque2_mov add column if not exists estornadoat timestamptz default null;
 alter table estoque2_mov add column if not exists estornadoby text default null;
+-- idem no Estoque 1 (estorno neutro vale para os dois módulos)
+alter table estoque_mov add column if not exists estornado boolean default false;
+alter table estoque_mov add column if not exists estornadoat timestamptz default null;
+alter table estoque_mov add column if not exists estornadoby text default null;
