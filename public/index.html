@@ -1679,7 +1679,7 @@
             <button onclick="loadEst2Evolucao()" class="btn btn-primary text-xs px-4 py-2">📈 Evolução no período</button>
             <button onclick="est2EvolucaoCSV()" class="btn btn-ghost text-xs px-3 py-2">⬇ CSV</button>
           </div>
-          <p class="text-[11px] text-slate-500 mt-1.5">Fechamento dia a dia no intervalo (máx. 31 dias) — clique numa data para detalhar.</p>
+          <p class="text-[11px] text-slate-500 mt-1.5">Fechamento dia a dia no intervalo (máx. 31 dias) — <b>+</b> expande por material • 🔍 abre o detalhe completo do dia.</p>
           <div id="est2EvolucaoBody" class="mt-2"></div>
         </div>
         <div id="est2FluxoBody" class="space-y-5"></div>
@@ -11186,21 +11186,32 @@ function renderEvolucao2(){
   const undTxt=r.unidade ? ' • ' + r.unidade : ' • todas as unidades';
   const rows=r.dias.map(d=>{
     const dt=new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR');
-    return `<tr class="border-t border-slate-100 hover:bg-indigo-50/50 cursor-pointer" onclick="verEst2Dia('${d.data}')" title="Clique para detalhar o dia">` +
-      `<td class="py-1.5 px-2 font-bold text-indigo-700">${dt}</td>` +
+    const cards=fluxoFech2PorMaterialHTML(r.materiais, d.unidades, d);
+    return `<tr class="border-t border-slate-100 hover:bg-indigo-50/50">` +
+      `<td class="py-1.5 px-2 font-bold text-indigo-700 whitespace-nowrap"><button onclick="toggleEvo2Dia('${d.data}')" id="evo2btn-${d.data}" class="inline-block w-5 text-center font-extrabold" title="Ver por material">+</button> ${dt}</td>` +
       `<td class="py-1.5 px-2 text-right">${d.totalInicial}</td>` +
       `<td class="py-1.5 px-2 text-right text-emerald-600">+${d.totalEntradas}</td>` +
       `<td class="py-1.5 px-2 text-right text-teal-600">+${d.totalEntradasTriagem}</td>` +
       `<td class="py-1.5 px-2 text-right text-rose-600">−${d.totalSaidas}</td>` +
       `<td class="py-1.5 px-2 text-right font-extrabold">${d.totalFinal}</td>` +
-      `<td class="py-1.5 px-2 text-right text-slate-400">${d.movimentacoes}</td></tr>`;
+      `<td class="py-1.5 px-2 text-right text-slate-400">${d.movimentacoes}</td>` +
+      `<td class="py-1.5 px-2 text-right"><button onclick="verEst2Dia('${d.data}')" class="text-indigo-600 hover:underline text-[11px]" title="Detalhe completo do dia">🔍</button></td></tr>` +
+    `<tr id="evo2det-${d.data}" class="hidden"><td colspan="8" class="px-2 pb-2.5">${cards}</td></tr>`;
   }).join('');
   const fmt=x=>String(x||'').split('-').reverse().join('/');
   body.innerHTML =
-    `<p class="text-[11px] font-bold text-slate-600 mb-1.5">📈 Evolução ${esc(fmt(r.de))} → ${esc(fmt(r.ate))} — ${esc(r.contratoLabel||r.contrato||'')}${esc(undTxt)} (${r.dias.length} dias • clique no dia para detalhar)</p>` +
+    `<p class="text-[11px] font-bold text-slate-600 mb-1.5">📈 Evolução ${esc(fmt(r.de))} → ${esc(fmt(r.ate))} — ${esc(r.contratoLabel||r.contrato||'')}${esc(undTxt)} (${r.dias.length} dias)</p>` +
     `<div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-xs bg-white">` +
-    `<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500"><th class="py-1.5 px-2 text-left">DIA</th><th class="py-1.5 px-2 text-right">INICIAL</th><th class="py-1.5 px-2 text-right">ENTRADAS</th><th class="py-1.5 px-2 text-right">TRIAGEM</th><th class="py-1.5 px-2 text-right">SAÍDAS</th><th class="py-1.5 px-2 text-right">FINAL</th><th class="py-1.5 px-2 text-right">MOVS</th></tr></thead>` +
+    `<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500"><th class="py-1.5 px-2 text-left">DIA</th><th class="py-1.5 px-2 text-right">INICIAL</th><th class="py-1.5 px-2 text-right">ENTRADAS</th><th class="py-1.5 px-2 text-right">TRIAGEM</th><th class="py-1.5 px-2 text-right">SAÍDAS</th><th class="py-1.5 px-2 text-right">FINAL</th><th class="py-1.5 px-2 text-right">MOVS</th><th class="py-1.5 px-2"></th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;
+}
+function toggleEvo2Dia(dataISO){
+  const det=document.getElementById('evo2det-'+dataISO);
+  const btn=document.getElementById('evo2btn-'+dataISO);
+  if(!det) return;
+  const show=det.classList.contains('hidden');
+  det.classList.toggle('hidden');
+  if(btn) btn.textContent = show ? '−' : '+';
 }
 function verEst2Dia(dataISO){
   const inp=document.getElementById('est2FechData');
@@ -11211,7 +11222,10 @@ function verEst2Dia(dataISO){
 function est2EvolucaoCSV(){
   if(!est2EvolucaoCache) return toast('⚠️ Calcule a evolução primeiro');
   const r=est2EvolucaoCache;
-  const csv='data;inicial;entradas;triagem;saidas;final;movimentacoes\n'+r.dias.map(d=>[d.data,d.totalInicial,d.totalEntradas,d.totalEntradasTriagem,d.totalSaidas,d.totalFinal,d.movimentacoes].join(';')).join('\n');
+  const csv='data;inicial;entradas;triagem;saidas;final;movimentacoes'+r.materiais.map(m=>';final_'+m).join('')+'\n'+r.dias.map(d=>{
+    const fins=r.materiais.map(m=>{ let s=0; (r.unidades||[]).forEach(u=>{ s+=Number((d.final[u]&&d.final[u][m])||0); }); return s; });
+    return [d.data,d.totalInicial,d.totalEntradas,d.totalEntradasTriagem,d.totalSaidas,d.totalFinal,d.movimentacoes].concat(fins).join(';');
+  }).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'})); a.download=`evolucao-estoque2-${r.de}_${r.ate}.csv`; a.click();
 }
 let est2ConcCache=null;
