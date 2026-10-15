@@ -1759,7 +1759,7 @@
           <h3 class="font-display font-bold text-sm mb-3">📋 Últimas movimentações <span id="est2MovCount" class="text-xs font-normal text-slate-400"></span></h3>
           <div class="flex flex-wrap gap-2 mb-2 items-end">
             <select id="est2MovMatFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todos os materiais</option></select>
-            <select id="est2MovTipoFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todas</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="cat:triagem">🔬 Triagem</option><option value="cat:manutencao">🔧 Manutenção</option><option value="cat:outros">📦 Outros</option></select>
+            <select id="est2MovTipoFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todas</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="estorno">🔧 Correções</option><option value="cat:triagem">🔬 Triagem</option><option value="cat:manutencao">🔧 Manutenção</option><option value="cat:outros">📦 Outros</option></select>
             <select id="est2MovUserFiltro" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()"><option value="">Todos os usuários</option></select>
             <input id="est2MovFrom" type="date" title="De" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()">
             <input id="est2MovTo" type="date" title="Até" class="inp !w-auto text-xs py-1.5" onchange="loadEstoque2Mov()">
@@ -10976,6 +10976,9 @@ async function loadEstoque2Mov(){
     document.getElementById('est2MovCount').textContent=`${total} movimentações${estoque2UnidadeAtiva?' em '+estoque2UnidadeAtiva:''}${total>list.length?` • mostrando ${list.length}`:''}`;
     document.getElementById('est2MovList').innerHTML = list.length ? list.map(m=>{
       const isEntrada=m.tipo==='entrada';
+      const isEstorno=m.tipo==='estorno';
+      const efEstorno=(Number(m.saldoDepois)||0)-(Number(m.saldoAntes)||0);
+      const efTxt=isEstorno ? ((efEstorno>0?'+':'')+efEstorno) : '';
       const motivoMov=String(m.motivo||'').trim();
       const isTriagem=/^\[triagem\]/i.test(motivoMov);
       const isManut=/^\[manutencao\]/i.test(motivoMov);
@@ -10985,7 +10988,7 @@ async function loadEstoque2Mov(){
       const triBadge=isTriagem ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">🔬 TRIAGEM</span>' : '';
       const manBadge=isManut ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">🔧 MANUTENÇÃO</span>' : '';
       const outBadge=isOutros ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">📦 OUTROS</span>' : '';
-      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEntrada?'ENTRADA':'SAÍDA'} ${m.qtd>0? (isEntrada?'+':'-')+m.qtd : ''}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${matImg2(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px]">${m.seriais.slice(0,3).map(esc).join(', ')}${m.seriais.length>3?' +'+(m.seriais.length-3):''}</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov2(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}</span></div>`;
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEstorno?'bg-amber-50/50': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEstorno?'bg-amber-100 text-amber-700': isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEstorno?'🔧 CORREÇÃO': isEntrada?'ENTRADA':'SAÍDA'} ${isEstorno?efTxt:(m.qtd>0? (isEntrada?'+':'-')+m.qtd : '')}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${matImg2(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b> <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px] block max-h-[72px] overflow-y-auto">${m.seriais.map(esc).join(', ')}(${m.seriais.length})</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov2(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('est2MovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
 }
@@ -11079,14 +11082,15 @@ async function loadEst2Fluxo(){
     body.innerHTML =
       `<div>${head('📈 ENTRADAS', r.totalEntradas, 'emerald')}${fluxoMatriz2HTML(r.materiais, r.unidades, r.entradas, 'emerald')}</div>` +
       `<div>${head('📉 SAÍDAS', r.totalSaidas, 'rose')}${fluxoMatriz2HTML(r.materiais, r.unidades, r.saidas, 'rose')}</div>`;
+      ((Number(r.totalCorrecoes)||0) ? `<div>${head('🔧 CORREÇÕES', (Number(r.totalCorrecoes)>=0?'+':'')+r.totalCorrecoes, 'amber')}${fluxoMatriz2HTML(r.materiais, r.unidades, r.correcoes, 'amber')}</div>` : '');
   }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar fluxo</p>'; }
 }
 function est2FluxoCSV(){
   if(!est2FluxoCache) return toast('⚠️ Liste o fluxo primeiro');
   const r=est2FluxoCache;
-  const csv='unidade;material;entradas;saidas;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
-    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
-    return [u,m,e,s,e-s].map(v=>String(v??'')).join(';');
+  const csv='unidade;material;entradas;saidas;correcoes;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
+    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0), co=Number((r.correcoes&&r.correcoes[u]&&r.correcoes[u][m])||0);
+    return [u,m,e,s,co,e-s+co].map(v=>String(v??'')).join(';');
   }).join('\n')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
 }
@@ -11095,14 +11099,14 @@ let est2FechamentoCache=null;
 const FECH2_COM_TRIAGEM = ['TZPR', 'TZPR04', 'UPR', 'UPR04'];
 function fluxoFech2PorMaterialHTML(mats, unidades, get){
   return mats.map(m=>{
-    let ini=0, ent=0, tri=0, sai=0;
-    unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); });
-    const fin=ini+ent-sai;
+    let ini=0, ent=0, tri=0, sai=0, cor=0;
+    unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); cor+=Number((get.correcoes&&get.correcoes[u]&&get.correcoes[u][m])||0); });
+    const fin=ini+ent-sai+cor;
     const comTriagem=FECH2_COM_TRIAGEM.includes(String(m).toUpperCase());
     const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center flex-1 min-w-[86px]"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-base font-extrabold ${cls}">${v}</p></div>`;
     const seq = comTriagem
-      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700')
-      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700');
+      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('🔧 CORR.', (cor>=0?'+':'') + cor, 'text-amber-600') + card('FINAL', fin, 'text-indigo-700')
+      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('🔧 CORR.', (cor>=0?'+':'') + cor, 'text-amber-600') + card('FINAL', fin, 'text-indigo-700');
     return `<div class="mb-2.5"><p class="text-[11px] font-extrabold text-slate-600 mb-1">${esc(m)}</p><div class="flex flex-wrap gap-1.5">${seq}</div></div>`;
   }).join('');
 }
@@ -11142,11 +11146,12 @@ function renderFechamento2(){
   const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-lg font-extrabold ${cls}">${v}</p></div>`;
   body.innerHTML =
     `<p class="text-[11px] font-bold text-slate-600 mb-2">📅 Fechamento ${dt} — ${esc(label)}${esc(undTxt)} (${r.movimentacoes} movimentações no dia)</p>` +
-    `<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">` +
+    `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">` +
       card('INICIAL', r.totalInicial, '') +
       card('🔬 TRIAGEM', '+' + r.totalEntradasTriagem, 'text-teal-600') +
       card('ENTRADAS', '+' + r.totalEntradas, 'text-emerald-600') +
       card('SAÍDAS', '−' + r.totalSaidas, 'text-rose-600') +
+      card('🔧 CORREÇÃO', (Number(r.totalCorrecoes||0)>=0?'+':'') + (r.totalCorrecoes||0), 'text-amber-600') +
       card('FINAL', r.totalFinal, 'text-indigo-700') +
     `</div>` +
     `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 mb-1">${subMat} — Final = Inicial + Entradas − Saídas</p>${fluxoFech2PorMaterialHTML(mats, r.unidades, r)}</div>` +
@@ -11155,10 +11160,10 @@ function renderFechamento2(){
 function est2FechamentoCSV(){
   if(!est2FechamentoCache) return toast('⚠️ Calcule o fechamento primeiro');
   const r=est2FechamentoCache;
-  const csv='unidade;material;inicial;entradas;entradas_triagem;saidas;final\n'+r.unidades.map(u=>r.materiais.map(m=>{
+  const csv='unidade;material;inicial;entradas;entradas_triagem;saidas;correcoes;final\n'+r.unidades.map(u=>r.materiais.map(m=>{
     const ini=Number((r.inicial[u]&&r.inicial[u][m])||0), e=Number((r.entradas[u]&&r.entradas[u][m])||0),
-      tri=Number((r.entradasTriagem[u]&&r.entradasTriagem[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
-    return [u,m,ini,e,tri,s,ini+e-s].map(v=>String(v??'')).join(';');
+      tri=Number((r.entradasTriagem[u]&&r.entradasTriagem[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0), co=Number((r.correcoes&&r.correcoes[u]&&r.correcoes[u][m])||0);
+    return [u,m,ini,e,tri,s,co,ini+e-s+co].map(v=>String(v??'')).join(';');
   }).join('\n')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`fechamento-estoque-${r.data}.csv`; a.click();
 }
@@ -11192,17 +11197,18 @@ function renderEvolucao2(){
       `<td class="py-1.5 px-2 text-right">${d.totalInicial}</td>` +
       `<td class="py-1.5 px-2 text-right text-emerald-600">+${d.totalEntradas}</td>` +
       `<td class="py-1.5 px-2 text-right text-teal-600">+${d.totalEntradasTriagem}</td>` +
-      `<td class="py-1.5 px-2 text-right text-rose-600">−${d.totalSaidas}</td>` +
+      `<td class="py-1.5 px-2 text-right text-rose-600">−${d.totalSaidas}</td>
+      `<td class="py-1.5 px-2 text-right text-amber-600">${(Number(d.totalCorrecoes||0)>=0?'+':'')+(d.totalCorrecoes||0)}</td>` +` +
       `<td class="py-1.5 px-2 text-right font-extrabold">${d.totalFinal}</td>` +
       `<td class="py-1.5 px-2 text-right text-slate-400">${d.movimentacoes}</td>` +
       `<td class="py-1.5 px-2 text-right"><button onclick="verEst2Dia('${d.data}')" class="text-indigo-600 hover:underline text-[11px]" title="Detalhe completo do dia">🔍</button></td></tr>` +
-    `<tr id="evo2det-${d.data}" class="hidden"><td colspan="8" class="px-2 pb-2.5">${cards}</td></tr>`;
+    `<tr id="evo2det-${d.data}" class="hidden"><td colspan="9" class="px-2 pb-2.5">${cards}</td></tr>`;
   }).join('');
   const fmt=x=>String(x||'').split('-').reverse().join('/');
   body.innerHTML =
     `<p class="text-[11px] font-bold text-slate-600 mb-1.5">📈 Evolução ${esc(fmt(r.de))} → ${esc(fmt(r.ate))} — ${esc(r.contratoLabel||r.contrato||'')}${esc(undTxt)} (${r.dias.length} dias)</p>` +
     `<div class="overflow-x-auto rounded-xl border border-slate-200"><table class="w-full text-xs bg-white">` +
-    `<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500"><th class="py-1.5 px-2 text-left">DIA</th><th class="py-1.5 px-2 text-right">INICIAL</th><th class="py-1.5 px-2 text-right">ENTRADAS</th><th class="py-1.5 px-2 text-right">TRIAGEM</th><th class="py-1.5 px-2 text-right">SAÍDAS</th><th class="py-1.5 px-2 text-right">FINAL</th><th class="py-1.5 px-2 text-right">MOVS</th><th class="py-1.5 px-2"></th></tr></thead>` +
+    `<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500"><th class="py-1.5 px-2 text-left">DIA</th><th class="py-1.5 px-2 text-right">INICIAL</th><th class="py-1.5 px-2 text-right">ENTRADAS</th><th class="py-1.5 px-2 text-right">TRIAGEM</th><th class="py-1.5 px-2 text-right">SAÍDAS</th><th class="py-1.5 px-2 text-right">CORREÇÃO</th><th class="py-1.5 px-2 text-right">FINAL</th><th class="py-1.5 px-2 text-right">MOVS</th><th class="py-1.5 px-2"></th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>`;
 }
 function toggleEvo2Dia(dataISO){
@@ -11222,9 +11228,9 @@ function verEst2Dia(dataISO){
 function est2EvolucaoCSV(){
   if(!est2EvolucaoCache) return toast('⚠️ Calcule a evolução primeiro');
   const r=est2EvolucaoCache;
-  const csv='data;inicial;entradas;triagem;saidas;final;movimentacoes'+r.materiais.map(m=>';final_'+m).join('')+'\n'+r.dias.map(d=>{
+  const csv='data;inicial;entradas;triagem;saidas;correcoes;final;movimentacoes'+r.materiais.map(m=>';final_'+m).join('')+'\n'+r.dias.map(d=>{
     const fins=r.materiais.map(m=>{ let s=0; (r.unidades||[]).forEach(u=>{ s+=Number((d.final[u]&&d.final[u][m])||0); }); return s; });
-    return [d.data,d.totalInicial,d.totalEntradas,d.totalEntradasTriagem,d.totalSaidas,d.totalFinal,d.movimentacoes].concat(fins).join(';');
+    return [d.data,d.totalInicial,d.totalEntradas,d.totalEntradasTriagem,d.totalSaidas,(d.totalCorrecoes||0),d.totalFinal,d.movimentacoes].concat(fins).join(';');
   }).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'})); a.download=`evolucao-estoque2-${r.de}_${r.ate}.csv`; a.click();
 }

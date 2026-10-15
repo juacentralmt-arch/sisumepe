@@ -81,7 +81,7 @@ async function main() {
 
   // estorna para deixar o módulo como estava (limpeza do teste)
   const movs2 = await store.estoque2Mov.all({ limit: 'all' });
-  const alvo = movs2.filter(m => m.motivo === 'teste independencia e2').slice(-1)[0];
+  const alvo = movs2.find(m => m.motivo === 'teste independencia e2' && !m.estornado);
   assert(!!alvo, 'movimentação de teste localizada no Estoque 2');
   if (alvo) {
     const est = await post('/api/estoque2/estornar', { id: alvo.id, motivo: 'limpeza teste' });
@@ -105,6 +105,32 @@ async function main() {
   assert(evoInv.status === 400, 'data inválida: 400');
   const dia = await get(`/api/estoque2/fluxo?sistema=spacecom&contrato=CE01&data=${hoje}`);
   assert(dia.status === 200 && dia.body.modo === 'diario' && dia.body.data === hoje, '?data= segue íntegro após refatoração');
+
+  console.log('\n=== ESTOQUE 2 — estorno como correção neutra ===');
+  const mvE = await post('/api/estoque2/movimentar', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
+    qtd: 5, motivo: 'entrada para estorno e2test'
+  });
+  assert(mvE.status === 200, 'entrada +5 CINTA: 200');
+  const movsE = await store.estoque2Mov.all({ limit: 'all' });
+  const alvoE = movsE.find(m => m.motivo === 'entrada para estorno e2test' && !m.estornado);
+  assert(!!alvoE, 'movimentação original localizada');
+  const diaAntes = await get(`/api/estoque2/fluxo?sistema=spacecom&contrato=CE01&data=${hoje}`);
+  const est = await post('/api/estoque2/estornar', { id: alvoE.id, motivo: 'correcao teste e2test' });
+  assert(est.status === 200 && est.body.estorno && est.body.estorno.mov.tipo === 'estorno', 'estorno cria mov tipo=estorno');
+  const diaDepois = await get(`/api/estoque2/fluxo?sistema=spacecom&contrato=CE01&data=${hoje}`);
+  assert(diaDepois.body.totalCorrecoes === diaAntes.body.totalCorrecoes - 5, `correções somam -5 (${diaAntes.body.totalCorrecoes} -> ${diaDepois.body.totalCorrecoes})`);
+  assert(diaDepois.body.totalSaidas === diaAntes.body.totalSaidas, 'estorno NÃO infla saídas');
+  assert(diaDepois.body.totalEntradas === diaAntes.body.totalEntradas, 'estorno NÃO infla entradas');
+  assert(diaDepois.body.totalFinal === diaAntes.body.totalFinal - 5, 'saldo final reflete a reversão');
+  const fEst = await get('/api/estoque2-mov?contrato=CE01&sistema=spacecom&tipo=estorno&limit=5');
+  assert(fEst.status === 200 && (fEst.body.items || []).length >= 1, 'filtro ?tipo=estorno funciona');
+  const origCheck = (await store.estoque2Mov.all({ limit: 'all' })).find(m => Number(m.id) === Number(alvoE.id));
+  assert(origCheck && origCheck.estornado === true, 'original marcada estornada');
+  const duplo = await post('/api/estoque2/estornar', { id: alvoE.id, motivo: 'tentativa dupla' });
+  assert(duplo.status !== 200, 're-estorno da original bloqueado (usa-se a correção)');
+  const duplo2 = await post('/api/estoque2/estornar', { id: est.body.estorno.mov.id, motivo: 'tentativa dupla 2' });
+  assert(duplo2.status === 400, 'estorno de estorno: 400');
 
   console.log('\n=== ESTOQUE 2 — cache IA isolado por namespace ===');
   const cache = require('../src/lib/estoqueIA-core/cache');

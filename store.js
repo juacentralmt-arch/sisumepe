@@ -1107,7 +1107,7 @@ const store = {
       const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
       return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
     },
-    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit, skipSerialCheck }){
+    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit, skipSerialCheck, tipo: tipoForcado }){
       // `at`: grava a movimentação com data histórica (usado pelos seeds de 60 dias).
       // `skipAudit`: não escreve na trilha de auditoria — dados de demonstração não
       // podem empurrar os registros reais para fora do limite de 500.
@@ -1250,7 +1250,7 @@ const store = {
           if(MODE==='file') saveFile();
         }
       }
-      const mov={ sistema, contrato, material, unidade, tipo: qtd>0?'entrada':'saida', qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: quando, unidadeDestino: null };
+      const mov={ sistema, contrato, material, unidade, tipo: tipoForcado==='estorno' ? 'estorno' : (qtd>0?'entrada':'saida'), qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: quando, unidadeDestino: null };
       const auditRef=`${contrato}/${material}/${unidade} ${qtd>0?'+':''}${qtd}`;
       if(MODE==='file'){
         const m={ id: mem.seqEstoqueMov++, ...mov, saldoAntes, saldoDepois };
@@ -1666,7 +1666,7 @@ const store = {
       const criticos=baixos.filter(e=> Number(e.saldo||0)===0);
       return { total: baixos.length, criticos: criticos.length, itens: baixos, criticosItens: criticos };
     },
-    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit, skipSerialCheck }){
+    async adjust({ contrato, material, unidade, qtd, motivo, user, userName, seriais, sistema, at, skipAudit, skipSerialCheck, tipo: tipoForcado }){
       // `at`: grava a movimentação com data histórica (usado pelos seeds de 60 dias).
       // `skipAudit`: não escreve na trilha de auditoria — dados de demonstração não
       // podem empurrar os registros reais para fora do limite de 500.
@@ -1809,7 +1809,7 @@ const store = {
           if(MODE==='file') saveFile();
         }
       }
-      const mov={ sistema, contrato, material, unidade, tipo: qtd>0?'entrada':'saida', qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: quando, unidadeDestino: null };
+      const mov={ sistema, contrato, material, unidade, tipo: tipoForcado==='estorno' ? 'estorno' : (qtd>0?'entrada':'saida'), qtd: Math.abs(qtd), motivo: motivo||null, seriais: serialList, user: user||null, userName: userName||null, createdAt: quando, unidadeDestino: null };
       const auditRef=`${contrato}/${material}/${unidade} ${qtd>0?'+':''}${qtd}`;
       if(MODE==='file'){
         const m={ id: mem.seqEstoque2Mov++, ...mov, saldoAntes, saldoDepois };
@@ -2024,9 +2024,15 @@ const store = {
       const all=await store.estoque2Mov.all();
       const mov=all.find(m=> Number(m.id)===id);
       if(!mov) throw Object.assign(new Error('Movimentação não encontrada'),{status:404});
-      // estorno é operação inversa - preserva sistema original
-      const qtdEstorno = mov.tipo==='entrada' ? -Number(mov.qtd) : Number(mov.qtd);
-      const res=await store.estoque2.adjust({ sistema: mov.sistema||DEFAULT_SISTEMA, contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
+      if(mov.tipo==='estorno') throw Object.assign(new Error('Estorno não pode ser estornado — faça o ajuste manual'),{status:400});
+      if(mov.estornado) throw Object.assign(new Error('Movimentação já estornada'),{status:400});
+      // Correção neutra: inverte o efeito no saldo mas grava tipo 'estorno'
+      // (não entra nas contas de entradas/saídas — só em correções).
+      const mag = Math.abs(Number(mov.qtd));
+      if(!mag) throw Object.assign(new Error('Movimentação sem quantidade'),{status:400});
+      const eraSaida = mov.tipo==='saida' || Number(mov.qtd) < 0;
+      const qtdEstorno = eraSaida ? mag : -mag;
+      const res=await store.estoque2.adjust({ sistema: mov.sistema||DEFAULT_SISTEMA, contrato: mov.contrato, material: mov.material, unidade: mov.unidade, qtd: qtdEstorno, tipo: 'estorno', motivo: `ESTORNO #${mov.id}: ${motivo}`, user, userName, seriais: mov.seriais });
       // marca mov original como estornada (audit trail)
       if(MODE==='file'){
         const orig=mem.estoque2Mov.find(m=> Number(m.id)===id);
