@@ -1942,7 +1942,7 @@
     <label class="lbl">SENHA</label>
     <input id="loginPass" type="password" onkeydown="if(event.key==='Enter')doLogin()" placeholder="••••••••" class="inp mb-2.5" autocomplete="current-password">
     <p id="loginErr" class="hidden text-xs text-rose-600 font-semibold mb-2"></p>
-    <button onclick="doLogin()" class="btn btn-primary w-full py-3 text-sm">Entrar no sistema →</button>
+    <button id="loginBtn" onclick="doLogin()" class="btn btn-primary w-full py-3 text-sm">Entrar no sistema →</button>
   </div>
 </div>
 
@@ -2564,6 +2564,8 @@ async function doLogin(){
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   const err = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+  if(!setBtnLoading(btn, true, 'Entrando...')) return;
   try{
     const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
     session = s; role = s.role;
@@ -2573,6 +2575,7 @@ async function doLogin(){
     enterApp();
     toast('Bem-vindo(a), ' + s.name + '!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
+  finally{ setBtnLoading(btn, false); }
 }
 async function finishLogout(silent){
   // Encerra a sessão no servidor, mas nunca trava a tela: timeout de 3s
