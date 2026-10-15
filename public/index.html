@@ -9906,15 +9906,16 @@ async function loadEstFluxo(){
     body.innerHTML =
       `<div>${head('📈 ENTRADAS', r.totalEntradas, 'emerald')}${fluxoMatrizHTML(r.materiais, r.unidades, r.entradas, 'emerald')}</div>` +
       `<div>${head('📉 SAÍDAS', r.totalSaidas, 'rose')}${fluxoMatrizHTML(r.materiais, r.unidades, r.saidas, 'rose')}</div>`;
+      ((Number(r.totalCorrecoes)||0) ? `<div>${head('🔧 CORREÇÕES', (Number(r.totalCorrecoes)>=0?'+':'')+r.totalCorrecoes, 'amber')}${fluxoMatrizHTML(r.materiais, r.unidades, r.correcoes, 'amber')}</div>` : '');
       ((Number(r.totalCorrecoes)||0) ? `<div>${head('🔧 CORREÇÃO', (Number(r.totalCorrecoes)>=0?'+':'')+r.totalCorrecoes, 'amber')}${fluxoMatrizHTML(r.materiais, r.unidades, r.correcoes, 'amber')}</div>` : '');
   }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar fluxo</p>'; }
 }
 function estFluxoCSV(){
   if(!estFluxoCache) return toast('⚠️ Liste o fluxo primeiro');
   const r=estFluxoCache;
-  const csv='unidade;material;entradas;saidas;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
-    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
-    return [u,m,e,s,e-s].map(v=>String(v??'')).join(';');
+  const csv='unidade;material;entradas;saidas;correcoes;saldo\n'+r.unidades.map(u=>r.materiais.map(m=>{
+    const e=Number((r.entradas[u]&&r.entradas[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0), co=Number((r.correcoes&&r.correcoes[u]&&r.correcoes[u][m])||0);
+    return [u,m,e,s,co,e-s+co].map(v=>String(v??'')).join(';');
   }).join('\n')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='fluxo-estoque.csv'; a.click();
 }
@@ -9923,14 +9924,14 @@ let estFechamentoCache=null;
 const FECH_COM_TRIAGEM = ['TZPR', 'TZPR04', 'UPR', 'UPR04'];
 function fluxoFechPorMaterialHTML(mats, unidades, get){
   return mats.map(m=>{
-    let ini=0, ent=0, tri=0, sai=0;
-    unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); });
-    const fin=ini+ent-sai;
+    let ini=0, ent=0, tri=0, sai=0, cor=0;
+    unidades.forEach(u=>{ ini+=Number((get.inicial[u]&&get.inicial[u][m])||0); ent+=Number((get.entradas[u]&&get.entradas[u][m])||0); tri+=Number((get.entradasTriagem[u]&&get.entradasTriagem[u][m])||0); sai+=Number((get.saidas[u]&&get.saidas[u][m])||0); cor+=Number((get.correcoes&&get.correcoes[u]&&get.correcoes[u][m])||0); });
+    const fin=ini+ent-sai+cor;
     const comTriagem=FECH_COM_TRIAGEM.includes(String(m).toUpperCase());
     const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-center flex-1 min-w-[86px]"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-base font-extrabold ${cls}">${v}</p></div>`;
     const seq = comTriagem
-      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700')
-      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('FINAL', fin, 'text-indigo-700');
+      ? card('INICIAL', ini, '') + card('🔬 TRIAGEM', '+' + tri, 'text-teal-600') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('CORR.', (cor>=0?'+':'') + cor, 'text-amber-600') + card('FINAL', fin, 'text-indigo-700')
+      : card('INICIAL', ini, '') + card('ENTRADAS', '+' + ent, 'text-emerald-600') + card('SAÍDAS', '−' + sai, 'text-rose-600') + card('CORR.', (cor>=0?'+':'') + cor, 'text-amber-600') + card('FINAL', fin, 'text-indigo-700');
     return `<div class="mb-2.5"><p class="text-[11px] font-extrabold text-slate-600 mb-1">${esc(m)}</p><div class="flex flex-wrap gap-1.5">${seq}</div></div>`;
   }).join('');
 }
@@ -9970,11 +9971,12 @@ function renderFechamento(){
   const card=(t,v,cls)=>`<div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center"><p class="text-[10px] font-bold tracking-wider text-slate-500">${t}</p><p class="font-display text-lg font-extrabold ${cls}">${v}</p></div>`;
   body.innerHTML =
     `<p class="text-[11px] font-bold text-slate-600 mb-2">📅 Fechamento ${dt} — ${esc(label)}${esc(undTxt)} (${r.movimentacoes} movimentações no dia)</p>` +
-    `<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">` +
+    `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">` +
       card('INICIAL', r.totalInicial, '') +
       card('🔬 TRIAGEM', '+' + r.totalEntradasTriagem, 'text-teal-600') +
       card('ENTRADAS', '+' + r.totalEntradas, 'text-emerald-600') +
       card('SAÍDAS', '−' + r.totalSaidas, 'text-rose-600') +
+      card('🔧 CORREÇÃO', (Number(r.totalCorrecoes||0)>=0?'+':'') + (r.totalCorrecoes||0), 'text-amber-600') +
       card('FINAL', r.totalFinal, 'text-indigo-700') +
       card('🔧 CORREÇÃO', (Number(r.totalCorrecoes||0)>=0?'+':'') + (r.totalCorrecoes||0), 'text-amber-600') +
     `</div>` +
@@ -9984,10 +9986,10 @@ function renderFechamento(){
 function estFechamentoCSV(){
   if(!estFechamentoCache) return toast('⚠️ Calcule o fechamento primeiro');
   const r=estFechamentoCache;
-  const csv='unidade;material;inicial;entradas;entradas_triagem;saidas;final\n'+r.unidades.map(u=>r.materiais.map(m=>{
+  const csv='unidade;material;inicial;entradas;entradas_triagem;saidas;correcoes;final\n'+r.unidades.map(u=>r.materiais.map(m=>{
     const ini=Number((r.inicial[u]&&r.inicial[u][m])||0), e=Number((r.entradas[u]&&r.entradas[u][m])||0),
-      tri=Number((r.entradasTriagem[u]&&r.entradasTriagem[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0);
-    return [u,m,ini,e,tri,s,ini+e-s].map(v=>String(v??'')).join(';');
+      tri=Number((r.entradasTriagem[u]&&r.entradasTriagem[u][m])||0), s=Number((r.saidas[u]&&r.saidas[u][m])||0), co=Number((r.correcoes&&r.correcoes[u]&&r.correcoes[u][m])||0);
+    return [u,m,ini,e,tri,s,co,ini+e-s+co].map(v=>String(v??'')).join(';');
   }).join('\n')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`fechamento-estoque-${r.data}.csv`; a.click();
 }
@@ -10008,6 +10010,14 @@ async function loadEstEvolucao(){
     renderEvolucao();
   }catch(e){ body.innerHTML='<p class="text-xs text-rose-500 text-center py-3">⚠️ '+esc(e.message)+'</p>'; }
 }
+function toggleEvoDia(dataISO){
+  const det=document.getElementById('evodet-'+dataISO);
+  const btn=document.getElementById('evobtn-'+dataISO);
+  if(!det) return;
+  const show=det.classList.contains('hidden');
+  det.classList.toggle('hidden');
+  if(btn) btn.textContent = show ? '−' : '+';
+}
 function renderEvolucao(){
   const r=estEvolucaoCache;
   const body=document.getElementById('estEvolucaoBody');
@@ -10017,7 +10027,7 @@ function renderEvolucao(){
     const dt=new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR');
     const cards=fluxoFechPorMaterialHTML(r.materiais, d.unidades, d);
     return `<tr class="border-t border-slate-100 hover:bg-indigo-50/50">` +
-      `<td class="py-1.5 px-2 font-bold text-indigo-700 whitespace-nowrap"><button onclick="toggleEvo2Dia('${d.data}')" id="evobtn-${d.data}" class="inline-block w-5 text-center font-extrabold" title="Ver por material">+</button> ${dt}</td>` +
+      `<td class="py-1.5 px-2 font-bold text-indigo-700 whitespace-nowrap"><button onclick="toggleEvoDia('${d.data}')" id="evobtn-${d.data}" class="inline-block w-5 text-center font-extrabold" title="Ver por material">+</button> ${dt}</td>` +
       `<td class="py-1.5 px-2 text-right">${d.totalInicial}</td>` +
       `<td class="py-1.5 px-2 text-right text-emerald-600">+${d.totalEntradas}</td>` +
       `<td class="py-1.5 px-2 text-right text-teal-600">+${d.totalEntradasTriagem}</td>` +
