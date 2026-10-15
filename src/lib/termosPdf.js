@@ -491,7 +491,7 @@ async function gerarTermoRecolhimentoPDF(termo){
   const dh = d.dataHora ? new Date(d.dataHora) : new Date();
   const dhTxt = isNaN(dh) ? '' : dh.toLocaleDateString('pt-BR') + ' ' + String(dh.getHours()).padStart(2,'0') + ':' + String(dh.getMinutes()).padStart(2,'0') + 'h';
   for(let pi=0; pi<pages.length; pi++){
-    const pg = pdfDoc.addPage([PW, PH]);
+    let pg = pdfDoc.addPage([PW, PH]);
     const isLast = pi === pages.length - 1;
     let y = drawHeader(pg);
     if(pi === 0){
@@ -525,12 +525,67 @@ async function gerarTermoRecolhimentoPDF(termo){
     y = y - rowsUsed * (cardH + rowGap);
     if(isLast){
       y -= 2;
-      const descLines = d.descricao ? String(d.descricao).split('\n').slice(0,6) : [];
-      const descH = 52;
-      pg.drawRectangle({ x: M, y: y - descH, width: PW - 2*M, height: descH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
-      pg.drawText('Descrição:', { x: M + 6, y: y - 14, size: 8.5, font, color: rgb(0,0,0) });
-      descLines.forEach((ln, i)=>{ pg.drawText(String(ln).slice(0,110), { x: M + 6, y: y - 26 - i*10, size: 8, font, color: rgb(0,0,0) }); });
-      y -= descH + 18;
+      // Descrição geral com quebra por palavras e paginação: antes eram só
+      // 6 linhas x 110 chars (corte silencioso). Agora nada é descartado
+      // (teto continua o do backend: 2000 chars).
+      const descMaxW = PW - 2 * M - 12;
+      const wrapDesc = (text) => {
+        const raw = String(text || '');
+        if(!raw.trim()) return [];
+        const out = [];
+        for(const para of raw.split(/\r?\n/)){
+          if(!para.trim()){ out.push(''); continue; }
+          const words = para.split(/\s+/).filter(Boolean);
+          let cur = '';
+          for(const w of words){
+            const cand = cur ? cur + ' ' + w : w;
+            if(font.widthOfTextAtSize(cand, 8) <= descMaxW){ cur = cand; continue; }
+            if(cur) out.push(cur);
+            if(font.widthOfTextAtSize(w, 8) <= descMaxW){ cur = w; continue; }
+            // palavra única mais larga que a linha: quebra dura por caractere
+            let part = '';
+            for(const ch of w){
+              if(font.widthOfTextAtSize(part + ch, 8) <= descMaxW) part += ch;
+              else { if(part) out.push(part); part = ch; }
+            }
+            cur = part;
+          }
+          if(cur) out.push(cur);
+        }
+        return out;
+      };
+      let descLines = wrapDesc(d.descricao);
+      const descLineH = 10;
+      const descHeaderH = 20;
+      const descPad = 8;
+      const blockFor = (n) => Math.max(52, descHeaderH + Math.max(n, 1) * descLineH + descPad);
+      // Se o bloco + assinaturas + rodapé não couberem, continua numa página
+      // nova (com cabeçalho oficial) em vez de invadir o rodapé.
+      const sigBlockH = 18 + 34 + 26 + 30;
+      if(y - blockFor(descLines.length) - sigBlockH < 28){
+        pg = pdfDoc.addPage([PW, PH]);
+        y = drawHeader(pg) - 4;
+      }
+      // Descrição muito longa: fatia em blocos de páginas (último bloco leva
+      // as assinaturas; intermediários são só continuação da caixa).
+      let li = 0;
+      while(li < descLines.length || (descLines.length === 0 && li === 0)){
+        const availH = y - 28 - sigBlockH;
+        const capLines = Math.max(1, Math.floor((availH - descHeaderH - descPad) / descLineH));
+        const chunk = descLines.length === 0 ? [] : descLines.slice(li, li + capLines);
+        const isFinalChunk = descLines.length === 0 || li + capLines >= descLines.length;
+        const boxH = descLines.length === 0 ? 52 : blockFor(chunk.length);
+        pg.drawRectangle({ x: M, y: y - boxH, width: PW - 2*M, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
+        pg.drawText(descLines.length === 0 || li === 0 ? 'Descrição:' : 'Descrição (cont.):', { x: M + 6, y: y - 14, size: 8.5, font, color: rgb(0,0,0) });
+        chunk.forEach((ln, i)=>{ if(ln) pg.drawText(ln, { x: M + 6, y: y - 26 - i*descLineH, size: 8, font, color: rgb(0,0,0) }); });
+        y -= boxH + 18;
+        li += chunk.length;
+        if(descLines.length === 0) break;
+        if(!isFinalChunk){
+          pg = pdfDoc.addPage([PW, PH]);
+          y = drawHeader(pg) - 4;
+        } else break;
+      }
       pg.drawText('Assinatura:', { x: M, y, size: 8.5, font: fontBold, color: rgb(0,0,0) });
       const assW = fontBold.widthOfTextAtSize('Assinatura: ', 8.5);
       pg.drawLine({ start: {x: M + assW, y: y - 2}, end: {x: M + 400, y: y - 2}, thickness: 0.7, color: rgb(0,0,0) });
