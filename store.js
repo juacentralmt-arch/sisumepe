@@ -1929,6 +1929,7 @@ const store = {
       } else {
         try{ must(await supa.from('estoque2_mov').update({ unidadedestino: unidadeDestino }).eq('id', Number(out.mov.id)),'estoque2Mov.patchDestino'); }catch(e){}
       }
+      if(out && out.mov) out.mov.unidadeDestino = unidadeDestino;
       return { origem: out, destino: inn };
     },
     async atDate(contrato, dateStr, unidade, sistema){
