@@ -398,7 +398,7 @@ router.get('/api/estoque2-mov', shared.auth(['tecnico','admin']), shared.ah(asyn
   // categoria ([TRIAGEM]/[MANUTENCAO]/[OUTROS] no motivo), período e busca textual.
   if(tipo){
     const t=String(tipo).toLowerCase().trim();
-    if(!['entrada','saida'].includes(t)) return res.status(400).json({ error: 'Tipo inválido (entrada/saida)' });
+    if(!['entrada','saida','estorno'].includes(t)) return res.status(400).json({ error: 'Tipo inválido (entrada/saida/estorno)' });
     list=list.filter(m=> String(m.tipo)===t);
   }
   if(categoria){
@@ -597,9 +597,20 @@ function fechamentoDiaE2(movs, mats, unids, diaISO){
   const fimDia = new Date(diaISO + 'T23:59:59.999Z');
   const diaAnt = new Date(iniDia); diaAnt.setUTCDate(diaAnt.getUTCDate() - 1);
   const zero = () => { const o = {}; unids.forEach(u=>{ o[u]={}; mats.forEach(m=>{ o[u][m]=0; }); }); return o; };
-  const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), fin = zero();
-  let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalFinal = 0, movsDia = 0;
+  const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), correcoes = zero(), fin = zero();
+  let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalCorrecoes = 0, totalFinal = 0, movsDia = 0;
   const ehTriagem = m => /^\[triagem\]/i.test(String((m && m.motivo) || '').trim());
+  // Efeito com sinal no saldo: saídas subtraem; estornos (correções neutras)
+  // valem saldoDepois-saldoAntes; demais somam. Idêntico ao original p/ entrada/saída.
+  const efeito = m => {
+    const q = Math.abs(Number(m.qtd)||0);
+    if(String(m.tipo)==='saida') return -q;
+    if(String(m.tipo)==='estorno'){
+      const d = Number(m.saldoDepois) - Number(m.saldoAntes);
+      return Number.isFinite(d) ? d : 0;
+    }
+    return q;
+  };
   for(const m of movs){
     const u = String(m.unidade||'').trim();
     if(!unids.includes(u)) continue;
@@ -610,11 +621,12 @@ function fechamentoDiaE2(movs, mats, unids, diaISO){
     if(isNaN(ts)) continue;
     if(ts < iniDia){
       // compõe o estoque inicial do dia (fim do dia anterior)
-      if(String(m.tipo)==='saida'){ inicial[u][mat]-=qtd; totalInicial-=qtd; }
-      else { inicial[u][mat]+=qtd; totalInicial+=qtd; }
+      const ef = efeito(m);
+      inicial[u][mat]+=ef; totalInicial+=ef;
     } else if(ts <= fimDia){
       movsDia++;
       if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
+      else if(String(m.tipo)==='estorno'){ const ef=efeito(m); correcoes[u][mat]+=ef; totalCorrecoes+=ef; }
       else {
         entradas[u][mat]+=qtd; totalEntradas+=qtd;
         if(ehTriagem(m)){ entradasTriagem[u][mat]+=qtd; totalEntradasTriagem+=qtd; }
@@ -622,13 +634,13 @@ function fechamentoDiaE2(movs, mats, unids, diaISO){
     }
   }
   for(const u of unids) for(const m of mats){
-    fin[u][m] = inicial[u][m] + entradas[u][m] - saidas[u][m];
+    fin[u][m] = inicial[u][m] + entradas[u][m] - saidas[u][m] + correcoes[u][m];
     totalFinal += fin[u][m];
   }
   return {
     data: diaISO, dataAnterior: diaAnt.toISOString().slice(0,10),
-    unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, final: fin,
-    totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalFinal,
+    unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, correcoes, final: fin,
+    totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalCorrecoes, totalFinal,
     movimentacoes: movsDia
   };
 }
@@ -664,9 +676,10 @@ router.get('/api/estoque2/fluxo', shared.auth(['tecnico','admin']), shared.ah(as
       modo: 'diario', sistema: effectiveSistema, contrato: cd, contratoLabel: contratoLabel(cd),
       data: f.data, dataAnterior: f.dataAnterior, unidade: und || null,
       unidades: f.unidades, materiais: f.materiais, inicial: f.inicial, entradas: f.entradas,
-      entradasTriagem: f.entradasTriagem, saidas: f.saidas, final: f.final,
+      entradasTriagem: f.entradasTriagem, saidas: f.saidas, correcoes: f.correcoes, final: f.final,
       totalInicial: f.totalInicial, totalEntradas: f.totalEntradas,
       totalEntradasTriagem: f.totalEntradasTriagem, totalSaidas: f.totalSaidas,
+      totalCorrecoes: f.totalCorrecoes,
       totalFinal: f.totalFinal, movimentacoes: f.movimentacoes,
       geradoEm: new Date().toISOString()
     });
@@ -677,9 +690,9 @@ router.get('/api/estoque2/fluxo', shared.auth(['tecnico','admin']), shared.ah(as
   if(dFrom) movs = movs.filter(m=> new Date(m.createdAt) >= dFrom);
   if(dTo) movs = movs.filter(m=> new Date(m.createdAt) <= dTo);
   const mats = materiaisDoSistemaRoute(effectiveSistema);
-  const entradas = {}, saidas = {};
-  UNIDADES.forEach(u=>{ entradas[u]={}; saidas[u]={}; mats.forEach(m=>{ entradas[u][m]=0; saidas[u][m]=0; }); });
-  let totalEntradas = 0, totalSaidas = 0;
+  const entradas = {}, saidas = {}, correcoes = {};
+  UNIDADES.forEach(u=>{ entradas[u]={}; saidas[u]={}; correcoes[u]={}; mats.forEach(m=>{ entradas[u][m]=0; saidas[u][m]=0; correcoes[u][m]=0; }); });
+  let totalEntradas = 0, totalSaidas = 0, totalCorrecoes = 0;
   for(const m of movs){
     const u = String(m.unidade||'').trim();
     if(!UNIDADES.includes(u)) continue;
@@ -687,14 +700,19 @@ router.get('/api/estoque2/fluxo', shared.auth(['tecnico','admin']), shared.ah(as
     if(!mats.includes(mat)) continue;
     const qtd = Math.abs(Number(m.qtd)||0);
     if(String(m.tipo)==='saida'){ saidas[u][mat]+=qtd; totalSaidas+=qtd; }
+    else if(String(m.tipo)==='estorno'){
+      const d = Number(m.saldoDepois) - Number(m.saldoAntes);
+      const ef = Number.isFinite(d) ? d : 0;
+      correcoes[u][mat]+=ef; totalCorrecoes+=ef;
+    }
     else { entradas[u][mat]+=qtd; totalEntradas+=qtd; }
   }
   res.json({
     sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null,
     from: dFrom ? dFrom.toISOString().slice(0,10) : null,
     to: dTo ? dTo.toISOString().slice(0,10) : null,
-    unidades: UNIDADES, materiais: mats, entradas, saidas,
-    totalEntradas, totalSaidas, movimentacoes: movs.length,
+    unidades: UNIDADES, materiais: mats, entradas, saidas, correcoes,
+    totalEntradas, totalSaidas, totalCorrecoes, movimentacoes: movs.length,
     geradoEm: new Date().toISOString()
   });
 }));

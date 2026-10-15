@@ -49,3 +49,7 @@ create index if not exists idx_estoque2_mov_sistema on estoque2_mov (sistema);
 create index if not exists idx_estoque2_mov_data on estoque2_mov (createdat);
 create index if not exists idx_estoque2_serial_contrato on estoque2_serial (contrato);
 create index if not exists idx_estoque2_serial_unidade on estoque2_serial (unidade);
+-- trilha de estorno (audit trail da correção; sem ela o app segue com fallback)
+alter table estoque2_mov add column if not exists estornado boolean default false;
+alter table estoque2_mov add column if not exists estornadoat timestamptz default null;
+alter table estoque2_mov add column if not exists estornadoby text default null;

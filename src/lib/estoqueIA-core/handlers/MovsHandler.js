@@ -68,8 +68,9 @@ class MovsHandler extends BaseHandler {
       };
     }
 
-    const ent = movs.filter(m => m.tipo !== 'saida').length;
-    const sai = movs.length - ent;
+    const ent = movs.filter(m => m.tipo !== 'saida' && m.tipo !== 'estorno').length;
+    const sai = movs.filter(m => m.tipo === 'saida').length;
+    const cor = movs.length - ent - sai;
     const txt = movs.map(m =>
       `${new Date(m.createdAt).toLocaleString('pt-BR')} — ${m.tipo.toUpperCase()} ${m.qtd}x ${m.material} em ${m.unidade}${m.unidadeDestino ? ' → ' + m.unidadeDestino : ''} (${m.contrato}) | ${m.motivo || ''} | ${m.userName || m.user} [${m.saldoAntes}→${m.saldoDepois}]${m.seriais && m.seriais.length ? ' | seriais: ' + m.seriais.slice(0, 2).join(', ') + (m.seriais.length > 2 ? ' +' + (m.seriais.length - 2) : '') : ''}${m.estornado ? ' (ESTORNADO)' : ''}`
     ).join('\n');
@@ -77,7 +78,7 @@ class MovsHandler extends BaseHandler {
     const sugUser = usuario ? `movimentações de ${usuario.user} ontem ${contrato || 'CE01'}` : `movimentações por usuário ontem ${contrato || 'CE01'}`;
     return {
       intent: 'movs',
-      text: `📋 ${total} movimentação${total > 1 ? 'ões' : ''}${quem}${rotuloData}${onde} — ${ent} entrada${ent === 1 ? '' : 's'} • ${sai} saída${sai === 1 ? '' : 's'}${total > 20 ? ` (mostrando 20 de ${total})` : ''}:\n${txt}`,
+      text: `📋 ${total} movimentação${total > 1 ? 'ões' : ''}${quem}${rotuloData}${onde} — ${ent} entrada${ent === 1 ? '' : 's'} • ${sai} saída${sai === 1 ? '' : 's'}${cor ? ` • ${cor} correção${cor === 1 ? '' : 'ões'}` : ''}${total > 20 ? ` (mostrando 20 de ${total})` : ''}:\n${txt}`,
       data: { movs, usuario: usuario || null, total },
       suggestions: [sugUser, 'consumo ' + (material || 'TZPR04'), 'histórico ' + (contrato || 'CE01')]
     };
