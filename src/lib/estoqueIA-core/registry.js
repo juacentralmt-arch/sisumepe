@@ -19,6 +19,7 @@ const HelpHandler = require('./handlers/HelpHandler');
 const PrevisaoRupturaHandler = require('./handlers/PrevisaoRupturaHandler');
 const SugestaoCompraHandler = require('./handlers/SugestaoCompraHandler');
 const TransferenciaSugeridaHandler = require('./handlers/TransferenciaSugeridaHandler');
+const AtivacoesHandler = require('./handlers/AtivacoesHandler');
 const LinguagemNaturalHandler = require('./handlers/LinguagemNaturalHandler');
 const HistoricoConversasHandler = require('./handlers/HistoricoConversasHandler');
 
@@ -32,6 +33,7 @@ const handlers = [
   new PrevisaoRupturaHandler(),  // previsão ruptura
   new SugestaoCompraHandler(),   // sugestão compra
   new TransferenciaSugeridaHandler(), // transferência sugerida
+  new AtivacoesHandler(),        // ativações por destino ([ATIVACAO])
   new EstoqueAtualHandler(),     // estoque atual
   new MediaConsumoHandler(),     // média consumo
   new ReposicaoSegurancaHandler(), // necessidade reposição segurança

@@ -54,8 +54,10 @@ async function answer(query, store, opts = {}) {
     try { sistema = store.normalizeSistema(sistema) || sistema; } catch (e) {}
   }
 
-  // 5. Infinity: TZPR04 vira TZPR; UPR04 não existe
+  // 5. Infinity: TZPR04 vira TZPR; UPR04 não existe.
+  // Fora do Infinity, "TZPR" sozinho vale TZPR04 (Spacecom não tem TZPR).
   if (sistema === 'infinity' && material === 'TZPR04') material = 'TZPR';
+  if (sistema !== 'infinity' && material === 'TZPR') material = 'TZPR04';
   if (sistema === 'infinity' && material === 'UPR04') {
     return {
       intent: 'erro',
