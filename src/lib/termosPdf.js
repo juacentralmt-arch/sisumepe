@@ -561,7 +561,9 @@ async function gerarTermoRecolhimentoPDF(termo){
       const blockFor = (n) => Math.max(52, descHeaderH + Math.max(n, 1) * descLineH + descPad);
       // Se o bloco + assinaturas + rodapé não couberem, continua numa página
       // nova (com cabeçalho oficial) em vez de invadir o rodapé.
-      const sigBlockH = 18 + 34 + 26 + 30;
+      const descGap = 36;
+      const sigGap = 56;
+      const sigBlockH = descGap + sigGap + 26 + 30;
       if(y - blockFor(descLines.length) - sigBlockH < 28){
         pg = pdfDoc.addPage([PW, PH]);
         y = drawHeader(pg) - 4;
@@ -578,7 +580,7 @@ async function gerarTermoRecolhimentoPDF(termo){
         pg.drawRectangle({ x: M, y: y - boxH, width: PW - 2*M, height: boxH, borderColor: rgb(0,0,0), borderWidth: 1, color: rgb(1,1,1) });
         pg.drawText(descLines.length === 0 || li === 0 ? 'Descrição:' : 'Descrição (cont.):', { x: M + 6, y: y - 14, size: 8.5, font, color: rgb(0,0,0) });
         chunk.forEach((ln, i)=>{ if(ln) pg.drawText(ln, { x: M + 6, y: y - 26 - i*descLineH, size: 8, font, color: rgb(0,0,0) }); });
-        y -= boxH + 18;
+        y -= boxH + descGap;
         li += chunk.length;
         if(descLines.length === 0) break;
         if(!isFinalChunk){
@@ -589,7 +591,7 @@ async function gerarTermoRecolhimentoPDF(termo){
       pg.drawText('Assinatura:', { x: M, y, size: 8.5, font: fontBold, color: rgb(0,0,0) });
       const assW = fontBold.widthOfTextAtSize('Assinatura: ', 8.5);
       pg.drawLine({ start: {x: M + assW, y: y - 2}, end: {x: M + 400, y: y - 2}, thickness: 0.7, color: rgb(0,0,0) });
-      y -= 34;
+      y -= sigGap;
       const midX = M + (PW - 2*M)/2;
       pg.drawLine({ start: {x: M + 10, y}, end: {x: midX - 10, y}, thickness: 0.8, color: rgb(0,0,0) });
       pg.drawLine({ start: {x: midX + 10, y}, end: {x: PW - M - 10, y}, thickness: 0.8, color: rgb(0,0,0) });
