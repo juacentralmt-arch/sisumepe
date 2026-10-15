@@ -106,6 +106,56 @@ async function main() {
   const dia = await get(`/api/estoque2/fluxo?sistema=spacecom&contrato=CE01&data=${hoje}`);
   assert(dia.status === 200 && dia.body.modo === 'diario' && dia.body.data === hoje, '?data= segue íntegro após refatoração');
 
+  console.log('\n=== ESTOQUE 2 — transferência origem→destino ===');
+  const saldoE2 = async (mat, und) => {
+    const all = await store.estoque2.all();
+    const r = all.find(e => e.sistema === 'spacecom' && e.contrato === 'CE01' && e.material === mat && e.unidade === und);
+    return Number(r ? r.saldo : 0);
+  };
+  const sAntesO = await saldoE2('CINTA', 'UMEPE Juazeiro');
+  const sAntesD = await saldoE2('CINTA', 'UP-Juazeiro');
+  const tr1 = await post('/api/estoque2/transferir', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', qtd: 1,
+    unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Juazeiro', motivo: 'teste transferencia e2test'
+  });
+  assert(tr1.status === 200, 'transferir 1 CINTA UMEPE→UP-Juazeiro: 200');
+  assert((await saldoE2('CINTA', 'UMEPE Juazeiro')) === sAntesO - 1, `origem -1 (${sAntesO})`);
+  assert((await saldoE2('CINTA', 'UP-Juazeiro')) === sAntesD + 1, `destino +1 (${sAntesD})`);
+  assert(tr1.body.origem && tr1.body.destino, 'resposta com pernas origem+destino');
+  const movOut = tr1.body.origem.mov;
+  assert(movOut.unidadeDestino === 'UP-Juazeiro', 'mov de saída linkada ao destino');
+  // serial rastreado viaja junto (ida e volta)
+  const sers = await store.estoque2Serial.all({ limit: 'all' });
+  const cand = sers.find(s => s.sistema === 'spacecom' && s.contrato === 'CE01' && s.status === 'disponivel' && s.unidade === 'UMEPE Juazeiro' && /^431/.test(s.serial));
+  if (cand) {
+    const trS = await post('/api/estoque2/transferir', {
+      sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
+      unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Juazeiro',
+      motivo: 'teste transferencia serial e2test', seriais: [cand.serial]
+    });
+    assert(trS.status === 200, 'transferir serial TZPR04: 200');
+    const afterS = (await store.estoque2Serial.all({ limit: 'all' })).find(s => s.serial === cand.serial);
+    assert(afterS.unidade === 'UP-Juazeiro' && afterS.status === 'disponivel', 'serial em UP-Juazeiro disponível');
+    const trS2 = await post('/api/estoque2/transferir', {
+      sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
+      unidadeOrigem: 'UP-Juazeiro', unidadeDestino: 'UMEPE Juazeiro',
+      motivo: 'retorno teste serial e2test', seriais: [cand.serial]
+    });
+    assert(trS2.status === 200, 'serial de volta: 200');
+    const backS = (await store.estoque2Serial.all({ limit: 'all' })).find(s => s.serial === cand.serial);
+    assert(backS.unidade === 'UMEPE Juazeiro' && backS.status === 'disponivel', 'serial restaurado na origem');
+  } else {
+    console.log('  ⚠️ sem serial 431 disponível em UMEPE — pulei etapa de serial');
+  }
+  // desfaz a perna CINTA (saldos voltam; ficam só as linhas de histórico)
+  const trBack = await post('/api/estoque2/transferir', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', qtd: 1,
+    unidadeOrigem: 'UP-Juazeiro', unidadeDestino: 'UMEPE Juazeiro', motivo: 'retorno teste e2test'
+  });
+  assert(trBack.status === 200, 'transferência de retorno: 200');
+  assert((await saldoE2('CINTA', 'UMEPE Juazeiro')) === sAntesO, 'origem restaurada');
+  assert((await saldoE2('CINTA', 'UP-Juazeiro')) === sAntesD, 'destino restaurado');
+
   console.log('\n=== ESTOQUE 2 — estorno como correção neutra ===');
   const mvE = await post('/api/estoque2/movimentar', {
     sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
