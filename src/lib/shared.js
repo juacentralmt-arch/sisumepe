@@ -35,6 +35,19 @@ function loginRateLimit(req, res, next) {
 
 // Rate-limit global leve para /api (sem nova dependência):
 // 300 req/min por IP. Rotas de stream/saúde ficam de fora.
+const iaHits = new Map();
+function iaRateLimit(req, res, next) {
+  const key = (req.auth && req.auth.user) ? req.auth.user : (req.ip || '?');
+  const now = Date.now();
+  const h = iaHits.get(key) || { n: 0, reset: now + 60e3 };
+  if (now > h.reset) { h.n = 0; h.reset = now + 60e3; }
+  h.n++;
+  iaHits.set(key, h);
+  if (iaHits.size > 5000) { for (const [k, v] of iaHits) if (now > v.reset) iaHits.delete(k); }
+  if (h.n > 30) return res.status(429).json({ error: 'Muitas consultas de IA. Tente de novo em instantes.' });
+  next();
+}
+
 const apiHits = new Map();
 const API_WINDOW_MS = 60e3;
 const API_MAX = 300;
@@ -503,7 +516,7 @@ const pendingGoogleStates = new Map();
 module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
-  loginRateLimit, apiRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
+  loginRateLimit, apiRateLimit, iaRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
   horarioComercialInfo, recepcaoBloqueada, RECP_TZ, RECP_MSG,
   upload, uploadLarge, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,

@@ -23,6 +23,12 @@ router.post('/api/persons', auth(), ah(async (req, res) => {
   const { nome, cpf, rg, nomeMae, dataNascimento, modeloTornozeleira } = req.body || {};
   if (!nome || !nome.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!cpf && !rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
+  const cpfDigits = String(cpf || '').replace(/\D/g, '');
+  if (cpf && cpfDigits.length !== 11) return res.status(400).json({ error: 'CPF deve ter 11 dígitos' });
+  if (dataNascimento) {
+    const dt = new Date(dataNascimento);
+    if (isNaN(dt.getTime())) return res.status(400).json({ error: 'Data de nascimento inválida' });
+  }
   if (!['Spacecom', 'Infinity', 'Sem tornozeleira'].includes(modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)' });
   const cpfN = (cpf || '').replace(/\D/g, '');
   const all = await store.persons.all();
@@ -49,6 +55,12 @@ router.patch('/api/persons/:id', auth(), ah(async (req, res) => {
   fields.forEach(f => { next[f] = f === 'dataNascimento' ? String((req.body && req.body[f]) || '') : String((req.body && req.body[f]) || '').trim(); });
   if (!next.nome) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!next.cpf && !next.rg) return res.status(400).json({ error: 'Informe CPF ou RG' });
+  const cpfDigitsPatch = String(next.cpf || '').replace(/\D/g, '');
+  if (next.cpf && cpfDigitsPatch.length !== 11) return res.status(400).json({ error: 'CPF deve ter 11 dígitos' });
+  if (next.dataNascimento) {
+    const dt = new Date(next.dataNascimento);
+    if (isNaN(dt.getTime())) return res.status(400).json({ error: 'Data de nascimento inválida' });
+  }
   if (!['Spacecom', 'Infinity', 'Sem tornozeleira'].includes(next.modeloTornozeleira)) return res.status(400).json({ error: 'Selecione o modelo da tornozeleira (Spacecom, Infinity ou Sem tornozeleira)' });
   const cpfN = next.cpf.replace(/\D/g, '');
   const all = await store.persons.all();

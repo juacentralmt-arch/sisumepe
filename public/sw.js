@@ -1,4 +1,4 @@
-const CACHE = 'te-v47';
+const CACHE = 'te-v49';
 const CORE = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/tesseract.min.js', '/favicon.png', '/favicon.ico', '/logo-sisumepe.svg', '/apple-touch.png'];
 
 self.addEventListener('install', e => {
@@ -35,6 +35,15 @@ self.addEventListener('fetch', e => {
   if (u.origin !== location.origin) return;
   // API e uploads: sempre rede (dados em tempo real, sem cache)
   if (u.pathname.startsWith('/api/') || u.pathname.startsWith('/uploads/')) return;
+  // JS/CSS do app: rede primeiro (atualizações chegam na hora; cache é só para offline)
+  if (u.pathname.startsWith('/js/') || u.pathname.startsWith('/css/')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(r => { const c = r.clone(); caches.open(CACHE).then(cc => cc.put(e.request, c)); return r; })
+        .catch(() => caches.match(e.request).then(h => h || caches.match('/')))
+    );
+    return;
+  }
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)

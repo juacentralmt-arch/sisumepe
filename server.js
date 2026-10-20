@@ -16,6 +16,9 @@ app.use(shared.requestId);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self)');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -41,8 +44,23 @@ if (process.env.FORCE_HTTPS === '1') {
 app.use(express.json({ limit: '2mb' }));
 // CORS: permite frontend local (SPA) acessar API
 const cors = require('cors');
+function corsOrigins() {
+  const fromEnv = String(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const auto = [];
+  if (process.env.RENDER_EXTERNAL_URL) auto.push(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
+  if (process.env.RENDER_EXTERNAL_HOSTNAME) auto.push('https://' + process.env.RENDER_EXTERNAL_HOSTNAME);
+  if (fromEnv.length) return [...new Set([...fromEnv, ...auto])];
+  const p = process.env.PORT || 3000;
+  return ['http://localhost:' + p, 'http://127.0.0.1:' + p];
+}
 app.use(cors({
-  origin: true,
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    const allowed = corsOrigins();
+    if (allowed.includes(origin)) return cb(null, true);
+    // Nega silenciosamente (sem lançar) para não virar 500 no handler global.
+    return cb(null, false);
+  },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','X-Session','X-Request-Id']
@@ -148,6 +166,9 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   res.status(err && err.status || 500).json({ error: 'Erro interno. Tente de novo.', requestId: req.requestId || null });
 });
+
+process.on('unhandledRejection', (reason) => console.error(JSON.stringify({ level: 'error', type: 'unhandledRejection', message: String(reason && reason.message || reason), at: new Date().toISOString() })));
+process.on('uncaughtException', (err) => console.error(JSON.stringify({ level: 'error', type: 'uncaughtException', message: err && err.message, at: new Date().toISOString() })));
 
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));
 

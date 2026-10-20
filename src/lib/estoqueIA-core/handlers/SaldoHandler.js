@@ -16,7 +16,8 @@ class SaldoHandler extends BaseHandler {
     // Detectar ambiguidade: query genérica sem contexto anterior
     const isGenericQuery = /saldo|estoque|quanto tem|quantos/.test(query) && 
                            !contrato && !unidade && !material &&
-                           !last?.contrato && !last?.unidade && !last?.material;
+                           !last?.contrato && !last?.unidade && !last?.material &&
+                           !/total|geral/.test(query);
     
     if (isGenericQuery) {
       return {

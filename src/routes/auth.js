@@ -8,14 +8,20 @@ const router = express.Router();
 router.post('/api/login', loginRateLimit, ah(async (req, res) => {
   const { user, pass } = req.body || {};
   const u = await store.users.byName(user);
-  if (!u) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  if (!u) {
+    try { await store.audit.insert({ kind: 'auth', action: 'login_failed', byUser: String(user||'').toLowerCase().trim(), byName: String(user||''), byRole: 'desconhecido', summary: 'Usuário inexistente' }); } catch (e) {}
+    return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  }
   let ok = false;
   if (isHash(u.pass)) ok = await bcrypt.compare(String(pass || ''), u.pass);
   else if (u.pass === String(pass || '')) {
     ok = true;
     await store.users.patch(u.user, { pass: await bcrypt.hash(String(pass || ''), 10) }); // migra p/ hash
   }
-  if (!ok) return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  if (!ok) {
+    try { await store.audit.insert({ kind: 'auth', action: 'login_failed', byUser: u.user, byName: u.name, byRole: u.role, summary: 'Senha incorreta' }); } catch (e) {}
+    return res.status(401).json({ error: 'Usuário ou senha inválidos' });
+  }
   if (u.active === false) return res.status(403).json({ error: 'Usuário desativado. Fale com o administrador.' });
   // Recepção só entra em horário comercial (seg–sex, 8h–12h e 13h–17h, America/Fortaleza)
   if (u.role === 'recepcao' && !horarioComercialInfo().emHorario)
@@ -23,6 +29,10 @@ router.post('/api/login', loginRateLimit, ah(async (req, res) => {
   const token = await issueToken(u);
   // httpOnly cookie para mitigar XSS steal via localStorage
   res.setHeader('Set-Cookie', `te_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${12*3600}${process.env.FORCE_HTTPS==='1' ? '; Secure' : ''}`);
+  try {
+    await store.users.patch(u.user, { lastLoginAt: new Date().toISOString() });
+    await store.audit.insert({ kind: 'auth', action: 'login', byUser: u.user, byName: u.name, byRole: u.role, summary: 'Login bem-sucedido' });
+  } catch (e) {}
   const sistema = u.sistema || (u.user && require('../../store').getUserSistema ? require('../../store').getUserSistema(u) : null);
   res.json({ user: u.user, role: u.role, name: u.name, sistema: u.role==='admin' ? null : sistema, token });
 }));
@@ -30,6 +40,7 @@ router.post('/api/login', loginRateLimit, ah(async (req, res) => {
 router.post('/api/logout', auth(), ah(async (req, res) => {
   const t = req.auth && req.auth.token ? req.auth.token : (req.headers['x-session'] || '');
   if(t) await store.sessions.del(t);
+  try { await store.audit.insert({ kind: 'auth', action: 'logout', byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Logout' }); } catch (e) {}
   res.setHeader('Set-Cookie', `te_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${process.env.FORCE_HTTPS==='1' ? '; Secure' : ''}`);
   res.json({ ok: true });
 }));

@@ -32,6 +32,11 @@ app.use((req, res, next) => {
 });
 app.use(estoque2Router);
 
+const DB = require('path').join(__dirname, '..', 'db.json');
+const fs = require('fs');
+const DB_BACKUP = fs.readFileSync(DB, 'utf8');
+function restoreDb() { try { fs.writeFileSync(DB, DB_BACKUP); } catch (e) {} }
+
 const server = app.listen(0);
 const BASE = 'http://127.0.0.1:' + server.address().port;
 
@@ -89,8 +94,10 @@ async function main() {
   }
 
   console.log('\n=== ESTOQUE 2 — evolução por período ===');
-  const hoje = new Date().toISOString().slice(0, 10);
-  const d3 = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  // O fechamento usa dias no fuso operacional (America/Fortaleza)
+  const { hojeLocal, addDiasISO } = require('../src/lib/datas');
+  const hoje = hojeLocal();
+  const d3 = addDiasISO(hoje, -3);
   const evo = await get(`/api/estoque2/fluxo/evolucao?sistema=spacecom&contrato=CE01&de=${d3}&ate=${hoje}`);
   assert(evo.status === 200 && evo.body.modo === 'evolucao', 'evolução 4 dias: 200');
   assert(Array.isArray(evo.body.dias) && evo.body.dias.length === 4, `4 dias retornados (${(evo.body.dias || []).length})`);
@@ -124,29 +131,34 @@ async function main() {
   assert(tr1.body.origem && tr1.body.destino, 'resposta com pernas origem+destino');
   const movOut = tr1.body.origem.mov;
   assert(movOut.unidadeDestino === 'UP-Juazeiro', 'mov de saída linkada ao destino');
-  // serial rastreado viaja junto (ida e volta)
-  const sers = await store.estoque2Serial.all({ limit: 'all' });
-  const cand = sers.find(s => s.sistema === 'spacecom' && s.contrato === 'CE01' && s.status === 'disponivel' && s.unidade === 'UMEPE Juazeiro' && /^431/.test(s.serial));
-  if (cand) {
-    const trS = await post('/api/estoque2/transferir', {
-      sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
-      unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Juazeiro',
-      motivo: 'teste transferencia serial e2test', seriais: [cand.serial]
-    });
-    assert(trS.status === 200, 'transferir serial TZPR04: 200');
-    const afterS = (await store.estoque2Serial.all({ limit: 'all' })).find(s => s.serial === cand.serial);
-    assert(afterS.unidade === 'UP-Juazeiro' && afterS.status === 'disponivel', 'serial em UP-Juazeiro disponível');
-    const trS2 = await post('/api/estoque2/transferir', {
-      sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
-      unidadeOrigem: 'UP-Juazeiro', unidadeDestino: 'UMEPE Juazeiro',
-      motivo: 'retorno teste serial e2test', seriais: [cand.serial]
-    });
-    assert(trS2.status === 200, 'serial de volta: 200');
-    const backS = (await store.estoque2Serial.all({ limit: 'all' })).find(s => s.serial === cand.serial);
-    assert(backS.unidade === 'UMEPE Juazeiro' && backS.status === 'disponivel', 'serial restaurado na origem');
-  } else {
-    console.log('  ⚠️ sem serial 431 disponível em UMEPE — pulei etapa de serial');
-  }
+  // seriais saíram da lógica do estoque: a transferência é só quantitativa
+  // e o pool de seriais permanece intacto (ficam no bloco de notas).
+  const sersAntes = await store.estoque2Serial.all({ limit: 'all' });
+  // garante saldo para a transferência quantitativa (independe do estado do banco)
+  const seedTzpr = await post('/api/estoque2/movimentar', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro',
+    qtd: 2, motivo: 'setup teste transferencia quantitativa e2test'
+  });
+  assert(seedTzpr.status === 200, 'setup: entrada 2x TZPR04');
+  const salO = await saldoE2('TZPR04', 'UMEPE Juazeiro');
+  const salD = await saldoE2('TZPR04', 'UP-Juazeiro');
+  const trS = await post('/api/estoque2/transferir', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
+    unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Juazeiro',
+    motivo: 'teste transferencia quantitativa e2test'
+  });
+  assert(trS.status === 200, 'transferir TZPR04 (só quantidade): 200');
+  assert((await saldoE2('TZPR04', 'UMEPE Juazeiro')) === salO - 1, 'origem -1');
+  assert((await saldoE2('TZPR04', 'UP-Juazeiro')) === salD + 1, 'destino +1');
+  const sersDepois = await store.estoque2Serial.all({ limit: 'all' });
+  assert(sersDepois.length === sersAntes.length, 'pool de seriais não é alterado pela transferência');
+  const trS2 = await post('/api/estoque2/transferir', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', qtd: 1,
+    unidadeOrigem: 'UP-Juazeiro', unidadeDestino: 'UMEPE Juazeiro',
+    motivo: 'retorno teste quantitativo e2test'
+  });
+  assert(trS2.status === 200, 'retorno: 200');
+  assert((await saldoE2('TZPR04', 'UMEPE Juazeiro')) === salO, 'origem restaurada');
   // desfaz a perna CINTA (saldos voltam; ficam só as linhas de histórico)
   const trBack = await post('/api/estoque2/transferir', {
     sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', qtd: 1,
@@ -191,11 +203,12 @@ async function main() {
 }
 
 main().then(() => {
+  restoreDb();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   server.close();
   process.exitCode = failed > 0 ? 1 : 0;
 }).catch(e => {
   console.error(e);
-  try { server.close(); } catch (_) {}
+  try { restoreDb(); server.close(); } catch (_) {}
   process.exit(1);
 });

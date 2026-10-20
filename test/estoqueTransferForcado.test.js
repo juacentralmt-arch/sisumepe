@@ -1,8 +1,8 @@
 // =====================================================================
-//  Testes da transferência forçada ("disponível para uso").
-//  Sem forçar: serial fora de disponibilidade na origem barra (400).
-//  Forçando: viaja mesmo assim e chega DISPONÍVEL no destino.
-//  Caminho normal preservado. Banco local com backup/restore no processo.
+//  Transferência entre unidades — SOMENTE QUANTITATIVA.
+//  Regra atual: seriais saíram da lógica do estoque (ficam no bloco de
+//  notas por unidade). A transferência move apenas quantidade e nunca
+//  é bloqueada por serial fora de disponibilidade.
 //  Script puro (sem framework), no estilo das demais suítes do projeto.
 // =====================================================================
 let passed = 0, failed = 0;
@@ -48,35 +48,41 @@ const DB = path.join(__dirname, '..', 'db.json');
 const backup = fs.readFileSync(DB, 'utf8');
 function restore() { try { fs.writeFileSync(DB, backup); } catch (e) { console.log('  ⚠️ restore:', e.message); } }
 
-const S1 = '4319870001', S2 = '4319870002', S3 = '4319870003';
-const serialInfo = async (s) => {
-  const r = await get('/api/estoque/seriais?q=' + s + '&limit=all');
-  return (r.body || []).find(x => String(x.serial) === s);
-};
-
 (async () => {
   try {
-    console.log('\n=== TRANSFERÊNCIA — modo disponível para uso ===');
-    const e1 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: 2, motivo: 'teste setup', seriais: [S1, S2] });
-    assert(e1.status === 200, 'setup: entrada 2x TZPR04 UMEPE');
-    const s1 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: -1, motivo: 'teste baixa', seriais: [S1] });
-    assert(s1.status === 200, 'setup: saída 1x (serial em_uso)');
+    const store = require('../store');
+    const saldo = async (mat, und) => {
+      const all = await store.estoque.all();
+      const r = all.find(e => e.sistema === 'spacecom' && e.contrato === 'CE01' && e.material === mat && e.unidade === und);
+      return Number(r ? r.saldo : 0);
+    };
 
-    const t1 = await post('/api/estoque/transferir', { contrato: 'CE01', material: 'TZPR04', qtd: 1, unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Cariri', motivo: 'teste normal bloqueado', seriais: [S1] });
-    assert(t1.status === 400, 'sem forçar: serial fora de disponibilidade barra (400)');
+    console.log('\n=== MOVIMENTAÇÃO — quantitativa (sem seriais) ===');
+    const e1 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: 2, motivo: 'teste setup' });
+    assert(e1.status === 200, 'entrada 2x TZPR04 sem seriais: 200');
 
-    const t2 = await post('/api/estoque/transferir', { contrato: 'CE01', material: 'TZPR04', qtd: 1, unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Cariri', motivo: 'teste forcado', seriais: [S1], forcarDisponivel: true });
-    assert(t2.status === 200, 'forçando: transferência 200');
-    const info = await serialInfo(S1);
-    assert(info && info.status === 'disponivel' && info.unidade === 'UP-Cariri', 'forçando: serial chega DISPONÍVEL em UP-Cariri');
+    const s1 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: -1, motivo: 'teste baixa' });
+    assert(s1.status === 200, 'saída 1x TZPR04 sem seriais: 200');
 
-    console.log('\n=== TRANSFERÊNCIA — caminho normal preservado ===');
-    const e3 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: 1, motivo: 'teste setup 2', seriais: [S3] });
-    assert(e3.status === 200, 'setup: entrada 1x');
-    const t3 = await post('/api/estoque/transferir', { contrato: 'CE01', material: 'TZPR04', qtd: 1, unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Cariri', motivo: 'teste normal', seriais: [S3] });
-    assert(t3.status === 200, 'normal: serial disponível transfere sem forçar');
-    const info3 = await serialInfo(S3);
-    assert(info3 && info3.status === 'disponivel' && info3.unidade === 'UP-Cariri', 'normal: destino recebe disponível');
+    console.log('\n=== TRANSFERÊNCIA — só quantidade ===');
+    const antesO = await saldo('TZPR04', 'UMEPE Juazeiro');
+    const antesD = await saldo('TZPR04', 'UP-Cariri');
+    const t1 = await post('/api/estoque/transferir', { contrato: 'CE01', material: 'TZPR04', qtd: 1, unidadeOrigem: 'UMEPE Juazeiro', unidadeDestino: 'UP-Cariri', motivo: 'teste transferencia' });
+    assert(t1.status === 200, 'transferência 1x TZPR04: 200');
+    assert((await saldo('TZPR04', 'UMEPE Juazeiro')) === antesO - 1, `origem -1 (${antesO})`);
+    assert((await saldo('TZPR04', 'UP-Cariri')) === antesD + 1, `destino +1 (${antesD})`);
+
+    // devolve o saldo
+    const t2 = await post('/api/estoque/transferir', { contrato: 'CE01', material: 'TZPR04', qtd: 1, unidadeOrigem: 'UP-Cariri', unidadeDestino: 'UMEPE Juazeiro', motivo: 'retorno teste' });
+    assert(t2.status === 200, 'transferência de retorno: 200');
+    assert((await saldo('TZPR04', 'UMEPE Juazeiro')) === antesO, 'origem restaurada');
+
+    console.log('\n=== SERIAIS — não atrelados ao estoque ===');
+    const serAntes = await store.estoqueSerial.all({ limit: 'all' });
+    const e2 = await post('/api/estoque/movimentar', { contrato: 'CE01', material: 'TZPR04', unidade: 'UMEPE Juazeiro', qtd: 1, motivo: 'teste com serial', seriais: ['4319870009'] });
+    assert(e2.status === 200, 'movimentação com serial informado: 200');
+    const serDepois = await store.estoqueSerial.all({ limit: 'all' });
+    assert(serDepois.length === serAntes.length, 'pool de seriais não muda com a movimentação');
   } finally {
     restore();
     server.close();
