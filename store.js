@@ -6,6 +6,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+const { diaLocal } = require('./src/lib/datas');
 
 const MODE = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) ? 'supabase' : 'file';
 const ROOT = path.join(__dirname);
@@ -230,6 +231,7 @@ if(!mem.seqEstoque2) mem.seqEstoque2 = mem.estoque2.length ? Math.max(...mem.est
 if(!Array.isArray(mem.estoque2Mov)) mem.estoque2Mov=[];
 if(!mem.seqEstoque2Mov) mem.seqEstoque2Mov = mem.estoque2Mov.length ? Math.max(...mem.estoque2Mov.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque2Serial)) mem.estoque2Serial=[];
+if(!Array.isArray(mem.estoqueNotas)) mem.estoqueNotas=[];
 if(!mem.seqEstoque2Serial) mem.seqEstoque2Serial = mem.estoque2Serial.length ? Math.max(...mem.estoque2Serial.map(x=>x.id))+1 : 1;
      // inicializa estoque padrão: spacecom CE01/CE02 x 5 materiais x 6 unidades + infinity INF (Estoque Infinity) x 5 x 6
     // migração: garante campo unidade e sistema em registros antigos + unifica infinity CE01/CE02 em INF
@@ -304,7 +306,7 @@ if(!mem.seqEstoque2Serial) mem.seqEstoque2Serial = mem.estoque2Serial.length ? M
     if(needSave||added) saveFile();
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoque2: [], estoque2Mov: [], estoque2Serial: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1, seqEstoque2: 1, seqEstoque2Mov: 1, seqEstoque2Serial: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoque2: [], estoque2Mov: [], estoque2Serial: [], estoqueNotas: [], seqEstoqueNota: 0, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1, seqEstoque2: 1, seqEstoque2Mov: 1, seqEstoque2Serial: 1 };
     const matsInit={ spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
     [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> matsInit[sis].forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
     return mem;
@@ -337,6 +339,7 @@ if(!mem.seqEstoque2) mem.seqEstoque2 = mem.estoque2.length ? Math.max(...mem.est
 if(!Array.isArray(mem.estoque2Mov)) mem.estoque2Mov=[];
 if(!mem.seqEstoque2Mov) mem.seqEstoque2Mov = mem.estoque2Mov.length ? Math.max(...mem.estoque2Mov.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque2Serial)) mem.estoque2Serial=[];
+if(!Array.isArray(mem.estoqueNotas)) mem.estoqueNotas=[];
 if(!mem.seqEstoque2Serial) mem.seqEstoque2Serial = mem.estoque2Serial.length ? Math.max(...mem.estoque2Serial.map(x=>x.id))+1 : 1;
 // fallback garante campo unidade/sistema e combinações (supabase sem tabela ainda) + unifica infinity em INF
 (()=>{
@@ -386,6 +389,7 @@ if(!mem.seqEstoque2Serial) mem.seqEstoque2Serial = mem.estoque2Serial.length ? M
   if(!Array.isArray(mem.estoque2)) mem.estoque2=[];
   if(!Array.isArray(mem.estoque2Mov)) mem.estoque2Mov=[];
   if(!Array.isArray(mem.estoque2Serial)) mem.estoque2Serial=[];
+  if(!Array.isArray(mem.estoqueNotas)) mem.estoqueNotas=[];
   if(!mem.seqEstoque2) mem.seqEstoque2 = mem.estoque2.length ? Math.max(...mem.estoque2.map(x=>x.id))+1 : 1;
   if(!mem.seqEstoque2Mov) mem.seqEstoque2Mov = mem.estoque2Mov.length ? Math.max(...mem.estoque2Mov.map(x=>x.id))+1 : 1;
   if(!mem.seqEstoque2Serial) mem.seqEstoque2Serial = mem.estoque2Serial.length ? Math.max(...mem.estoque2Serial.map(x=>x.id))+1 : 1;
@@ -1146,11 +1150,8 @@ const store = {
       if(Math.abs(qtd)>500) throw Object.assign(new Error('Lote máximo 500 unidades por movimentação'),{status:400});
       if(motivo!=null && String(motivo).trim() && String(motivo).trim().length < 3) throw Object.assign(new Error('Motivo deve ter ao menos 3 caracteres'),{status:400});
       let serialList=[];
-      if(temSerial(material)){
-        serialList=parseSeriaisInput(seriais);
-        if(serialList.length !== Math.abs(qtd)) throw Object.assign(new Error(`${material} exige ${Math.abs(qtd)} seriais de 10 dígitos (recebido ${serialList.length}) — verifique se colou 10 dígitos por linha`),{status:400});
-        if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na lista'),{status:400});
-      }
+      // Seriais retirados da lógica de movimentação: manter apenas quantitativo
+      serialList = [];
       // garante linha existe (por sistema)
       let row=await store.estoque.get(contrato, material, unidade, sistema);
       if(!row){
@@ -1311,11 +1312,8 @@ const store = {
       if(!qtd) throw Object.assign(new Error('Quantidade inválida'),{status:400});
       if(qtd>500) throw Object.assign(new Error('Lote máximo 500 unidades por transferência'),{status:400});
       let serialList=[];
-      if(temSerial(material)){
-        serialList=parseSeriaisInput(seriais);
-        if(serialList.length !== qtd) throw Object.assign(new Error(`${material} exige ${qtd} seriais (recebido ${serialList.length}) — verifique o lote`),{status:400});
-        if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na transferência'),{status:400});
-      }
+      // Seriais retirados da lógica de movimentação: manter apenas quantitativo
+      serialList = [];
       // verifica saldo origem antes para falhar rápido
       const rowOrig = await store.estoque.get(contrato, material, unidadeOrigem, sistema);
       if(!rowOrig || Number(rowOrig.saldo||0) < qtd) throw Object.assign(new Error(`Saldo insuficiente em ${unidadeOrigem} (${rowOrig?rowOrig.saldo:0} disponível)`),{status:400});
@@ -1387,7 +1385,8 @@ const store = {
     async atDate(contrato, dateStr, unidade, sistema){
       let target;
       if(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())){
-        target = new Date(String(dateStr).trim() + 'T23:59:59.999Z');
+        // fim do dia no fuso operacional (America/Fortaleza)
+        target = diaLocal(String(dateStr).trim())?.fim || new Date(String(dateStr).trim() + 'T23:59:59.999Z');
       } else {
         target = dateStr ? new Date(dateStr) : new Date();
         if(!isNaN(target)) target.setUTCHours(23,59,59,999);
@@ -1442,7 +1441,7 @@ const store = {
       return result;
     },
     async atDateDetailed(contrato, dateStr, sistema){
-      const target = (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) ? new Date(String(dateStr).trim() + 'T23:59:59.999Z') : new Date(dateStr||Date.now());
+      const target = (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) ? (diaLocal(String(dateStr).trim())?.fim || new Date(String(dateStr).trim() + 'T23:59:59.999Z')) : new Date(dateStr||Date.now());
       if(isNaN(target)) throw Object.assign(new Error('Data inválida'),{status:400});
       const c=normalizeContrato(contrato, sistema) || String(contrato||'').toUpperCase().trim();
       const allMov = await store.estoqueMov.all({ sistema: sistema || undefined, limit: 'all' });
@@ -1711,11 +1710,8 @@ const store = {
       if(Math.abs(qtd)>500) throw Object.assign(new Error('Lote máximo 500 unidades por movimentação'),{status:400});
       if(motivo!=null && String(motivo).trim() && String(motivo).trim().length < 3) throw Object.assign(new Error('Motivo deve ter ao menos 3 caracteres'),{status:400});
       let serialList=[];
-      if(temSerial(material)){
-        serialList=parseSeriaisInput(seriais);
-        if(serialList.length !== Math.abs(qtd)) throw Object.assign(new Error(`${material} exige ${Math.abs(qtd)} seriais de 10 dígitos (recebido ${serialList.length}) — verifique se colou 10 dígitos por linha`),{status:400});
-        if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na lista'),{status:400});
-      }
+      // Seriais retirados da lógica de movimentação: manter apenas quantitativo
+      serialList = [];
       // garante linha existe (por sistema)
       let row=await store.estoque2.get(contrato, material, unidade, sistema);
       if(!row){
@@ -1876,11 +1872,8 @@ const store = {
       if(!qtd) throw Object.assign(new Error('Quantidade inválida'),{status:400});
       if(qtd>500) throw Object.assign(new Error('Lote máximo 500 unidades por transferência'),{status:400});
       let serialList=[];
-      if(temSerial(material)){
-        serialList=parseSeriaisInput(seriais);
-        if(serialList.length !== qtd) throw Object.assign(new Error(`${material} exige ${qtd} seriais (recebido ${serialList.length}) — verifique o lote`),{status:400});
-        if(new Set(serialList).size !== serialList.length) throw Object.assign(new Error('Seriais duplicados na transferência'),{status:400});
-      }
+      // Seriais retirados da lógica de movimentação: manter apenas quantitativo
+      serialList = [];
       // verifica saldo origem antes para falhar rápido
       const rowOrig = await store.estoque2.get(contrato, material, unidadeOrigem, sistema);
       if(!rowOrig || Number(rowOrig.saldo||0) < qtd) throw Object.assign(new Error(`Saldo insuficiente em ${unidadeOrigem} (${rowOrig?rowOrig.saldo:0} disponível)`),{status:400});
@@ -2196,6 +2189,31 @@ const store = {
   },
 
   // Sessões persistentes (sobrevivem a restart do servidor)
+  // Bloco de notas por unidade (texto livre de seriais, sem lógica de estoque)
+  estoqueNotas: {
+    async get(modulo, sistema, contrato, unidade) {
+      const mod = String(modulo || 'estoque');
+      const sis = normalizeSistema(sistema) || DEFAULT_SISTEMA;
+      const c = String(contrato || '').toUpperCase().trim() || (sis === 'infinity' ? CONTRATO_INFINITY : 'CE01');
+      const u = normalizeUnidade(unidade || DEFAULT_UNIDADE);
+      const rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u);
+      return rec || { modulo: mod, sistema: sis, contrato: c, unidade: u, texto: '', updatedAt: null };
+    },
+    async set(modulo, sistema, contrato, unidade, texto) {
+      const mod = String(modulo || 'estoque');
+      const sis = normalizeSistema(sistema) || DEFAULT_SISTEMA;
+      const c = String(contrato || '').toUpperCase().trim() || (sis === 'infinity' ? CONTRATO_INFINITY : 'CE01');
+      const u = normalizeUnidade(unidade || DEFAULT_UNIDADE);
+      const t = String(texto || '').slice(0, 20000);
+      if (!mem.estoqueNotas) mem.estoqueNotas = [];
+      let rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u);
+      if (rec) { rec.texto = t; rec.updatedAt = new Date().toISOString(); }
+      else { rec = { id: (mem.seqEstoqueNota = (mem.seqEstoqueNota || 0) + 1), modulo: mod, sistema: sis, contrato: c, unidade: u, texto: t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; mem.estoqueNotas.push(rec); }
+      if (MODE === 'file') saveFile();
+      return rec;
+    }
+  },
+
   sessions: {
     async insert(token, row) {
       if (MODE === 'file') { mem.sessions[token] = row; saveFile(); return; }
@@ -2271,16 +2289,17 @@ const store = {
   },
 
   async backup() {
-    const [persons, tickets, chat, audit, users, agenda, termos, psi, estoque, estoqueMov, estoqueSerial, estoque2, estoque2Mov, estoque2Serial] = await Promise.all([
+    const [persons, tickets, chat, audit, users, agenda, termos, psi, estoque, estoqueMov, estoqueSerial, estoque2, estoque2Mov, estoque2Serial, estoqueNotas] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.chat.list(),
       store.audit.recent(500), store.users.all(), store.agenda.all().catch(()=>[]), store.termos.all().catch(()=>[]), store.psi.all().catch(()=>[]),
-      store.estoque.all(), store.estoqueMov.all({ limit: 'all' }), store.estoqueSerial.all({ limit: 'all' }), store.estoque2.all(), store.estoque2Mov.all({ limit: 'all' }), store.estoque2Serial.all({ limit: 'all' })
+      store.estoque.all(), store.estoqueMov.all({ limit: 'all' }), store.estoqueSerial.all({ limit: 'all' }), store.estoque2.all(), store.estoque2Mov.all({ limit: 'all' }), store.estoque2Serial.all({ limit: 'all' }), Promise.resolve(mem.estoqueNotas || [])
     ]);
     const mx = a => a.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
     return {
       persons, tickets, chat: chat.slice(-200), audit: audit.slice(-500), users, agenda: agenda.slice(-500), termos: termos.slice(-500), psi: psi.slice(-2000),
       estoque, estoqueMov, estoqueSerial,
       estoque2, estoque2Mov, estoque2Serial,
+      estoqueNotas: (mem.estoqueNotas || []),
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
       seqChat: mx(chat) + 1, seqAudit: mx(audit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1,
       seqEstoque: mx(estoque) + 1, seqEstoqueMov: mx(estoqueMov) + 1, seqEstoqueSerial: mx(estoqueSerial) + 1, seqEstoque2: mx(estoque2) + 1, seqEstoque2Mov: mx(estoque2Mov) + 1, seqEstoque2Serial: mx(estoque2Serial) + 1
@@ -2323,6 +2342,7 @@ const store = {
         estoque2: Array.isArray(dump.estoque2) ? dump.estoque2 : [],
         estoque2Mov: Array.isArray(dump.estoque2Mov) ? dump.estoque2Mov : [],
         estoque2Serial: Array.isArray(dump.estoque2Serial) ? dump.estoque2Serial : [],
+        estoqueNotas: Array.isArray(dump.estoqueNotas) ? dump.estoqueNotas : (mem.estoqueNotas || []),
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
         seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi,
         seqEstoque: dump.seqEstoque || keepSeqEstoque, seqEstoqueMov: dump.seqEstoqueMov || keepSeqEstoqueMov, seqEstoqueSerial: dump.seqEstoqueSerial || keepSeqEstoqueSerial, seqEstoque2: dump.seqEstoque2 || keepSeqEstoque2, seqEstoque2Mov: dump.seqEstoque2Mov || keepSeqEstoque2Mov, seqEstoque2Serial: dump.seqEstoque2Serial || keepSeqEstoque2Serial

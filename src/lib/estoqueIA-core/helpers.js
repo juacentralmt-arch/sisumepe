@@ -59,8 +59,8 @@ const CORRECOES_TYPO = {
   'serial': 'seriais',
   'seriais': 'seriais',
   'kit': 'kit',
-  'transferencia': 'transferir',
-  'transferência': 'transferir',
+  // 'transferencia': 'transferir',  // removido: quebrava intent "transferencia sugerida"
+  // removido: 'transferencia' nao e typo
   'previsao': 'previsao ruptura',
   'previsão': 'previsao ruptura',
   'ruptura': 'previsao ruptura',

@@ -1,8 +1,16 @@
 const express = require('express');
+const crypto = require('crypto');
 const shared = require('../lib/shared');
 const estoqueIA = require('../lib/estoqueIA');
 const { popularEstoque } = require('../lib/estoqueSeed');
+const { diaLocal, addDiasISO, hojeLocal } = require('../lib/datas');
 const router = express.Router();
+
+// Token do lote de KIT no motivo: '[KIT x2 #A1B2C3]'
+function kitTokenDe(motivo){
+  const m = String(motivo||'').match(/\[KIT x\d+\s*#([A-Za-z0-9]{4,12})\]/i);
+  return m ? m[1].toUpperCase() : null;
+}
 
 // Helper para invalidar cache da IA após movimentações
 function invalidateEstoqueCache() {
@@ -148,7 +156,18 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   if(tipo && String(tipo).toLowerCase()==='saida' && Number(qtd)>0) qtdFinal = -Math.abs(Number(qtd));
   if(tipo && String(tipo).toLowerCase()==='entrada' && Number(qtd)>0) qtdFinal = Math.abs(Number(qtd));
   const errQ=validaQtd(qtdFinal); if(errQ) return res.status(400).json({ error: errQ });
-  if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  // Tipos com tag própria (triagem/manutenção/ativação/outros): o motivo é
+  // automático e não é exigido do usuário.
+  const TIPOS_AUTO = { triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento', outros_entrada:'Outros - entrada', outros_saida:'Outros - saida' };
+  const tipoNorm = String(tipo||'').toLowerCase();
+  let motivoFinal = motivo;
+  if (TIPOS_AUTO[tipoNorm]) {
+    const tag = { triagem:'[TRIAGEM]', manutencao:'[MANUTENCAO]', ativacao:'[ATIVACAO]', outros_entrada:'[OUTROS]', outros_saida:'[OUTROS]' }[tipoNorm];
+    const base = String(motivo||'').trim();
+    motivoFinal = (base && !/^\[(TRIAGEM|MANUTENCAO|OUTROS|ATIVACAO)\]/i.test(base)) ? (tag + ' ' + base).slice(0,120) : (base || (tag + ' ' + TIPOS_AUTO[tipoNorm]).slice(0,120));
+  } else if (!motivoFinal || String(motivoFinal).trim().length < 3) {
+    return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  }
   const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req) || 'spacecom';
   const contratoNorm = resolveContrato(contrato, effectiveSistema);
@@ -157,7 +176,7 @@ router.post('/api/estoque/movimentar', shared.auth(['tecnico','admin']), shared.
   if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
   const errM=validaMaterial(material, effectiveSistema); if(errM) return res.status(400).json({ error: errM });
   const r = await shared.store.estoque.adjust({
-    sistema: effectiveSistema, contrato: contratoNorm, material, unidade, qtd: qtdFinal, motivo, seriais,
+    sistema: effectiveSistema, contrato: contratoNorm, material, unidade, qtd: qtdFinal, motivo: motivoFinal, seriais,
     user: req.auth.user, userName: req.auth.name
   });
   invalidateEstoqueCache();
@@ -189,7 +208,18 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
   const n = Math.floor(Number(kits));
   if(!Number.isFinite(n) || n < 1) return res.status(400).json({ error: 'Informe a quantidade de kits (mín. 1)' });
   if(n > 250) return res.status(400).json({ error: 'Máximo 250 kits por movimentação (limite do lote)' });
-  if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  // Tipos com tag própria (triagem/manutenção/ativação/outros): o motivo é
+  // automático e não é exigido do usuário.
+  const TIPOS_AUTO = { triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento', outros_entrada:'Outros - entrada', outros_saida:'Outros - saida' };
+  const tipoNorm = String(tipo||'').toLowerCase();
+  let motivoFinal = motivo;
+  if (TIPOS_AUTO[tipoNorm]) {
+    const tag = { triagem:'[TRIAGEM]', manutencao:'[MANUTENCAO]', ativacao:'[ATIVACAO]', outros_entrada:'[OUTROS]', outros_saida:'[OUTROS]' }[tipoNorm];
+    const base = String(motivo||'').trim();
+    motivoFinal = (base && !/^\[(TRIAGEM|MANUTENCAO|OUTROS|ATIVACAO)\]/i.test(base)) ? (tag + ' ' + base).slice(0,120) : (base || (tag + ' ' + TIPOS_AUTO[tipoNorm]).slice(0,120));
+  } else if (!motivoFinal || String(motivoFinal).trim().length < 3) {
+    return res.status(400).json({ error: 'Motivo obrigatório (mín. 3 caracteres)' });
+  }
   const sinal = (tipo && String(tipo).toLowerCase()==='saida') ? -1 : 1;
   const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req) || 'spacecom';
@@ -197,7 +227,8 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
   if(effectiveSistema==='infinity' && contratoNorm!==CONTRATO_INFINITY) return res.status(400).json({ error: 'Infinity usa contrato único: Estoque Infinity' });
   if(effectiveSistema==='spacecom' && contratoNorm && !['CE01','CE02'].includes(contratoNorm)) return res.status(400).json({ error: 'Contrato inválido (CE01/CE02)' });
   if(effectiveSistema==='spacecom' && !contratoNorm) return res.status(400).json({ error: 'Informe o contrato (CE01/CE02)' });
-  const kitTipo = String(kit||'tzpr').toLowerCase()==='upr' ? 'upr' : 'tzpr';
+  const _kitRaw = String(kit||'tzpr').toLowerCase();
+  const kitTipo = _kitRaw==='upr' ? 'upr' : (_kitRaw==='tzprsf' || _kitRaw==='tzpr-sf' ? 'tzprsf' : 'tzpr');
   let composicao;
   if(kitTipo==='upr'){
     if(effectiveSistema==='infinity') return res.status(400).json({ error: 'Kit UPR indisponível no Infinity (sem UPR04)' });
@@ -205,10 +236,19 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
       { material: 'UPR04', porKit: 1, comSerial: true },
       { material: 'FONTE04', porKit: 1 }
     ];
+  } else if (kitTipo==='tzprsf') {
+    // Kit TZPR sem fonte: 1x TZPR + 1x CINTA + 2x TRAVAS (sem FONTE04)
+    composicao = [
+      { material: effectiveSistema==='infinity' ? 'TZPR' : 'TZPR04', porKit: 1, comSerial: true },
+      { material: 'CINTA', porKit: 1 },
+      { material: 'TRAVAS', porKit: 2 }
+    ];
   } else {
     composicao = effectiveSistema==='infinity' ? KIT_POR_SISTEMA.infinity : KIT_POR_SISTEMA.spacecom;
   }
-  const motivoKit = String(motivo).trim() + ' [KIT x' + n + ']';
+  // Token único do lote de KIT: permite estornar o kit completo depois
+  const kitToken = crypto.randomBytes(3).toString('hex').toUpperCase();
+  const motivoKit = String(motivoFinal).trim() + ' [KIT x' + n + ' #' + kitToken + ']';
   const feitos = [];
   try{
     for(const item of composicao){
@@ -239,7 +279,7 @@ router.post('/api/estoque/movimentar-kit', shared.auth(['tecnico','admin']), sha
   }
   invalidateEstoqueCache();
   shared.broadcast();
-  res.json({ ok: true, kits: n, kit: kitTipo, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
+  res.json({ ok: true, kits: n, kit: kitTipo, kitToken, tipo: sinal > 0 ? 'entrada' : 'saida', sistema: effectiveSistema, contrato: contratoNorm, itens: feitos });
 }));
 
 // Estorno de movimentação (inverte operação)
@@ -251,6 +291,32 @@ router.post('/api/estoque/estornar', shared.auth(['tecnico','admin']), shared.ah
   invalidateEstoqueCache();
   shared.broadcast();
   res.json(r);
+}));
+
+// Estorno do KIT completo: reverte todos os itens de um lote de KIT de uma vez.
+router.post('/api/estoque/estornar-kit', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { movId, id, motivo } = req.body||{};
+  const targetId = movId || id;
+  if(!targetId) return res.status(400).json({ error: 'Informe movId' });
+  if(!motivo || String(motivo).trim().length < 3) return res.status(400).json({ error: 'Motivo do estorno obrigatório (mín. 3 caracteres)' });
+  const all = await shared.store.estoqueMov.all({ limit: 'all' });
+  const alvo = all.find(m => Number(m.id) === Number(targetId));
+  if(!alvo) return res.status(404).json({ error: 'Movimentação não encontrada' });
+  const token = kitTokenDe(alvo.motivo);
+  if(!token) return res.status(400).json({ error: 'Esta movimentação não faz parte de um KIT' });
+  const grupo = all.filter(m => kitTokenDe(m.motivo) === token && !m.estornado && String(m.tipo||'')!=='estorno');
+  if(!grupo.length) return res.status(400).json({ error: 'Kit já estornado' });
+  const estornos = [];
+  const erros = [];
+  for(const m of [...grupo].reverse()){
+    try{
+      const r = await shared.store.estoque.estornar(m.id, { motivo: String(motivo).trim() + ' (KIT #' + token + ')', user: req.auth.user, userName: req.auth.name });
+      estornos.push({ id: m.id, material: m.material, qtd: m.qtd, estorno: r && r.estorno && r.estorno.mov ? r.estorno.mov.id : null });
+    }catch(e){ erros.push({ id: m.id, material: m.material, erro: e.message || 'Falha ao estornar' }); }
+  }
+  invalidateEstoqueCache();
+  shared.broadcast();
+  res.json({ ok: estornos.length > 0, kit: token, total: grupo.length, estornos, erros });
 }));
 
 // Transferência entre unidades (atômica) — lote TZPR suportado.
@@ -393,8 +459,8 @@ router.get('/api/estoque-mov', shared.auth(['tecnico','admin']), shared.ah(async
     const rx=new RegExp('^\\['+cat+'\\]','i');
     list=list.filter(m=> rx.test(String((m&&m.motivo)||'').trim()));
   }
-  if(from){ const d=new Date(from); if(!isNaN(d)) list=list.filter(m=> new Date(m.createdAt)>=d); }
-  if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); list=list.filter(m=> new Date(m.createdAt)<=d); } }
+  if(from){ const l=diaLocal(String(from).slice(0,10)); if(l) list=list.filter(m=> new Date(m.createdAt)>=l.inicio); }
+  if(to){ const l=diaLocal(String(to).slice(0,10)); if(l) list=list.filter(m=> new Date(m.createdAt)<=l.fim); }
   if(q){
     const nq=String(q).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
     const nv=v=> String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -419,7 +485,7 @@ router.get('/api/estoque/mov', shared.auth(['tecnico','admin']), shared.ah(async
 }));
 
 // Chat IA estoque — on-prem, sem LLM externo (parser determinístico)
-router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+router.post('/api/estoque/ia', shared.auth(['tecnico','admin']), shared.iaRateLimit, shared.ah(async (req,res)=>{
   const { message, pergunta, q } = req.body||{};
   const query = String(message || pergunta || q || '').trim();
   if(!query) return res.status(400).json({ error: 'Informe message' });
@@ -576,9 +642,14 @@ router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,re
 }));
 
 function fechamentoDia(movs, mats, unids, diaISO){
-  const iniDia = new Date(diaISO + 'T00:00:00Z');
-  const fimDia = new Date(diaISO + 'T23:59:59.999Z');
-  const diaAnt = new Date(iniDia); diaAnt.setUTCDate(diaAnt.getUTCDate() - 1);
+  // Limites do dia no fuso operacional (America/Fortaleza): evita que
+  // movimentações da noite (>=21h, UTC-3) caiam no dia seguinte e sumam do
+  // fechamento.
+  const _lim = diaLocal(diaISO) || { inicio: new Date(diaISO + 'T00:00:00Z'), fim: new Date(diaISO + 'T23:59:59.999Z') };
+  const iniDia = _lim.inicio;
+  const fimDia = _lim.fim;
+  const diaAntISO = addDiasISO(String(diaISO).slice(0,10), -1) || String(diaISO).slice(0,10);
+  const diaAnt = diaLocal(diaAntISO)?.inicio || new Date(diaAntISO + 'T00:00:00Z');
   const zero = () => { const o = {}; unids.forEach(u=>{ o[u]={}; mats.forEach(m=>{ o[u][m]=0; }); }); return o; };
   const inicial = zero(), entradas = zero(), entradasTriagem = zero(), saidas = zero(), correcoes = zero(), fin = zero();
   let totalInicial = 0, totalEntradas = 0, totalEntradasTriagem = 0, totalSaidas = 0, totalCorrecoes = 0, totalFinal = 0, movsDia = 0;
@@ -621,7 +692,7 @@ function fechamentoDia(movs, mats, unids, diaISO){
     totalFinal += fin[u][m];
   }
   return {
-    data: diaISO, dataAnterior: diaAnt.toISOString().slice(0,10),
+    data: diaISO, dataAnterior: diaAntISO,
     unidades: unids, materiais: mats, inicial, entradas, entradasTriagem, saidas, correcoes, final: fin,
     totalInicial, totalEntradas, totalEntradasTriagem, totalSaidas, totalCorrecoes, totalFinal,
     movimentacoes: movsDia
@@ -651,7 +722,7 @@ router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(asy
     if(und) movs = movs.filter(m=> String(m.unidade)===und);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(String(data).trim())) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
     const dia = String(data).trim();
-    if(isNaN(new Date(dia + 'T00:00:00Z'))) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(dia) || !diaLocal(dia)) return res.status(400).json({ error: 'Data inválida (use AAAA-MM-DD)' });
     const mats = materiaisDoSistemaRoute(effectiveSistema);
     const unids = und ? [und] : [...UNIDADES];
     const f = fechamentoDia(movs, mats, unids, dia);
@@ -668,8 +739,8 @@ router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(asy
     });
   }
   let dFrom = null, dTo = null;
-  if(from){ const d=new Date(from); if(!isNaN(d)) dFrom = d; }
-  if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); dTo = d; } }
+  if(from){ const l=diaLocal(String(from).slice(0,10)); if(l) dFrom = l.inicio; }
+  if(to){ const l=diaLocal(String(to).slice(0,10)); if(l) dTo = l.fim; }
   if(dFrom) movs = movs.filter(m=> new Date(m.createdAt) >= dFrom);
   if(dTo) movs = movs.filter(m=> new Date(m.createdAt) <= dTo);
   const mats = materiaisDoSistemaRoute(effectiveSistema);
@@ -692,8 +763,8 @@ router.get('/api/estoque/fluxo', shared.auth(['tecnico','admin']), shared.ah(asy
   }
   res.json({
     sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null,
-    from: dFrom ? dFrom.toISOString().slice(0,10) : null,
-    to: dTo ? dTo.toISOString().slice(0,10) : null,
+    from: dFrom ? String(from).slice(0,10) : null,
+    to: dTo ? String(to).slice(0,10) : null,
     unidades: UNIDADES, materiais: mats, entradas, saidas, correcoes,
     totalEntradas, totalSaidas, totalCorrecoes, movimentacoes: movs.length,
     geradoEm: new Date().toISOString()
@@ -712,7 +783,8 @@ router.get('/api/estoque/fluxo/evolucao', shared.auth(['tecnico','admin']), shar
   if(!contratosValidos(effectiveSistema).includes(cd)) return res.status(400).json({ error: effectiveSistema==='infinity' ? 'Infinity usa contrato único: Estoque Infinity' : 'Contrato inválido (CE01/CE02)' });
   const rx = /^\d{4}-\d{2}-\d{2}$/;
   if(!de || !rx.test(String(de).trim()) || !ate || !rx.test(String(ate).trim())) return res.status(400).json({ error: 'Informe de=AAAA-MM-DD e ate=AAAA-MM-DD' });
-  const d0 = new Date(String(de).trim() + 'T00:00:00Z'), d1 = new Date(String(ate).trim() + 'T00:00:00Z');
+  const _de=String(de).trim(), _ate=String(ate).trim();
+  const d0 = diaLocal(_de)?.inicio || new Date(_de + 'T00:00:00Z'), d1 = diaLocal(_ate)?.inicio || new Date(_ate + 'T00:00:00Z');
   if(isNaN(d0) || isNaN(d1) || d1 < d0) return res.status(400).json({ error: 'Período inválido (ate anterior a de)' });
   const nDias = Math.round((d1 - d0) / 864e5) + 1;
   if(nDias > 31) return res.status(400).json({ error: 'Período máximo: 31 dias' });
@@ -724,8 +796,8 @@ router.get('/api/estoque/fluxo/evolucao', shared.auth(['tecnico','admin']), shar
   const unids = und ? [und] : [...UNIDADES];
   const dias = [];
   for(let i = 0; i < nDias; i++){
-    const dt = new Date(d0); dt.setUTCDate(dt.getUTCDate() + i);
-    dias.push(fechamentoDia(movs, mats, unids, dt.toISOString().slice(0,10)));
+    const diaISO_i = addDiasISO(_de, i);
+    dias.push(fechamentoDia(movs, mats, unids, diaISO_i));
   }
   res.json({
     modo: 'evolucao', sistema: effectiveSistema, contrato: cd, contratoLabel: contratoLabel(cd),
@@ -795,7 +867,10 @@ router.post('/api/estoque/seriais/avulso', shared.auth(['tecnico','admin']), sha
   if(!limpos.length) return res.status(400).json({ error: 'Informe ao menos 1 serial (10 dígitos, um por linha)' });
   if(limpos.length > 200) return res.status(400).json({ error: 'Máximo 200 seriais por vez' });
   const ok = [], erros = [];
-  for(const s of limpos){
+  // Validação de formato: serial deve ter exatamente 10 dígitos
+  const validos = limpos.filter(s => /^\d{10}$/.test(s));
+  limpos.filter(s => !/^\d{10}$/.test(s)).forEach(s => erros.push({ serial: s, erro: 'Serial deve ter exatamente 10 dígitos' }));
+  for(const s of validos){
     try{
       await shared.store.estoqueSerial.add({ sistema: effectiveSistema, contrato: c, serial: s, unidade: und });
       ok.push(s);
@@ -843,8 +918,8 @@ router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah
   let movs = await shared.store.estoqueMov.all({ sistema: effectiveSistema, limit: 'all' });
   if(c) movs = movs.filter(m=> String(m.contrato).toUpperCase()===c);
   if(unidade) movs = movs.filter(m=> String(m.unidade)===String(unidade).trim() || String(m.unidadeDestino)===String(unidade).trim());
-  if(from){ const d=new Date(from); if(!isNaN(d)) movs=movs.filter(m=> new Date(m.createdAt) >= d); }
-  if(to){ const d=new Date(to); if(!isNaN(d)){ d.setHours(23,59,59,999); movs=movs.filter(m=> new Date(m.createdAt) <= d); } }
+  if(from){ const l=diaLocal(String(from).slice(0,10)); if(l) movs=movs.filter(m=> new Date(m.createdAt) >= l.inicio); }
+  if(to){ const l=diaLocal(String(to).slice(0,10)); if(l) movs=movs.filter(m=> new Date(m.createdAt) <= l.fim); }
   let audit = await shared.store.audit.recent(500);
   audit = audit.filter(a=> String(a.kind)==='estoque');
   if(effectiveSistema) audit = audit.filter(a=> String(a.ref||'').toLowerCase().includes(effectiveSistema) || String(a.summary||'').toLowerCase().includes(effectiveSistema));
@@ -852,6 +927,24 @@ router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah
   if(unidade) audit = audit.filter(a=> String(a.ref||'').includes(String(unidade).trim()) || String(a.summary||'').includes(String(unidade).trim()));
   // limita o corpo (relatórios longos) mas informa o total real do período
   res.json({ estoque, movimentacoes: movs.slice(0, 5000), totalMovimentacoes: movs.length, auditoria: audit, geradoEm: new Date().toISOString(), unidades: UNIDADES, sistema: effectiveSistema, contrato: c||null, contratoLabel: c?contratoLabel(c):null });
+}));
+
+// Bloco de notas por unidade (texto livre de seriais, sem lógica de estoque)
+router.get('/api/estoque/notas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, unidade, sistema } = req.query;
+  const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = sis || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  const u = unidade ? String(unidade).trim() : 'UMEPE Juazeiro';
+  res.json(await shared.store.estoqueNotas.get('estoque', effectiveSistema, c, u));
+}));
+router.put('/api/estoque/notas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
+  const { contrato, unidade, sistema, texto } = req.body||{};
+  const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
+  const effectiveSistema = sis || getSistema(req);
+  const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
+  const u = unidade ? String(unidade).trim() : 'UMEPE Juazeiro';
+  res.json(await shared.store.estoqueNotas.set('estoque', effectiveSistema, c, u, texto));
 }));
 
 // Rota paramétrica por contrato - DEVE ficar por último entre /api/estoque/* para não sombrear /relatorio, /seriais, /historico, etc.
@@ -868,5 +961,7 @@ router.get('/api/estoque/:contrato', shared.auth(['tecnico','admin']), shared.ah
     res.json(await shared.store.estoque.byContrato(c, effectiveSistema));
   }
 }));
+
+
 
 module.exports = router;

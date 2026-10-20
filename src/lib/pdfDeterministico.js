@@ -9,7 +9,10 @@
 const crypto = require('crypto');
 
 async function saveDeterministico(pdfDoc) {
-  const agora = new Date();
+  // Data fixa (não o relógio atual): preview e PDF final gerados em instantes
+  // diferentes precisam produzir bytes idênticos. Usar new Date() aqui fazia a
+  // metadata variar a cada segundo e quebrava a comparação byte-a-byte.
+  const agora = new Date('2026-01-01T00:00:00.000Z');
   pdfDoc.setCreationDate(agora);
   pdfDoc.setModificationDate(agora);
   const bytes = await pdfDoc.save();

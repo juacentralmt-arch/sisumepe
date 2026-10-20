@@ -11,3 +11,6 @@ tornozeleira-system/
 .freebuff/
 *.traineddata
 *.traineddata.gz
+*.apk
+__pycache__/
+rea/

@@ -49,8 +49,10 @@ async function get(path) {
 async function main() {
   const store = require('../store');
   const uni = 'UMEPE Juazeiro';
-  const hoje = new Date().toISOString().slice(0, 10);
-  const d3 = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  // O fechamento usa dias no fuso operacional (America/Fortaleza)
+  const { hojeLocal, addDiasISO } = require('../src/lib/datas');
+  const hoje = hojeLocal();
+  const d3 = addDiasISO(hoje, -3);
 
   console.log('\n=== ESTOQUE 1 — estorno neutro ===');
   const mv = await post('/api/estoque/movimentar', {

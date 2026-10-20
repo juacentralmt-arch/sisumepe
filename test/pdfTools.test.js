@@ -222,6 +222,47 @@ async function postPdf(path, pdfBuf, fields) {
     assert((await PDFDocument.load(buf)).getPageCount() === 1, 'jpg-to-pdf: 1 imagem -> 1 página');
   }
 
+  // ===== Novas ferramentas: redact / header-footer / resize-pages =====
+  // redact com áreas válidas
+  {
+    const pdf = await makePdf(2);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf], { type: 'application/pdf' }), 'doc.pdf');
+    fd.append('areas', JSON.stringify([{ page: 1, x: 100, y: 100, w: 200, h: 50 }, { page: 2, x: 50, y: 50, w: 100, h: 30 }]));
+    const res = await fetch(BASE + '/api/pdf/redact', { method: 'POST', body: fd });
+    assert(res.status === 200, 'redact: 200');
+    assert((await PDFDocument.load(Buffer.from(await res.arrayBuffer()))).getPageCount() === 2, 'redact: mantém 2 páginas');
+  }
+  // redact sem áreas -> 400
+  {
+    const pdf = await makePdf(1);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/redact', { method: 'POST', body: fd });
+    assert(res.status === 400, 'redact sem áreas: 400');
+  }
+  // header-footer com textos
+  {
+    const pdf = await makePdf(2);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf], { type: 'application/pdf' }), 'doc.pdf');
+    fd.append('headerText', 'CONFIDENCIAL');
+    fd.append('footerText', 'Página');
+    fd.append('headerPos', 'centro');
+    fd.append('footerPos', 'direita');
+    const res = await fetch(BASE + '/api/pdf/header-footer', { method: 'POST', body: fd });
+    assert(res.status === 200, 'header-footer: 200');
+    assert(/application\/pdf/.test(res.headers.get('content-type')||''), 'header-footer: content-type pdf');
+  }
+  // header-footer sem textos -> 400
+  {
+    const pdf = await makePdf(1);
+    const fd = new FormData();
+    fd.append('file', new Blob([pdf], { type: 'application/pdf' }), 'doc.pdf');
+    const res = await fetch(BASE + '/api/pdf/header-footer', { method: 'POST', body: fd });
+    assert(res.status === 400, 'header-footer sem texto: 400');
+  }
+
   server.close();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   process.exit(failed ? 1 : 0);

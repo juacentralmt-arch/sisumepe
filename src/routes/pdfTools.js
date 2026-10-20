@@ -1,6 +1,8 @@
 const express = require('express');
 const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const pdfParse = require('pdf-parse');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip, convertTwipToInch } = require('docx');
+const mammoth = require('mammoth');
 const shared = require('../lib/shared');
 const router = express.Router();
 
@@ -346,6 +348,200 @@ router.post('/api/pdf/split-zip', shared.auth(['tecnico','psico','admin']), shar
   res.setHeader('Content-Type','application/zip');
   res.setHeader('Content-Disposition','attachment; filename="paginas.zip"');
   res.send(zip);
+}));
+
+// =====================================================================
+//  Novas ferramentas PDF: redação (blackout), cabeçalho/rodapé
+//  personalizado e redimensionamento de páginas. Todas 100% on-prem,
+//  sem envio externo.
+// =====================================================================
+
+// Redigir / blackout: cobre áreas retangulares com retângulo preto opaco
+router.post('/api/pdf/redact', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const { areas } = req.body||{};
+  let areasList = [];
+  try { areasList = typeof areas === 'string' ? JSON.parse(areas) : (Array.isArray(areas) ? areas : []); } catch { return res.status(400).json({ error: 'Áreas inválidas (envie JSON)' }); }
+  if(!areasList.length) return res.status(400).json({ error: 'Informe ao menos uma área para redigir' });
+  const doc = await PDFDocument.load(req.file.buffer);
+  if(doc.getPageCount() > MAX_PDF_PAGES_IN) tooBig(doc.getPageCount());
+  const pages = doc.getPages();
+  for(const a of areasList){
+    const pageIdx = Number(a.page) - 1;
+    if(pageIdx < 0 || pageIdx >= pages.length) continue;
+    const page = pages[pageIdx];
+    const { width, height } = page.getSize();
+    const x = Math.max(0, Math.min(Number(a.x||0), width));
+    const topY = Math.max(0, Math.min(Number(a.y||0), height));
+    const w = Math.max(0, Math.min(Number(a.w||100), width - x));
+    const h = Math.max(0, Math.min(Number(a.h||40), height - topY));
+    // pdf-lib usa origem inferior-esquerda; y do frontend é do topo
+    page.drawRectangle({ x, y: height - topY - h, width: w, height: h, color: rgb(0,0,0), borderColor: rgb(0,0,0), borderWidth: 0 });
+  }
+  const bytes = await doc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="redigido.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
+// Adicionar cabeçalho e/ou rodapé personalizado em todas as páginas
+router.post('/api/pdf/header-footer', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const { headerText, footerText, headerSize, footerSize, headerPos, footerPos, headerY, footerY } = req.body||{};
+  if(!headerText && !footerText) return res.status(400).json({ error: 'Informe texto do cabeçalho e/ou rodapé' });
+  const doc = await PDFDocument.load(req.file.buffer);
+  if(doc.getPageCount() > MAX_PDF_PAGES_IN) tooBig(doc.getPageCount());
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const pages = doc.getPages();
+  const hSize = Number(headerSize||10);
+  const fSize = Number(footerSize||10);
+  const hPos = headerPos || 'centro';
+  const fPos = footerPos || 'centro';
+  const hY = headerY != null ? Number(headerY) : null;
+  const fY = footerY != null ? Number(footerY) : null;
+  for(const page of pages){
+    const { width, height } = page.getSize();
+    if(headerText){
+      const hTxt = String(headerText).slice(0,120);
+      const hW = font.widthOfTextAtSize(hTxt, hSize);
+      let hx = hPos === 'direita' ? width - hW - 40 : hPos === 'esquerda' ? 40 : (width - hW)/2;
+      let hy = hY != null ? hY : height - 40;
+      page.drawText(hTxt, { x: hx, y: hy, size: hSize, font, color: rgb(0,0,0) });
+    }
+    if(footerText){
+      const fTxt = String(footerText).slice(0,120);
+      const fW = font.widthOfTextAtSize(fTxt, fSize);
+      let fx = fPos === 'direita' ? width - fW - 40 : fPos === 'esquerda' ? 40 : (width - fW)/2;
+      let fy = fY != null ? fY : 30;
+      page.drawText(fTxt, { x: fx, y: fy, size: fSize, font, color: rgb(0,0,0) });
+    }
+  }
+  const bytes = await doc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="com-cabecalho-rodape.pdf"');
+  res.send(Buffer.from(bytes));
+}));
+
+// =====================================================================
+//  Conversão PDF <-> Word (DOCX). Todas 100% on-prem, sem envio externo.
+//  PDF -> DOCX: extrai texto com pdf-parse e monta DOCX com a biblioteca docx.
+//  DOCX -> PDF: extrai texto com mammoth e renderiza PDF com pdf-lib.
+// =====================================================================
+
+// PDF -> Word (DOCX)
+router.post('/api/pdf/pdf-to-word', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um PDF' });
+  if(!isPdf(req.file.buffer)) return res.status(400).json({ error: 'Arquivo não é PDF' });
+  const { titulo } = req.body||{};
+  const clean = new Uint8Array(req.file.buffer);
+  const data = await pdfParse(clean);
+  const texto = String(data.text||'').replace(/\r/g,'');
+  if(!texto.trim()) return res.status(400).json({ error: 'Nenhum texto extraível do PDF (pode estar escaneado)' });
+
+  const doc = new Document();
+  const secTitle = String(titulo||'').trim() || 'Documento convertido do PDF';
+  doc.addParagraph(new Paragraph({
+    heading: HeadingLevel.TITLE,
+    text: secTitle,
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 200 }
+  }));
+
+  // Divide texto em parágrafos por linha em branco; linhas soltas viram parágrafos simples
+  const paragrafos = texto.split(/\n\s*\n/).filter(p=>p.trim());
+  for(const p of paragrafos){
+    const linhas = p.split(/\n/).map(l=>l.trim()).filter(Boolean);
+    if(linhas.length===1){
+      doc.addParagraph(new Paragraph({ children: [new TextRun({ text: linhas[0] })], spacing: { after: 120 } }));
+    } else {
+      // bloco com múltiplas linhas: cada linha um parágrafo ou um único com quebra
+      for(const l of linhas){
+        doc.addParagraph(new Paragraph({ children: [new TextRun({ text: l })], spacing: { after: 60 } }));
+      }
+    }
+  }
+
+  const blob = await Packer.toBuffer(doc);
+  res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  res.setHeader('Content-Disposition','attachment; filename="convertido.docx"');
+  res.send(Buffer.from(blob));
+}));
+
+// Word (DOCX) -> PDF
+router.post('/api/pdf/word-to-pdf', shared.auth(['tecnico','psico','admin']), shared.uploadLarge.single('file'), shared.ah(async (req,res)=>{
+  if(!req.file) return res.status(400).json({ error: 'Envie um DOCX' });
+  const name = String(req.file.originalname||'').toLowerCase();
+  if(!name.endsWith('.docx') && req.file.mimetype !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    return res.status(400).json({ error: 'Arquivo não é DOCX' });
+
+  const resultado = await mammoth.extractRawText({ buffer: req.file.buffer });
+  const texto = String(resultado.value||'').replace(/\r/g,'');
+  if(!texto.trim()) return res.status(400).json({ error: 'Nenhum texto extraível do DOCX' });
+
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const PW = 595.32, PH = 841.92, M = 54;
+  const W = PW - 2*M;
+  const LH = 14;
+  let pg = pdfDoc.addPage([PW, PH]);
+  let y = PH - M;
+
+  // Título simples na primeira linha
+  const primeiroTitulo = texto.split(/\n/)[0].slice(0,90);
+  if(primeiroTitulo.trim()){
+    const tW = fontBold.widthOfTextAtSize(primeiroTitulo, 13);
+    pg.drawText(primeiroTitulo, { x: (PW - tW)/2, y, size: 13, font: fontBold, color: rgb(0,0,0) });
+    y -= 26;
+  }
+
+  const linhas = texto.split(/\n/);
+  let bufferLinha = '';
+  const flush = () => {
+    if(!bufferLinha.trim()) return;
+    const t = bufferLinha.trim();
+    bufferLinha = '';
+    // quebra por palavras se passar da largura
+    const palavras = t.split(/\s+/);
+    let linhaAtual = '';
+    for(const w of palavras){
+      const cand = linhaAtual ? linhaAtual + ' ' + w : w;
+      if(font.widthOfTextAtSize(cand, 10) > W && linhaAtual){
+        pg.drawText(linhaAtual, { x: M, y, size: 10, font, color: rgb(0,0,0) });
+        y -= LH;
+        if(y < M + 20){ pg = pdfDoc.addPage([PW, PH]); y = PH - M; }
+        linhaAtual = w;
+      } else {
+        linhaAtual = cand;
+      }
+    }
+    if(linhaAtual){
+      pg.drawText(linhaAtual, { x: M, y, size: 10, font, color: rgb(0,0,0) });
+      y -= LH;
+      if(y < M + 20){ pg = pdfDoc.addPage([PW, PH]); y = PH - M; }
+    }
+  };
+
+  for(const linha of linhas){
+    if(y < M + 20){ pg = pdfDoc.addPage([PW, PH]); y = PH - M; }
+    if(linha.trim() === ''){
+      flush();
+      y -= 6;
+    } else {
+      bufferLinha += (bufferLinha ? ' ' : '') + linha;
+      if(font.widthOfTextAtSize(bufferLinha, 10) > W){
+        flush();
+      }
+    }
+  }
+  flush();
+
+  const bytes = await pdfDoc.save();
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition','attachment; filename="convertido.pdf"');
+  res.send(Buffer.from(bytes));
 }));
 
 module.exports = router;

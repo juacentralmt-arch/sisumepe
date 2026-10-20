@@ -18,6 +18,8 @@ services:
         value: production
       - key: FILES_TTL_HOURS
         value: 24
+      - key: ALLOWED_ORIGINS
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
