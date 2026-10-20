@@ -7337,6 +7337,17 @@ function limparFiltrosMov(){
 }
 // Miniatura do material (mesmas imagens dos cards do estoque)
 const MAT_IMG_SRC = { TZPR04:'/tzpr.png?v=6', TZPR:'/tzpr.png?v=6', UPR04:'/upr.png?v=7', UPR:'/upr.png?v=7', FONTE04:'/fonte.png?v=9', CINTA:'/cinta.png?v=5', TRAVAS:'/travas.png?v=5' };
+function matImgKit(mats, cls){
+  const seen = new Set();
+  const imgs = (mats||[]).map(function(x){
+    const m = String(x.material||"").toUpperCase();
+    if (seen.has(m)) return "";
+    seen.add(m);
+    const src = MAT_IMG_SRC[m];
+    return src ? "<img src=\"" + src + "\" alt=\"" + esc(m) + "\" class=\"" + (cls||"w-5 h-5 object-contain") + "\" loading=\"lazy\">" : "";
+  }).filter(Boolean).join("");
+  return imgs ? `<span class="flex items-center gap-0.5 flex-wrap justify-center">${imgs}</span>` : "📦";
+}
 function matImg(m, cls){
   const src = MAT_IMG_SRC[String(m||'').toUpperCase()];
   if(!src) return '📦';
@@ -7444,7 +7455,7 @@ async function loadEstoqueMov(){
       const triBadge=isTriagem ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">🔬 TRIAGEM</span>' : '';
       const manBadge=isManut ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">🔧 MANUTENÇÃO</span>' : '';
       const outBadge=isOutros ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">📦 OUTROS</span>' : '';
-      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEstorno?'bg-amber-50/50': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEstorno?'bg-amber-100 text-amber-700': isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEstorno?'🔧 CORREÇÃO': isEntrada?'ENTRADA':'SAÍDA'} ${isEstorno?efTxt:(m.qtd>0? (isEntrada?'+':'-')+m.qtd : '')}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${matImg(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b>${m._kitMats?` <span class="text-[10px] text-slate-500">(${m._kitMats.map(x=>x.material+'×'+x.qtd).join(', ')})</span>`:''} <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}${kitBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px] block max-h-[72px] overflow-y-auto">${m.seriais.map(esc).join(', ')}(${m.seriais.length})</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}${kitInfo && !m.estornado?`<br><button onclick="estornarKit(${m.id})" class="text-[11px] text-rose-600 hover:underline">📦 estornar kit completo</button>`:''}</span></div>`;
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEstorno?'bg-amber-50/50': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEstorno?'bg-amber-100 text-amber-700': isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEstorno?'🔧 CORREÇÃO': isEntrada?'ENTRADA':'SAÍDA'} ${isEstorno?efTxt:(m.qtd>0? (isEntrada?'+':'-')+m.qtd : '')}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${m._kit ? matImgKit(m._kitMats,'w-5 h-5 object-contain') : matImg(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b>${m._kitMats?` <span class="text-[10px] text-slate-500">(${m._kitMats.map(x=>x.material+'×'+x.qtd).join(', ')})</span>`:''} <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}${kitBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px] block max-h-[72px] overflow-y-auto">${m.seriais.map(esc).join(', ')}(${m.seriais.length})</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}${kitInfo && !m.estornado?`<br><button onclick="estornarKit(${m.id})" class="text-[11px] text-rose-600 hover:underline">📦 estornar kit completo</button>`:''}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('estMovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
 }
@@ -8617,6 +8628,17 @@ function limparFiltrosMov2(){
 }
 // Miniatura do material (mesmas imagens dos cards do estoque)
 const MAT_IMG2_SRC = { TZPR04:'/tzpr.png?v=6', TZPR:'/tzpr.png?v=6', UPR04:'/upr.png?v=7', UPR:'/upr.png?v=7', FONTE04:'/fonte.png?v=9', CINTA:'/cinta.png?v=5', TRAVAS:'/travas.png?v=5' };
+function matImg2Kit(mats, cls){
+  const seen = new Set();
+  const imgs = (mats||[]).map(function(x){
+    const m = String(x.material||"").toUpperCase();
+    if (seen.has(m)) return "";
+    seen.add(m);
+    const src = MAT_IMG2_SRC[m];
+    return src ? "<img src=\"" + src + "\" alt=\"" + esc(m) + "\" class=\"" + (cls||"w-5 h-5 object-contain") + "\" loading=\"lazy\">" : "";
+  }).filter(Boolean).join("");
+  return imgs ? `<span class="flex items-center gap-0.5 flex-wrap justify-center">${imgs}</span>` : "📦";
+}
 function matImg2(m, cls){
   const src = MAT_IMG2_SRC[String(m||'').toUpperCase()];
   if(!src) return '📦';
@@ -8681,7 +8703,7 @@ async function loadEstoque2Mov(){
       const triBadge=isTriagem ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">🔬 TRIAGEM</span>' : '';
       const manBadge=isManut ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">🔧 MANUTENÇÃO</span>' : '';
       const outBadge=isOutros ? '<span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold">📦 OUTROS</span>' : '';
-      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEstorno?'bg-amber-50/50': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEstorno?'bg-amber-100 text-amber-700': isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEstorno?'🔧 CORREÇÃO': isEntrada?'ENTRADA':'SAÍDA'} ${isEstorno?efTxt:(m.qtd>0? (isEntrada?'+':'-')+m.qtd : '')}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${matImg2(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b>${m._kitMats?` <span class="text-[10px] text-slate-500">(${m._kitMats.map(x=>x.material+'×'+x.qtd).join(', ')})</span>`:''} <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}${kitBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px] block max-h-[72px] overflow-y-auto">${m.seriais.map(esc).join(', ')}(${m.seriais.length})</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov2(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}${kitInfo && !m.estornado?`<br><button onclick="estornarKit2(${m.id})" class="text-[11px] text-rose-600 hover:underline">📦 estornar kit completo</button>`:''}</span></div>`;
+      return `<div class="flex items-center gap-2 text-xs border border-slate-100 rounded-xl p-2.5 ${m.estornado?'bg-slate-50 opacity-70': isEstorno?'bg-amber-50/50': isEntrada?'bg-emerald-50/50':'bg-rose-50/50'}"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full ${isEstorno?'bg-amber-100 text-amber-700': isEntrada?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}">${isEstorno?'🔧 CORREÇÃO': isEntrada?'ENTRADA':'SAÍDA'} ${isEstorno?efTxt:(m.qtd>0? (isEntrada?'+':'-')+m.qtd : '')}</span><span class="w-8 h-8 flex-none rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center">${m._kit ? matImg2Kit(m._kitMats,'w-5 h-5 object-contain') : matImg2(m.material,'w-7 h-7 object-contain')}</span><span class="flex-1"><b>${esc(m.material)}</b>${m._kitMats?` <span class="text-[10px] text-slate-500">(${m._kitMats.map(x=>x.material+'×'+x.qtd).join(', ')})</span>`:''} <span class="text-[11px] bg-white border px-1.5 py-0.5 rounded-full">${unidadeTxt}</span> ${estornado} ${triBadge}${manBadge}${outBadge}${kitBadge}<br><span class="text-slate-500">${esc(m.motivo||'')}</span> ${m.seriais&&m.seriais.length?`<br><span class="font-mono text-[11px] block max-h-[72px] overflow-y-auto">${m.seriais.map(esc).join(', ')}(${m.seriais.length})</span>`:''}</span><span class="text-[11px] text-slate-500 text-right">${new Date(m.createdAt).toLocaleDateString('pt-BR')} ${new Date(m.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}<br><b>${esc(m.userName||m.user||'')}</b> ${m.saldoAntes}→${m.saldoDepois}${!m.estornado?`<br><button onclick="estornarMov2(${m.id})" class="text-[11px] text-amber-600 hover:underline">↩ estornar</button>`:''}${kitInfo && !m.estornado?`<br><button onclick="estornarKit2(${m.id})" class="text-[11px] text-rose-600 hover:underline">📦 estornar kit completo</button>`:''}</span></div>`;
     }).join('') : '<p class="text-xs text-slate-400 text-center py-4">Nenhuma movimentação</p>';
   }catch(e){ document.getElementById('est2MovList').innerHTML='<p class="text-xs text-rose-500">Erro ao carregar</p>'; }
 }
