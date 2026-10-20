@@ -65,6 +65,13 @@ async function main() {
   const movsAntes1 = await store.estoqueMov.all({ limit: 'all' });
   const serAntes1 = await store.estoqueSerial.all({ limit: 'all' });
 
+  // Saldo inicial: o teste não pode depender do estado do banco.
+  const seedCinta = await post('/api/estoque2/movimentar', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
+    qtd: 10, motivo: 'setup saldo teste independencia e2'
+  });
+  assert(seedCinta.status === 200, 'setup: entrada de CINTA no Estoque 2');
+
   // movimenta SÓ no Estoque 2 (entrada sem serial em CINTA para não tocar no pool)
   const mv = await post('/api/estoque2/movimentar', {
     sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,

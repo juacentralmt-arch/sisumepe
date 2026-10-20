@@ -52,6 +52,13 @@ const get = async (p) => {
   const store = require('../store');
   const uni = 'UMEPE Juazeiro';
 
+  // Saldo inicial necessário: os testes não dependem do estado do banco.
+  const seed = await post('/api/estoque/movimentar', {
+    sistema: 'spacecom', contrato: 'CE01', material: 'TZPR04', unidade: uni,
+    qtd: 5, motivo: 'setup saldo para teste de motivo automatico'
+  });
+  assert(seed.status === 200, 'setup: entrada de TZPR04 para os testes');
+
   console.log('\n=== MOTIVO AUTOMÁTICO — triagem ===');
   const tri = await post('/api/estoque/movimentar', {
     sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
