@@ -7852,6 +7852,13 @@ function toggleEstMovTipo(){
   }
 }
 async function movimentarEstoque(){
+  const _btn=document.getElementById('estConfirmBtn');
+  const _sp=document.getElementById('estConfirmSpinner');
+  const _lbl=document.getElementById('estConfirmLabel');
+  if(_btn){ _btn.disabled=true; _btn.classList.add('opacity-70','pointer-events-none'); }
+  if(_sp) _sp.classList.remove('hidden');
+  if(_lbl) _lbl.classList.add('opacity-0');
+  const _reset=()=>{ if(_btn){ _btn.disabled=false; _btn.classList.remove('opacity-70','pointer-events-none'); } if(_sp) _sp.classList.add('hidden'); if(_lbl) _lbl.classList.remove('opacity-0'); };
   const err=document.getElementById('estErr');
   err.classList.add('hidden');
   const contrato=isInfinitySistema() ? 'INF' : document.getElementById('estContrato').value;
@@ -7860,17 +7867,17 @@ async function movimentarEstoque(){
   const tipo=document.getElementById('estTipo').value;
   const origem=document.getElementById('estMovOrigem')?.value || unidade;
   const destino=document.getElementById('estMovDestino')?.value || unidade;
-  if(tipo==='movimentacao' && origem===destino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(tipo==='movimentacao' && origem===destino) _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
   const qtd=Number(document.getElementById('estQtd').value);
   const MOTIVO_AUTO={ triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento' };
   const autoTipo=['triagem','manutencao','ativacao'].includes(tipo);
   const motivo=autoTipo ? (tipo==='ativacao' ? ((document.getElementById('estAtivacaoDestino')?.value || '').trim() || MOTIVO_AUTO.ativacao) : MOTIVO_AUTO[tipo]) : document.getElementById('estMotivo').value.trim();
-  if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (isKitMat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
-  if(isKitMat(material) && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
-  if(!isKitMat(material) && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
-  if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
-  if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  if(!unidade) _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKitMat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
+  if(isKitMat(material) && qtd>250) _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
+  if(!isKitMat(material) && qtd>500) _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!motivo || motivo.length<3) _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
+  if(motivo.length>120) _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
   const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]', ativacao: '[ATIVACAO]' };
   const tagTipo = TIPO_TAG[tipo] || '';
@@ -7880,19 +7887,21 @@ async function movimentarEstoque(){
   if(isKitMat(material)){
     const kit=kitTipoDe(material);
     const serialMat=kitSerialMat(kit);
-    if(kit==='upr' && isInfinitySistema()) return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
+    if(kit==='upr' && isInfinitySistema()) _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
     const txt=document.getElementById('estSeriais')?.value||'';
     const seriaisKit=parseSeriais(txt);
     if(seriaisKit.length && seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
-    if(new Set(seriaisKit).size !== seriaisKit.length) return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
     try{
       const r=await api('/api/estoque/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
       const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
       const kitNome=String(r.kit||'tzpr').toLowerCase()==='upr' ? 'KIT-UPR' : (String(r.kit||'tzpr').toLowerCase()==='tzprsf' ? 'KIT-TZPR (sem fonte)' : 'KIT-TZPR');
       toast(`✅ ${unidade}: ${r.kits} ${kitNome}${r.kits>1?'s':''} (${detalhe})`);
       document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const stk=document.getElementById('estSeriais'); if(stk) stk.value=''; document.getElementById('estSeriaisList').innerHTML='';
+      _reset();
       loadEstoque();
-    }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}catch(e){ _reset(); err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+      _reset();
     return;
   }
   const delta = sinalNegativo ? -Math.abs(qtd) : Math.abs(qtd);
@@ -7904,9 +7913,10 @@ async function movimentarEstoque(){
       const dica = seriais.length===0 ? ' — verifique se colou 10 dígitos por linha (ex: 1234567890) ou use Importar CSV' : ` — você colou ${seriais.length}, mas QTD=${Math.abs(qtd)}`;
       err.innerHTML=`⚠️ ${material} lote exige <b>${Math.abs(qtd)} seriais</b> de 10 dígitos (encontrado ${seriais.length})${dica}<br><span class="text-[11px]">Dica: QTD é ajustado automaticamente se deixar em branco.</span>`;
       err.classList.remove('hidden');
+      _reset();
       return;
     }
-    if(seriais.length && new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
+    if(seriais.length && new Set(seriais).size !== seriais.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
     if(tipo==='movimentacao'){
@@ -7918,8 +7928,9 @@ async function movimentarEstoque(){
       toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoqueSistemaAtivo+']');
     }
     document.getElementById('estQtd').value=''; document.getElementById('estMotivo').value=''; const st=document.getElementById('estSeriais'); if(st) st.value=''; document.getElementById('estSeriaisList').innerHTML=''; const fc=document.getElementById('estForcar'); if(fc) fc.checked=false;
+      _reset();
     loadEstoque();
-  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}catch(e){ _reset(); err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function transferirEstoque(){
   const err=document.getElementById('estTransErr'); err.classList.add('hidden');
@@ -8446,6 +8457,7 @@ function switchEstoque2Contrato(c){
     document.getElementById('estoque2BtnCE01')?.classList.remove('btn-primary');
     document.getElementById('estoque2BtnCE02')?.classList.remove('btn-primary');
     const sel=document.getElementById('est2Contrato'); if(sel) sel.value='INF';
+      _reset();
     return;
   }
   estoque2ContratoAtivo = (c==='CE02'?'CE02':'CE01');
@@ -8548,6 +8560,7 @@ async function loadEstoque2Alertas(){
     const labelC = isInfinity2Sistema() ? 'Estoque2 Infinity' : getEstoque2ContratoEfetivo();
     if(!data.total){
       el.innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-xs text-emerald-700">✅ Nenhum alerta — estoque acima do mínimo em ${esc(labelC)}${estoque2UnidadeAtiva?' • '+esc(estoque2UnidadeAtiva):''}</div>`;
+      _reset();
       return;
     }
     el.innerHTML=`<div class="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs"><div class="flex items-center justify-between"><b class="text-amber-800">⚠️ ${data.total} itens abaixo do mínimo${data.criticos?` • ${data.criticos} zerados 🔴`:''}</b><span class="text-amber-600 text-[11px]">${esc(labelC)}${estoque2UnidadeAtiva?' • '+esc(estoque2UnidadeAtiva):''} • ${estoque2SistemaAtivo==='infinity'?'Infinity': estoque2SistemaAtivo==='all'?'Ambos':estoque2ContratoAtivo}</span></div><div class="mt-1.5 flex flex-wrap gap-1.5">${data.itens.slice(0,12).map(r=>`<span class="bg-white border ${r.saldo===0?'border-rose-200 text-rose-700':'border-amber-200 text-amber-700'} rounded-full px-2 py-0.5 font-mono text-[11px]">${esc(r.material)} ${esc(r.unidade)}: ${r.saldo}/${r.limite}</span>`).join('')}${data.itens.length>12?`<span class="text-slate-500 text-[11px]">+${data.itens.length-12}...</span>`:''}</div></div>`;
@@ -9059,6 +9072,7 @@ async function quickEstoque2(material, delta){
       if(row) row.saldo = Number(row.saldo || 0) - qtd;
       renderEstoque2();
     }catch(_){}
+      _reset();
     return;
   }
   await loadEstoque2();
@@ -9127,6 +9141,13 @@ async function saveEstoque2Notas(){
 }
 
 async function movimentarEstoque2(){
+  const _btn=document.getElementById('est2ConfirmBtn');
+  const _sp=document.getElementById('est2ConfirmSpinner');
+  const _lbl=document.getElementById('est2ConfirmLabel');
+  if(_btn){ _btn.disabled=true; _btn.classList.add('opacity-70','pointer-events-none'); }
+  if(_sp) _sp.classList.remove('hidden');
+  if(_lbl) _lbl.classList.add('opacity-0');
+  const _reset=()=>{ if(_btn){ _btn.disabled=false; _btn.classList.remove('opacity-70','pointer-events-none'); } if(_sp) _sp.classList.add('hidden'); if(_lbl) _lbl.classList.remove('opacity-0'); };
   const err=document.getElementById('est2Err');
   err.classList.add('hidden');
   const contrato=isInfinity2Sistema() ? 'INF' : document.getElementById('est2Contrato').value;
@@ -9135,17 +9156,17 @@ async function movimentarEstoque2(){
   const tipo=document.getElementById('est2Tipo').value;
   const origem=document.getElementById('est2MovOrigem')?.value || unidade;
   const destino=document.getElementById('est2MovDestino')?.value || unidade;
-  if(tipo==='movimentacao' && origem===destino) return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(tipo==='movimentacao' && origem===destino) _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
   const qtd=Number(document.getElementById('est2Qtd').value);
   const MOTIVO_AUTO={ triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento' };
   const autoTipo=['triagem','manutencao','ativacao'].includes(tipo);
   const motivo=autoTipo ? (tipo==='ativacao' ? ((document.getElementById('est2AtivacaoDestino')?.value || '').trim() || MOTIVO_AUTO.ativacao) : MOTIVO_AUTO[tipo]) : document.getElementById('est2Motivo').value.trim();
-  if(!unidade) return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
-  if(isKit2Mat(material) && qtd>250) return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
-  if(!isKit2Mat(material) && qtd>500) return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
-  if(!motivo || motivo.length<3) return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
-  if(motivo.length>120) return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  if(!unidade) _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
+  if(!qtd || qtd<=0) _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
+  if(isKit2Mat(material) && qtd>250) _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
+  if(!isKit2Mat(material) && qtd>500) _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
+  if(!motivo || motivo.length<3) _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
+  if(motivo.length>120) _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
   const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]', ativacao: '[ATIVACAO]' };
   const tagTipo = TIPO_TAG[tipo] || '';
@@ -9155,19 +9176,21 @@ async function movimentarEstoque2(){
   if(isKit2Mat(material)){
     const kit=kit2TipoDe(material);
     const serialMat=kit2SerialMat(kit);
-    if(kit==='upr' && isInfinity2Sistema()) return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
+    if(kit==='upr' && isInfinity2Sistema()) _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
     const txt=document.getElementById('est2Seriais')?.value||'';
     const seriaisKit=parseSeriais2(txt);
     if(seriaisKit.length && seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
-    if(new Set(seriaisKit).size !== seriaisKit.length) return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
     try{
       const r=await api('/api/estoque2/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
       const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
       const kitNome=String(r.kit||'tzpr').toLowerCase()==='upr' ? 'KIT-UPR' : (String(r.kit||'tzpr').toLowerCase()==='tzprsf' ? 'KIT-TZPR (sem fonte)' : 'KIT-TZPR');
       toast(`✅ ${unidade}: ${r.kits} ${kitNome}${r.kits>1?'s':''} (${detalhe})`);
       document.getElementById('est2Qtd').value=''; document.getElementById('est2Motivo').value=''; const stk=document.getElementById('est2Seriais'); if(stk) stk.value=''; document.getElementById('est2SeriaisList').innerHTML='';
+      _reset();
       loadEstoque2();
-    }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}catch(e){ _reset(); err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+      _reset();
     return;
   }
   const delta = sinalNegativo ? -Math.abs(qtd) : Math.abs(qtd);
@@ -9179,9 +9202,10 @@ async function movimentarEstoque2(){
       const dica = seriais.length===0 ? ' — verifique se colou 10 dígitos por linha (ex: 1234567890) ou use Importar CSV' : ` — você colou ${seriais.length}, mas QTD=${Math.abs(qtd)}`;
       err.innerHTML=`⚠️ ${material} lote exige <b>${Math.abs(qtd)} seriais</b> de 10 dígitos (encontrado ${seriais.length})${dica}<br><span class="text-[11px]">Dica: QTD é ajustado automaticamente se deixar em branco.</span>`;
       err.classList.remove('hidden');
+      _reset();
       return;
     }
-    if(seriais.length && new Set(seriais).size !== seriais.length) return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
+    if(seriais.length && new Set(seriais).size !== seriais.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
   }
   try{
     if(tipo==='movimentacao'){
@@ -9193,8 +9217,9 @@ async function movimentarEstoque2(){
       toast('✅ '+unidade+': '+material+' '+(delta>0?'+':'')+delta+(seriais.length?` (${seriais.length} seriais em lote)`:'')+' ['+estoque2SistemaAtivo+']');
     }
     document.getElementById('est2Qtd').value=''; document.getElementById('est2Motivo').value=''; const st=document.getElementById('est2Seriais'); if(st) st.value=''; document.getElementById('est2SeriaisList').innerHTML=''; const fc=document.getElementById('est2Forcar'); if(fc) fc.checked=false;
+      _reset();
     loadEstoque2();
-  }catch(e){ err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
+}catch(e){ _reset(); err.textContent='⚠️ '+e.message; err.classList.remove('hidden'); }
 }
 async function transferirEstoque2(){
   const err=document.getElementById('est2TransErr'); err.classList.add('hidden');
