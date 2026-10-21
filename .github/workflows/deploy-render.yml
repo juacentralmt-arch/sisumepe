@@ -1,10 +1,10 @@
 name: deploy-render
 
 # Gatilho redundante de deploy: todo push na main chama o Deploy Hook do
-# Render, mesmo se a integração GitHub↔Render (Auto-Deploy) falhar um push.
-# Requer o secret RENDER_DEPLOY_HOOK (URL do hook em Render → sisumepe →
-# Settings → Deploy Hook). Sem o secret, o workflow pula em silêncio.
-# O deploy em si continua idêntico ao Manual Deploy (mesmo build/start).
+# Render, mesmo se a integracao GitHub<->Render (Auto-Deploy) falhar um push.
+# Requer o secret RENDER_DEPLOY_HOOK (URL do hook em Render -> sisumepe ->
+# Settings -> Deploy Hook). Sem o secret, o workflow apenas informa e encerra.
+# O deploy em si continua identico ao Manual Deploy (mesmo build/start).
 
 on:
   push:
@@ -13,7 +13,6 @@ on:
 
 jobs:
   trigger:
-    if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -21,10 +20,14 @@ jobs:
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::Secret RENDER_DEPLOY_HOOK nao configurado. Use Manual Deploy no Render ou cadastre o secret."
+            exit 0
+          fi
           echo "Disparando deploy..."
           CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 -X POST "$HOOK" || echo "000")
           echo "HTTP $CODE"
-          # 200/201/204 = hook aceito (build entra na fila do Render)
+          # 200/201/202/204 = hook aceito (build entra na fila do Render)
           case "$CODE" in
             200|201|202|204) echo "Deploy enfileirado com sucesso";;
             *) echo "::error::Hook retornou $CODE — confira a URL em Secrets"; exit 1;;
