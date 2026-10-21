@@ -7864,23 +7864,20 @@ async function movimentarEstoque(){
   const contrato=isInfinitySistema() ? 'INF' : document.getElementById('estContrato').value;
   const unidade=document.getElementById('estUnidade').value;
   const material=document.getElementById('estMaterial').value;
-  let tipo=document.getElementById('estTipo').value;
-  const movWrap=document.getElementById('estMovOrigemWrap');
-  if(tipo==='movimentacao' && (!movWrap || movWrap.classList.contains('hidden') || (document.getElementById('estMovOrigem')?.value || unidade) === (document.getElementById('estMovDestino')?.value || unidade))){ document.getElementById('estTipo').value='saida'; tipo='saida'; try{ toggleEstMovTipo(); }catch(e){} }
-  const isMov=tipo==='movimentacao' && movWrap && !movWrap.classList.contains('hidden');
+  const tipo=document.getElementById('estTipo').value;
   const origem=document.getElementById('estMovOrigem')?.value || unidade;
   const destino=document.getElementById('estMovDestino')?.value || unidade;
-  if(isMov && origem===destino) _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(tipo==='movimentacao' && origem===destino){ _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden')); }
   const qtd=Number(document.getElementById('estQtd').value);
   const MOTIVO_AUTO={ triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento' };
   const autoTipo=['triagem','manutencao','ativacao'].includes(tipo);
   const motivo=autoTipo ? (tipo==='ativacao' ? ((document.getElementById('estAtivacaoDestino')?.value || '').trim() || MOTIVO_AUTO.ativacao) : MOTIVO_AUTO[tipo]) : document.getElementById('estMotivo').value.trim();
-  if(!unidade) _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKitMat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
-  if(isKitMat(material) && qtd>250) _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
-  if(!isKitMat(material) && qtd>500) _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
-  if(!motivo || motivo.length<3) _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
-  if(motivo.length>120) _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  if(!unidade){ _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden')); }
+  if(!qtd || qtd<=0){ _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKitMat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden')); }
+  if(isKitMat(material) && qtd>250){ _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden')); }
+  if(!isKitMat(material) && qtd>500){ _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden')); }
+  if(!motivo || motivo.length<3){ _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden')); }
+  if(motivo.length>120){ _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden')); }
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
   const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]', ativacao: '[ATIVACAO]' };
   const tagTipo = TIPO_TAG[tipo] || '';
@@ -7890,11 +7887,11 @@ async function movimentarEstoque(){
   if(isKitMat(material)){
     const kit=kitTipoDe(material);
     const serialMat=kitSerialMat(kit);
-    if(kit==='upr' && isInfinitySistema()) _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
+    if(kit==='upr' && isInfinitySistema()){ _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden')); }
     const txt=document.getElementById('estSeriais')?.value||'';
     const seriaisKit=parseSeriais(txt);
     if(seriaisKit.length && seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
-    if(new Set(seriaisKit).size !== seriaisKit.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length){ _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden')); }
     try{
       const r=await api('/api/estoque/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
       const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
@@ -7919,10 +7916,10 @@ async function movimentarEstoque(){
       _reset();
       return;
     }
-    if(seriais.length && new Set(seriais).size !== seriais.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
+    if(seriais.length && new Set(seriais).size !== seriais.length){ _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden')); }
   }
   try{
-    if(isMov){
+    if(tipo==='movimentacao'){
       const forcar = document.getElementById('estForcar')?.checked && temSerialEst(material);
       await api('/api/estoque/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato, material, qtd: Math.abs(qtd), motivo, unidadeOrigem: origem, unidadeDestino: destino, seriais, forcarDisponivel: !!forcar }) });
       toast('✅ '+material+' transferido: '+origem+' → '+destino+(seriais.length?` (${seriais.length} seriais)`:'')+(forcar?' ✅ disponível para uso':'')+' ['+estoqueSistemaAtivo+']');
@@ -9156,23 +9153,20 @@ async function movimentarEstoque2(){
   const contrato=isInfinity2Sistema() ? 'INF' : document.getElementById('est2Contrato').value;
   const unidade=document.getElementById('est2Unidade').value;
   const material=document.getElementById('est2Material').value;
-  let tipo=document.getElementById('est2Tipo').value;
-  const movWrap2=document.getElementById('est2MovOrigemWrap');
-  if(tipo==='movimentacao' && (!movWrap2 || movWrap2.classList.contains('hidden') || (document.getElementById('est2MovOrigem')?.value || unidade) === (document.getElementById('est2MovDestino')?.value || unidade))){ document.getElementById('est2Tipo').value='saida'; tipo='saida'; try{ toggleEst2MovTipo(); }catch(e){} }
-  const isMov=tipo==='movimentacao' && movWrap2 && !movWrap2.classList.contains('hidden');
+  const tipo=document.getElementById('est2Tipo').value;
   const origem=document.getElementById('est2MovOrigem')?.value || unidade;
   const destino=document.getElementById('est2MovDestino')?.value || unidade;
-  if(isMov && origem===destino) _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden'));
+  if(tipo==='movimentacao' && origem===destino){ _reset(); return (err.textContent='⚠️ Origem e destino devem ser diferentes', err.classList.remove('hidden')); }
   const qtd=Number(document.getElementById('est2Qtd').value);
   const MOTIVO_AUTO={ triagem:'Triagem de material', manutencao:'Manutencao de material', ativacao:'Ativacao de equipamento' };
   const autoTipo=['triagem','manutencao','ativacao'].includes(tipo);
   const motivo=autoTipo ? (tipo==='ativacao' ? ((document.getElementById('est2AtivacaoDestino')?.value || '').trim() || MOTIVO_AUTO.ativacao) : MOTIVO_AUTO[tipo]) : document.getElementById('est2Motivo').value.trim();
-  if(!unidade) _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden'));
-  if(!qtd || qtd<=0) _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden'));
-  if(isKit2Mat(material) && qtd>250) _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden'));
-  if(!isKit2Mat(material) && qtd>500) _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden'));
-  if(!motivo || motivo.length<3) _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden'));
-  if(motivo.length>120) _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden'));
+  if(!unidade){ _reset(); return (err.textContent='⚠️ Selecione a unidade', err.classList.remove('hidden')); }
+  if(!qtd || qtd<=0){ _reset(); return (err.textContent='⚠️ Informe a quantidade (' + (isKit2Mat(material) ? 'nº de kits, máx 250' : 'lote até 500') + ')', err.classList.remove('hidden')); }
+  if(isKit2Mat(material) && qtd>250){ _reset(); return (err.textContent='⚠️ Máximo 250 kits por movimentação', err.classList.remove('hidden')); }
+  if(!isKit2Mat(material) && qtd>500){ _reset(); return (err.textContent='⚠️ Lote máximo 500 unidades', err.classList.remove('hidden')); }
+  if(!motivo || motivo.length<3){ _reset(); return (err.textContent='⚠️ Informe o motivo (mín. 3 caracteres)', err.classList.remove('hidden')); }
+  if(motivo.length>120){ _reset(); return (err.textContent='⚠️ Motivo muito longo (máx 120)', err.classList.remove('hidden')); }
   // Tipos com categoria marcam o motivo ([TRIAGEM]/[MANUTENCAO]/[OUTROS]) para separação nos relatórios
   const TIPO_TAG = { triagem: '[TRIAGEM]', manutencao: '[MANUTENCAO]', outros_entrada: '[OUTROS]', outros_saida: '[OUTROS]', ativacao: '[ATIVACAO]' };
   const tagTipo = TIPO_TAG[tipo] || '';
@@ -9182,11 +9176,11 @@ async function movimentarEstoque2(){
   if(isKit2Mat(material)){
     const kit=kit2TipoDe(material);
     const serialMat=kit2SerialMat(kit);
-    if(kit==='upr' && isInfinity2Sistema()) _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden'));
+    if(kit==='upr' && isInfinity2Sistema()){ _reset(); return (err.textContent='⚠️ Kit UPR indisponível no Infinity (sem UPR04)', err.classList.remove('hidden')); }
     const txt=document.getElementById('est2Seriais')?.value||'';
     const seriaisKit=parseSeriais2(txt);
     if(seriaisKit.length && seriaisKit.length !== Math.abs(qtd)) return (err.innerHTML=`⚠️ KIT exige <b>${Math.abs(qtd)} seriais</b> ${serialMat} (1 por kit — encontrado ${seriaisKit.length})`, err.classList.remove('hidden'));
-    if(new Set(seriaisKit).size !== seriaisKit.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden'));
+    if(new Set(seriaisKit).size !== seriaisKit.length){ _reset(); return (err.textContent='⚠️ Seriais duplicados no lote', err.classList.remove('hidden')); }
     try{
       const r=await api('/api/estoque2/movimentar-kit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, unidade, kits: Math.abs(qtd), kit, tipo: (sinalNegativo ? 'saida' : 'entrada'), motivo: motivoFinal, seriais: seriaisKit }) });
       const detalhe=(r.itens||[]).map(i=>`${i.material} ${i.qtd>0?'+':''}${i.qtd}`).join(' • ');
@@ -9211,10 +9205,10 @@ async function movimentarEstoque2(){
       _reset();
       return;
     }
-    if(seriais.length && new Set(seriais).size !== seriais.length) _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden'));
+    if(seriais.length && new Set(seriais).size !== seriais.length){ _reset(); return (err.textContent='⚠️ Seriais duplicados no lote — verifique e remova repetições', err.classList.remove('hidden')); }
   }
   try{
-    if(isMov){
+    if(tipo==='movimentacao'){
       const forcar = document.getElementById('est2Forcar')?.checked && temSerialEst2(material);
       await api('/api/estoque2/transferir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoque2SistemaAtivo, contrato, material, qtd: Math.abs(qtd), motivo, unidadeOrigem: origem, unidadeDestino: destino, seriais, forcarDisponivel: !!forcar }) });
       toast('✅ '+material+' transferido: '+origem+' → '+destino+(seriais.length?` (${seriais.length} seriais)`:'')+(forcar?' ✅ disponível para uso':'')+' ['+estoque2SistemaAtivo+']');
