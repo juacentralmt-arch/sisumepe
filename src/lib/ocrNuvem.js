@@ -12,6 +12,8 @@
 // =====================================================================
 
 const sharp = require('sharp');
+const FormData = require('form-data');
+const fetch = require('node-fetch');
 
 const OCR_SPACE_URL = (process.env.OCR_SPACE_URL || 'https://api.ocr.space/parse/image').replace(/\/$/, '');
 const OCR_TIMEOUT_MS = Number(process.env.OCR_SPACE_TIMEOUT_MS) || 90000;
@@ -51,7 +53,8 @@ async function ocrImagemNuvem(buffer, opts) {
   fd.append('OCREngine', '2');
   fd.append('scale', 'true');
   fd.append('isOverlayRequired', 'false');
-  fd.append('file', new Blob([img], { type: 'image/jpeg' }), 'pagina.jpg');
+  // form-data v4: Buffer direto com options (filename, contentType, knownLength)
+  fd.append('file', img, { filename: 'pagina.jpg', contentType: 'image/jpeg', knownLength: img.length });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), o.timeoutMs || OCR_TIMEOUT_MS);
   try {

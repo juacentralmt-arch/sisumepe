@@ -239,7 +239,7 @@ console.log('\n=== TESTES AUTORENOMEAR — formato da sugestão e helpers ===');
 // Marcador de versão do motor presente (a9ed2cb) — prova qual código gerou:
 {
   const r = sugerirNome('MONITORADO: Teste Da Silva\nData: 01/01/2026', 'doc.pdf');
-  assert(r.motor === 'rn8', 'motor: versão rn8 (fallback sem rótulo + junta-letras OCR) — "' + r.motor + '"');
+  assert(r.motor === 'rn9', 'motor: versão rn8 (fallback sem rótulo + junta-letras OCR) — "' + r.motor + '"');
 }
 
 console.log('\n=== TESTES AUTORENOMEAR — termos de recolhimento reais (núcleo Juazeiro) ===');
