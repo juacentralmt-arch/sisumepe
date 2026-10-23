@@ -303,7 +303,7 @@ async function extractTextAutoRenomear(buffer){
   let fullText = '';
   // Só as 2 primeiras páginas: tipo/nome/data estão no cabeçalho; o resto é
   // custo puro (antes lia até 5).
-  const maxPages = Math.min(pdf.numPages, 2);
+  const maxPages = Math.min(pdf.numPages, 3);
   for(let i = 1; i <= maxPages; i++){
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();

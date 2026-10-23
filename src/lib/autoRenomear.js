@@ -32,7 +32,7 @@ const TIPOS = [
   { id: 'listagem', label: 'Listagem de equipamentos', chaves: ['listagem de equipamentos', 'lista de equipamentos'] },
   { id: 'endereco', label: 'Ofício', chaves: ['oficio', 'endereco do monitorado', 'comunicacao de endereco'] },
   { id: 'declaracao', label: 'Declaração', chaves: ['declaracao'] },
-  { id: 'relatorio', label: 'Relatório', chaves: ['relatorio'] },
+  { id: 'relatorio', label: 'Relatório', chaves: ['relatorio', 'inspecao', 'evolucao', 'dados da inspecao', 'ficha de evolucao', 'relatorio de inspecao', 'relatorio de evolucao', 'auto de inspecao'] },
   { id: 'ata', label: 'Ata', chaves: ['ata de reuniao', 'ata de audiencia'] }
 ];
 
@@ -335,7 +335,7 @@ function sugerirNome(texto, nomeOriginal) {
     //       data-arquivo só em grupo isolado (seriais longos não viram data).
     // rn8 = buscarNomeRotulado reutilizável + junta-letras OCR ("F A B R I C I A") +
     //       fallback sem rótulo (caixa alta, stoplist de documento, aviso + teto média).
-    motor: 'rn8'
+    motor: 'rn9'
   };
 }
 
