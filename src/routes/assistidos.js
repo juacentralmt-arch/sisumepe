@@ -67,6 +67,33 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
   res.json({ ok: true, importados: total });
 }));
 
+router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
+  const b = req.body || {};
+  const row = await store.assistidos.insert({
+    statusGrupo: b.statusGrupo || 'ativo',
+    processo: b.processo || '',
+    vara: b.vara || '',
+    nome: b.nome || '',
+    vinculo: b.vinculo || '',
+    sitJuridico: b.sitJuridico || '',
+    inicio: b.inicio || '',
+    status: b.status || '',
+    observacao: b.observacao || '',
+    proximaJuntada: b.proximaJuntada || '',
+    dias: b.dias || '',
+    alerta: b.alerta || '',
+    extras: b.extras || {}
+  });
+  res.status(201).json(row);
+}));
+
+router.patch('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
+  const b = req.body || {};
+  const row = await store.assistidos.patch(req.params.id, b);
+  if (!row) return res.status(404).json({ error: 'Não encontrado' });
+  res.json(row);
+}));
+
 router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
   await store.assistidos.remove(req.params.id);
   res.json({ ok: true });
