@@ -38,33 +38,43 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
 
 router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(req.file.buffer);
-  let total = 0;
-  const sheets = ['ATIVOS','ARQUIVADOS'];
-  for (const name of sheets) {
-    const ws = wb.getWorksheet(name);
-    if (!ws) continue;
-    const { rows } = parseSheet(ws);
-    const mapped = rows.map(r => ({
-      statusGrupo: name === 'ATIVOS' ? 'ativo' : 'arquivado',
-      processo: r['PROCESSO'] || r['PROCESSO '] || '',
-      vara: r['VARA'] || r['VARA '] || '',
-      nome: r['NOME'] || '',
-      vinculo: r['VÍNCULO'] || r['VINCULO'] || '',
-      sitJuridico: r['SIT. JURICO PENAL'] || r['SITUAÇÃO'] || '',
-      inicio: r['INICIO DA MEDIDA'] || r['INICIO DO CUMPRIMENTO'] || '',
-      status: r['STATUS'] || '',
-      observacao: r['OBSERVAÇÃO'] || r['EVOLUÇÃO  (OBSERVAÇÃO)'] || '',
-      proximaJuntada: r['PROXIMA JUNTADA'] || r['PROXIMA JUNTADA.1'] || '',
-      dias: r['Nº DIAS'] || r['DIAS'] || '',
-      alerta: r['ALERTA'] || '',
-      extras: r
-    }));
-    await store.assistidos.bulkInsert(mapped);
-    total += mapped.length;
-  }
-  res.json({ ok: true, importados: total });
+  // Processa em background para não estourar timeout do Render/HTTP
+  const buffer = req.file.buffer;
+  res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background. Aguarde ~1-2 min e atualize a lista.' });
+  setImmediate(async () => {
+    try {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      let total = 0;
+      const sheets = ['ATIVOS','ARQUIVADOS'];
+      for (const name of sheets) {
+        const ws = wb.getWorksheet(name);
+        if (!ws) continue;
+        const { rows } = parseSheet(ws);
+        const mapped = rows.map(r => ({
+          statusGrupo: name === 'ATIVOS' ? 'ativo' : 'arquivado',
+          processo: r['PROCESSO'] || r['PROCESSO '] || '',
+          vara: r['VARA'] || r['VARA '] || '',
+          nome: r['NOME'] || '',
+          vinculo: r['VÍNCULO'] || r['VINCULO'] || '',
+          sitJuridico: r['SIT. JURICO PENAL'] || r['SITUAÇÃO'] || '',
+          inicio: r['INICIO DA MEDIDA'] || r['INICIO DO CUMPRIMENTO'] || '',
+          status: r['STATUS'] || '',
+          observacao: r['OBSERVAÇÃO'] || r['EVOLUÇÃO  (OBSERVAÇÃO)'] || '',
+          proximaJuntada: r['PROXIMA JUNTADA'] || r['PROXIMA JUNTADA.1'] || '',
+          dias: r['Nº DIAS'] || r['DIAS'] || '',
+          alerta: r['ALERTA'] || '',
+          extras: r
+        }));
+        await store.assistidos.bulkInsert(mapped);
+        total += mapped.length;
+      }
+      console.log('[assistidos] importação concluída:', total);
+      shared.broadcast();
+    } catch (e) {
+      console.error('[assistidos] importação falhou:', e.message);
+    }
+  });
 }));
 
 router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
