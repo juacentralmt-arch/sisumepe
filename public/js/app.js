@@ -7189,6 +7189,7 @@ function switchEstoqueUnidade(u){
   const formSel=document.getElementById('estUnidade'); if(formSel && estoqueUnidadeAtiva) formSel.value=estoqueUnidadeAtiva;
   renderEstoque();
   loadEstoqueMov();
+  loadEstoqueNotas();
 }
 async function loadEstoque(){
   try{
@@ -8491,6 +8492,7 @@ function switchEstoque2Unidade(u){
   const formSel=document.getElementById('est2Unidade'); if(formSel && estoque2UnidadeAtiva) formSel.value=estoque2UnidadeAtiva;
   renderEstoque2();
   loadEstoque2Mov();
+  loadEstoque2Notas();
 }
 async function loadEstoque2(){
   try{
