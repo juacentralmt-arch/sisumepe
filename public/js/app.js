@@ -187,9 +187,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'fila', 'auditoria', 'usuarios'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'],
   psico: ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'pdf', 'arquivos', 'visao', 'dash'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'arquivos', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
@@ -332,12 +332,12 @@ function canSee(t){
   if(t==='agenda') return agendaUser();
   if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin','arquivos'].includes(t);
-  if(session.role==='psico') return ['fila','checkin','psico','arquivos','pdf'].includes(t);
+  if(session.role==='psico') return ['fila','checkin','psico','arquivos','pdf','assistidos'].includes(t);
   return t!=='usuarios' && t!=='psico' && t!=='auditoria';
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','pdf','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','pdf','arquivos','assistidos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
@@ -352,6 +352,7 @@ function go(tab){
   if(tab==='estoque2') loadEstoque2();
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   if(tab==='arquivos') loadArquivos();
+  if(tab==='assistidos') loadAssistidos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
@@ -10542,3 +10543,35 @@ window.addEventListener('online', () => {
 });
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
+async function loadAssistidos(){
+  const body = document.getElementById('assistidosBody');
+  if(!body) return;
+  body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Carregando...</td></tr>';
+  try{
+    const r = await api('/api/assistidos');
+    const list = Array.isArray(r) ? r : (r.itens || []);
+    if(!list.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido. Importe um XLSX.</td></tr>'; return; }
+    body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
+      '<td class="p-2">' + esc(a.nome) + '</td>' +
+      '<td class="p-2">' + esc(a.processo) + '</td>' +
+      '<td class="p-2">' + esc(a.vara) + '</td>' +
+      '<td class="p-2">' + esc(a.statusGrupo || a.status) + '</td>' +
+      '<td class="p-2">' + esc(a.inicio) + '</td>' +
+      '<td class="p-2">' + esc(a.sitJuridico) + '</td>' +
+      '<td class="p-2">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
+    '</tr>').join('');
+  }catch(e){
+    body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-rose-500">' + esc(e.message) + '</td></tr>';
+  }
+}
+async function importarAssistidos(inp){
+  const f = inp && inp.files && inp.files[0];
+  if(!f) return;
+  const fd = new FormData(); fd.append('arquivo', f);
+  try{
+    const r = await api('/api/assistidos/import', { method:'POST', body: fd });
+    toast('Importados: ' + (r.importados||0));
+    loadAssistidos();
+  }catch(e){ toast('Erro: ' + e.message); }
+  inp.value = '';
+}

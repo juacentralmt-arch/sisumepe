@@ -80,6 +80,9 @@
     <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       Arquivos</button>
+    <button data-tab="assistidos" onclick="go('assistidos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Assistidos <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
   </nav>
   <div class="p-4">
     <div class="rounded-2xl p-4" style="background:linear-gradient(135deg,rgba(99,102,241,.25),rgba(139,92,246,.15));border:1px solid rgba(255,255,255,.08)">
@@ -129,6 +132,7 @@
       <button data-tab="estoque2" onclick="go('estoque2')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque 2</button>
       <button data-tab="pdf" onclick="go('pdf')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 PDF</button>
       <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📁 Arquivos</button>
+      <button data-tab="assistidos" onclick="go('assistidos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Assistidos</button>
     </div>
   </header>
 
@@ -1824,6 +1828,28 @@
         <div id="arqList" class="space-y-2 max-h-[520px] overflow-y-auto"></div>
       </div>
     </section>
+
+    <!-- ASSISTIDOS (Planilha Geral) -->
+    <section id="tab-assistidos" class="hidden fade">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="font-display font-bold text-xl">Assistidos - Planilha Geral</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Dados consolidados da planilha geral dos assistidos (admin/secretaria)</p>
+        </div>
+        <div class="flex gap-2">
+          <input id="assistidosFile" type="file" accept=".xlsx" class="hidden" onchange="importarAssistidos(this)">
+          <button onclick="document.getElementById('assistidosFile').click()" class="btn btn-primary text-xs px-3 py-2">Importar XLSX</button>
+          <button onclick="loadAssistidos()" class="btn btn-ghost text-xs px-3 py-2">Atualizar</button>
+        </div>
+      </div>
+      <div id="assistidosWrap" class="card p-4 overflow-auto">
+        <table class="w-full text-xs">
+          <thead><tr><th class="text-left p-2">Nome</th><th class="text-left p-2">Processo</th><th class="text-left p-2">Vara</th><th class="text-left p-2">Status</th><th class="text-left p-2">Inicio</th><th class="text-left p-2">Situacao</th><th class="text-left p-2">Obs</th></tr></thead>
+          <tbody id="assistidosBody"></tbody>
+        </table>
+      </div>
+    </section>
+
 
     <!-- VISAO 360 -->
     <section id="tab-visao" class="hidden fade">
