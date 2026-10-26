@@ -10566,12 +10566,12 @@ async function loadAssistidos(){
 }
 async function importarAssistidos(inp){
   const f = inp && inp.files && inp.files[0];
-  if(!f) return;
+  if(!f){ alert('Nenhum arquivo selecionado'); return; }
   const fd = new FormData(); fd.append('arquivo', f);
   try{
     const r = await api('/api/assistidos/import', { method:'POST', body: fd });
-    toast('Importados: ' + (r.importados||0));
+    alert('Importados: ' + (r.importados||0));
     loadAssistidos();
-  }catch(e){ toast('Erro: ' + e.message); }
+  }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
   inp.value = '';
 }
