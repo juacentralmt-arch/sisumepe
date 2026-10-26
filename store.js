@@ -2635,6 +2635,14 @@ store.assistidos = {
   },
   async bulkInsert(rows) {
     const out = [];
+    if (MODE === 'supabase') {
+      try {
+        const rr = must(await supa.from('assistidos').insert(rows).select(), 'assistidos.bulkInsert');
+        return rr;
+      } catch (e) {
+        console.warn('assistidos.bulkInsert fallback', e.message);
+      }
+    }
     for (const r of rows) out.push(await this.insert(r));
     return out;
   },
