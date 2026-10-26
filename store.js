@@ -2200,6 +2200,12 @@ const store = {
       const sis = normalizeSistema(sistema) || DEFAULT_SISTEMA;
       const c = String(contrato || '').toUpperCase().trim() || (sis === 'infinity' ? CONTRATO_INFINITY : 'CE01');
       const u = normalizeUnidade(unidade || DEFAULT_UNIDADE);
+      if (MODE === 'supabase') {
+        try {
+          const r = must(await supa.from('estoque_notas').select('*').eq('modulo', mod).eq('sistema', sis).eq('contrato', c).eq('unidade', u).limit(1), 'estoqueNotas.get');
+          if (r.length) return r[0];
+        } catch (e) { console.warn('estoqueNotas.get fallback', e.message); }
+      }
       const rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u);
       return rec || { modulo: mod, sistema: sis, contrato: c, unidade: u, texto: '', updatedAt: null };
     },
@@ -2214,6 +2220,11 @@ const store = {
       if (rec) { rec.texto = t; rec.updatedAt = new Date().toISOString(); }
       else { rec = { id: (mem.seqEstoqueNota = (mem.seqEstoqueNota || 0) + 1), modulo: mod, sistema: sis, contrato: c, unidade: u, texto: t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; mem.estoqueNotas.push(rec); }
       if (MODE === 'file') saveFile();
+      if (MODE === 'supabase') {
+        try {
+          must(await supa.from('estoque_notas').upsert({ modulo: mod, sistema: sis, contrato: c, unidade: u, texto: t, updatedat: new Date().toISOString() }, { onConflict: 'modulo,sistema,contrato,unidade' }), 'estoqueNotas.set');
+        } catch (e) { console.warn('estoqueNotas.set fallback', e.message); }
+      }
       return rec;
     }
   },
