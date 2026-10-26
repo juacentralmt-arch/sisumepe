@@ -1838,13 +1838,14 @@
         </div>
         <div class="flex gap-2">
           <input id="assistidosFile" type="file" accept=".xlsx" class="hidden" onchange="importarAssistidos(this)">
+          <button onclick="adicionarAssistido()" class="btn btn-ghost text-xs px-3 py-2">+ Adicionar</button>
           <button onclick="document.getElementById('assistidosFile').click()" class="btn btn-primary text-xs px-3 py-2">Importar XLSX</button>
           <button onclick="loadAssistidos()" class="btn btn-ghost text-xs px-3 py-2">Atualizar</button>
         </div>
       </div>
       <div id="assistidosWrap" class="card p-4 overflow-auto">
         <table class="w-full text-xs">
-          <thead><tr><th class="text-left p-2">Nome</th><th class="text-left p-2">Processo</th><th class="text-left p-2">Vara</th><th class="text-left p-2">Status</th><th class="text-left p-2">Inicio</th><th class="text-left p-2">Situacao</th><th class="text-left p-2">Obs</th></tr></thead>
+          <thead><tr><th class="text-left p-2">Nome</th><th class="text-left p-2">Processo</th><th class="text-left p-2">Vara</th><th class="text-left p-2">Status</th><th class="text-left p-2">Inicio</th><th class="text-left p-2">Situacao</th><th class="text-left p-2">Obs</th><th class="text-left p-2">Acoes</th></tr></thead>
           <tbody id="assistidosBody"></tbody>
         </table>
       </div>
