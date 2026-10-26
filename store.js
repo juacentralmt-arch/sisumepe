@@ -2636,12 +2636,18 @@ store.assistidos = {
   async bulkInsert(rows) {
     const out = [];
     if (MODE === 'supabase') {
-      try {
-        const rr = must(await supa.from('assistidos').insert(rows).select(), 'assistidos.bulkInsert');
-        return rr;
-      } catch (e) {
-        console.warn('assistidos.bulkInsert fallback', e.message);
+      const chunkSize = 100;
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const chunk = rows.slice(i, i + chunkSize);
+        try {
+          const rr = must(await supa.from('assistidos').insert(chunk).select(), 'assistidos.bulkInsert');
+          out.push(...rr);
+        } catch (e) {
+          console.warn('assistidos.bulkInsert fallback', e.message);
+          for (const r of chunk) out.push(await this.insert(r));
+        }
       }
+      return out;
     }
     for (const r of rows) out.push(await this.insert(r));
     return out;
