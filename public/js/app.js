@@ -187,9 +187,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'arquivos', 'fila', 'auditoria', 'usuarios'],
-  psico: ['fila', 'checkin', 'psico', 'arquivos', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'arquivos', 'visao', 'dash'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'fila', 'auditoria', 'usuarios'],
+  psico: ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'pdf', 'arquivos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'arquivos', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
@@ -332,12 +332,12 @@ function canSee(t){
   if(t==='agenda') return agendaUser();
   if(session.role==='admin') return t!=='tecnico' && t!=='termos' && t!=='psico';
   if(session.role==='recepcao') return ['fila','checkin','arquivos'].includes(t);
-  if(session.role==='psico') return ['fila','checkin','psico','arquivos'].includes(t);
+  if(session.role==='psico') return ['fila','checkin','psico','arquivos','pdf'].includes(t);
   return t!=='usuarios' && t!=='psico' && t!=='auditoria';
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','pdf','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
@@ -350,6 +350,7 @@ function go(tab){
   if(tab==='auditoria') loadAuditoria();
   if(tab==='estoque') loadEstoque();
   if(tab==='estoque2') loadEstoque2();
+  if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   if(tab==='arquivos') loadArquivos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

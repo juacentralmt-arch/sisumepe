@@ -74,6 +74,9 @@
     <button data-tab="estoque2" onclick="go('estoque2')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
       Estoque 2 <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">TESTE</span></button>
+    <button data-tab="pdf" onclick="go('pdf')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Ferramentas PDF</button>
     <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn snav w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition text-left">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       Arquivos</button>
@@ -124,6 +127,7 @@
       <button data-tab="auditoria" onclick="go('auditoria')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📋 Auditoria</button>
       <button data-tab="estoque" onclick="go('estoque')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque</button>
       <button data-tab="estoque2" onclick="go('estoque2')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque 2</button>
+      <button data-tab="pdf" onclick="go('pdf')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 PDF</button>
       <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📁 Arquivos</button>
     </div>
   </header>
@@ -741,78 +745,7 @@
           <p id="ativErr" class="hidden text-xs text-rose-600 font-semibold mt-2"></p>
         </div>
         <!-- PDF Tools (iLovePDF) -->
-        <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
-          <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
-          <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            <button data-pdftool="merge" onclick="openPdfTool('merge')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📑</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Juntar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Mesclar vários PDFs</p>
-            </button>
-            <button data-pdftool="split" onclick="openPdfTool('split')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-100 hover:border-violet-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-[26px] shadow-lg shadow-violet-200 group-hover:scale-105 transition-transform">✂️</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Dividir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Extrair páginas</p>
-            </button>
-            <button data-pdftool="compress" onclick="openPdfTool('compress')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-100 hover:border-emerald-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[26px] shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">🗜️</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Comprimir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Reduzir tamanho</p>
-            </button>
-            <button data-pdftool="jpg2pdf" onclick="openPdfTool('jpg2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-100 hover:border-amber-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-[26px] shadow-lg shadow-amber-200 group-hover:scale-105 transition-transform">🖼️</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">JPG para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Imagens → PDF</p>
-            </button>
-            <button data-pdftool="rotate" onclick="openPdfTool('rotate')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-100 hover:border-sky-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-[26px] shadow-lg shadow-sky-200 group-hover:scale-105 transition-transform">🔄</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Girar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">90° / 180°</p>
-            </button>
-            <button data-pdftool="extract" onclick="openPdfTool('extract')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100 hover:border-rose-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-[26px] shadow-lg shadow-rose-200 group-hover:scale-105 transition-transform">📄</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Extrair páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Salvar seleção</p>
-            </button>
-            <button data-pdftool="pdf2jpg" onclick="openPdfTool('pdf2jpg')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-green-100 hover:border-green-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center text-[26px] shadow-lg shadow-green-200 group-hover:scale-105 transition-transform">📸</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">PDF para JPG</p><p class="text-[11px] text-slate-500 mt-0.5">Páginas → ZIP</p>
-            </button>
-            <button data-pdftool="watermark" onclick="openPdfTool('watermark')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-100 hover:border-cyan-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center text-[26px] shadow-lg shadow-cyan-200 group-hover:scale-105 transition-transform">💧</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Marca d'água</p><p class="text-[11px] text-slate-500 mt-0.5">Texto nas páginas</p>
-            </button>
-            <button data-pdftool="pagenumber" onclick="openPdfTool('pagenumber')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200 hover:border-slate-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[26px] shadow-lg shadow-slate-200 group-hover:scale-105 transition-transform">🔢</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Numerar páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Rodapé 1, 2, 3…</p>
-            </button>
-            <button data-pdftool="remove" onclick="openPdfTool('remove')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-red-100 hover:border-red-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-[26px] shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">🗑️</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Remover páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Excluir seleção</p>
-            </button>
-            <button data-pdftool="word2pdf" onclick="openPdfTool('word2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-100 hover:border-blue-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[26px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">📝</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Word para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">.docx → PDF</p>
-            </button>
-            <button data-pdftool="gettext" onclick="openPdfTool('gettext')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-stone-200 hover:border-stone-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-stone-500 to-stone-700 flex items-center justify-center text-[26px] shadow-lg shadow-stone-200 group-hover:scale-105 transition-transform">🔤</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Extrair texto</p><p class="text-[11px] text-slate-500 mt-0.5">PDF → .txt</p>
-            </button>
-            <button data-pdftool="redact" onclick="openPdfTool('redact')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200 hover:border-slate-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[26px] shadow-lg shadow-slate-200 group-hover:scale-105 transition-transform">🚫</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Redigir</p><p class="text-[11px] text-slate-500 mt-0.5">Blackout de áreas</p>
-            </button>
-            <button data-pdftool="headerfooter" onclick="openPdfTool('headerfooter')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-200 hover:border-amber-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-[26px] shadow-lg shadow-amber-200 group-hover:scale-105 transition-transform">📋</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Cabeçalho/Rodapé</p><p class="text-[11px] text-slate-500 mt-0.5">Texto em todas as páginas</p>
-            </button>
-            <button data-pdftool="pdf2word" onclick="openPdfTool('pdf2word')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-200 hover:border-blue-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[26px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">📘</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">PDF para Word</p><p class="text-[11px] text-slate-500 mt-0.5">PDF → .docx</p>
-            </button>
-            <button data-pdftool="word2pdf" onclick="openPdfTool('word2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-200 hover:border-indigo-400">
-              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📄</div>
-              <p class="text-sm font-bold mt-3 text-slate-800">Word para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">.docx → PDF</p>
-            </button>
-          </div>
-          <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
-          <p id="pdfToolMsg" class="hidden text-xs font-semibold mt-2"></p>
-        </div>
+
         <div id="termoFormRenomear" class="hidden lg:col-span-2 card p-5">
           <h3 class="font-display font-bold text-sm mb-1">🏷️ AutoRenomear</h3>
           <p class="text-xs text-slate-500 mb-4">Envie arquivos com nomes aleatórios e receba sugestões no padrão <b>Tipo - Nome da pessoa - Data do documento</b>. Ex.: <i>Termo de recolhimento - João Silva - 28-09-2026.pdf</i>. 100% on-prem, sem envio externo. Arquivos <b>escaneados (foto)</b> passam por <b>📷 OCR local automático</b> após a análise.</p>
@@ -1775,6 +1708,87 @@
           </div>
         </div>
       </div>
+    </section>
+
+
+    <!-- FERRAMENTAS PDF (modulo) -->
+    <section id="tab-pdf" class="hidden fade">
+      <div class="mb-4">
+        <h2 class="font-display font-bold text-xl">Ferramentas PDF</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Modifique, converta e edite seus PDFs - 100% on-prem, sem envio externo</p>
+      </div>
+        <div id="termoFormPdf" class="hidden lg:col-span-2 card p-5">
+          <h3 class="font-display font-bold text-sm mb-1">📄 Ferramentas PDF <span class="text-indigo-600">— iLovePDF</span></h3>
+          <p class="text-xs text-slate-500 mb-4">Modifique, converta e edite seus PDFs — 100% on-prem, sem envio externo</p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <button data-pdftool="merge" onclick="openPdfTool('merge')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📑</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Juntar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Mesclar vários PDFs</p>
+            </button>
+            <button data-pdftool="split" onclick="openPdfTool('split')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-violet-100 hover:border-violet-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-[26px] shadow-lg shadow-violet-200 group-hover:scale-105 transition-transform">✂️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Dividir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Extrair páginas</p>
+            </button>
+            <button data-pdftool="compress" onclick="openPdfTool('compress')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-100 hover:border-emerald-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[26px] shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">🗜️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Comprimir PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Reduzir tamanho</p>
+            </button>
+            <button data-pdftool="jpg2pdf" onclick="openPdfTool('jpg2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-100 hover:border-amber-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-[26px] shadow-lg shadow-amber-200 group-hover:scale-105 transition-transform">🖼️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">JPG para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">Imagens → PDF</p>
+            </button>
+            <button data-pdftool="rotate" onclick="openPdfTool('rotate')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-100 hover:border-sky-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-[26px] shadow-lg shadow-sky-200 group-hover:scale-105 transition-transform">🔄</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Girar PDF</p><p class="text-[11px] text-slate-500 mt-0.5">90° / 180°</p>
+            </button>
+            <button data-pdftool="extract" onclick="openPdfTool('extract')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100 hover:border-rose-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-[26px] shadow-lg shadow-rose-200 group-hover:scale-105 transition-transform">📄</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Extrair páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Salvar seleção</p>
+            </button>
+            <button data-pdftool="pdf2jpg" onclick="openPdfTool('pdf2jpg')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-green-100 hover:border-green-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center text-[26px] shadow-lg shadow-green-200 group-hover:scale-105 transition-transform">📸</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">PDF para JPG</p><p class="text-[11px] text-slate-500 mt-0.5">Páginas → ZIP</p>
+            </button>
+            <button data-pdftool="watermark" onclick="openPdfTool('watermark')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-100 hover:border-cyan-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center text-[26px] shadow-lg shadow-cyan-200 group-hover:scale-105 transition-transform">💧</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Marca d'água</p><p class="text-[11px] text-slate-500 mt-0.5">Texto nas páginas</p>
+            </button>
+            <button data-pdftool="pagenumber" onclick="openPdfTool('pagenumber')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200 hover:border-slate-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[26px] shadow-lg shadow-slate-200 group-hover:scale-105 transition-transform">🔢</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Numerar páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Rodapé 1, 2, 3…</p>
+            </button>
+            <button data-pdftool="remove" onclick="openPdfTool('remove')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-red-100 hover:border-red-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-[26px] shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">🗑️</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Remover páginas</p><p class="text-[11px] text-slate-500 mt-0.5">Excluir seleção</p>
+            </button>
+            <button data-pdftool="word2pdf" onclick="openPdfTool('word2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-100 hover:border-blue-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[26px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">📝</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Word para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">.docx → PDF</p>
+            </button>
+            <button data-pdftool="gettext" onclick="openPdfTool('gettext')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-stone-200 hover:border-stone-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-stone-500 to-stone-700 flex items-center justify-center text-[26px] shadow-lg shadow-stone-200 group-hover:scale-105 transition-transform">🔤</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Extrair texto</p><p class="text-[11px] text-slate-500 mt-0.5">PDF → .txt</p>
+            </button>
+            <button data-pdftool="redact" onclick="openPdfTool('redact')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200 hover:border-slate-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[26px] shadow-lg shadow-slate-200 group-hover:scale-105 transition-transform">🚫</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Redigir</p><p class="text-[11px] text-slate-500 mt-0.5">Blackout de áreas</p>
+            </button>
+            <button data-pdftool="headerfooter" onclick="openPdfTool('headerfooter')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-amber-200 hover:border-amber-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-[26px] shadow-lg shadow-amber-200 group-hover:scale-105 transition-transform">📋</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Cabeçalho/Rodapé</p><p class="text-[11px] text-slate-500 mt-0.5">Texto em todas as páginas</p>
+            </button>
+            <button data-pdftool="pdf2word" onclick="openPdfTool('pdf2word')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-200 hover:border-blue-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-[26px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">📘</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">PDF para Word</p><p class="text-[11px] text-slate-500 mt-0.5">PDF → .docx</p>
+            </button>
+            <button data-pdftool="word2pdf" onclick="openPdfTool('word2pdf')" class="pdf-tool-btn group rounded-2xl border-2 border-slate-200 bg-white p-5 text-center transition-all duration-150 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-200 hover:border-indigo-400">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-[26px] shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform">📄</div>
+              <p class="text-sm font-bold mt-3 text-slate-800">Word para PDF</p><p class="text-[11px] text-slate-500 mt-0.5">.docx → PDF</p>
+            </button>
+          </div>
+          <div id="pdfToolArea" class="hidden mt-5 border-t border-slate-100 pt-4"></div>
+          <p id="pdfToolMsg" class="hidden text-xs font-semibold mt-2"></p>
+        </div>
     </section>
 
     <!-- ARQUIVOS COMPARTILHADOS (Google Drive) -->
