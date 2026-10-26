@@ -10559,6 +10559,10 @@ async function loadAssistidos(){
       '<td class="p-2">' + esc(a.inicio) + '</td>' +
       '<td class="p-2">' + esc(a.sitJuridico) + '</td>' +
       '<td class="p-2">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
+      '<td class="p-2 whitespace-nowrap">' +
+        '<button class="text-indigo-600 hover:underline mr-2" onclick="editarAssistido(' + a.id + ')">Editar</button>' +
+        '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
+      '</td>' +
     '</tr>').join('');
   }catch(e){
     body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-rose-500">' + esc(e.message) + '</td></tr>';
@@ -10574,4 +10578,32 @@ async function importarAssistidos(inp){
     loadAssistidos();
   }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
   inp.value = '';
+}
+async function adicionarAssistido(){
+  const nome = prompt('Nome:'); if(!nome) return;
+  const processo = prompt('Processo:') || '';
+  const vara = prompt('Vara:') || '';
+  const statusGrupo = prompt('Status (ativo/arquivado):','ativo') || 'ativo';
+  const inicio = prompt('Início (AAAA-MM-DD):') || '';
+  const sitJuridico = prompt('Situação jurídica:') || '';
+  const observacao = prompt('Observação:') || '';
+  try{
+    await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nome, processo, vara, statusGrupo, inicio, sitJuridico, observacao }) });
+    toast('Adicionado'); loadAssistidos();
+  }catch(e){ alert('Erro: ' + e.message); }
+}
+async function editarAssistido(id){
+  const nome = prompt('Novo nome (deixe vazio para manter):');
+  const body = {};
+  if(nome) body.nome = nome;
+  const obs = prompt('Nova observação (deixe vazio para manter):');
+  if(obs) body.observacao = obs;
+  if(!Object.keys(body).length) return;
+  try{ await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }); toast('Atualizado'); loadAssistidos(); }
+  catch(e){ alert('Erro: ' + e.message); }
+}
+async function excluirAssistido(id){
+  if(!confirm('Excluir este assistido?')) return;
+  try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluído'); loadAssistidos(); }
+  catch(e){ alert('Erro: ' + e.message); }
 }
