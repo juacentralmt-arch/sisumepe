@@ -130,6 +130,7 @@ app.use(require('./src/routes/estoque'));
 app.use(require('./src/routes/estoque2'));
 app.use(require('./src/routes/psico'));
 app.use(require('./src/routes/arquivos'));
+app.use(require('./src/routes/assistidos'));
 
 // Painel TV público (sem login): só o mínimo necessário à chamada.
 // Exibe e anuncia o nome completo do atendido (texto + voz).

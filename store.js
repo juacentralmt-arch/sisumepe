@@ -220,6 +220,8 @@ function loadFile() {
     if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
     if (!Array.isArray(mem.termos)) mem.termos = [];
     if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+    if (!Array.isArray(mem.assistidos)) mem.assistidos = [];
+    if (!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoque)) mem.estoque = [];
     if (!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
@@ -328,6 +330,8 @@ if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.ma
 if(!mem.googleTokens) mem.googleTokens = {};
 if(!mem.termos) mem.termos = [];
 if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+if(!Array.isArray(mem.assistidos)) mem.assistidos = [];
+if(!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque)) mem.estoque=[];
 if(!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
@@ -2595,6 +2599,63 @@ const store = {
       if(chatsTouched && MODE==='file') saveFile();
     }catch(e){}
     return { filesRemoved, ticketsTouched, chatsTouched };
+  }
+};
+
+// Assistidos (Planilha Geral)
+store.assistidos = {
+  async all() {
+    if (MODE === 'file') return [...(mem.assistidos || [])];
+    try {
+      return must(await supa.from('assistidos').select('*').order('id'), 'assistidos.all');
+    } catch (e) {
+      console.warn('assistidos.all fallback', e.message);
+      return [...(mem.assistidos || [])];
+    }
+  },
+  async byId(id) {
+    if (MODE === 'file') return (mem.assistidos || []).find(x => eqi(x.id, id)) || null;
+    try {
+      const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
+      return r.length ? r[0] : null;
+    } catch (e) { return (mem.assistidos || []).find(x => eqi(x.id, id)) || null; }
+  },
+  async insert(r) {
+    if (MODE === 'file') {
+      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString() };
+      mem.assistidos.push(row); saveFile(); return row;
+    }
+    try {
+      const rr = must(await supa.from('assistidos').insert(r).select().single(), 'assistidos.insert');
+      return rr;
+    } catch (e) {
+      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString() };
+      mem.assistidos.push(row); saveFile(); return row;
+    }
+  },
+  async bulkInsert(rows) {
+    const out = [];
+    for (const r of rows) out.push(await this.insert(r));
+    return out;
+  },
+  async patch(id, fields) {
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      Object.assign(r, fields); saveFile(); return r;
+    }
+    try {
+      const rr = must(await supa.from('assistidos').update(fields).eq('id', Number(id)).select(), 'assistidos.patch');
+      return rr.length ? rr[0] : null;
+    } catch (e) {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      Object.assign(r, fields); return r;
+    }
+  },
+  async remove(id) {
+    if (MODE === 'file') { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
+    try { must(await supa.from('assistidos').delete().eq('id', Number(id)), 'assistidos.remove'); } catch (e) { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); }
   }
 };
 
