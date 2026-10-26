@@ -176,8 +176,8 @@ function paintUser(){
     const t = b.dataset.tab;
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
-    else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'agenda'].includes(t);
-    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'fila', 'auditoria', 'usuarios'].includes(t);
+    else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'].includes(t);
+    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     b.classList.toggle('hidden', !show);
   });
