@@ -458,6 +458,12 @@ const TM = {
 const PSI = {
   id: 'id', user: 'user', kind: 'kind', personId: 'personid', personName: 'personname', grupoId: 'grupoid', data: 'data', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
+const ASS = {
+  id: 'id', statusGrupo: 'statusgrupo', numero: 'numero', dias: 'dias', alerta: 'alerta',
+  processo: 'processo', vara: 'vara', nome: 'nome', vinculo: 'vinculo', sitJuridico: 'sitjuridico',
+  inicio: 'inicio', status: 'status', observacao: 'observacao', juntadas: 'juntadas',
+  proximaJuntada: 'proximajuntada', extras: 'extras', createdAt: 'createdat'
+};
 const EST = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
 };
@@ -485,6 +491,7 @@ const appA = r => toApp(r, A);
 const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.to, text: r.text, anexos: r.anexos || [], at: r.at });
 const appAG = r => toApp(r, AG);
 const appTM = r => toApp(r, TM);
+const appASS = r => toApp(r, ASS);
 const appEST = r => toApp(r, EST);
 const appESTMOV = r => toApp(r, ESTMOV);
 const appESTSER = r => toApp(r, ESTSER);
@@ -2618,7 +2625,8 @@ store.assistidos = {
   async all() {
     if (MODE === 'file') return [...(mem.assistidos || [])];
     try {
-      return must(await supa.from('assistidos').select('*').order('id'), 'assistidos.all');
+      const r = must(await supa.from('assistidos').select('*').order('id'), 'assistidos.all');
+      return r.map(appASS);
     } catch (e) {
       console.warn('assistidos.all fallback', e.message);
       return [...(mem.assistidos || [])];
@@ -2628,7 +2636,7 @@ store.assistidos = {
     if (MODE === 'file') return (mem.assistidos || []).find(x => eqi(x.id, id)) || null;
     try {
       const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
-      return r.length ? r[0] : null;
+      return r.length ? appASS(r[0]) : null;
     } catch (e) { return (mem.assistidos || []).find(x => eqi(x.id, id)) || null; }
   },
   async insert(r) {
@@ -2637,9 +2645,10 @@ store.assistidos = {
       mem.assistidos.push(row); saveFile(); return row;
     }
     try {
-      const rr = must(await supa.from('assistidos').insert(r).select().single(), 'assistidos.insert');
-      return rr;
+      const rr = must(await supa.from('assistidos').insert(toRow(r, ASS)).select().single(), 'assistidos.insert');
+      return appASS(rr);
     } catch (e) {
+      console.warn('assistidos.insert fallback', e.message);
       const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString() };
       mem.assistidos.push(row); saveFile(); return row;
     }
@@ -2651,8 +2660,8 @@ store.assistidos = {
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize);
         try {
-          const rr = must(await supa.from('assistidos').insert(chunk).select(), 'assistidos.bulkInsert');
-          out.push(...rr);
+          const rr = must(await supa.from('assistidos').insert(chunk.map(x => toRow(x, ASS))).select(), 'assistidos.bulkInsert');
+          out.push(...rr.map(appASS));
         } catch (e) {
           console.warn('assistidos.bulkInsert fallback', e.message);
           for (const r of chunk) out.push(await this.insert(r));
@@ -2670,9 +2679,10 @@ store.assistidos = {
       Object.assign(r, fields); saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos').update(fields).eq('id', Number(id)).select(), 'assistidos.patch');
-      return rr.length ? rr[0] : null;
+      const rr = must(await supa.from('assistidos').update(toRow(fields, ASS)).eq('id', Number(id)).select(), 'assistidos.patch');
+      return rr.length ? appASS(rr[0]) : null;
     } catch (e) {
+      console.warn('assistidos.patch fallback', e.message);
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return null;
       Object.assign(r, fields); return r;
