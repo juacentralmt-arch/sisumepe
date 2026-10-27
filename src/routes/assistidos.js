@@ -103,7 +103,24 @@ router.get('/api/assistidos/debug', auth(['admin']), ah(async (req, res) => {
 router.get('/api/assistidos/debug-insert', auth(['admin']), ah(async (req, res) => {
   const { createClient } = require('@supabase/supabase-js');
   const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  const r = await supa.from('assistidos').insert({ nome: 'DEBUG' }).select();
+  const payload = {
+    statusGrupo: 'ativo',
+    numero: '1',
+    dias: '2',
+    alerta: 'A',
+    processo: '123',
+    vara: 'VARA',
+    nome: 'DEBUG FULL',
+    vinculo: 'V',
+    sitJuridico: 'SIT',
+    inicio: '2023-02-14',
+    status: 'ATIVO',
+    observacao: 'OBS',
+    juntadas: 'J1: teste',
+    proximaJuntada: 'PROX',
+    extras: { 'Nº': '1' }
+  };
+  const r = await supa.from('assistidos').insert(payload).select();
   res.json(r);
 }));
 router.get('/api/assistidos/debug-select', auth(['admin']), ah(async (req, res) => {
