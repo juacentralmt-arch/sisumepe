@@ -2625,8 +2625,16 @@ store.assistidos = {
   async all() {
     if (MODE === 'file') return [...(mem.assistidos || [])];
     try {
-      const r = must(await supa.from('assistidos').select('*').order('id').limit(10000), 'assistidos.all');
-      return r.map(appASS);
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.all');
+        out.push(...r.map(appASS));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
     } catch (e) {
       console.warn('assistidos.all fallback', e.message);
       return [...(mem.assistidos || [])];
