@@ -94,43 +94,7 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   const list = await store.assistidos.all();
   res.json(list);
 }));
-router.get('/api/assistidos/debug', auth(['admin']), ah(async (req, res) => {
-  let err = null, rows = null;
-  try { rows = await store.assistidos.all(); }
-  catch (e) { err = e && e.message; }
-  res.json({ mode: store.mode, count: Array.isArray(rows) ? rows.length : null, error: err });
-}));
-router.get('/api/assistidos/debug-insert', auth(['admin']), ah(async (req, res) => {
-  const { createClient } = require('@supabase/supabase-js');
-  const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  const payload = {
-    statusGrupo: 'ativo',
-    numero: '1',
-    dias: '2',
-    alerta: 'A',
-    processo: '123',
-    vara: 'VARA',
-    nome: 'DEBUG FULL',
-    vinculo: 'V',
-    sitJuridico: 'SIT',
-    inicio: '2023-02-14',
-    status: 'ATIVO',
-    observacao: 'OBS',
-    juntadas: 'J1: teste',
-    proximaJuntada: 'PROX',
-    extras: { 'Nº': '1' }
-  };
-  const r = await supa.from('assistidos').insert(payload).select();
-  res.json(r);
-}));
-router.get('/api/assistidos/debug-select', auth(['admin']), ah(async (req, res) => {
-  const { createClient } = require('@supabase/supabase-js');
-  const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  const r1 = await supa.from('assistidos').select('*');
-  const r2 = await supa.from('assistidos').select('*').order('id');
-  const r3 = await store.assistidos.all();
-  res.json({ url: process.env.SUPABASE_URL, r1count: r1.data && r1.data.length, r2count: r2.data && r2.data.length, r2error: r2.error && r2.error.message, storeCount: r3.length });
-}));
+// (endpoints de debug removidos)
 
 let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
 router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res) => {
