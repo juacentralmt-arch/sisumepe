@@ -2625,7 +2625,7 @@ store.assistidos = {
   async all() {
     if (MODE === 'file') return [...(mem.assistidos || [])];
     try {
-      const r = must(await supa.from('assistidos').select('*').order('id'), 'assistidos.all');
+      const r = must(await supa.from('assistidos').select('*').order('id').limit(10000), 'assistidos.all');
       return r.map(appASS);
     } catch (e) {
       console.warn('assistidos.all fallback', e.message);
