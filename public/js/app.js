@@ -10591,19 +10591,19 @@ function renderAssistidos(){
   if(alerta) list=list.filter(a=> a.alerta===alerta);
   if(!list.length){ body.innerHTML = '<tr><td colspan="13" class="p-2 text-center text-slate-400">Nenhum registro.</td></tr>'; return; }
   body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
-    '<td class="p-2">' + esc(a.numero) + '</td>' +
-    '<td class="p-2">' + esc(a.dias) + '</td>' +
-    '<td class="p-2">' + esc(a.alerta) + '</td>' +
-    '<td class="p-2">' + esc(a.nome) + '</td>' +
-    '<td class="p-2">' + esc(a.vara) + '</td>' +
-    '<td class="p-2">' + esc(a.processo) + '</td>' +
-    '<td class="p-2">' + esc(a.vinculo) + '</td>' +
-    '<td class="p-2">' + esc(a.sitJuridico) + '</td>' +
-    '<td class="p-2">' + esc(a.inicio) + '</td>' +
-    '<td class="p-2">' + esc(a.status) + '</td>' +
-    '<td class="p-2">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
-    '<td class="p-2">' + esc(String(a.juntadas||'').replace(/\n/g,'; ').slice(0,120)) + '</td>' +
-    '<td class="p-2 whitespace-nowrap">' +
+    '<td class="p-1">' + esc(a.numero) + '</td>' +
+    '<td class="p-1">' + esc(a.dias) + '</td>' +
+    '<td class="p-1">' + esc(a.alerta) + '</td>' +
+    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + '</td>' +
+    '<td class="p-1 max-w-[160px] truncate" title="' + esc(a.vara) + '">' + esc(a.vara) + '</td>' +
+    '<td class="p-1">' + esc(a.processo) + '</td>' +
+    '<td class="p-1">' + esc(a.vinculo) + '</td>' +
+    '<td class="p-1">' + esc(a.sitJuridico) + '</td>' +
+    '<td class="p-1">' + esc(a.inicio) + '</td>' +
+    '<td class="p-1">' + esc(a.status) + '</td>' +
+    '<td class="p-1 max-w-[200px] truncate" title="' + esc(a.observacao) + '">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
+    '<td class="p-1 max-w-[220px] truncate" title="' + esc(a.juntadas) + '">' + esc(String(a.juntadas||'').replace(/\n/g,'; ').slice(0,120)) + '</td>' +
+    '<td class="p-1 whitespace-nowrap">' +
       '<button class="text-indigo-600 hover:underline mr-2" onclick="editarAssistido(' + a.id + ')">Editar</button>' +
       (assistidosTab==='concluidos' ? '<button class="text-amber-600 hover:underline mr-2" onclick="reabrirAssistido(' + a.id + ')">Reabrir</button>' : '<button class="text-emerald-600 hover:underline mr-2" onclick="concluirAssistido(' + a.id + ')">Concluido</button>') +
       '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
