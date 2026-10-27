@@ -10546,29 +10546,69 @@ window.addEventListener('online', () => {
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
 async function loadAssistidos(){
+  await loadAssistidosData();
+  renderAssistidos();
+}
+let assistidosData = [];
+let assistidosTab = 'ativos';
+async function loadAssistidosData(){
+  const r = await api('/api/assistidos');
+  assistidosData = Array.isArray(r) ? r : (r.itens || []);
+}
+function setAssistidosTab(tab){
+  assistidosTab = tab;
+  const a = document.getElementById('assistidosTabAtivos');
+  const c = document.getElementById('assistidosTabConcluidos');
+  if(a && c){
+    a.className = 'btn ' + (tab==='ativos'?'btn-primary':'btn-ghost') + ' text-xs px-3 py-2';
+    c.className = 'btn ' + (tab==='concluidos'?'btn-primary':'btn-ghost') + ' text-xs px-3 py-2';
+  }
+  renderAssistidos();
+}
+function renderAssistidos(){
   const body = document.getElementById('assistidosBody');
   if(!body) return;
-  body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Carregando...</td></tr>';
-  try{
-    const r = await api('/api/assistidos');
-    const list = Array.isArray(r) ? r : (r.itens || []);
-    if(!list.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido. Importe um XLSX.</td></tr>'; return; }
-    body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
-      '<td class="p-2">' + esc(a.nome) + '</td>' +
-      '<td class="p-2">' + esc(a.processo) + '</td>' +
-      '<td class="p-2">' + esc(a.vara) + '</td>' +
-      '<td class="p-2">' + esc(a.statusGrupo || a.status) + '</td>' +
-      '<td class="p-2">' + esc(a.inicio) + '</td>' +
-      '<td class="p-2">' + esc(a.sitJuridico) + '</td>' +
-      '<td class="p-2">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
-      '<td class="p-2 whitespace-nowrap">' +
-        '<button class="text-indigo-600 hover:underline mr-2" onclick="editarAssistido(' + a.id + ')">Editar</button>' +
-        '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
-      '</td>' +
-    '</tr>').join('');
-  }catch(e){
-    body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-rose-500">' + esc(e.message) + '</td></tr>';
-  }
+  const buscaEl = document.getElementById('assistidosBusca');
+  const varaEl = document.getElementById('assistidosFiltroVara');
+  const statusEl = document.getElementById('assistidosFiltroStatus');
+  const alertaEl = document.getElementById('assistidosFiltroAlerta');
+  const busca = buscaEl ? buscaEl.value : '';
+  const vara = varaEl ? varaEl.value : '';
+  const status = statusEl ? statusEl.value : '';
+  const alerta = alertaEl ? alertaEl.value : '';
+  const varas = [...new Set(assistidosData.map(a=>a.vara).filter(Boolean))];
+  const statuses = [...new Set(assistidosData.map(a=>a.status).filter(Boolean))];
+  const alertas = [...new Set(assistidosData.map(a=>a.alerta).filter(Boolean))];
+  if(varaEl && varaEl.options.length <= 1){ varas.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;varaEl.appendChild(o);}); }
+  if(statusEl && statusEl.options.length <= 1){ statuses.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;statusEl.appendChild(o);}); }
+  if(alertaEl && alertaEl.options.length <= 1){ alertas.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;alertaEl.appendChild(o);}); }
+  let list = [];
+  if(assistidosTab==='ativos') list = assistidosData.filter(a => a.statusGrupo !== 'concluido');
+  else list = assistidosData.filter(a => a.statusGrupo === 'concluido');
+  if(busca){ const t=busca.toLowerCase(); list=list.filter(a=> (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vara||'').toLowerCase().includes(t)); }
+  if(vara) list=list.filter(a=> a.vara===vara);
+  if(status) list=list.filter(a=> a.status===status);
+  if(alerta) list=list.filter(a=> a.alerta===alerta);
+  if(!list.length){ body.innerHTML = '<tr><td colspan="13" class="p-2 text-center text-slate-400">Nenhum registro.</td></tr>'; return; }
+  body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
+    '<td class="p-2">' + esc(a.numero) + '</td>' +
+    '<td class="p-2">' + esc(a.dias) + '</td>' +
+    '<td class="p-2">' + esc(a.alerta) + '</td>' +
+    '<td class="p-2">' + esc(a.nome) + '</td>' +
+    '<td class="p-2">' + esc(a.vara) + '</td>' +
+    '<td class="p-2">' + esc(a.processo) + '</td>' +
+    '<td class="p-2">' + esc(a.vinculo) + '</td>' +
+    '<td class="p-2">' + esc(a.sitJuridico) + '</td>' +
+    '<td class="p-2">' + esc(a.inicio) + '</td>' +
+    '<td class="p-2">' + esc(a.status) + '</td>' +
+    '<td class="p-2">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
+    '<td class="p-2">' + esc(String(a.juntadas||'').replace(/\n/g,'; ').slice(0,120)) + '</td>' +
+    '<td class="p-2 whitespace-nowrap">' +
+      '<button class="text-indigo-600 hover:underline mr-2" onclick="editarAssistido(' + a.id + ')">Editar</button>' +
+      (assistidosTab==='concluidos' ? '<button class="text-amber-600 hover:underline mr-2" onclick="reabrirAssistido(' + a.id + ')">Reabrir</button>' : '<button class="text-emerald-600 hover:underline mr-2" onclick="concluirAssistido(' + a.id + ')">Concluido</button>') +
+      '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
+    '</td>' +
+  '</tr>').join('');
 }
 async function importarAssistidos(inp){
   const f = inp && inp.files && inp.files[0];
@@ -10576,36 +10616,72 @@ async function importarAssistidos(inp){
   const fd = new FormData(); fd.append('arquivo', f);
   try{
     const r = await api('/api/assistidos/import', { method:'POST', body: fd });
-    alert('Importados: ' + (r.importados||0));
-    loadAssistidos();
+    alert(r.msg || 'Importacao iniciada');
+    setTimeout(loadAssistidos, 2000);
   }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
   inp.value = '';
 }
-async function adicionarAssistido(){
-  const nome = prompt('Nome:'); if(!nome) return;
-  const processo = prompt('Processo:') || '';
-  const vara = prompt('Vara:') || '';
-  const statusGrupo = prompt('Status (ativo/arquivado):','ativo') || 'ativo';
-  const inicio = prompt('Início (AAAA-MM-DD):') || '';
-  const sitJuridico = prompt('Situação jurídica:') || '';
-  const observacao = prompt('Observação:') || '';
+async function loadAssistidos(){
+  await loadAssistidosData();
+  renderAssistidos();
+}
+function openAssistidoModal(a){
+  document.getElementById('assistidoId').value = a ? a.id : '';
+  document.getElementById('assistidoModalTitle').textContent = a ? 'Editar assistido' : 'Novo assistido';
+  document.getElementById('aNumero').value = a ? (a.numero||'') : '';
+  document.getElementById('aDias').value = a ? (a.dias||'') : '';
+  document.getElementById('aAlerta').value = a ? (a.alerta||'') : '';
+  document.getElementById('aNome').value = a ? (a.nome||'') : '';
+  document.getElementById('aVara').value = a ? (a.vara||'') : '';
+  document.getElementById('aProcesso').value = a ? (a.processo||'') : '';
+  document.getElementById('aVinculo').value = a ? (a.vinculo||'') : '';
+  document.getElementById('aSit').value = a ? (a.sitJuridico||'') : '';
+  document.getElementById('aInicio').value = a ? (a.inicio||'') : '';
+  document.getElementById('aStatus').value = a ? (a.status||'') : '';
+  document.getElementById('aObs').value = a ? (a.observacao||'') : '';
+  document.getElementById('aJuntadas').value = a ? (a.juntadas||'') : '';
+  document.getElementById('modalAssistido').classList.remove('hidden');
+}
+function closeAssistidoModal(){ document.getElementById('modalAssistido').classList.add('hidden'); }
+async function salvarAssistido(){
+  const id = document.getElementById('assistidoId').value;
+  const body = {
+    numero: document.getElementById('aNumero').value.trim(),
+    dias: document.getElementById('aDias').value.trim(),
+    alerta: document.getElementById('aAlerta').value.trim(),
+    nome: document.getElementById('aNome').value.trim(),
+    vara: document.getElementById('aVara').value.trim(),
+    processo: document.getElementById('aProcesso').value.trim(),
+    vinculo: document.getElementById('aVinculo').value.trim(),
+    sitJuridico: document.getElementById('aSit').value.trim(),
+    inicio: document.getElementById('aInicio').value,
+    status: document.getElementById('aStatus').value.trim(),
+    observacao: document.getElementById('aObs').value.trim(),
+    juntadas: document.getElementById('aJuntadas').value.trim()
+  };
+  if(!body.nome){ alert('Nome obrigatorio'); return; }
   try{
-    await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nome, processo, vara, statusGrupo, inicio, sitJuridico, observacao }) });
-    toast('Adicionado'); loadAssistidos();
+    if(id) await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    else await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Salvo'); closeAssistidoModal(); loadAssistidos();
   }catch(e){ alert('Erro: ' + e.message); }
 }
+function adicionarAssistido(){ openAssistidoModal(null); }
 async function editarAssistido(id){
-  const nome = prompt('Novo nome (deixe vazio para manter):');
-  const body = {};
-  if(nome) body.nome = nome;
-  const obs = prompt('Nova observação (deixe vazio para manter):');
-  if(obs) body.observacao = obs;
-  if(!Object.keys(body).length) return;
-  try{ await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }); toast('Atualizado'); loadAssistidos(); }
-  catch(e){ alert('Erro: ' + e.message); }
+  const a = assistidosData.find(x=> String(x.id)===String(id));
+  if(!a) return;
+  openAssistidoModal(a);
 }
 async function excluirAssistido(id){
   if(!confirm('Excluir este assistido?')) return;
-  try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluído'); loadAssistidos(); }
+  try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); }
+  catch(e){ alert('Erro: ' + e.message); }
+}
+async function concluirAssistido(id){
+  try{ await api('/api/assistidos/'+id+'/concluir', { method:'POST' }); toast('Concluido'); loadAssistidos(); }
+  catch(e){ alert('Erro: ' + e.message); }
+}
+async function reabrirAssistido(id){
+  try{ await api('/api/assistidos/'+id+'/reabrir', { method:'POST' }); toast('Reaberto'); loadAssistidos(); }
   catch(e){ alert('Erro: ' + e.message); }
 }

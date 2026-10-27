@@ -1843,13 +1843,68 @@
           <button onclick="loadAssistidos()" class="btn btn-ghost text-xs px-3 py-2">Atualizar</button>
         </div>
       </div>
+
+      <!-- Abas -->
+      <div class="flex gap-2 mb-3">
+        <button id="assistidosTabAtivos" onclick="setAssistidosTab('ativos')" class="btn btn-primary text-xs px-3 py-2">Ativos</button>
+        <button id="assistidosTabConcluidos" onclick="setAssistidosTab('concluidos')" class="btn btn-ghost text-xs px-3 py-2">Concluídos</button>
+      </div>
+
+      <!-- Filtros -->
+      <div class="mb-3 flex flex-wrap gap-2">
+        <input id="assistidosBusca" placeholder="Buscar nome/processo/vara..." class="inp text-xs px-3 py-2" style="min-width:220px" oninput="renderAssistidos()">
+        <select id="assistidosFiltroVara" class="inp text-xs px-3 py-2" onchange="renderAssistidos()"><option value="">Todas as varas</option></select>
+        <select id="assistidosFiltroStatus" class="inp text-xs px-3 py-2" onchange="renderAssistidos()"><option value="">Todos os status</option></select>
+        <select id="assistidosFiltroAlerta" class="inp text-xs px-3 py-2" onchange="renderAssistidos()"><option value="">Todos os alertas</option></select>
+      </div>
+
       <div id="assistidosWrap" class="card p-4 overflow-auto">
         <table class="w-full text-xs">
-          <thead><tr><th class="text-left p-2">Nome</th><th class="text-left p-2">Processo</th><th class="text-left p-2">Vara</th><th class="text-left p-2">Status</th><th class="text-left p-2">Inicio</th><th class="text-left p-2">Situacao</th><th class="text-left p-2">Obs</th><th class="text-left p-2">Acoes</th></tr></thead>
+          <thead><tr>
+            <th class="text-left p-2">Nº</th>
+            <th class="text-left p-2">Dias</th>
+            <th class="text-left p-2">Alerta</th>
+            <th class="text-left p-2">Nome</th>
+            <th class="text-left p-2">Vara</th>
+            <th class="text-left p-2">Processo</th>
+            <th class="text-left p-2">Vínculo</th>
+            <th class="text-left p-2">Sit. Jurídico Penal</th>
+            <th class="text-left p-2">Início da Medida</th>
+            <th class="text-left p-2">Status</th>
+            <th class="text-left p-2">Observação</th>
+            <th class="text-left p-2">Juntadas</th>
+            <th class="text-left p-2">Ações</th>
+          </tr></thead>
           <tbody id="assistidosBody"></tbody>
         </table>
       </div>
     </section>
+
+    <!-- MODAL ASSISTIDO -->
+    <div id="modalAssistido" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-auto p-6">
+        <h3 class="font-display font-bold text-lg mb-4"><span id="assistidoModalTitle">Novo assistido</span></h3>
+        <input type="hidden" id="assistidoId">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Nº</label><input id="aNumero" class="inp mt-1"></div>
+          <div><label class="lbl">Dias</label><input id="aDias" class="inp mt-1"></div>
+          <div><label class="lbl">Alerta</label><input id="aAlerta" class="inp mt-1"></div>
+          <div><label class="lbl">Nome</label><input id="aNome" class="inp mt-1"></div>
+          <div><label class="lbl">Vara</label><input id="aVara" class="inp mt-1"></div>
+          <div><label class="lbl">Processo</label><input id="aProcesso" class="inp mt-1"></div>
+          <div><label class="lbl">Vínculo</label><input id="aVinculo" class="inp mt-1"></div>
+          <div><label class="lbl">Sit. Jurídico Penal</label><input id="aSit" class="inp mt-1"></div>
+          <div><label class="lbl">Início da Medida</label><input id="aInicio" type="date" class="inp mt-1"></div>
+          <div><label class="lbl">Status</label><input id="aStatus" class="inp mt-1"></div>
+          <div class="col-span-2"><label class="lbl">Observação</label><textarea id="aObs" class="inp mt-1" rows="3"></textarea></div>
+          <div class="col-span-2"><label class="lbl">Juntadas</label><textarea id="aJuntadas" class="inp mt-1" rows="4"></textarea></div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button onclick="salvarAssistido()" class="btn btn-primary flex-1 py-3 text-sm">Salvar</button>
+          <button onclick="closeAssistidoModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
 
     <!-- VISAO 360 -->
