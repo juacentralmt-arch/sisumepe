@@ -109,8 +109,10 @@ router.get('/api/assistidos/debug-insert', auth(['admin']), ah(async (req, res) 
 router.get('/api/assistidos/debug-select', auth(['admin']), ah(async (req, res) => {
   const { createClient } = require('@supabase/supabase-js');
   const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  const r = await supa.from('assistidos').select('*');
-  res.json({ url: process.env.SUPABASE_URL, keyPrefix: String(process.env.SUPABASE_KEY||'').slice(0,12), result: r });
+  const r1 = await supa.from('assistidos').select('*');
+  const r2 = await supa.from('assistidos').select('*').order('id');
+  const r3 = await store.assistidos.all();
+  res.json({ url: process.env.SUPABASE_URL, r1count: r1.data && r1.data.length, r2count: r2.data && r2.data.length, r2error: r2.error && r2.error.message, storeCount: r3.length });
 }));
 
 let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
