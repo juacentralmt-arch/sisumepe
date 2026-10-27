@@ -30,7 +30,8 @@ const suites = [
   'test/estoqueKitSemFonte.test.js',
   'test/estoqueEstornoKit.test.js',
   'test/estoque.estorno.test.js',
-  'test/estoque2.independencia.test.js'
+  'test/estoque2.independencia.test.js',
+  'test/assistidos.test.js'
 ];
 
 const failed = [];
