@@ -106,6 +106,12 @@ router.get('/api/assistidos/debug-insert', auth(['admin']), ah(async (req, res) 
   const r = await supa.from('assistidos').insert({ nome: 'DEBUG' }).select();
   res.json(r);
 }));
+router.get('/api/assistidos/debug-select', auth(['admin']), ah(async (req, res) => {
+  const { createClient } = require('@supabase/supabase-js');
+  const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+  const r = await supa.from('assistidos').select('*');
+  res.json(r);
+}));
 
 let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
 router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res) => {
