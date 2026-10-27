@@ -94,6 +94,12 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   const list = await store.assistidos.all();
   res.json(list);
 }));
+router.get('/api/assistidos/debug', auth(['admin']), ah(async (req, res) => {
+  let err = null, rows = null;
+  try { rows = await store.assistidos.all(); }
+  catch (e) { err = e && e.message; }
+  res.json({ mode: store.mode, count: Array.isArray(rows) ? rows.length : null, error: err });
+}));
 
 let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
 router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res) => {
