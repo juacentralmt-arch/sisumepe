@@ -95,9 +95,15 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   res.json(list);
 }));
 
+let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
+router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res) => {
+  res.json(lastImportStatus);
+}));
+
 router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
   const buffer = req.file.buffer;
+  lastImportStatus = { state: 'running', total: 0, error: null, at: new Date().toISOString() };
   res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background. Aguarde e atualize a lista.' });
   setImmediate(async () => {
     try {
@@ -132,9 +138,11 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
         total += mapped.length;
       }
       console.log('[assistidos] importação concluída:', total);
+      lastImportStatus = { state: 'done', total, error: null, at: new Date().toISOString() };
       shared.broadcast({ type: 'assistidos_import_done', total });
     } catch (e) {
-      console.error('[assistidos] importação falhou:', e.message);
+      console.error('[assistidos] importação falhou:', e && e.stack ? e.stack : e.message);
+      lastImportStatus = { state: 'error', total: 0, error: String(e && e.message ? e.message : e), at: new Date().toISOString() };
     }
   });
 }));
