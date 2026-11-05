@@ -9,7 +9,22 @@ const PORT = shared.PORT;
 const ROOT = shared.ROOT;
 
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
+// Trust proxy: só confia em X-Forwarded-* quando realmente atrás de proxy.
+// TRUST_PROXY_HOPS permite ajustar (ex.: 2 atrás de CDN + balanceador).
+app.set('trust proxy', (() => {
+  const raw = process.env.TRUST_PROXY_HOPS;
+  if (raw !== undefined && raw !== '') {
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 0) return n;
+  }
+  return (process.env.RENDER || process.env.FORCE_HTTPS === '1') ? 1 : false;
+})());
+const HTTPS_ON = process.env.FORCE_HTTPS === '1' || process.env.NODE_ENV === 'production';
+// Origem do Supabase (se usada) para mídia/conexões diretas do navegador.
+const SUPA_ORIGIN = (() => {
+  try { return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : ''; } catch { return ''; }
+})();
+const SUPA_MEDIA = SUPA_ORIGIN ? ' ' + SUPA_ORIGIN : '';
 
 // Cabeçalhos de segurança
 app.use(shared.requestId);
@@ -23,13 +38,27 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self)');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   // CSP: permite Tailwind CDN (temporário), Google Fonts, OpenCV e workers blob/data
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org blob: data:; script-src-elem 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org; worker-src 'self' blob: data:; child-src blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.gstatic.com; connect-src 'self' data: blob: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org blob: data:; script-src-elem 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org; worker-src 'self' blob: data:; child-src blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.gstatic.com" + SUPA_MEDIA + "; media-src 'self' blob: data:" + SUPA_MEDIA + "; connect-src 'self' data: blob: https://viacep.com.br https://api.qrserver.com https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://docs.opencv.org" + SUPA_MEDIA + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   if (req.path === '/' || req.path === '/index.html') res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  // HSTS só faz sentido atrás de HTTPS (Render define FORCE_HTTPS=1)
-  if (process.env.FORCE_HTTPS === '1')
-    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  // HSTS sempre que a aplicação roda em HTTPS (produção/Render).
+  if (HTTPS_ON)
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  next();
+});
+// Log estruturado de requisições de API (sem corpo/dados pessoais).
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/') || req.path === '/api/events' || req.path === '/api/health') return next();
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    console.log(JSON.stringify({
+      level: 'info', type: 'http', requestId: req.requestId || null,
+      method: req.method, path: req.path, status: res.statusCode,
+      duration_ms: Math.round(ms), at: new Date().toISOString()
+    }));
+  });
   next();
 });
 // HTTPS em produção (Render)
@@ -90,14 +119,36 @@ app.use('/uploads', shared.auth(), express.static(path.join(ROOT, 'uploads'), {
 }));
 
 app.get('/api/health', (req, res) => {
-  let ocrNuvem = false;
-  try { ocrNuvem = require('./src/lib/ocrNuvem').chaveConfigurada(); } catch {}
   res.json({
-    ok: true, store: store.mode,
+    ok: true,
     version: require('./package.json').version || '1.0.0',
     uptime_s: Math.round(process.uptime()),
+    now: new Date().toISOString()
+  });
+});
+
+// Readiness: verifica a dependência crítica (arquivo ou Supabase).
+// Retorna 503 quando o banco não responde — o Render não deve receber tráfego.
+app.get('/api/ready', async (req, res) => {
+  const started = Date.now();
+  try {
+    await store.ping();
+    res.json({ ok: true, store: store.mode, latency_ms: Date.now() - started });
+  } catch (e) {
+    console.error(JSON.stringify({ level: 'error', type: 'readiness', message: e.message, at: new Date().toISOString() }));
+    res.status(503).json({ ok: false, store: store.mode, error: 'Dependência indisponível' });
+  }
+});
+
+// Métricas operacionais (admin): volume e clientes SSE, sem PII.
+app.get('/api/metrics', shared.auth(['admin']), (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    uptime_s: Math.round(process.uptime()),
     sse_clients: shared.sseClients.length,
-    ocrNuvem,
+    memory: { rss_mb: Math.round(mem.rss / 1048576), heap_mb: Math.round(mem.heapUsed / 1048576) },
+    store: store.mode,
+    node: process.version,
     now: new Date().toISOString()
   });
 });
@@ -116,6 +167,7 @@ app.get('/api/events', shared.auth(), (req, res) => {
 });
 
 app.use(require('./src/routes/auth'));
+app.use(require('./src/routes/files'));
 app.use(require('./src/routes/chat'));
 app.use(require('./src/routes/persons'));
 app.use(require('./src/routes/tickets'));
@@ -127,28 +179,40 @@ app.use(require('./src/routes/termos'));
 app.use(require('./src/routes/ativacoes'));
 app.use(require('./src/routes/pdfTools'));
 app.use(require('./src/routes/estoque'));
-app.use(require('./src/routes/estoque2'));
 app.use(require('./src/routes/psico'));
 app.use(require('./src/routes/arquivos'));
 app.use(require('./src/routes/assistidos'));
 
-// Painel TV público (sem login): só o mínimo necessário à chamada.
-// Exibe e anuncia o nome completo do atendido (texto + voz).
-app.get('/api/tv', shared.ah(async (req, res) => {
+// Painel TV: dispositivo autorizado por token (TV_DEVICE_TOKEN) ou equipe
+// autenticada. Payload mínimo: sem motivo, modelo ou histórico; nome
+// abreviado por padrão (TV_NOME_COMPLETO=1 restaura o nome completo).
+app.get('/api/tv', shared.tvAuth, shared.ah(async (req, res) => {
   const all = await store.tickets.all();
   const persons = await store.persons.all();
+  const byId = new Map(persons.map(p => [String(p.id), p]));
   const queue = shared.sortQueue(all.filter(t => t.status === 'aguardando')).map(t => {
-    const p = persons.find(x => String(x.id) === String(t.personId));
-    const nomeCompleto = (p && p.nome ? String(p.nome).trim() : '') || '-';
+    const p = byId.get(String(t.personId));
     return {
-      id: t.id, code: t.code, nome: nomeCompleto,
-      motivo: t.motivo || '', modelo: t.modeloTornozeleira || '',
+      id: t.id, code: t.code, nome: shared.tvDisplayName(p && p.nome),
       prioridade: !!t.prioridadeLegal,
       called: !!t.called, calledAt: t.calledAt || null, createdAt: t.createdAt
     };
   });
   res.json({ queue, now: new Date().toISOString() });
 }));
+
+// Atualizações do painel por SSE (o EventSource envia o token na query).
+app.get('/api/tv/events', shared.tvAuth, (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+  const client = shared.addSseClient(res, 'tv:' + (req.tvDevice ? 'device' : (req.auth && req.auth.user) || 'staff'));
+  req.on('close', () => shared.removeSseClient(client));
+  const hb = setInterval(() => { try { res.write(': hb\n\n'); } catch {} }, 25000);
+  req.on('close', () => clearInterval(hb));
+});
 
 app.get('/tv', (req, res) => res.sendFile(path.join(ROOT, 'public', 'tv.html')));
 
@@ -173,11 +237,15 @@ process.on('uncaughtException', (err) => console.error(JSON.stringify({ level: '
 
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`SISUMEPE Juazeiro [${store.mode}] rodando em http://localhost:${PORT}`));
 
-// Auto-seed na nuvem: garante as contas padrão (psicologo, recepcao, admin...)
-// sem tocar em quem já existe. É o que recria o psicólogo se a linha sumir.
-store.users.ensureSeeded()
-  .then(r => { if (r && r.created && r.created.length) console.log('Seed: usuários criados no banco:', r.created.join(', ')); })
-  .catch(() => {});
+// Auto-seed: DESATIVADO por padrão em produção. Recriar contas padrão com
+// senhas conhecidas é um risco. Para habilitar explicitamente, defina
+// AUTO_SEED_USERS=1 e troque as senhas no primeiro acesso. O modo arquivo
+// (dev/testes) continua semeando via loadFile().
+if (process.env.AUTO_SEED_USERS === '1') {
+  store.users.ensureSeeded()
+    .then(r => { if (r && r.created && r.created.length) console.log('Seed: usuários criados no banco:', r.created.join(', ')); })
+    .catch(() => {});
+}
 
 // Pre-warm OCR servidor: cria o worker Tesseract em background após o boot
 // (a 1ª criação baixa ~2MB de dados `por` e leva segundos) para a primeira

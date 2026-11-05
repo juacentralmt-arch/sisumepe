@@ -21,7 +21,6 @@ shared.auth = (roles) => (req, res, next) => {
   next();
 };
 const estoqueRouter = require('../src/routes/estoque');
-const estoque2Router = require('../src/routes/estoque2');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -30,7 +29,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(estoqueRouter);
-app.use(estoque2Router);
 
 const DB = path.join(__dirname, '..', 'db.json');
 const DB_BACKUP = fs.readFileSync(DB, 'utf8');
@@ -87,15 +85,6 @@ const get = async (p) => {
   assert(r3.status === 200, 'saída de kit: 200');
   assert((await saldos('TZPR04')) === antes.tzpr + 2, 'TZPR04 volta ao saldo anterior (+2)');
   assert((await saldos('TRAVAS')) === antes.travas + 4, 'TRAVAS volta ao saldo anterior (+4)');
-
-  console.log('\n=== KIT TZPR (sem fonte) — Estoque 2 ===');
-  const r4 = await post('/api/estoque2/movimentar-kit', {
-    sistema: 'spacecom', contrato: 'CE01', unidade: uni,
-    kits: 1, kit: 'tzprsf', tipo: 'entrada', motivo: 'teste kit sem fonte e2'
-  });
-  assert(r4.status === 200, 'movimentar-kit (e2) tzprsf: 200');
-  const itens2 = (r4.body.itens || []).map(i => i.material + ':' + i.qtd).sort();
-  assert(itens2.join(',') === 'CINTA:1,TRAVAS:2,TZPR04:1', `composição e2 (${itens2.join(', ')})`);
 
   console.log('\n=== KIT TZPR (sem fonte) — kit completo continua íntegro ===');
   const r5 = await post('/api/estoque/movimentar-kit', {

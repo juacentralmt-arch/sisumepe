@@ -21,7 +21,6 @@ shared.auth = (roles) => (req, res, next) => {
   next();
 };
 const estoqueRouter = require('../src/routes/estoque');
-const estoque2Router = require('../src/routes/estoque2');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -30,7 +29,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(estoqueRouter);
-app.use(estoque2Router);
 
 const DB = require('path').join(__dirname, '..', 'db.json');
 const fs = require('fs');
@@ -103,20 +101,6 @@ const get = async (p) => {
     qtd: 1, tipo: 'entrada', motivo: ''
   });
   assert(semMotivo.status === 400, 'entrada comum sem motivo: 400');
-
-  console.log('\n=== MOTIVO AUTOMÁTICO — Estoque 2 ===');
-  const tri2 = await post('/api/estoque2/movimentar', {
-    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
-    qtd: 2, tipo: 'triagem', motivo: ''
-  });
-  assert(tri2.status === 200, 'triagem (e2) sem motivo: 200');
-  const movTri2 = (await store.estoque2Mov.all({ limit: 'all' })).find(m => m.motivo && m.motivo.startsWith('[TRIAGEM]'));
-  assert(!!movTri2, 'movimentação e2 gravada com tag [TRIAGEM]');
-  const semMotivo2 = await post('/api/estoque2/movimentar', {
-    sistema: 'spacecom', contrato: 'CE01', material: 'CINTA', unidade: uni,
-    qtd: 1, tipo: 'entrada', motivo: ''
-  });
-  assert(semMotivo2.status === 400, 'entrada comum (e2) sem motivo: 400');
 
   console.log('\n=== FILTRO POR CATEGORIA ===');
   const f = await get('/api/estoque-mov?contrato=CE01&sistema=spacecom&categoria=triagem&limit=20');

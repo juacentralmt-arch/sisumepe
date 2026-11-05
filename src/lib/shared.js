@@ -77,8 +77,21 @@ function requestId(req, res, next) {
 async function issueToken(u) {
   const token = crypto.randomBytes(32).toString('hex');
   const sistema = u.sistema || (u.user && require('../../store').getUserSistema ? require('../../store').getUserSistema(u) : 'spacecom');
-  await store.sessions.insert(token, { user: u.user, role: u.role, name: u.name, sistema: u.role==='admin' ? null : sistema, exp: Date.now() + 12 * 3600e3 });
+  await store.sessions.insert(token, {
+    user: u.user, role: u.role, name: u.name,
+    sistema: u.role === 'admin' ? null : sistema,
+    mustChangePassword: !!u.mustChangePassword,
+    exp: Date.now() + 12 * 3600e3
+  });
   return token;
+}
+function sessionCookie(token, maxAgeSeconds = 12 * 3600) {
+  const secure = process.env.FORCE_HTTPS === '1' || process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `te_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${secure}`;
+}
+function clearSessionCookie() {
+  const secure = process.env.FORCE_HTTPS === '1' || process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  return `te_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 setInterval(() => { store.sessions.cleanup().catch(() => {}); }, 3600e3).unref();
 function parseCookies(req){
@@ -107,6 +120,13 @@ function auth(roles) {
       }
       req.auth = s; req.auth.token = t;
       if (roles && roles.length && !roles.includes(s.role)) return res.status(403).json({ error: 'Acesso restrito ao seu perfil.' });
+      // Senha inicial/temporária: bloqueia o resto da API até a troca.
+      if (s.mustChangePassword) {
+        const allowed = new Set(['/api/users/me/password', '/api/logout', '/api/users/me']);
+        if (!allowed.has(req.path)) {
+          return res.status(403).json({ error: 'Troque a senha inicial para continuar.', code: 'password_change_required' });
+        }
+      }
       next();
     }).catch(() => res.status(401).json({ error: 'Sessão expirada. Entre novamente.' }));
   };
@@ -159,6 +179,45 @@ function horarioComercialInfo(when) {
 function recepcaoBloqueada(sess) {
   if (!sess || sess.role !== 'recepcao') return false;
   return !horarioComercialInfo().emHorario;
+}
+
+// ------------------------- Painel TV (device token) -------------------
+// O painel é um dispositivo, não um usuário. Ele usa um token dedicado
+// (TV_DEVICE_TOKEN), nunca a sessão de um servidor. Sem token configurado,
+// em produção o acesso exige sessão de equipe (fail-closed).
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  if (ba.length !== bb.length) return false;
+  try { return crypto.timingSafeEqual(ba, bb); } catch { return false; }
+}
+function tvTokenFromReq(req) {
+  const h = req.headers['x-tv-token'];
+  if (h) return String(h);
+  const authz = String(req.headers.authorization || '');
+  if (/^Bearer\s+/i.test(authz)) return authz.replace(/^Bearer\s+/i, '').trim();
+  if (req.query && req.query.token) return String(req.query.token);
+  return '';
+}
+function tvTokenOk(req) {
+  const expected = String(process.env.TV_DEVICE_TOKEN || '');
+  if (!expected) return process.env.NODE_ENV !== 'production';
+  return safeEqual(tvTokenFromReq(req), expected);
+}
+function tvAuth(req, res, next) {
+  if (tvTokenOk(req)) { req.tvDevice = true; return next(); }
+  // Fallback: equipe autenticada pode abrir o painel no navegador.
+  return auth()(req, res, next);
+}
+// Minimização de dados no painel: por padrão exibe apenas primeiro nome +
+// inicial do sobrenome. TV_NOME_COMPLETO=1 restaura o nome completo.
+function tvDisplayName(nome) {
+  const raw = String(nome || '').trim();
+  if (!raw || raw === '-') return '-';
+  if (process.env.TV_NOME_COMPLETO === '1') return raw;
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0];
+  return parts[0] + ' ' + parts[parts.length - 1].charAt(0).toUpperCase() + '.';
 }
 
 const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e => {
@@ -517,6 +576,7 @@ module.exports = {
   ROOT, PORT, store,
   ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
   loginRateLimit, apiRateLimit, iaRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
+  safeEqual, tvTokenOk, tvAuth, tvDisplayName, sessionCookie, clearSessionCookie,
   horarioComercialInfo, recepcaoBloqueada, RECP_TZ, RECP_MSG,
   upload, uploadLarge, mapFiles, consolidateTicketFiles, pdfPrefixForMotivo,
   sortQueue, shortName, enrich, enrichAll, servePersonsCache, invalidatePersonsCache, ticketOwnerOf, infinityBlocked, ticketSistemaBlocked, ticketVisivelPara, actorSistema, isInfinityTicket,
