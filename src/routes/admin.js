@@ -16,6 +16,10 @@ router.get('/api/audit/search', auth(['admin']), ah(async (req, res) => {
   const { q, user, action, kind, from, to, limit, offset } = req.query;
   res.json(await store.audit.search({ q, user, action, kind, from, to, limit, offset }));
 }));
+router.get('/api/audit/verify', auth(['admin']), ah(async (req, res) => {
+  const result = await store.audit.verify();
+  res.status(result.ok ? 200 : 409).json(result);
+}));
 router.get('/api/audit/stats', auth(['admin']), ah(async (req, res) => {
   const all = await store.audit.recent(500);
   const byAction={}, byUser={}, byDay={};

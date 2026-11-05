@@ -1,5 +1,10 @@
 
 let session = JSON.parse(localStorage.getItem('te_session') || 'null');
+// O token nunca é persistido no navegador: a sessão vive no cookie httpOnly.
+if (session && session.token) {
+  delete session.token;
+  try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {}
+}
 let es = null;
 let role = session ? session.role : null;
 let lastVisaoPerson = null;
@@ -101,12 +106,20 @@ async function doLogin(){
   if(!setBtnLoading(btn, true, 'Entrando...')) return;
   try{
     const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
-    session = s; role = s.role;
-    localStorage.setItem('te_session', JSON.stringify(s));
+    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword };
+    role = s.role;
+    localStorage.setItem('te_session', JSON.stringify(session));
     document.getElementById('loginPass').value = '';
     err.classList.add('hidden');
     enterApp();
     toast('Bem-vindo(a), ' + s.name + '!');
+    if (s.mustChangePassword) {
+      setTimeout(() => {
+        openAccount();
+        const e = document.getElementById('accErr');
+        if (e) { e.textContent = 'Troque a senha inicial para liberar o sistema.'; e.classList.remove('hidden'); }
+      }, 400);
+    }
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
   finally{ setBtnLoading(btn, false); }
 }
@@ -114,13 +127,10 @@ async function finishLogout(silent){
   // Encerra a sessão no servidor, mas nunca trava a tela: timeout de 3s
   // (ex.: servidor "acordando" no plano grátis) — a sessão expira sozinha.
   try{
-    const s = JSON.parse(localStorage.getItem('te_session') || 'null');
-    if(s && s.token){
-      await Promise.race([
-        fetch('/api/logout', { method: 'POST', headers: { 'X-Session': s.token } }).catch(() => {}),
-        new Promise(res => setTimeout(res, 3000))
-      ]);
-    }
+    await Promise.race([
+      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {}),
+      new Promise(res => setTimeout(res, 3000))
+    ]);
   }catch(e){}
   session = null; role = null;
   tickets = []; visaoHist = [];
@@ -177,7 +187,7 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
     else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'].includes(t);
-    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'].includes(t);
+    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     b.classList.toggle('hidden', !show);
   });
@@ -187,9 +197,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'],
   psico: ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'estoque2', 'pdf', 'arquivos', 'assistidos', 'visao', 'dash'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'pdf', 'arquivos', 'assistidos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'arquivos', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
@@ -337,7 +347,7 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','estoque2','pdf','arquivos','assistidos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','pdf','arquivos','assistidos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
@@ -349,7 +359,6 @@ function go(tab){
   if(tab==='usuarios') loadUsersAdmin();
   if(tab==='auditoria') loadAuditoria();
   if(tab==='estoque') loadEstoque();
-  if(tab==='estoque2') loadEstoque2();
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   if(tab==='arquivos') loadArquivos();
   if(tab==='assistidos') loadAssistidos();
@@ -360,19 +369,22 @@ function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;',
 function initials(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 
 function authHeaders(h){
-  h = h || {};
-  try{
-    const s = JSON.parse(localStorage.getItem('te_session') || 'null');
-    if(s && s.token) h['X-Session'] = s.token;
-  }catch(e){}
-  return h;
+  // Autenticação exclusivamente por cookie httpOnly (SameSite=Strict).
+  return h || {};
 }
 async function api(p, opt){
   opt = opt || {};
+  opt.credentials = opt.credentials || 'same-origin';
   opt.headers = authHeaders(opt.headers);
   const r = await fetch(p, opt);
   const j = await r.json().catch(() => ({}));
   if(r.status === 401){ logout(true); throw new Error(j.error || 'Sessão expirada. Entre novamente.'); }
+  if(r.status === 403 && j.code === 'password_change_required'){
+    openAccount();
+    const e = document.getElementById('accErr');
+    if(e){ e.textContent = 'Troque a senha inicial para continuar.'; e.classList.remove('hidden'); }
+    throw new Error(j.error || 'Troque a senha inicial.');
+  }
   if(!r.ok) throw new Error(j.error || 'Erro');
   return j;
 }
@@ -5672,11 +5684,8 @@ function arqEnviar(input){
   if(txt) txt.textContent = 'Enviando ' + file.name + '...';
   const fd = new FormData();
   fd.append('arquivo', file);
-  let token = '';
-  try{ const s = JSON.parse(localStorage.getItem('te_session') || 'null'); if(s && s.token) token = s.token; }catch(e){}
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/arquivos/upload', true);
-  if(token) xhr.setRequestHeader('X-Session', token);
   xhr.upload.onprogress = (e) => {
     if(!e.lengthComputable) return;
     const p = Math.round((e.loaded / e.total) * 100);
@@ -6007,7 +6016,7 @@ async function psiDelAtend(id){
 }
 // ---- PSC (Prestação de Serviços à Comunidade) ----
 let psiLocais = [], psiVincs = [];
-function psiTok(){ try{ const s=JSON.parse(localStorage.getItem('te_session')||'null'); return (s&&s.token)||''; }catch(e){ return ''; } }
+function psiTok(){ return ''; } // sessão via cookie httpOnly; token nunca vai na URL
 async function openPdfAuth(url){
   try{
     const r=await authFetch(url);
@@ -6903,6 +6912,7 @@ async function saveAccount(){
   const err = document.getElementById('accErr');
   try{
     await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
+    if (session) { session.mustChangePassword = false; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
     closeAccount(); toast('Senha atualizada!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
@@ -10511,9 +10521,9 @@ function handleCallSignal(data){
 function connectSSE(){
   try{ if(es) es.close(); }catch(e){}
   es = null;
-  if(!session || !session.token) return;
+  if(!session) return;
   try{
-    es = new EventSource('/api/events?token=' + encodeURIComponent(session.token));
+    es = new EventSource('/api/events', { withCredentials: true });
     es.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);

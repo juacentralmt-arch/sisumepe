@@ -122,9 +122,26 @@ function sortQ(list){
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 }
+// Token do dispositivo: informe uma vez em /tv?token=SEU_TOKEN
+// (fica só nesta aba; nunca é gravado no localStorage).
+const TV_TOKEN = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('token');
+    if (q) { sessionStorage.setItem('tv_token', q); history.replaceState({}, '', '/tv'); return q; }
+    return sessionStorage.getItem('tv_token') || '';
+  } catch (e) { return ''; }
+})();
+function tvHeaders(){ return TV_TOKEN ? { 'X-TV-Token': TV_TOKEN } : {}; }
 async function tick(){
   try{
-    const data = await (await fetch('/api/tv')).json();
+    const r = await fetch('/api/tv', { headers: tvHeaders(), credentials: 'same-origin' });
+    if (r.status === 401 || r.status === 403) {
+      document.getElementById('callBox').classList.add('hidden');
+      document.getElementById('idleBox').classList.remove('hidden');
+      document.getElementById('idleBox').innerHTML = '<p class="text-4xl mb-3">🔒</p><p class="font-bold text-xl sm:text-2xl">Painel não autorizado</p><p class="text-sm text-slate-400 mt-1">Abra /tv?token=SEU_TOKEN (TV_DEVICE_TOKEN no servidor).</p>';
+      return;
+    }
+    const data = await r.json();
     const all = Array.isArray(data.queue) ? data.queue : [];
     const q = sortQ(all);
     const called = all.filter(t => t.called)
@@ -136,7 +153,7 @@ async function tick(){
     if(hasCall){
       document.getElementById('callCode').textContent = called.code;
       document.getElementById('callName').textContent = called.nome || '';
-      document.getElementById('callInfo').textContent = (called.modelo ? called.modelo + ' • ' : '') + (called.motivo || '');
+      document.getElementById('callInfo').textContent = called.prioridade ? 'PRIORIDADE LEGAL' : '';
       if(key !== lastCallKey){ if(lastCallKey !== ''){ chime(); announceCall(called); } lastCallKey = key; }
     } else lastCallKey = '';
     const escTV = s => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -152,7 +169,14 @@ setInterval(() => {
   const d = new Date();
   document.getElementById('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }, 1000);
-tick(); setInterval(tick, 5000);
+tick();
+// Atualização por SSE (tempo real) + polling de segurança a cada 30s.
+try {
+  const sse = new EventSource('/api/tv/events' + (TV_TOKEN ? '?token=' + encodeURIComponent(TV_TOKEN) : ''), { withCredentials: true });
+  sse.onmessage = () => tick();
+  sse.onerror = () => { /* o navegador reconecta sozinho */ };
+} catch (e) {}
+setInterval(tick, 30000);
 </script>
 </body>
 </html>

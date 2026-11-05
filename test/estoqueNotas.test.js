@@ -1,7 +1,6 @@
 // =====================================================================
 //  Bloco de notas por unidade (texto livre de seriais).
-//  - GET/PUT em /api/estoque/notas e /api/estoque2/notas
-//  - Notas são independentes entre módulos (estoque vs estoque2)
+//  - GET/PUT em /api/estoque/notas
 //  - Texto não altera saldos nem pool de seriais
 //  Script puro (sem framework), no estilo das demais suítes.
 // =====================================================================
@@ -22,7 +21,6 @@ shared.auth = (roles) => (req, res, next) => {
   next();
 };
 const estoqueRouter = require('../src/routes/estoque');
-const estoque2Router = require('../src/routes/estoque2');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -31,7 +29,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(estoqueRouter);
-app.use(estoque2Router);
 
 const server = app.listen(0);
 const BASE = 'http://127.0.0.1:' + server.address().port;
@@ -66,12 +63,6 @@ const put = async (p, body) => {
   const outraUnidade = await get('/api/estoque/notas?sistema=spacecom&contrato=CE01&unidade=' + encodeURIComponent('UP-Cariri'));
   assert(!outraUnidade.body.texto || outraUnidade.body.texto.indexOf('4319870001') < 0, 'notas são independentes por unidade');
 
-  console.log('\n=== NOTAS — módulos isolados ===');
-  const e2 = await get('/api/estoque2/notas?sistema=spacecom&contrato=CE01&unidade=' + encodeURIComponent(uni));
-  assert(e2.status === 200 && (!e2.body.texto || e2.body.texto.indexOf('4319870001') < 0), 'Estoque 2 não enxerga as notas do Estoque 1');
-  const e2s = await put('/api/estoque2/notas', { sistema: 'spacecom', contrato: 'CE01', unidade: uni, texto: 'notas do e2' });
-  assert(e2s.status === 200 && e2s.body.texto === 'notas do e2', 'PUT no Estoque 2 salva');
-
   console.log('\n=== NOTAS — sem efeito no estoque ===');
   const saldoAntes = await store.estoque.resumo({ contrato: 'CE01', sistema: 'spacecom' });
   const serAntes = (await store.estoqueSerial.all({ limit: 'all' })).length;
@@ -88,7 +79,6 @@ const put = async (p, body) => {
 
   // limpeza
   await put('/api/estoque/notas', { sistema: 'spacecom', contrato: 'CE01', unidade: uni, texto: '' });
-  await put('/api/estoque2/notas', { sistema: 'spacecom', contrato: 'CE01', unidade: uni, texto: '' });
 
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
   server.close();

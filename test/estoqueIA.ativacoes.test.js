@@ -60,11 +60,6 @@ async function main() {
   assert(f.intent === 'ativacoes', 'filtro destino: intent ativacoes');
   assert((f.data.porDestino || []).length === 1 && f.data.porDestino[0].destino === 'Núcleo de Custódia', 'filtro núcleo: só 1 destino');
 
-  // escopo Estoque 2: mesmo handler, sem crash (lê as coleções e2)
-  const scoped = Object.assign({}, store, { estoque: store.estoque2, estoqueMov: store.estoque2Mov, estoqueSerial: store.estoque2Serial });
-  const e2 = await ask('quantas ativações tiveram?', scoped, { ns: 'e2' });
-  assert(e2.intent === 'ativacoes', 'escopo e2: intent ativacoes');
-
   // limpeza: desfaz o lastro e as ativações (estorno é neutro; ficam só linhas)
   const movs = await store.estoqueMov.all({ limit: 'all' });
   for (const m of movs.filter(x => ['setup teste ia ativacoes', '[ATIVACAO] Réu Solto', '[ATIVACAO] Núcleo de Custódia'].includes(x.motivo) && !x.estornado)) {

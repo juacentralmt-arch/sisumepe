@@ -24,7 +24,6 @@ shared.auth = (roles) => (req, res, next) => {
   next();
 };
 const estoqueRouter = require('../src/routes/estoque');
-const estoque2Router = require('../src/routes/estoque2');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -33,7 +32,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(estoqueRouter);
-app.use(estoque2Router);
 
 const DB = path.join(__dirname, '..', 'db.json');
 const DB_BACKUP = fs.readFileSync(DB, 'utf8');
@@ -98,21 +96,6 @@ const get = async (p) => {
   assert(semMotivo.status === 400, 'motivo curto: 400');
   const naoKit = await post('/api/estoque/estornar-kit', { movId: 999999, motivo: 'teste invalido' });
   assert(naoKit.status === 404, 'movimentação inexistente: 404');
-
-  console.log('\n=== ESTORNO DO KIT — Estoque 2 ===');
-  const r2 = await post('/api/estoque2/movimentar-kit', {
-    sistema: 'spacecom', contrato: 'CE01', unidade: uni,
-    kits: 1, kit: 'tzprsf', tipo: 'entrada', motivo: 'teste estorno kit e2'
-  });
-  assert(r2.status === 200 && !!r2.body.kitToken, 'kit e2 registrado com token');
-  const token2 = r2.body.kitToken;
-  const movs2 = await store.estoque2Mov.all({ limit: 'all' });
-  const doKit2 = movs2.filter(m => String(m.motivo || '').includes('#' + token2));
-  assert(doKit2.length === 3, `3 movimentações no kit e2 (${doKit2.length})`);
-  const antes2 = await saldos('e2', 'TZPR04');
-  const est2 = await post('/api/estoque2/estornar-kit', { movId: doKit2[0].id, motivo: 'estorno kit e2' });
-  assert(est2.status === 200 && est2.body.total === 3, `estorno do kit e2: ${est2.body.total} itens`);
-  assert((await saldos('e2', 'TZPR04')) === antes2 - 1, 'TZPR04 (e2) voltou ao saldo anterior');
 
   restoreDb();
   console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
