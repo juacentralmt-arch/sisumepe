@@ -10561,6 +10561,16 @@ let assistidoSelecionado = null;
 function fmtDataBR(v){ if(!v) return ''; const s=String(v).trim(); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ const [y,m,d]=s.slice(0,10).split('-'); return d+'/'+m+'/'+y; } return s; }
 
 let assTabView = 'todos';
+async function exportarAssistidosCSV(){
+  const r = await api('/api/assistidos');
+  const list = Array.isArray(r) ? r : [];
+  const rows = [['Vínculo','Nome','Processo','Vara','Local','Início','Frequência','Status']];
+  list.forEach(a => rows.push([a.vinculo,a.nome,a.processo,a.vara,a.localAssinatura,a.dataInicio,a.frequencia,a.status]));
+  const csv = rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='assistidos.csv'; a.click();
+}
+
 async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();
@@ -10641,7 +10651,7 @@ function renderAssistidos(){
   if(!assistidosData.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido.</td></tr>'; return; }
   body.innerHTML = assistidosData.map(a => '<tr class="border-t border-slate-100">' +
     '<td class="p-1">' + esc(a.vinculo) + '</td>' +
-    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + '</td>' +
+    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + ' <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span></td>' +
     '<td class="p-1">' + esc(a.processo) + '</td>' +
     '<td class="p-1">' + esc(a.vara) + '</td>' +
     '<td class="p-1">' + esc(a.localAssinatura) + '</td>' +
@@ -10661,7 +10671,9 @@ async function salvarAssistido(){
     processo: document.getElementById('asProcesso').value.trim(),
     vara: document.getElementById('asVara').value.trim(),
     localAssinatura: document.getElementById('asLocal').value.trim(),
-    dataInicio: document.getElementById('asInicio').value
+    dataInicio: document.getElementById('asInicio').value,
+    frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
+    status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo'
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
