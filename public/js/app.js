@@ -7477,7 +7477,25 @@ function toggleEstSeriaisPanel(abrir){
   const p=document.getElementById('estSeriaisPanel'); if(!p) return;
   const show = abrir==null ? p.classList.contains('hidden') : !!abrir;
   p.classList.toggle('hidden', !show);
-  if(show){ loadEstSeriais(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+  if(show){ loadEstSeriais(); loadEstSeriaisNotas(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
+}
+async function loadEstSeriaisNotas(){
+  const ta=document.getElementById('estSeriaisNotas'); if(!ta) return;
+  try{
+    const url='/api/estoque/notas?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&unidade='+encodeURIComponent(document.getElementById('estSerUnd')?.value||document.getElementById('estUnidade')?.value||'UMEPE Juazeiro');
+    const r=await api(url);
+    ta.value=r&&r.texto?String(r.texto):'';
+  }catch(e){ ta.value=''; }
+}
+async function saveEstSeriaisNotas(){
+  const ta=document.getElementById('estSeriaisNotas'); const msg=document.getElementById('estSeriaisNotasMsg');
+  if(!ta) return;
+  try{
+    await api('/api/estoque/notas', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: getEstoqueContratoEfetivo(), unidade: document.getElementById('estSerUnd')?.value||document.getElementById('estUnidade')?.value||'UMEPE Juazeiro', texto: ta.value }) });
+    if(msg){ msg.textContent='Notas salvas'; msg.classList.remove('hidden'); setTimeout(()=>msg.classList.add('hidden'), 2500); }
+    // sincroniza o bloco de notas dos cards
+    const ta2=document.getElementById('estNotas'); if(ta2) ta2.value=ta.value;
+  }catch(e){ if(msg){ msg.textContent='Erro: '+e.message; msg.classList.remove('hidden'); } }
 }
 function verSeriaisCadastrados(material){
   const m=document.getElementById('estSerMat'); if(m) m.value=material||'';
@@ -9127,6 +9145,7 @@ async function loadEstoqueNotas(){
     const url='/api/estoque/notas?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&unidade='+encodeURIComponent(document.getElementById('estUnidade')?.value||'UMEPE Juazeiro');
     const r=await api(url);
     ta.value=r&&r.texto?String(r.texto):'';
+    const ta2=document.getElementById('estSeriaisNotas'); if(ta2) ta2.value=ta.value;
   }catch(e){ ta.value=''; }
 }
 async function saveEstoqueNotas(){
@@ -9135,6 +9154,7 @@ async function saveEstoqueNotas(){
   try{
     await api('/api/estoque/notas', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: getEstoqueContratoEfetivo(), unidade: document.getElementById('estUnidade')?.value||'UMEPE Juazeiro', texto: ta.value }) });
     if(msg){ msg.textContent='Notas salvas'; msg.classList.remove('hidden'); setTimeout(()=>msg.classList.add('hidden'), 2500); }
+    const ta2=document.getElementById('estSeriaisNotas'); if(ta2) ta2.value=ta.value;
   }catch(e){ if(msg){ msg.textContent='Erro: '+e.message; msg.classList.remove('hidden'); } }
 }
 async function loadEstoque2Notas(){
