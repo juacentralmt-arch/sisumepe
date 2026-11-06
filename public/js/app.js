@@ -10739,14 +10739,22 @@ async function protocolar(id){
   }catch(e){ alert('Erro: ' + e.message); }
 }
 
-async function registrarJuntada(id){
-  const val = prompt('Dados da juntada (número/observação):') || '';
-  if(!val.trim()) return;
+function abrirModalJuntada(id){
+  document.getElementById('juntadaId').value = id;
+  document.getElementById('juntadaTexto').value = '';
+  document.getElementById('modalJuntada').classList.remove('hidden');
+}
+function fecharModalJuntada(){ document.getElementById('modalJuntada').classList.add('hidden'); }
+async function salvarJuntada(){
+  const id = document.getElementById('juntadaId').value;
+  const val = document.getElementById('juntadaTexto').value.trim();
+  if(!val){ alert('Informe os dados da juntada'); return; }
   try{
-    await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val.trim() }) });
-    toast('Juntada registrada'); loadComparecimentos(); loadPendencias();
+    await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val }) });
+    toast('Juntada registrada'); fecharModalJuntada(); loadComparecimentos(); loadPendencias(); loadJuntPendencias();
   }catch(e){ alert('Erro: ' + e.message); }
 }
+async function registrarJuntada(id){ abrirModalJuntada(id); }
 
 async function loadPendencias(){
   const wrap = document.getElementById('pendenciasWrap');
