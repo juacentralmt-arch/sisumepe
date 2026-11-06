@@ -1565,20 +1565,20 @@
 
     <!-- ASSISTIDOS -->
     <section id="tab-assistidos" class="hidden fade">
-      <div class="mb-4 flex items-center justify-between">
+      <div class="mb-6 flex items-center justify-between">
         <div>
-          <h2 class="font-display font-bold text-xl">Assistidos</h2>
+          <h2 class="font-display font-extrabold text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Assistidos</h2>
           <p class="text-xs text-slate-500 mt-0.5">Controle de comparecimento e protocolação</p>
         </div>
+        <button onclick="toggleFormAssistido()" class="btn btn-primary text-xs px-4 py-2 shadow-md hover:shadow-lg transition">+ Novo assistido</button>
       </div>
 
-      <!-- Cadastro -->
-      <div class="mb-4"><button onclick="toggleFormAssistido()" class="btn btn-primary text-xs px-3 py-2">+ Novo assistido</button></div>
-      <div id="formAssistido" class="card p-4 mb-4 hidden">
-        <h3 class="font-bold text-sm mb-2">Novo assistido</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <!-- Formulário (oculto) -->
+      <div id="formAssistido" class="hidden card p-5 mb-6 border border-indigo-100 shadow-sm">
+        <h3 class="font-bold text-sm mb-3 text-indigo-700">Cadastrar assistido</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input id="asVinculo" placeholder="Número de vínculo" class="inp text-xs">
-          <input id="asNome" placeholder="Nome" class="inp text-xs">
+          <input id="asNome" placeholder="Nome completo" class="inp text-xs">
           <input id="asProcesso" placeholder="Processo" class="inp text-xs">
           <input id="asVara" placeholder="Vara" class="inp text-xs">
           <input id="asLocal" placeholder="Local de assinatura" class="inp text-xs">
@@ -1596,29 +1596,42 @@
             <option value="arquivado">Arquivado</option>
           </select>
         </div>
-        <div class="mt-2 flex gap-2">
-          <button onclick="salvarAssistido()" class="btn btn-primary text-xs px-3 py-2">Salvar</button>
-          <button onclick="exportarAssistidosCSV()" class="btn btn-ghost text-xs px-3 py-2">Exportar CSV</button>
+        <div class="mt-3 flex gap-2">
+          <button onclick="salvarAssistido()" class="btn btn-primary text-xs px-4 py-2">Salvar</button>
+          <button onclick="toggleFormAssistido()" class="btn btn-ghost text-xs px-4 py-2">Cancelar</button>
+          <button onclick="exportarAssistidosCSV()" class="btn btn-ghost text-xs px-4 py-2">Exportar CSV</button>
+        </div>
+      </div>
+
+      <!-- Quantitativos -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div class="card p-4 bg-gradient-to-br from-indigo-50 to-white border border-indigo-100">
+          <p class="text-[11px] text-slate-500">Assistidos</p>
+          <p id="stTotalAss" class="font-display text-3xl font-extrabold text-indigo-600">0</p>
+        </div>
+        <div class="card p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100">
+          <p class="text-[11px] text-slate-500">Comparecimentos</p>
+          <p id="stTotalCmp" class="font-display text-3xl font-extrabold text-blue-600">0</p>
+        </div>
+        <div class="card p-4 bg-gradient-to-br from-amber-50 to-white border border-amber-100">
+          <p class="text-[11px] text-slate-500">Pendências</p>
+          <p id="stPend" class="font-display text-3xl font-extrabold text-amber-600">0</p>
+        </div>
+        <div class="card p-4 bg-gradient-to-br from-emerald-50 to-white border border-emerald-100">
+          <p class="text-[11px] text-slate-500">Protocolados</p>
+          <p id="stProt" class="font-display text-3xl font-extrabold text-emerald-600">0</p>
         </div>
       </div>
 
       <!-- Abas -->
-      <div class="flex gap-2 mb-3">
-        <button id="tabAssTodos" onclick="setAssistidosTabView('todos')" class="btn btn-primary text-xs px-3 py-2">Todos os assistidos</button>
-        <button id="tabAssComp" onclick="setAssistidosTabView('comp')" class="btn btn-ghost text-xs px-3 py-2">Pendentes de comparecimento</button>
-        <button id="tabAssJunt" onclick="setAssistidosTabView('junt')" class="btn btn-ghost text-xs px-3 py-2">Pendentes de Juntada</button>
-      </div>
-
-      <!-- Quantitativos -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div class="card p-3"><p class="text-[11px] text-slate-500">Assistidos</p><p id="stTotalAss" class="font-display text-2xl font-extrabold">0</p></div>
-        <div class="card p-3"><p class="text-[11px] text-slate-500">Comparecimentos</p><p id="stTotalCmp" class="font-display text-2xl font-extrabold">0</p></div>
-        <div class="card p-3"><p class="text-[11px] text-slate-500">Pendências</p><p id="stPend" class="font-display text-2xl font-extrabold text-amber-600">0</p></div>
-        <div class="card p-3"><p class="text-[11px] text-slate-500">Protocolados</p><p id="stProt" class="font-display text-2xl font-extrabold text-emerald-600">0</p></div>
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <button id="tabAssTodos" onclick="setAssistidosTabView('todos')" class="btn btn-primary text-xs px-4 py-2 rounded-full">Todos</button>
+        <button id="tabAssComp" onclick="setAssistidosTabView('comp')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Pendentes de comparecimento</button>
+        <button id="tabAssJunt" onclick="setAssistidosTabView('junt')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Pendentes de Juntada</button>
       </div>
 
       <!-- Filtros -->
-      <div class="mb-3 flex flex-wrap gap-2">
+      <div class="mb-4 flex flex-wrap gap-2">
         <input id="asBusca" placeholder="Buscar nome/processo/vínculo..." class="inp text-xs px-3 py-2" style="min-width:220px" oninput="filtrarAssistidos()">
         <select id="asFiltroVara" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()"><option value="">Todas as varas</option></select>
       </div>
@@ -1626,150 +1639,68 @@
       <!-- Lista -->
       <div id="assistidosWrap" class="card p-2 overflow-x-auto mb-4">
         <table class="w-full text-[11px] whitespace-nowrap">
-          <thead><tr>
-            <th class="text-left p-1">Vínculo</th>
-            <th class="text-left p-1">Nome</th>
-            <th class="text-left p-1">Processo</th>
-            <th class="text-left p-1">Vara</th>
-            <th class="text-left p-1">Local</th>
-            <th class="text-left p-1">Início</th>
-            <th class="text-left p-1">Ações</th>
+          <thead><tr class="bg-slate-50">
+            <th class="text-left p-2">Vínculo</th>
+            <th class="text-left p-2">Nome</th>
+            <th class="text-left p-2">Processo</th>
+            <th class="text-left p-2">Vara</th>
+            <th class="text-left p-2">Local</th>
+            <th class="text-left p-2">Início</th>
+            <th class="text-left p-2">Ações</th>
           </tr></thead>
           <tbody id="assistidosBody"></tbody>
         </table>
       </div>
 
-      <!-- Comparecimentos / Pendências -->
-      <div id="assistidoDetalhe" class="card p-4 hidden">
-        <h3 class="font-bold text-sm mb-2" id="detalheTitulo">Comparecimentos</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
-          <input id="cmpData" type="date" class="inp text-xs">
-          <input id="cmpPolicial" placeholder="Policial de plantão" class="inp text-xs">
-          <button onclick="registrarComparecimento()" class="btn btn-primary text-xs px-3 py-2">Registrar comparecimento</button>
-        </div>
-        <div id="pendenciasWrap" class="mb-2"></div>
-        <table class="w-full text-[11px] whitespace-nowrap">
-          <thead><tr>
-            <th class="text-left p-1">Data</th>
-            <th class="text-left p-1">Policial</th>
-            <th class="text-left p-1">Juntada</th>
-            <th class="text-left p-1">Obs.</th>
-            <th class="text-left p-1">Ações</th>
-          </tr></thead>
-          <tbody id="comparecimentosBody"></tbody>
-        </table>
-      </div>
-    
       <!-- Pendentes de comparecimento -->
       <div id="viewComp" class="card p-2 overflow-x-auto mb-4 hidden">
         <table class="w-full text-[11px] whitespace-nowrap">
-          <thead><tr>
-            <th class="text-left p-1">Vínculo</th>
-            <th class="text-left p-1">Nome</th>
-            <th class="text-left p-1">Processo</th>
-            <th class="text-left p-1">Vara</th>
-            <th class="text-left p-1">Último comparecimento</th>
+          <thead><tr class="bg-amber-50">
+            <th class="text-left p-2">Vínculo</th>
+            <th class="text-left p-2">Nome</th>
+            <th class="text-left p-2">Processo</th>
+            <th class="text-left p-2">Vara</th>
+            <th class="text-left p-2">Último comparecimento</th>
           </tr></thead>
           <tbody id="compBody"></tbody>
         </table>
       </div>
 
-      <!-- Modal Juntada -->
-      <div id="modalJuntada" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-          <h3 class="font-display font-bold text-lg mb-3">Registrar Juntada</h3>
-          <input type="hidden" id="juntadaId">
-          <textarea id="juntadaTexto" class="inp w-full text-xs" rows="4" placeholder="Dados da juntada (número, observações...)"></textarea>
-          <div class="mt-3 flex gap-2 justify-end">
-            <button onclick="fecharModalJuntada()" class="btn btn-ghost text-xs px-3 py-2">Cancelar</button>
-            <button onclick="salvarJuntada()" class="btn btn-primary text-xs px-3 py-2">Salvar</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Pendentes de Juntada -->
       <div id="viewJunt" class="card p-2 overflow-x-auto mb-4 hidden">
         <table class="w-full text-[11px] whitespace-nowrap">
-          <thead><tr>
-            <th class="text-left p-1">Assistido</th>
-            <th class="text-left p-1">Data</th>
-            <th class="text-left p-1">Policial</th>
-            <th class="text-left p-1">Ações</th>
+          <thead><tr class="bg-amber-50">
+            <th class="text-left p-2">Assistido</th>
+            <th class="text-left p-2">Data</th>
+            <th class="text-left p-2">Policial</th>
+            <th class="text-left p-2">Ações</th>
           </tr></thead>
           <tbody id="juntBody"></tbody>
         </table>
       </div>
 
-
-
-    <!-- MODAL ASSISTIDO -->
-    <div id="modalAssistido" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-auto p-6">
-        <h3 class="font-display font-bold text-lg mb-4"><span id="assistidoModalTitle">Novo assistido</span></h3>
-        <input type="hidden" id="assistidoId">
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="lbl">Nº</label><input id="aNumero" class="inp mt-1"></div>
-          <div><label class="lbl">Dias</label><input id="aDias" class="inp mt-1"></div>
-          <div><label class="lbl">Alerta</label><input id="aAlerta" class="inp mt-1"></div>
-          <div><label class="lbl">Nome</label><input id="aNome" class="inp mt-1"></div>
-          <div><label class="lbl">Vara</label><input id="aVara" class="inp mt-1"></div>
-          <div><label class="lbl">Processo</label><input id="aProcesso" class="inp mt-1"></div>
-          <div><label class="lbl">Vínculo</label><input id="aVinculo" class="inp mt-1"></div>
-          <div><label class="lbl">Sit. Jurídico Penal</label><input id="aSit" class="inp mt-1"></div>
-          <div><label class="lbl">Início da Medida</label><input id="aInicio" type="date" class="inp mt-1"></div>
-          <div><label class="lbl">Status</label><input id="aStatus" class="inp mt-1"></div>
-          <div class="col-span-2"><label class="lbl">Observação</label><textarea id="aObs" class="inp mt-1" rows="3"></textarea></div>
-          <div class="col-span-2"><label class="lbl">Juntadas</label><textarea id="aJuntadas" class="inp mt-1" rows="4"></textarea></div>
+      <!-- Detalhe -->
+      <div id="assistidoDetalhe" class="card p-5 mb-4 hidden border border-indigo-100">
+        <h3 class="font-bold text-sm mb-3 text-indigo-700" id="detalheTitulo">Comparecimentos</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+          <input id="cmpData" type="date" class="inp text-xs">
+          <input id="cmpPolicial" placeholder="Policial de plantão" class="inp text-xs">
+          <button onclick="registrarComparecimento()" class="btn btn-primary text-xs px-3 py-2">Registrar comparecimento</button>
         </div>
-        <div class="flex gap-2 mt-4">
-          <button onclick="salvarAssistido()" class="btn btn-primary flex-1 py-3 text-sm">Salvar</button>
-          <button onclick="closeAssistidoModal()" class="btn btn-ghost flex-1 py-3 text-sm">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
-
-    <!-- VISAO 360 -->
-    <section id="tab-visao" class="hidden fade">
-      <div class="mb-4">
-        <h2 class="font-display font-bold text-xl">Visão 360° do atendido</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Ficha cadastral + histórico completo em linha do tempo</p>
-      </div>
-      <div id="visaoLock" class="hidden card p-8 text-center" style="background:linear-gradient(135deg,#fffbeb,#fff)">
-        <div class="w-12 h-12 mx-auto rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl">🔒</div>
-        <p class="font-display font-bold mt-3">Acesso restrito</p>
-        <p class="text-sm text-slate-500 mt-1">A Visão 360° é exclusiva do <b>Setor Técnico e do Administrador</b>. O usuário da <b>Recepção não tem acesso</b>. Saia e entre com um usuário autorizado.</p>
-      </div>
-      <div id="visaoBody">
-        <div class="card p-4 mb-4 flex gap-2">
-          <input id="vQ" oninput="visaoTyping()" onkeydown="if(event.key==='Enter')buscarVisao()" placeholder="Digite nome, CPF ou RG — busca automática..." class="inp flex-1" autocomplete="off">
-          <button onclick="buscarVisao()" class="btn btn-dark text-sm px-5">Buscar</button>
-        </div>
-        <div id="visaoRes" class="grid sm:grid-cols-2 md:grid-cols-3 gap-2.5 mb-4"></div>
-        <div id="visaoFilters" class="hidden card p-3.5 mb-4 flex flex-wrap gap-2 items-center">
-          <select id="vStatus" onchange="renderVisaoDetail()" class="inp !w-auto !py-2 text-xs font-bold">
-            <option value="">📋 Todos os status</option>
-            <option value="aguardando">🟡 Aguardando</option>
-            <option value="em_atendimento">🔵 Em atendimento</option>
-            <option value="finalizado">🟢 Finalizado</option>
-            <option value="cancelado">🔴 Cancelado</option>
-          </select>
-          <select id="vMotivo" onchange="renderVisaoDetail()" class="inp !w-auto !py-2 text-xs font-bold">
-            <option value="">🏷️ Todos os motivos</option>
-            <option>Botão do Pânico</option>
-            <option>Instalação de Tornozeleira</option>
-            <option>Retirada de Tornozeleira</option>
-            <option>Manutenção</option>
-            <option>Outros</option>
-          </select>
-          <input id="vDataIni" type="date" onchange="renderVisaoDetail()" title="De" class="inp !w-auto !py-2 text-xs">
-          <input id="vDataFim" type="date" onchange="renderVisaoDetail()" title="Até" class="inp !w-auto !py-2 text-xs">
-          <button onclick="limparFiltrosVisao()" class="btn btn-ghost text-xs px-3 py-2">Limpar</button>
-          <span id="vCount" class="ml-auto text-[11px] font-bold text-slate-400"></span>
-        </div>
-        <div id="visaoDetail" class="grid lg:grid-cols-3 gap-4 items-start"></div>
+        <div id="pendenciasWrap" class="mb-3"></div>
+        <table class="w-full text-[11px] whitespace-nowrap">
+          <thead><tr class="bg-slate-50">
+            <th class="text-left p-2">Data</th>
+            <th class="text-left p-2">Policial</th>
+            <th class="text-left p-2">Juntada</th>
+            <th class="text-left p-2">Obs.</th>
+            <th class="text-left p-2">Ações</th>
+          </tr></thead>
+          <tbody id="comparecimentosBody"></tbody>
+        </table>
       </div>
     </section>
+
   </main>
 
   <footer class="max-w-6xl mx-auto px-6 pb-6 w-full">
