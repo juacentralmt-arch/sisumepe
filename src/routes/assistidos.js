@@ -286,8 +286,8 @@ router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, re
     if (a.status === 'concluido' || a.status === 'arquivado') { etapas.concluido.push(a); continue; }
     const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
     if (!last) { etapas.aguardando.push(a); continue; }
-    if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id }); continue; }
-    etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento });
+    if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada }); continue; }
+    etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada });
   }
   res.json(etapas);
 }));

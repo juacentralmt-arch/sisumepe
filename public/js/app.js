@@ -10586,14 +10586,18 @@ async function importarAssistidos(inp){
 async function loadFluxo(){
   try{
     const r = await api('/api/assistidos/fluxo');
-    const renderCol = (id, list, color) => {
+    const renderCol = (id, list) => {
       const el = document.getElementById(id);
       if(!el) return;
+      const cnt = document.getElementById(id+'Count');
+      if(cnt) cnt.textContent = list.length;
       if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
       el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm hover:shadow-md transition cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
         '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
         '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
-        (a.ultimoComparecimento ? '<p class="text-[10px] text-slate-400 mt-1">Últ.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '') +
+        '<p class="text-[10px] text-slate-400 truncate">' + esc(a.processo) + '</p>' +
+        (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
+        (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
       '</div>').join('');
     };
     renderCol('fluxoAguardando', r.aguardando||[]);
