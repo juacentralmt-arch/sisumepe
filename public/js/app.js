@@ -10583,23 +10583,44 @@ async function importarAssistidos(inp){
   inp.value = '';
 }
 
+async function loadFluxo(){
+  try{
+    const r = await api('/api/assistidos/fluxo');
+    const renderCol = (id, list, color) => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
+      el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm hover:shadow-md transition cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
+        '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
+        '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
+        (a.ultimoComparecimento ? '<p class="text-[10px] text-slate-400 mt-1">Últ.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '') +
+      '</div>').join('');
+    };
+    renderCol('fluxoAguardando', r.aguardando||[]);
+    renderCol('fluxoCompareceu', r.compareceu||[]);
+    renderCol('fluxoProtocolado', r.protocolado||[]);
+    renderCol('fluxoConcluido', r.concluido||[]);
+  }catch(e){ console.error(e); }
+}
+
 async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();
   await loadCompPendencias();
   await loadJuntPendencias();
+  await loadFluxo();
 }
 
 function setAssistidosTabView(tab){
   assTabView = tab;
-  const ids = { todos: 'assistidosWrap', comp: 'viewComp', junt: 'viewJunt' };
+  const ids = { todos: 'assistidosWrap', comp: 'viewComp', junt: 'viewJunt', fluxo: 'viewFluxo' };
   Object.entries(ids).forEach(([k,v]) => {
     const el = document.getElementById(v);
     if(el) el.classList.toggle('hidden', k !== tab);
   });
-  ['tabAssTodos','tabAssComp','tabAssJunt'].forEach((bid,i) => {
+  ['tabAssTodos','tabAssComp','tabAssJunt','tabAssFluxo'].forEach((bid,i) => {
     const el = document.getElementById(bid);
-    if(el) el.className = 'btn ' + (['todos','comp','junt'][i]===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-3 py-2';
+    if(el) el.className = 'btn ' + (['todos','comp','junt','fluxo'][i]===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-3 py-2';
   });
 }
 
