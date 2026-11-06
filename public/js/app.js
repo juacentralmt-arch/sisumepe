@@ -10558,6 +10558,7 @@ if('serviceWorker' in navigator){ window.addEventListener('load', () => { naviga
 
 let assistidosData = [];
 let assistidoSelecionado = null;
+function fmtDataBR(v){ if(!v) return ''; const s=String(v).trim(); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ const [y,m,d]=s.slice(0,10).split('-'); return d+'/'+m+'/'+y; } return s; }
 
 let assTabView = 'todos';
 async function loadAssistidos(){
@@ -10590,7 +10591,7 @@ async function loadCompPendencias(){
     '<td class="p-1">' + esc(a.nome) + '</td>' +
     '<td class="p-1">' + esc(a.processo) + '</td>' +
     '<td class="p-1">' + esc(a.vara) + '</td>' +
-    '<td class="p-1">' + esc(a.ultimoComparecimento || 'Nunca') + '</td>' +
+    '<td class="p-1">' + esc(fmtDataBR(a.ultimoComparecimento) || 'Nunca') + '</td>' +
   '</tr>').join('') || '<tr><td colspan="5" class="p-2 text-center text-slate-400">Nenhuma pendência.</td></tr>';
 }
 
@@ -10601,7 +10602,7 @@ async function loadJuntPendencias(){
   const list = Array.isArray(r) ? r : [];
   body.innerHTML = list.map(p => '<tr class="border-t border-slate-100 bg-amber-50">' +
     '<td class="p-1">' + esc(p.assistido ? p.assistido.nome : '') + '</td>' +
-    '<td class="p-1">' + esc(p.dataComparecimento) + '</td>' +
+    '<td class="p-1">' + esc(fmtDataBR(p.dataComparecimento)) + '</td>' +
     '<td class="p-1">' + esc(p.policialPlantao) + '</td>' +
     '<td class="p-1"><button class="text-amber-600 hover:underline font-bold" onclick="registrarJuntada(' + p.id + ')">+ Juntada</button></td>' +
   '</tr>').join('') || '<tr><td colspan="4" class="p-2 text-center text-slate-400">Nenhuma pendência.</td></tr>';
@@ -10644,7 +10645,7 @@ function renderAssistidos(){
     '<td class="p-1">' + esc(a.processo) + '</td>' +
     '<td class="p-1">' + esc(a.vara) + '</td>' +
     '<td class="p-1">' + esc(a.localAssinatura) + '</td>' +
-    '<td class="p-1">' + esc(a.dataInicio) + '</td>' +
+    '<td class="p-1">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
     '<td class="p-1 whitespace-nowrap">' +
       '<button class="text-indigo-600 hover:underline mr-2" onclick="verAssistido(' + a.id + ')">Ver</button>' +
       '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
@@ -10691,7 +10692,7 @@ async function loadComparecimentos(){
   const r = await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos');
   const list = Array.isArray(r) ? r : [];
   body.innerHTML = list.map(c => '<tr class="border-t border-slate-100 ' + (!String(c.juntada||'').trim() ? 'bg-amber-50' : '') + '">' +
-    '<td class="p-1">' + esc(c.dataComparecimento) + '</td>' +
+    '<td class="p-1">' + esc(fmtDataBR(c.dataComparecimento)) + '</td>' +
     '<td class="p-1">' + esc(c.policialPlantao) + '</td>' +
     '<td class="p-1">' + (String(c.juntada||'').trim() ? esc(c.juntada) : '<span class="text-amber-600 font-bold">Pendente</span>') + '</td>' +
     '<td class="p-1 max-w-[200px] truncate" title="' + esc(c.observacoes||'') + '">' + esc(String(c.observacoes||'').slice(0,80)) + '</td>' +
