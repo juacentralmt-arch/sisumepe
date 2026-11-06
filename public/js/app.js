@@ -10571,6 +10571,18 @@ async function exportarAssistidosCSV(){
   const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='assistidos.csv'; a.click();
 }
 
+async function importarAssistidos(inp){
+  const f = inp && inp.files && inp.files[0];
+  if(!f){ alert('Nenhum arquivo selecionado'); return; }
+  const fd = new FormData(); fd.append('arquivo', f);
+  try{
+    const r = await api('/api/assistidos/import', { method:'POST', body: fd });
+    alert(r.msg || 'Importação iniciada');
+    setTimeout(loadAssistidos, 3000);
+  }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
+  inp.value = '';
+}
+
 async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();

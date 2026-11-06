@@ -164,4 +164,115 @@ router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']
   res.json(out);
 }));
 
+
+let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
+
+function excelSerialToISO(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  if (/^\d{4,6}$/.test(s)) {
+    const d = new Date((Number(s) - 25569) * 86400 * 1000);
+    if (!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    let [,dd,mm,yyyy] = m;
+    if (yyyy.length === 2) yyyy = '20' + yyyy;
+    const d = new Date(Number(yyyy), Number(mm)-1, Number(dd));
+    if (!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  return s;
+}
+function normFreq(v) {
+  const s = String(v||'').trim().toLowerCase();
+  if (s.startsWith('sem')) return 'semanal';
+  if (s.startsWith('quin')) return 'quinzenal';
+  if (s.startsWith('bim')) return 'bimestral';
+  if (s.startsWith('trim')) return 'trimestral';
+  return 'mensal';
+}
+
+router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res) => {
+  res.json(lastImportStatus);
+}));
+
+router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
+  const buffer = req.file.buffer;
+  lastImportStatus = { state: 'running', total: 0, error: null, at: new Date().toISOString() };
+  res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background.' });
+  setImmediate(async () => {
+    try {
+      const ExcelJS = require('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      let total = 0;
+      const allExisting = await store.assistidos.all();
+      const seenVinculo = new Set(allExisting.map(a => String(a.vinculo)));
+      for (const ws of wb.worksheets) {
+        const headerRow = ws.getRow(1);
+        const headers = [];
+        headerRow.eachCell((c, col) => { headers[col] = String(c.value || '').trim(); });
+        const findCol = (...names) => {
+          const low = headers.map(h => String(h||'').toLowerCase());
+          for (const n of names) {
+            const idx = low.indexOf(String(n).toLowerCase());
+            if (idx >= 0) return idx + 1;
+          }
+          return null;
+        };
+        const cVinculo = findCol('Vínculo','VINCULO');
+        const cNome = findCol('Nome','NOME');
+        const cProcesso = findCol('Processo','PROCESSO');
+        const cVara = findCol('Vara','VARA');
+        const cLocal = findCol('local de assinatura','Local de assinatura','LOCAL DE ASSINATURA');
+        const cInicio = findCol('Data Início','Data Inicio','DATA INÍCIO','DATA INICIO');
+        const cFreq = findCol('Frequência','FREQUENCIA','Frequencia');
+        const cComp = findCol('Data de Comparecimento','DATA DE COMPARECIMENTO');
+        const cPP = findCol('PP de Plantão','PP DE PLANTÃO','PP DE PLANTAO');
+        const cObs = findCol('Observação do PP: Em qual sistema foi protocolado e a folha','Observação do PP','OBSERVAÇÃO');
+        ws.eachRow((row, idx) => {
+          if (idx === 1) return;
+          const get = (col) => col ? row.getCell(col).value : null;
+          const vinculo = String(get(cVinculo) || '').trim();
+          const nome = String(get(cNome) || '').trim();
+          if (!vinculo || !nome) return;
+          if (seenVinculo.has(vinculo)) return;
+          const processo = String(get(cProcesso) || '').trim();
+          const vara = String(get(cVara) || '').trim();
+          const local = String(get(cLocal) || '').trim();
+          const inicio = excelSerialToISO(get(cInicio));
+          const freq = normFreq(get(cFreq));
+          const status = (processo.toUpperCase()==='ARQUIVADO' || vara.toUpperCase()==='ARQUIVADO') ? 'arquivado' : 'ativo';
+          store.assistidos.insert({
+            vinculo, nome, processo, vara, localAssinatura: local, dataInicio: inicio, frequencia: freq, status
+          }).then(async (a) => {
+            const dComp = excelSerialToISO(get(cComp));
+            const pp = String(get(cPP) || '').trim();
+            const obs = String(get(cObs) || '').trim();
+            if (dComp) {
+              const cmp = await store.assistidosComparecimentos.insert({
+                assistidoId: a.id,
+                dataComparecimento: dComp,
+                policialPlantao: pp || '—'
+              });
+              if (obs) await store.assistidosComparecimentos.patch(cmp.id, { juntada: obs });
+            }
+          }).catch(e => console.error('import row error', e.message));
+          seenVinculo.add(vinculo);
+          total++;
+        });
+      }
+      lastImportStatus = { state: 'done', total, error: null, at: new Date().toISOString() };
+      shared.broadcast({ type: 'assistidos_import_done', total });
+      console.log('[assistidos] importação concluída:', total);
+    } catch (e) {
+      console.error('[assistidos] importação falhou:', e && e.stack ? e.stack : e.message);
+      lastImportStatus = { state: 'error', total: 0, error: String(e && e.message ? e.message : e), at: new Date().toISOString() };
+    }
+  });
+}));
+
 module.exports = router;
