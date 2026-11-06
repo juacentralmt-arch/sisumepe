@@ -79,9 +79,21 @@ router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','te
   res.json(row);
 }));
 
-// Listar pendências (comparecimentos não protocolados)
+// Registrar juntada (coluna Juntada) de um comparecimento
+router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecnico']), ah(async (req, res) => {
+  const b = req.body || {};
+  const row = await store.assistidosComparecimentos.patch(req.params.id, {
+    juntada: String(b.juntada || '').trim()
+  });
+  if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
+  broadcast();
+  res.json(row);
+}));
+
+// Listar pendências (comparecimentos sem juntada)
 router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (req, res) => {
-  const list = await store.assistidosComparecimentos.pendencias();
+  const all = await store.assistidosComparecimentos.all();
+  const list = all.filter(c => !String(c.juntada||'').trim());
   const out = [];
   for (const c of list) {
     const a = await store.assistidos.byId(c.assistidoId);

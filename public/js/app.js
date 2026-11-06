@@ -10647,13 +10647,13 @@ async function loadComparecimentos(){
   if(!body || !assistidoSelecionado) return;
   const r = await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos');
   const list = Array.isArray(r) ? r : [];
-  body.innerHTML = list.map(c => '<tr class="border-t border-slate-100">' +
+  body.innerHTML = list.map(c => '<tr class="border-t border-slate-100 ' + (!String(c.juntada||'').trim() ? 'bg-amber-50' : '') + '">' +
     '<td class="p-1">' + esc(c.dataComparecimento) + '</td>' +
     '<td class="p-1">' + esc(c.policialPlantao) + '</td>' +
-    '<td class="p-1">' + (c.protocolado ? 'Sim' : 'Não') + '</td>' +
+    '<td class="p-1">' + (String(c.juntada||'').trim() ? esc(c.juntada) : '<span class="text-amber-600 font-bold">Pendente</span>') + '</td>' +
     '<td class="p-1 max-w-[200px] truncate" title="' + esc(c.observacoes||'') + '">' + esc(String(c.observacoes||'').slice(0,80)) + '</td>' +
     '<td class="p-1 whitespace-nowrap">' +
-      (!c.protocolado ? '<button class="text-emerald-600 hover:underline" onclick="protocolar(' + c.id + ')">Protocolar</button>' : '') +
+      (!String(c.juntada||'').trim() ? '<button class="text-amber-600 hover:underline font-bold" onclick="registrarJuntada(' + c.id + ')">+ Juntada</button>' : '<button class="text-slate-500 hover:underline text-[10px]" onclick="registrarJuntada(' + c.id + ')">Editar</button>') +
     '</td>' +
   '</tr>').join('') || '<tr><td colspan="5" class="p-2 text-center text-slate-400">Nenhum comparecimento.</td></tr>';
 }
@@ -10667,7 +10667,10 @@ async function registrarComparecimento(){
   if(!body.dataComparecimento || !body.policialPlantao){ alert('Preencha data e policial'); return; }
   try{
     await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Comparecimento registrado'); loadComparecimentos(); loadPendencias();
+    toast('Comparecimento registrado — pendência de juntada criada!'); 
+    const det = document.getElementById('assistidoDetalhe');
+    if(det){ det.classList.add('ring-2','ring-amber-400'); setTimeout(()=>det.classList.remove('ring-2','ring-amber-400'),2000); }
+    loadComparecimentos(); loadPendencias();
     document.getElementById('cmpData').value=''; document.getElementById('cmpPolicial').value='';
   }catch(e){ alert('Erro: ' + e.message); }
 }
@@ -10677,6 +10680,15 @@ async function protocolar(id){
   try{
     await api('/api/assistidos/comparecimentos/'+id+'/protocolar', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ observacoes: obs }) });
     toast('Protocolado'); loadComparecimentos(); loadPendencias();
+  }catch(e){ alert('Erro: ' + e.message); }
+}
+
+async function registrarJuntada(id){
+  const val = prompt('Dados da juntada (número/observação):') || '';
+  if(!val.trim()) return;
+  try{
+    await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val.trim() }) });
+    toast('Juntada registrada'); loadComparecimentos(); loadPendencias();
   }catch(e){ alert('Erro: ' + e.message); }
 }
 
