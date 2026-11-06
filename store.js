@@ -259,6 +259,8 @@ function loadFile() {
     if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.assistidos)) mem.assistidos = [];
     if (!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
+    if (!Array.isArray(mem.assistidosComparecimentos)) mem.assistidosComparecimentos = [];
+    if (!mem.seqAssistidoComp) mem.seqAssistidoComp = mem.assistidosComparecimentos.length ? Math.max(...mem.assistidosComparecimentos.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoque)) mem.estoque = [];
     if (!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
@@ -339,7 +341,7 @@ if(!Array.isArray(mem.estoqueNotas)) mem.estoqueNotas=[];
     if(needSave||added) saveFile();
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoqueNotas: [], seqEstoqueNota: 0, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoqueNotas: [], assistidos: [], assistidosComparecimentos: [], seqEstoqueNota: 0, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1, seqAssistido: 1, seqAssistidoComp: 1 };
     const matsInit={ spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
     [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> matsInit[sis].forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
     return mem;
@@ -363,6 +365,8 @@ if(!mem.termos) mem.termos = [];
 if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.assistidos)) mem.assistidos = [];
 if(!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
+if(!Array.isArray(mem.assistidosComparecimentos)) mem.assistidosComparecimentos = [];
+if(!mem.seqAssistidoComp) mem.seqAssistidoComp = mem.assistidosComparecimentos.length ? Math.max(...mem.assistidosComparecimentos.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque)) mem.estoque=[];
 if(!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
@@ -481,10 +485,13 @@ const PSI = {
   id: 'id', user: 'user', kind: 'kind', personId: 'personid', personName: 'personname', grupoId: 'grupoid', data: 'data', dados: 'dados', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ASS = {
-  id: 'id', statusGrupo: 'statusgrupo', numero: 'numero', dias: 'dias', alerta: 'alerta',
-  processo: 'processo', vara: 'vara', nome: 'nome', vinculo: 'vinculo', sitJuridico: 'sitjuridico',
-  inicio: 'inicio', status: 'status', observacao: 'observacao', juntadas: 'juntadas',
-  proximaJuntada: 'proximajuntada', extras: 'extras', createdAt: 'createdat'
+  id: 'id', vinculo: 'vinculo', nome: 'nome', processo: 'processo', vara: 'vara',
+  localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', createdAt: 'createdat'
+};
+const ACC = {
+  id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
+  policialPlantao: 'policial_plantao', protocolado: 'protocolado',
+  dataProtocolacao: 'data_protocolacao', observacoes: 'observacoes', createdAt: 'createdat'
 };
 const EST = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
@@ -515,6 +522,7 @@ const appC = r => ({ id: r.id, user: r.user, name: r.name, role: r.role, to: r.t
 const appAG = r => toApp(r, AG);
 const appTM = r => toApp(r, TM);
 const appASS = r => toApp(r, ASS);
+const appACC = r => toApp(r, ACC);
 const appEST = r => toApp(r, EST);
 const appESTMOV = r => toApp(r, ESTMOV);
 const appESTSER = r => toApp(r, ESTSER);
@@ -2282,6 +2290,69 @@ store.assistidos = {
   async remove(id) {
     if (MODE === 'file') { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
     try { must(await supa.from('assistidos').delete().eq('id', Number(id)), 'assistidos.remove'); } catch (e) { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); }
+  }
+};
+
+
+// Assistidos - Comparecimentos (cada registro gera pendência de protocolação)
+store.assistidosComparecimentos = {
+  async all(assistidoId) {
+    if (MODE === 'file') {
+      const list = mem.assistidosComparecimentos || [];
+      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
+    }
+    try {
+      let q = supa.from('assistidos_comparecimentos').select('*').order('id');
+      if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
+      const r = must(await q, 'assistidosComparecimentos.all');
+      return r.map(appACC);
+    } catch (e) {
+      const list = mem.assistidosComparecimentos || [];
+      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
+    }
+  },
+  async byId(id) {
+    if (MODE === 'file') return (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id)) || null;
+    try {
+      const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
+      return r.length ? appACC(r[0]) : null;
+    } catch (e) { return (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id)) || null; }
+  },
+  async insert(r) {
+    if (MODE === 'file') {
+      const row = { id: mem.seqAssistidoComp++, ...r, protocolado: false, createdAt: new Date().toISOString() };
+      mem.assistidosComparecimentos.push(row); saveFile(); return row;
+    }
+    try {
+      const rr = must(await supa.from('assistidos_comparecimentos').insert(toRow(r, ACC)).select().single(), 'assistidosComparecimentos.insert');
+      return appACC(rr);
+    } catch (e) {
+      const row = { id: mem.seqAssistidoComp++, ...r, protocolado: false, createdAt: new Date().toISOString() };
+      mem.assistidosComparecimentos.push(row); saveFile(); return row;
+    }
+  },
+  async patch(id, fields) {
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      Object.assign(r, fields); saveFile(); return r;
+    }
+    try {
+      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow(fields, ACC)).eq('id', Number(id)).select(), 'assistidosComparecimentos.patch');
+      return rr.length ? appACC(rr[0]) : null;
+    } catch (e) {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      Object.assign(r, fields); return r;
+    }
+  },
+  async remove(id) {
+    if (MODE === 'file') { mem.assistidosComparecimentos = (mem.assistidosComparecimentos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
+    try { must(await supa.from('assistidos_comparecimentos').delete().eq('id', Number(id)), 'assistidosComparecimentos.remove'); } catch (e) { mem.assistidosComparecimentos = (mem.assistidosComparecimentos || []).filter(x => !eqi(x.id, id)); }
+  },
+  async pendencias() {
+    const list = await this.all();
+    return list.filter(x => !x.protocolado);
   }
 };
 

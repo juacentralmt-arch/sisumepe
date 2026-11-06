@@ -10555,143 +10555,112 @@ window.addEventListener('online', () => {
 });
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
-async function loadAssistidos(){
-  await loadAssistidosData();
-  renderAssistidos();
-}
+
 let assistidosData = [];
-let assistidosTab = 'ativos';
-async function loadAssistidosData(){
+let assistidoSelecionado = null;
+
+async function loadAssistidos(){
   const r = await api('/api/assistidos');
-  assistidosData = Array.isArray(r) ? r : (r.itens || []);
-}
-function setAssistidosTab(tab){
-  assistidosTab = tab;
-  const a = document.getElementById('assistidosTabAtivos');
-  const c = document.getElementById('assistidosTabConcluidos');
-  if(a && c){
-    a.className = 'btn ' + (tab==='ativos'?'btn-primary':'btn-ghost') + ' text-xs px-3 py-2';
-    c.className = 'btn ' + (tab==='concluidos'?'btn-primary':'btn-ghost') + ' text-xs px-3 py-2';
-  }
+  assistidosData = Array.isArray(r) ? r : [];
   renderAssistidos();
 }
+
 function renderAssistidos(){
   const body = document.getElementById('assistidosBody');
   if(!body) return;
-  const buscaEl = document.getElementById('assistidosBusca');
-  const varaEl = document.getElementById('assistidosFiltroVara');
-  const statusEl = document.getElementById('assistidosFiltroStatus');
-  const alertaEl = document.getElementById('assistidosFiltroAlerta');
-  const busca = buscaEl ? buscaEl.value : '';
-  const vara = varaEl ? varaEl.value : '';
-  const status = statusEl ? statusEl.value : '';
-  const alerta = alertaEl ? alertaEl.value : '';
-  const varas = [...new Set(assistidosData.map(a=>a.vara).filter(Boolean))];
-  const statuses = [...new Set(assistidosData.map(a=>a.status).filter(Boolean))];
-  const alertas = [...new Set(assistidosData.map(a=>a.alerta).filter(Boolean))];
-  if(varaEl && varaEl.options.length <= 1){ varas.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;varaEl.appendChild(o);}); }
-  if(statusEl && statusEl.options.length <= 1){ statuses.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;statusEl.appendChild(o);}); }
-  if(alertaEl && alertaEl.options.length <= 1){ alertas.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;alertaEl.appendChild(o);}); }
-  let list = [];
-  if(assistidosTab==='ativos') list = assistidosData.filter(a => a.statusGrupo !== 'concluido');
-  else list = assistidosData.filter(a => a.statusGrupo === 'concluido');
-  if(busca){ const t=busca.toLowerCase(); list=list.filter(a=> (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vara||'').toLowerCase().includes(t)); }
-  if(vara) list=list.filter(a=> a.vara===vara);
-  if(status) list=list.filter(a=> a.status===status);
-  if(alerta) list=list.filter(a=> a.alerta===alerta);
-  if(!list.length){ body.innerHTML = '<tr><td colspan="13" class="p-2 text-center text-slate-400">Nenhum registro.</td></tr>'; return; }
-  body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
-    '<td class="p-1">' + esc(a.numero) + '</td>' +
-    '<td class="p-1">' + esc(a.dias) + '</td>' +
-    '<td class="p-1">' + esc(a.alerta) + '</td>' +
-    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + '</td>' +
-    '<td class="p-1 max-w-[160px] truncate" title="' + esc(a.vara) + '">' + esc(a.vara) + '</td>' +
-    '<td class="p-1">' + esc(a.processo) + '</td>' +
+  if(!assistidosData.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido.</td></tr>'; return; }
+  body.innerHTML = assistidosData.map(a => '<tr class="border-t border-slate-100">' +
     '<td class="p-1">' + esc(a.vinculo) + '</td>' +
-    '<td class="p-1">' + esc(a.sitJuridico) + '</td>' +
-    '<td class="p-1">' + esc(a.inicio) + '</td>' +
-    '<td class="p-1">' + esc(a.status) + '</td>' +
-    '<td class="p-1 max-w-[200px] truncate" title="' + esc(a.observacao) + '">' + esc(String(a.observacao||'').slice(0,80)) + '</td>' +
-    '<td class="p-1 max-w-[220px] truncate" title="' + esc(a.juntadas) + '">' + esc(String(a.juntadas||'').replace(/\n/g,'; ').slice(0,120)) + '</td>' +
+    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + '</td>' +
+    '<td class="p-1">' + esc(a.processo) + '</td>' +
+    '<td class="p-1">' + esc(a.vara) + '</td>' +
+    '<td class="p-1">' + esc(a.localAssinatura) + '</td>' +
+    '<td class="p-1">' + esc(a.dataInicio) + '</td>' +
     '<td class="p-1 whitespace-nowrap">' +
-      '<button class="text-indigo-600 hover:underline mr-2" onclick="editarAssistido(' + a.id + ')">Editar</button>' +
-      (assistidosTab==='concluidos' ? '<button class="text-amber-600 hover:underline mr-2" onclick="reabrirAssistido(' + a.id + ')">Reabrir</button>' : '<button class="text-emerald-600 hover:underline mr-2" onclick="concluirAssistido(' + a.id + ')">Concluido</button>') +
+      '<button class="text-indigo-600 hover:underline mr-2" onclick="verAssistido(' + a.id + ')">Ver</button>' +
       '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</td>' +
   '</tr>').join('');
 }
-async function importarAssistidos(inp){
-  const f = inp && inp.files && inp.files[0];
-  if(!f){ alert('Nenhum arquivo selecionado'); return; }
-  const fd = new FormData(); fd.append('arquivo', f);
-  try{
-    const r = await api('/api/assistidos/import', { method:'POST', body: fd });
-    alert(r.msg || 'Importacao iniciada');
-    setTimeout(loadAssistidos, 2000);
-  }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
-  inp.value = '';
-}
-async function loadAssistidos(){
-  await loadAssistidosData();
-  renderAssistidos();
-}
-function openAssistidoModal(a){
-  document.getElementById('assistidoId').value = a ? a.id : '';
-  document.getElementById('assistidoModalTitle').textContent = a ? 'Editar assistido' : 'Novo assistido';
-  document.getElementById('aNumero').value = a ? (a.numero||'') : '';
-  document.getElementById('aDias').value = a ? (a.dias||'') : '';
-  document.getElementById('aAlerta').value = a ? (a.alerta||'') : '';
-  document.getElementById('aNome').value = a ? (a.nome||'') : '';
-  document.getElementById('aVara').value = a ? (a.vara||'') : '';
-  document.getElementById('aProcesso').value = a ? (a.processo||'') : '';
-  document.getElementById('aVinculo').value = a ? (a.vinculo||'') : '';
-  document.getElementById('aSit').value = a ? (a.sitJuridico||'') : '';
-  document.getElementById('aInicio').value = a ? (a.inicio||'') : '';
-  document.getElementById('aStatus').value = a ? (a.status||'') : '';
-  document.getElementById('aObs').value = a ? (a.observacao||'') : '';
-  document.getElementById('aJuntadas').value = a ? (a.juntadas||'') : '';
-  document.getElementById('modalAssistido').classList.remove('hidden');
-}
-function closeAssistidoModal(){ document.getElementById('modalAssistido').classList.add('hidden'); }
+
 async function salvarAssistido(){
-  const id = document.getElementById('assistidoId').value;
   const body = {
-    numero: document.getElementById('aNumero').value.trim(),
-    dias: document.getElementById('aDias').value.trim(),
-    alerta: document.getElementById('aAlerta').value.trim(),
-    nome: document.getElementById('aNome').value.trim(),
-    vara: document.getElementById('aVara').value.trim(),
-    processo: document.getElementById('aProcesso').value.trim(),
-    vinculo: document.getElementById('aVinculo').value.trim(),
-    sitJuridico: document.getElementById('aSit').value.trim(),
-    inicio: document.getElementById('aInicio').value,
-    status: document.getElementById('aStatus').value.trim(),
-    observacao: document.getElementById('aObs').value.trim(),
-    juntadas: document.getElementById('aJuntadas').value.trim()
+    vinculo: document.getElementById('asVinculo').value.trim(),
+    nome: document.getElementById('asNome').value.trim(),
+    processo: document.getElementById('asProcesso').value.trim(),
+    vara: document.getElementById('asVara').value.trim(),
+    localAssinatura: document.getElementById('asLocal').value.trim(),
+    dataInicio: document.getElementById('asInicio').value
   };
-  if(!body.nome){ alert('Nome obrigatorio'); return; }
+  if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
-    if(id) await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    else await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Salvo'); closeAssistidoModal(); loadAssistidos();
+    await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Salvo'); loadAssistidos();
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ alert('Erro: ' + e.message); }
 }
-function adicionarAssistido(){ openAssistidoModal(null); }
-async function editarAssistido(id){
-  const a = assistidosData.find(x=> String(x.id)===String(id));
-  if(!a) return;
-  openAssistidoModal(a);
-}
+
 async function excluirAssistido(id){
   if(!confirm('Excluir este assistido?')) return;
   try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); }
   catch(e){ alert('Erro: ' + e.message); }
 }
-async function concluirAssistido(id){
-  try{ await api('/api/assistidos/'+id+'/concluir', { method:'POST' }); toast('Concluido'); loadAssistidos(); }
-  catch(e){ alert('Erro: ' + e.message); }
+
+async function verAssistido(id){
+  assistidoSelecionado = id;
+  const a = assistidosData.find(x=> String(x.id)===String(id));
+  document.getElementById('assistidoDetalhe').classList.remove('hidden');
+  document.getElementById('detalheTitulo').textContent = 'Comparecimentos — ' + (a ? a.nome : '');
+  await loadComparecimentos();
+  await loadPendencias();
 }
-async function reabrirAssistido(id){
-  try{ await api('/api/assistidos/'+id+'/reabrir', { method:'POST' }); toast('Reaberto'); loadAssistidos(); }
-  catch(e){ alert('Erro: ' + e.message); }
+
+async function loadComparecimentos(){
+  const body = document.getElementById('comparecimentosBody');
+  if(!body || !assistidoSelecionado) return;
+  const r = await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos');
+  const list = Array.isArray(r) ? r : [];
+  body.innerHTML = list.map(c => '<tr class="border-t border-slate-100">' +
+    '<td class="p-1">' + esc(c.dataComparecimento) + '</td>' +
+    '<td class="p-1">' + esc(c.policialPlantao) + '</td>' +
+    '<td class="p-1">' + (c.protocolado ? 'Sim' : 'Não') + '</td>' +
+    '<td class="p-1 max-w-[200px] truncate" title="' + esc(c.observacoes||'') + '">' + esc(String(c.observacoes||'').slice(0,80)) + '</td>' +
+    '<td class="p-1 whitespace-nowrap">' +
+      (!c.protocolado ? '<button class="text-emerald-600 hover:underline" onclick="protocolar(' + c.id + ')">Protocolar</button>' : '') +
+    '</td>' +
+  '</tr>').join('') || '<tr><td colspan="5" class="p-2 text-center text-slate-400">Nenhum comparecimento.</td></tr>';
+}
+
+async function registrarComparecimento(){
+  if(!assistidoSelecionado) return;
+  const body = {
+    dataComparecimento: document.getElementById('cmpData').value,
+    policialPlantao: document.getElementById('cmpPolicial').value.trim()
+  };
+  if(!body.dataComparecimento || !body.policialPlantao){ alert('Preencha data e policial'); return; }
+  try{
+    await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Comparecimento registrado'); loadComparecimentos(); loadPendencias();
+    document.getElementById('cmpData').value=''; document.getElementById('cmpPolicial').value='';
+  }catch(e){ alert('Erro: ' + e.message); }
+}
+
+async function protocolar(id){
+  const obs = prompt('Observações da protocolação:') || '';
+  try{
+    await api('/api/assistidos/comparecimentos/'+id+'/protocolar', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ observacoes: obs }) });
+    toast('Protocolado'); loadComparecimentos(); loadPendencias();
+  }catch(e){ alert('Erro: ' + e.message); }
+}
+
+async function loadPendencias(){
+  const wrap = document.getElementById('pendenciasWrap');
+  if(!wrap) return;
+  const r = await api('/api/assistidos/pendencias');
+  const list = Array.isArray(r) ? r : [];
+  if(!list.length){ wrap.innerHTML = '<p class="text-xs text-slate-400">Nenhuma pendência.</p>'; return; }
+  wrap.innerHTML = '<p class="text-xs font-bold mb-1">Pendências de protocolação:</p>' + list.map(p =>
+    '<div class="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1">' +
+    esc(p.assistido ? p.assistido.nome : '') + ' — compareceu em ' + esc(p.dataComparecimento) + ' (policial: ' + esc(p.policialPlantao) + ')</div>'
+  ).join('');
 }
