@@ -1,6 +1,6 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast } = shared;
+const { store, ah, auth, broadcast, upload } = shared;
 const router = express.Router();
 
 // Cadastro de assistido
