@@ -1,27 +1,37 @@
+-- Módulo Assistidos (refeito): cadastro + comparecimentos + pendências de protocolação
 create table if not exists assistidos (
   id serial primary key,
-  statusgrupo text default '',
-  numero text default '',
-  dias text default '',
-  alerta text default '',
+  vinculo text default '',
+  nome text default '',
   processo text default '',
   vara text default '',
-  nome text default '',
-  vinculo text default '',
-  sitjuridico text default '',
-  inicio text default '',
-  status text default '',
-  observacao text default '',
-  juntadas text default '',
-  proximajuntada text default '',
-  extras jsonb default '{}'::jsonb,
+  local_assinatura text default '',
+  data_inicio text default '',
   createdat timestamptz default now()
 );
+
+-- Comparecimentos (cada registro gera pendência de protocolação)
+create table if not exists assistidos_comparecimentos (
+  id serial primary key,
+  assistido_id integer references assistidos(id) on delete cascade,
+  data_comparecimento text default '',
+  policial_plantao text default '',
+  protocolado boolean default false,
+  data_protocolacao text default '',
+  observacoes text default '',
+  createdat timestamptz default now()
+);
+
 -- Migração idempotente para bases existentes
-alter table assistidos add column if not exists numero text default '';
-alter table assistidos add column if not exists dias text default '';
-alter table assistidos add column if not exists alerta text default '';
-alter table assistidos add column if not exists juntadas text default '';
+alter table assistidos add column if not exists vinculo text default '';
+alter table assistidos add column if not exists nome text default '';
+alter table assistidos add column if not exists processo text default '';
+alter table assistidos add column if not exists vara text default '';
+alter table assistidos add column if not exists local_assinatura text default '';
+alter table assistidos add column if not exists data_inicio text default '';
+
 create index if not exists idx_assistidos_nome on assistidos (nome);
 create index if not exists idx_assistidos_processo on assistidos (processo);
-create index if not exists idx_assistidos_statusgrupo on assistidos (statusgrupo);
+create index if not exists idx_assistidos_vinculo on assistidos (vinculo);
+create index if not exists idx_assistidos_comp_assistido on assistidos_comparecimentos (assistido_id);
+create index if not exists idx_assistidos_comp_pend on assistidos_comparecimentos (protocolado);
