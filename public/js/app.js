@@ -10702,12 +10702,16 @@ async function excluirAssistido(id){
 }
 
 async function verAssistido(id){
-  assistidoSelecionado = id;
-  const a = assistidosData.find(x=> String(x.id)===String(id));
-  document.getElementById('assistidoDetalhe').classList.remove('hidden');
-  document.getElementById('detalheTitulo').textContent = 'Comparecimentos — ' + (a ? a.nome : '');
-  await loadComparecimentos();
-  await loadPendencias();
+  try {
+    assistidoSelecionado = id;
+    const a = assistidosData.find(x=> String(x.id)===String(id));
+    const det = document.getElementById('assistidoDetalhe');
+    if(det){ det.classList.remove('hidden'); det.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    const t = document.getElementById('detalheTitulo');
+    if(t) t.textContent = 'Comparecimentos — ' + (a ? a.nome : '');
+    await loadComparecimentos();
+    await loadPendencias();
+  } catch(e){ console.error('verAssistido', e); alert('Erro ao abrir detalhe: ' + (e.message||e)); }
 }
 
 async function loadComparecimentos(){
