@@ -7328,7 +7328,7 @@ function renderEstoque(){
       const color= saldo===0?'text-slate-400': saldo<limite?'text-amber-600': saldo<limite*2?'text-blue-600':'text-emerald-600';
       const bg= saldo===0?'bg-slate-50 border-slate-200': saldo<limite?'bg-amber-50 border-amber-200': saldo<limite*2?'bg-blue-50 border-blue-200':'bg-emerald-50 border-emerald-200';
       const alerta= saldo<limite ? (saldo===0?'🔴 ZERADO':'⚠️ BAIXO') : `mín ${limite}`;
-      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button>${(m==='TZPR04'||m==='UPR04')?`<button onclick="toggleEstNotasPanel(true)" class="flex-1 btn btn-ghost text-[11px] py-1">Seriais</button>`:''}</div></div>`;
+      return `<div class="card p-4 text-center ${bg}"><p class="text-2xl">${icons[m]||'📦'}</p><p class="text-[11px] font-bold tracking-wide text-slate-500 mt-1">${m}</p><p class="font-display text-2xl font-extrabold ${color}">${saldo}</p><p class="text-[11px] ${saldo<limite?'font-bold text-amber-700':'text-slate-500'}">${esc(estoqueUnidadeAtiva)} • ${alerta}</p><div class="flex gap-1 mt-2"><button onclick="quickEstoque('${m}',1)" class="flex-1 btn btn-ghost text-[11px] py-1">+1</button><button onclick="quickEstoque('${m}',-1)" class="flex-1 btn btn-ghost text-[11px] py-1">-1</button>${(m==='TZPR04'||m==='UPR04')?`<button onclick="toggleEstNotasPanel(true,'${m}')" class="flex-1 btn btn-ghost text-[11px] py-1">Seriais</button>`:''}</div></div>`;
     }).join('');
     if(resumo){ resumo.classList.remove('hidden'); const tot=list.reduce((s,x)=>s+Number(x.saldo||0),0); const lab=isInfinitySistema()?'Estoque Infinity':estoqueContratoAtivo; resumo.innerHTML=`<span class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-bold">📍 ${esc(estoqueUnidadeAtiva)} — Total: ${tot} unidades</span> <span class="text-slate-400">${esc(lab)}</span>`; }
     if(porUnidadeEl) porUnidadeEl.classList.add('hidden');
@@ -9139,8 +9139,11 @@ function toggleEst2MovTipo(){
   }
 }
 // --- Bloco de notas por unidade (texto livre, sem lógica de estoque) ---
-function toggleEstNotasPanel(show){
+let estNotasMaterial = 'GERAL';
+function toggleEstNotasPanel(show, material){
   const p=document.getElementById('estNotasPanel'); if(!p) return;
+  if(material){ estNotasMaterial = String(material).toUpperCase(); }
+  const lbl=document.querySelector('#estNotasPanel .lbl'); if(lbl) lbl.textContent = 'BLOCO DE NOTAS — ' + (estNotasMaterial==='GERAL' ? 'TZPR04 / UPR04' : estNotasMaterial) + ' (seriais/texto livre)';
   const sh = show==null ? p.classList.contains('hidden') : !!show;
   p.classList.toggle('hidden', !sh);
   if(sh){ loadEstoqueNotas(); try{ p.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){} }
@@ -9148,7 +9151,7 @@ function toggleEstNotasPanel(show){
 async function loadEstoqueNotas(){
   const ta=document.getElementById('estNotas'); if(!ta) return;
   try{
-    const url='/api/estoque/notas?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&unidade='+encodeURIComponent(document.getElementById('estUnidade')?.value||'UMEPE Juazeiro');
+    const url='/api/estoque/notas?sistema='+encodeURIComponent(estoqueSistemaAtivo)+'&contrato='+encodeURIComponent(getEstoqueContratoEfetivo())+'&unidade='+encodeURIComponent(document.getElementById('estUnidade')?.value||'UMEPE Juazeiro')+'&material='+encodeURIComponent(estNotasMaterial);
     const r=await api(url);
     ta.value=r&&r.texto?String(r.texto):'';
     const ta2=document.getElementById('estSeriaisNotas'); if(ta2) ta2.value=ta.value;
@@ -9158,7 +9161,7 @@ async function saveEstoqueNotas(){
   const ta=document.getElementById('estNotas'); const msg=document.getElementById('estNotasMsg');
   if(!ta) return;
   try{
-    await api('/api/estoque/notas', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: getEstoqueContratoEfetivo(), unidade: document.getElementById('estUnidade')?.value||'UMEPE Juazeiro', texto: ta.value }) });
+    await api('/api/estoque/notas', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sistema: estoqueSistemaAtivo, contrato: getEstoqueContratoEfetivo(), unidade: document.getElementById('estUnidade')?.value||'UMEPE Juazeiro', material: estNotasMaterial, texto: ta.value }) });
     if(msg){ msg.textContent='Notas salvas'; msg.classList.remove('hidden'); setTimeout(()=>msg.classList.add('hidden'), 2500); }
     const ta2=document.getElementById('estSeriaisNotas'); if(ta2) ta2.value=ta.value;
   }catch(e){ if(msg){ msg.textContent='Erro: '+e.message; msg.classList.remove('hidden'); } }
