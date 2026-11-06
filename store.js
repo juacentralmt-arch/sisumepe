@@ -1746,34 +1746,44 @@ const store = {
 
 
   estoqueNotas: {
-    async get(modulo, sistema, contrato, unidade) {
+    // `material`: opcional — permite bloco de notas separado por material
+    // (ex.: TZPR04 vs UPR04). Default 'GERAL' mantém compatibilidade.
+    _normMat(material){ return String(material || '').toUpperCase().trim() || 'GERAL'; },
+    async get(modulo, sistema, contrato, unidade, material) {
       const mod = String(modulo || 'estoque');
       const sis = normalizeSistema(sistema) || DEFAULT_SISTEMA;
       const c = String(contrato || '').toUpperCase().trim() || (sis === 'infinity' ? CONTRATO_INFINITY : 'CE01');
       const u = normalizeUnidade(unidade || DEFAULT_UNIDADE);
+      const m = this._normMat(material);
       if (MODE === 'supabase') {
         try {
-          const r = must(await supa.from('estoque_notas').select('*').eq('modulo', mod).eq('sistema', sis).eq('contrato', c).eq('unidade', u).limit(1), 'estoqueNotas.get');
+          const r = must(await supa.from('estoque_notas').select('*').eq('modulo', mod).eq('sistema', sis).eq('contrato', c).eq('unidade', u).eq('material', m).limit(1), 'estoqueNotas.get');
           if (r.length) return r[0];
         } catch (e) { console.warn('estoqueNotas.get fallback', e.message); }
       }
-      const rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u);
-      return rec || { modulo: mod, sistema: sis, contrato: c, unidade: u, texto: '', updatedAt: null };
+      const rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u && this._normMat(n.material) === m);
+      return rec || { modulo: mod, sistema: sis, contrato: c, unidade: u, material: m, texto: '', updatedAt: null };
     },
-    async set(modulo, sistema, contrato, unidade, texto) {
+    async set(modulo, sistema, contrato, unidade, material, texto) {
+      // compat: se chamado como set(mod, sis, cont, uni, texto) (5 args), trata 5º como texto
+      let mat = material, txt = texto;
+      if (txt === undefined && typeof mat === 'string' && !/^(TZPR|UPR|FONTE|CINTA|TRAVAS|GERAL)/i.test(mat)) {
+        txt = mat; mat = null;
+      }
       const mod = String(modulo || 'estoque');
       const sis = normalizeSistema(sistema) || DEFAULT_SISTEMA;
       const c = String(contrato || '').toUpperCase().trim() || (sis === 'infinity' ? CONTRATO_INFINITY : 'CE01');
       const u = normalizeUnidade(unidade || DEFAULT_UNIDADE);
-      const t = String(texto || '').slice(0, 20000);
+      const m = this._normMat(mat);
+      const t = String(txt || '').slice(0, 20000);
       if (!mem.estoqueNotas) mem.estoqueNotas = [];
-      let rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u);
-      if (rec) { rec.texto = t; rec.updatedAt = new Date().toISOString(); }
-      else { rec = { id: (mem.seqEstoqueNota = (mem.seqEstoqueNota || 0) + 1), modulo: mod, sistema: sis, contrato: c, unidade: u, texto: t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; mem.estoqueNotas.push(rec); }
+      let rec = (mem.estoqueNotas || []).find(n => String(n.modulo || 'estoque') === mod && normalizeSistema(n.sistema) === sis && String(n.contrato).toUpperCase() === c && normalizeUnidade(n.unidade) === u && this._normMat(n.material) === m);
+      if (rec) { rec.texto = t; rec.material = m; rec.updatedAt = new Date().toISOString(); }
+      else { rec = { id: (mem.seqEstoqueNota = (mem.seqEstoqueNota || 0) + 1), modulo: mod, sistema: sis, contrato: c, unidade: u, material: m, texto: t, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }; mem.estoqueNotas.push(rec); }
       if (MODE === 'file') saveFile();
       if (MODE === 'supabase') {
         try {
-          must(await supa.from('estoque_notas').upsert({ modulo: mod, sistema: sis, contrato: c, unidade: u, texto: t, updatedat: new Date().toISOString() }, { onConflict: 'modulo,sistema,contrato,unidade' }), 'estoqueNotas.set');
+          must(await supa.from('estoque_notas').upsert({ modulo: mod, sistema: sis, contrato: c, unidade: u, material: m, texto: t, updatedat: new Date().toISOString() }, { onConflict: 'modulo,sistema,contrato,unidade,material' }), 'estoqueNotas.set');
         } catch (e) { console.warn('estoqueNotas.set fallback', e.message); }
       }
       return rec;

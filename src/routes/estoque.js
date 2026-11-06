@@ -931,20 +931,20 @@ router.get('/api/estoque/relatorio', shared.auth(['tecnico','admin']), shared.ah
 
 // Bloco de notas por unidade (texto livre de seriais, sem lógica de estoque)
 router.get('/api/estoque/notas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade, sistema } = req.query;
+  const { contrato, unidade, sistema, material } = req.query;
   const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req);
   const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
   const u = unidade ? String(unidade).trim() : 'UMEPE Juazeiro';
-  res.json(await shared.store.estoqueNotas.get('estoque', effectiveSistema, c, u));
+  res.json(await shared.store.estoqueNotas.get('estoque', effectiveSistema, c, u, material));
 }));
 router.put('/api/estoque/notas', shared.auth(['tecnico','admin']), shared.ah(async (req,res)=>{
-  const { contrato, unidade, sistema, texto } = req.body||{};
+  const { contrato, unidade, sistema, material, texto } = req.body||{};
   const sis = req.auth.role==='admin' ? (sistema ? normalizeSistema(sistema) : null) : getSistema(req);
   const effectiveSistema = sis || getSistema(req);
   const c = resolveContrato(contrato, effectiveSistema) || (effectiveSistema==='infinity' ? CONTRATO_INFINITY : 'CE01');
   const u = unidade ? String(unidade).trim() : 'UMEPE Juazeiro';
-  res.json(await shared.store.estoqueNotas.set('estoque', effectiveSistema, c, u, texto));
+  res.json(await shared.store.estoqueNotas.set('estoque', effectiveSistema, c, u, material, texto));
 }));
 
 // Rota paramétrica por contrato - DEVE ficar por último entre /api/estoque/* para não sombrear /relatorio, /seriais, /historico, etc.
