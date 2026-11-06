@@ -17,14 +17,19 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!b.vara || !String(b.vara).trim()) return res.status(400).json({ error: 'Vara é obrigatória' });
   if (!b.localAssinatura || !String(b.localAssinatura).trim()) return res.status(400).json({ error: 'Local de assinatura é obrigatório' });
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
+  const all = await store.assistidos.all();
+  if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
     vinculo: String(b.vinculo).trim(),
     nome: String(b.nome).trim(),
     processo: String(b.processo).trim(),
     vara: String(b.vara).trim(),
     localAssinatura: String(b.localAssinatura).trim(),
-    dataInicio: String(b.dataInicio).trim()
+    dataInicio: String(b.dataInicio).trim(),
+    frequencia: b.frequencia || 'mensal',
+    status: 'ativo'
   });
+  try { await store.audit.insert({ kind:'assistido', action:'criado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido cadastrado: ' + row.nome }); } catch(e){}
   broadcast();
   res.status(201).json(row);
 }));
@@ -62,6 +67,7 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
     dataComparecimento: String(b.dataComparecimento).trim(),
     policialPlantao: String(b.policialPlantao).trim()
   });
+  try { await store.audit.insert({ kind:'assistido', action:'comparecimento', personName: a.nome, ref: 'comparecimento#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Comparecimento registrado: ' + row.dataComparecimento }); } catch(e){}
   broadcast();
   res.status(201).json(row);
 }));
@@ -140,15 +146,20 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
   res.json(list);
 }));
 
-// Pendentes de comparecimento: assistidos sem comparecimento nos últimos 30 dias
+const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
+// Pendentes de comparecimento: assistidos cujo próximo comparecimento esperado já passou
 router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
-  const cutoff = new Date(Date.now() - 30*864e5).toISOString().slice(0,10);
+  const hoje = new Date().toISOString().slice(0,10);
   const out = [];
   for (const a of assistidos) {
+    if (a.status && a.status !== 'ativo') continue;
     const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
-    if (!last || String(last.dataComparecimento) < cutoff) out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null });
+    const base = last ? last.dataComparecimento : (a.dataInicio || hoje);
+    const dias = FREQ_DAYS[a.frequencia] || 30;
+    const prox = new Date(new Date(base).getTime() + dias*864e5).toISOString().slice(0,10);
+    if (prox <= hoje) out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null, proximoEsperado: prox });
   }
   res.json(out);
 }));

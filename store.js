@@ -486,7 +486,8 @@ const PSI = {
 };
 const ASS = {
   id: 'id', vinculo: 'vinculo', nome: 'nome', processo: 'processo', vara: 'vara',
-  localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', createdAt: 'createdat'
+  localAssinatura: 'local_assinatura', dataInicio: 'data_inicio',
+  frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
 };
 const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
