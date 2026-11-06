@@ -1571,6 +1571,8 @@
           <p class="text-xs text-slate-500 mt-0.5">Controle de comparecimento e protocolação</p>
         </div>
         <button onclick="toggleFormAssistido()" class="btn btn-primary text-xs px-4 py-2 shadow-md hover:shadow-lg transition">+ Novo assistido</button>
+        <input id="assistidosFile" type="file" accept=".xlsx" class="hidden" onchange="importarAssistidos(this)">
+        <button onclick="document.getElementById('assistidosFile').click()" class="btn btn-ghost text-xs px-4 py-2">Importar XLSX</button>
       </div>
 
       <!-- Formulário (oculto) -->
