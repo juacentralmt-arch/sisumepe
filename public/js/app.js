@@ -10609,6 +10609,7 @@ function renderAssistidos(){
   '</tr>').join('');
 }
 
+function toggleFormAssistido(){ const el=document.getElementById("formAssistido"); if(el) el.classList.toggle("hidden"); }
 async function salvarAssistido(){
   const body = {
     vinculo: document.getElementById('asVinculo').value.trim(),
@@ -10621,7 +10622,7 @@ async function salvarAssistido(){
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Salvo'); loadAssistidos();
+    toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos();
     ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ alert('Erro: ' + e.message); }
 }
