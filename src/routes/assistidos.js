@@ -275,4 +275,21 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
   });
 }));
 
+// Visão de fluxo (kanban) — assistidos agrupados por etapa
+router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, res) => {
+  const assistidos = await store.assistidos.all();
+  const comps = await store.assistidosComparecimentos.all();
+  const hoje = new Date().toISOString().slice(0,10);
+  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
+  const etapas = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
+  for (const a of assistidos) {
+    if (a.status === 'concluido' || a.status === 'arquivado') { etapas.concluido.push(a); continue; }
+    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    if (!last) { etapas.aguardando.push(a); continue; }
+    if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id }); continue; }
+    etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento });
+  }
+  res.json(etapas);
+}));
+
 module.exports = router;
