@@ -10776,6 +10776,6 @@ async function loadPendencias(){
   if(!list.length){ wrap.innerHTML = '<p class="text-xs text-slate-400">Nenhuma pendência.</p>'; return; }
   wrap.innerHTML = '<p class="text-xs font-bold mb-1">Pendências de protocolação:</p>' + list.map(p =>
     '<div class="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1">' +
-    esc(p.assistido ? p.assistido.nome : '') + ' — compareceu em ' + esc(p.dataComparecimento) + ' (policial: ' + esc(p.policialPlantao) + ')</div>'
+    esc(p.assistido ? p.assistido.nome : '') + ' — compareceu em ' + esc(fmtDataBR(p.dataComparecimento)) + ' (policial: ' + esc(p.policialPlantao) + ')</div>'
   ).join('');
 }
