@@ -1691,19 +1691,19 @@
       <div id="viewFluxo" class="mb-4 hidden">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div class="card p-3 rounded-2xl border border-slate-200">
-            <h4 class="font-bold text-xs text-slate-600 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-slate-400"></span>Aguardando comparecimento</h4>
+            <h4 class="font-bold text-xs text-slate-600 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-slate-400"></span>Aguardando comparecimento <span id="fluxoAguardandoCount" class="ml-auto bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">0</span></h4>
             <div id="fluxoAguardando" class="space-y-2 min-h-[60px]"></div>
           </div>
           <div class="card p-3 rounded-2xl border border-amber-200 bg-amber-50/30">
-            <h4 class="font-bold text-xs text-amber-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Compareceu (pendente juntada)</h4>
+            <h4 class="font-bold text-xs text-amber-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Compareceu (pendente juntada) <span id="fluxoCompareceuCount" class="ml-auto bg-amber-200 text-amber-700 px-1.5 py-0.5 rounded-full text-[10px]">0</span></h4>
             <div id="fluxoCompareceu" class="space-y-2 min-h-[60px]"></div>
           </div>
           <div class="card p-3 rounded-2xl border border-blue-200 bg-blue-50/30">
-            <h4 class="font-bold text-xs text-blue-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>Protocolado</h4>
+            <h4 class="font-bold text-xs text-blue-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>Protocolado <span id="fluxoProtocoladoCount" class="ml-auto bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full text-[10px]">0</span></h4>
             <div id="fluxoProtocolado" class="space-y-2 min-h-[60px]"></div>
           </div>
           <div class="card p-3 rounded-2xl border border-emerald-200 bg-emerald-50/30">
-            <h4 class="font-bold text-xs text-emerald-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Concluído/Arquivado</h4>
+            <h4 class="font-bold text-xs text-emerald-700 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Concluído/Arquivado <span id="fluxoConcluidoCount" class="ml-auto bg-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded-full text-[10px]">0</span></h4>
             <div id="fluxoConcluido" class="space-y-2 min-h-[60px]"></div>
           </div>
         </div>
