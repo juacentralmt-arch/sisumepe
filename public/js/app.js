@@ -10560,7 +10560,33 @@ let assistidosData = [];
 let assistidoSelecionado = null;
 
 async function loadAssistidos(){
-  const r = await api('/api/assistidos');
+  await loadStats();
+  await filtrarAssistidos();
+}
+
+async function loadStats(){
+  try{
+    const s = await api('/api/assistidos/stats');
+    const set = (id,v) => { const e=document.getElementById(id); if(e) e.textContent = v; };
+    set('stTotalAss', s.totalAssistidos || 0);
+    set('stTotalCmp', s.totalComparecimentos || 0);
+    set('stPend', s.totalPendencias || 0);
+    set('stProt', s.totalProtocolados || 0);
+    const sel = document.getElementById('asFiltroVara');
+    if(sel && sel.options.length <= 1){
+      (s.porVara||[]).forEach(v=>{ const o=document.createElement('option'); o.value=v.vara; o.textContent=v.vara+' ('+v.total+')'; sel.appendChild(o); });
+    }
+  }catch(e){ console.error(e); }
+}
+
+async function filtrarAssistidos(){
+  const busca = document.getElementById('asBusca') ? document.getElementById('asBusca').value : '';
+  const vara = document.getElementById('asFiltroVara') ? document.getElementById('asFiltroVara').value : '';
+  const params = new URLSearchParams();
+  if(busca) params.set('q', busca);
+  if(vara) params.set('vara', vara);
+  const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
+  const r = await api(url);
   assistidosData = Array.isArray(r) ? r : [];
   renderAssistidos();
 }

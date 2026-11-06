@@ -82,13 +82,50 @@ router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','te
 // Listar pendências (comparecimentos não protocolados)
 router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (req, res) => {
   const list = await store.assistidosComparecimentos.pendencias();
-  // enriquecer com dados do assistido
   const out = [];
   for (const c of list) {
     const a = await store.assistidos.byId(c.assistidoId);
     out.push({ ...c, assistido: a });
   }
   res.json(out);
+}));
+
+// Filtros + quantitativos
+router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, res) => {
+  const assistidos = await store.assistidos.all();
+  const comps = await store.assistidosComparecimentos.all();
+  const pend = comps.filter(c => !c.protocolado);
+  const porVara = {};
+  const porPolicial = {};
+  const porMes = {};
+  assistidos.forEach(a => { porVara[a.vara || '—'] = (porVara[a.vara || '—'] || 0) + 1; });
+  comps.forEach(c => {
+    const p = c.policialPlantao || '—';
+    porPolicial[p] = (porPolicial[p] || 0) + 1;
+    const mes = String(c.dataComparecimento || '').slice(0,7) || '—';
+    porMes[mes] = (porMes[mes] || 0) + 1;
+  });
+  res.json({
+    totalAssistidos: assistidos.length,
+    totalComparecimentos: comps.length,
+    totalPendencias: pend.length,
+    totalProtocolados: comps.length - pend.length,
+    porVara: Object.entries(porVara).map(([vara,total]) => ({ vara, total })).sort((a,b)=>b.total-a.total),
+    porPolicial: Object.entries(porPolicial).map(([policial,total]) => ({ policial, total })).sort((a,b)=>b.total-a.total),
+    porMes: Object.entries(porMes).map(([mes,total]) => ({ mes, total })).sort((a,b)=>a.mes.localeCompare(b.mes))
+  });
+}));
+
+// Filtro de listagem
+router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, res) => {
+  const { q, vara } = req.query || {};
+  let list = await store.assistidos.all();
+  if (q) {
+    const t = String(q).toLowerCase();
+    list = list.filter(a => (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vinculo||'').toLowerCase().includes(t));
+  }
+  if (vara) list = list.filter(a => a.vara === vara);
+  res.json(list);
 }));
 
 module.exports = router;
