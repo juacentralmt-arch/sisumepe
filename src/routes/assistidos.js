@@ -140,4 +140,17 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
   res.json(list);
 }));
 
+// Pendentes de comparecimento: assistidos sem comparecimento nos últimos 30 dias
+router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']), ah(async (req, res) => {
+  const assistidos = await store.assistidos.all();
+  const comps = await store.assistidosComparecimentos.all();
+  const cutoff = new Date(Date.now() - 30*864e5).toISOString().slice(0,10);
+  const out = [];
+  for (const a of assistidos) {
+    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    if (!last || String(last.dataComparecimento) < cutoff) out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null });
+  }
+  res.json(out);
+}));
+
 module.exports = router;

@@ -10559,9 +10559,52 @@ if('serviceWorker' in navigator){ window.addEventListener('load', () => { naviga
 let assistidosData = [];
 let assistidoSelecionado = null;
 
+let assTabView = 'todos';
 async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();
+  await loadCompPendencias();
+  await loadJuntPendencias();
+}
+
+function setAssistidosTabView(tab){
+  assTabView = tab;
+  const ids = { todos: 'assistidosWrap', comp: 'viewComp', junt: 'viewJunt' };
+  Object.entries(ids).forEach(([k,v]) => {
+    const el = document.getElementById(v);
+    if(el) el.classList.toggle('hidden', k !== tab);
+  });
+  ['tabAssTodos','tabAssComp','tabAssJunt'].forEach((bid,i) => {
+    const el = document.getElementById(bid);
+    if(el) el.className = 'btn ' + (['todos','comp','junt'][i]===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-3 py-2';
+  });
+}
+
+async function loadCompPendencias(){
+  const body = document.getElementById('compBody');
+  if(!body) return;
+  const r = await api('/api/assistidos/pendencias-comparecimento');
+  const list = Array.isArray(r) ? r : [];
+  body.innerHTML = list.map(a => '<tr class="border-t border-slate-100">' +
+    '<td class="p-1">' + esc(a.vinculo) + '</td>' +
+    '<td class="p-1">' + esc(a.nome) + '</td>' +
+    '<td class="p-1">' + esc(a.processo) + '</td>' +
+    '<td class="p-1">' + esc(a.vara) + '</td>' +
+    '<td class="p-1">' + esc(a.ultimoComparecimento || 'Nunca') + '</td>' +
+  '</tr>').join('') || '<tr><td colspan="5" class="p-2 text-center text-slate-400">Nenhuma pendência.</td></tr>';
+}
+
+async function loadJuntPendencias(){
+  const body = document.getElementById('juntBody');
+  if(!body) return;
+  const r = await api('/api/assistidos/pendencias');
+  const list = Array.isArray(r) ? r : [];
+  body.innerHTML = list.map(p => '<tr class="border-t border-slate-100 bg-amber-50">' +
+    '<td class="p-1">' + esc(p.assistido ? p.assistido.nome : '') + '</td>' +
+    '<td class="p-1">' + esc(p.dataComparecimento) + '</td>' +
+    '<td class="p-1">' + esc(p.policialPlantao) + '</td>' +
+    '<td class="p-1"><button class="text-amber-600 hover:underline font-bold" onclick="registrarJuntada(' + p.id + ')">+ Juntada</button></td>' +
+  '</tr>').join('') || '<tr><td colspan="4" class="p-2 text-center text-slate-400">Nenhuma pendência.</td></tr>';
 }
 
 async function loadStats(){
