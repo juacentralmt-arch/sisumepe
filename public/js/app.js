@@ -10644,18 +10644,33 @@ function renderFluxoTab(){
   if(!el) return;
   const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const list = fluxoData[map[fluxoTab]] || [];
-  if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
-  el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">' +
-    '<div class="cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
-    '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
-    '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
-    '<p class="text-[10px] text-slate-400 truncate">' + esc(a.processo) + '</p>' +
-    (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
-    (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
+  if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
+  el.innerHTML = list.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition">' +
+    '<div class="cursor-pointer" onclick="abrirEditarAssistido(' + a.id + ')">' +
+      '<div class="flex items-start justify-between gap-2 mb-2">' +
+        '<div>' +
+          '<p class="font-bold text-sm text-slate-800 truncate">' + esc(a.nome) + '</p>' +
+          '<p class="text-[10px] text-slate-500">Vínculo: ' + esc(a.vinculo) + '</p>' +
+        '</div>' +
+        '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
+        '<div><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
+        '<div><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
+        '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
+        '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
+        '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+        (a.compId ? '<div><span class="font-semibold">Juntada:</span> ' + esc(a.juntada ? a.juntada.slice(0,24) : 'pendente') + '</div>' : '') +
+      '</div>' +
     '</div>' +
-    (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
-    (a.compId && !String(a.juntada||'').trim() ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg py-1" onclick="registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
+    '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
+      (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
+      (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
+      '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
+      '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
+    '</div>' +
   '</div>').join('');
+
 }
 async function loadFluxo(){
   try{
