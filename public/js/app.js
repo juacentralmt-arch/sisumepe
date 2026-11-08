@@ -10593,8 +10593,7 @@ function fmtDataBR(v){ if(!v) return ''; const s=String(v).trim(); if(/^\d{4}-\d
 
 let assTabView = 'todos';
 async function exportarAssistidosCSV(){
-  const r = await api('/api/assistidos');
-  const list = Array.isArray(r) ? r : [];
+  const list = Array.isArray(assistidosData) && assistidosData.length ? assistidosData : (await api('/api/assistidos') || []);
   const rows = [['Vínculo','Nome','Processo','Vara','Local','Início','Frequência','Status']];
   list.forEach(a => rows.push([a.vinculo,a.nome,a.processo,a.vara,a.localAssinatura,a.dataInicio,a.frequencia,a.status]));
   const csv = rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
@@ -10604,7 +10603,7 @@ async function exportarAssistidosCSV(){
 
 async function importarAssistidos(inp){
   const f = inp && inp.files && inp.files[0];
-  if(!f){ alert('Nenhum arquivo selecionado'); return; }
+  if(!f){ toast('Nenhum arquivo selecionado'); return; }
   const fd = new FormData(); fd.append('arquivo', f);
   try{
     const r = await api('/api/assistidos/import', { method:'POST', body: fd });
@@ -10616,7 +10615,7 @@ async function importarAssistidos(inp){
         else if (st.state === 'error') { clearInterval(poll); alert('Erro na importação: ' + (st.error || '')); }
       } catch(e) { clearInterval(poll); }
     }, 1500);
-  }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
+  }catch(e){ console.error(e); toast('Erro ao importar: ' + (e.message||e)); }
   inp.value = '';
 }
 
@@ -10664,6 +10663,7 @@ function renderFluxoTab(){
           '<p class="text-[10px] text-slate-500">Vínculo: ' + esc(a.vinculo) + '</p>' +
         '</div>' +
         '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span>' +
+      (a.pendenteJuntada ? ' <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendente juntada</span>' : '') +
       '</div>' +
       '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
         '<div><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
@@ -10896,18 +10896,18 @@ async function salvarAssistido(){
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
     status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo'
   };
-  if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
+  if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ toast('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
     ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 
 async function excluirAssistido(id){
   if(!confirm('Excluir este assistido?')) return;
   try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); loadStats(); }
-  catch(e){ alert('Erro: ' + e.message); }
+  catch(e){ toast('Erro: ' + e.message); }
 }
 
 async function abrirHistoricoAssistido(id){
@@ -10962,7 +10962,7 @@ async function salvarEdicaoAssistido(){
   try{
     await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Atualizado'); fecharEditarAssistido(); loadAssistidos(); loadStats();
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 
 async function verAssistido(id){
@@ -11003,16 +11003,19 @@ function abrirRegistrarComparecimento(id){
 }
 function fecharRegistrarComparecimento(){ document.getElementById('modalComparecimento').classList.add('hidden'); }
 async function salvarRegistrarComparecimento(){
+  const btn = document.querySelector('#modalComparecimento button[onclick="salvarRegistrarComparecimento()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
   const id = document.getElementById('cmpAssistidoId').value;
   const body = {
     dataComparecimento: document.getElementById('cmpData').value,
     policialPlantao: document.getElementById('cmpPolicial').value.trim()
   };
-  if(!body.dataComparecimento){ alert('Preencha a data'); return; }
+  if(!body.dataComparecimento){ if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } toast('Preencha a data'); return; }
   try{
     await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Comparecimento registrado'); fecharRegistrarComparecimento(); await loadAssistidos(); setFluxoTab('compareceu'); loadStats();
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } }
 }
 async function registrarComparecimento(){
   if(!assistidoSelecionado) return;
@@ -11028,7 +11031,7 @@ async function registrarComparecimento(){
     if(det){ det.classList.add('ring-2','ring-amber-400'); setTimeout(()=>det.classList.remove('ring-2','ring-amber-400'),2000); }
     loadComparecimentos(); loadPendencias();
     document.getElementById('cmpData').value=''; document.getElementById('cmpPolicial').value='';
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 
 async function protocolar(id){
@@ -11036,7 +11039,7 @@ async function protocolar(id){
   try{
     await api('/api/assistidos/comparecimentos/'+id+'/protocolar', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ observacoes: obs }) });
     toast('Protocolado'); loadComparecimentos(); loadPendencias();
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 
 function abrirModalJuntada(id){
@@ -11052,7 +11055,7 @@ async function salvarJuntada(){
   try{
     await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val }) });
     toast('Juntada registrada'); fecharModalJuntada(); loadComparecimentos(); loadPendencias(); loadStats();
-  }catch(e){ alert('Erro: ' + e.message); }
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 async function registrarJuntada(id){ abrirModalJuntada(id); }
 
