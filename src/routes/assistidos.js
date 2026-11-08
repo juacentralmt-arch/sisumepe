@@ -48,6 +48,9 @@ router.patch('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
   const b = req.body || {};
   const fields = {};
   for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio']) if (b[k] !== undefined) fields[k] = b[k];
+  if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
+  if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
+  if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   const row = await store.assistidos.patch(req.params.id, fields);
   if (!row) return res.status(404).json({ error: 'Não encontrado' });
   broadcast();
