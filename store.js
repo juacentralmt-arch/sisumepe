@@ -2226,13 +2226,13 @@ const store = {
 // Assistidos (Planilha Geral)
 store.assistidos = {
   async all() {
-    if (MODE === 'file') return [...(mem.assistidos || [])];
+    if (MODE === 'file') return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
     try {
       const out = [];
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.all');
+        const r = must(await supa.from('assistidos').select('*').is('deleted_at', null).order('id').range(from, from + pageSize - 1), 'assistidos.all');
         out.push(...r.map(appASS));
         if (r.length < pageSize) break;
         from += pageSize;
@@ -2240,19 +2240,45 @@ store.assistidos = {
       return out;
     } catch (e) {
       console.warn('assistidos.all fallback', e.message);
+      return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
+    }
+  },
+  async allIncludingDeleted() {
+    if (MODE === 'file') return [...(mem.assistidos || [])];
+    try {
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.allIncludingDeleted');
+        out.push(...r.map(appASS));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
+    } catch (e) {
+      console.warn('assistidos.allIncludingDeleted fallback', e.message);
       return [...(mem.assistidos || [])];
     }
   },
   async byId(id) {
-    if (MODE === 'file') return (mem.assistidos || []).find(x => eqi(x.id, id)) || null;
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      return r && r.deleted_at ? null : r || null;
+    }
     try {
       const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
-      return r.length ? appASS(r[0]) : null;
-    } catch (e) { return (mem.assistidos || []).find(x => eqi(x.id, id)) || null; }
+      if (!r.length) return null;
+      const row = appASS(r[0]);
+      return row.deleted_at ? null : row;
+    } catch (e) {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      return r && r.deleted_at ? null : r || null;
+    }
   },
   async insert(r) {
     if (MODE === 'file') {
-      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString() };
+      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), deleted_at: null };
       mem.assistidos.push(row); saveFile(); return row;
     }
     try {
@@ -2260,7 +2286,7 @@ store.assistidos = {
       return appASS(rr);
     } catch (e) {
       console.warn('assistidos.insert fallback', e.message);
-      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString() };
+      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), deleted_at: null };
       mem.assistidos.push(row); saveFile(); return row;
     }
   },
@@ -2287,21 +2313,33 @@ store.assistidos = {
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return null;
+      if (r.deleted_at) return null; // não edita excluído
       Object.assign(r, fields); saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos').update(toRow(fields, ASS)).eq('id', Number(id)).select(), 'assistidos.patch');
+      const rr = must(await supa.from('assistidos').update(toRow(fields, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) {
       console.warn('assistidos.patch fallback', e.message);
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      if (!r) return null;
+      if (!r || r.deleted_at) return null;
       Object.assign(r, fields); return r;
     }
   },
   async remove(id) {
-    if (MODE === 'file') { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
-    try { must(await supa.from('assistidos').delete().eq('id', Number(id)), 'assistidos.remove'); } catch (e) { mem.assistidos = (mem.assistidos || []).filter(x => !eqi(x.id, id)); }
+    // Soft-delete: marca deleted_at em vez de apagar fisicamente
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (!r) return;
+      r.deleted_at = new Date().toISOString();
+      saveFile(); return;
+    }
+    try {
+      must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
+    } catch (e) {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (r) { r.deleted_at = new Date().toISOString(); }
+    }
   }
 };
 

@@ -96,6 +96,12 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
   if (b.contrato !== undefined && CONTRATOS_ASSISTIDO.includes(String(b.contrato).trim())) fields.contrato = String(b.contrato).trim();
   if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
+  // Validação: vínculo não pode ser duplicado em outro assistido
+  if (fields.vinculo !== undefined && String(fields.vinculo).trim()) {
+    const todos = await store.assistidos.allIncludingDeleted();
+    const dup = todos.find(x => String(x.id) !== String(req.params.id) && String(x.vinculo).trim().toLowerCase() === String(fields.vinculo).trim().toLowerCase() && !x.deleted_at);
+    if (dup) return res.status(409).json({ error: 'Vínculo já cadastrado em outro assistido: ' + dup.nome });
+  }
   const row = await store.assistidos.patch(req.params.id, fields);
   if (!row) return res.status(404).json({ error: 'Não encontrado' });
   try { await store.audit.insert({ kind:'assistido', action:'editado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido editado: ' + row.nome }); } catch(e){}
@@ -711,6 +717,13 @@ router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, re
     etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor });
   }
   res.json(etapas);
+}));
+
+// Lista assistidos com vínculo pendente (vinculo começa com PENDENTE-)
+router.get('/api/assistidos/pendentes-vinculo', auth(['admin','tecnico']), ah(async (req, res) => {
+  const todos = await store.assistidos.allIncludingDeleted();
+  const pendentes = todos.filter(a => String(a.vinculo||'').startsWith('PENDENTE-') && !a.deleted_at);
+  res.json(pendentes.sort((a, b) => String(a.vinculo||'').localeCompare(String(b.vinculo||''))));
 }));
 
 module.exports = router;

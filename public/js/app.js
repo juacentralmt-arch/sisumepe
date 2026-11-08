@@ -11401,3 +11401,13 @@ function limparFiltrosAssistidos(){
   ['asFiltroVara','asFiltroLocal','asFiltroStatus'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   filtrarAssistidos();
 }
+
+// Filtro rápido: mostra apenas assistidos com vínculo pendente (PENDENTE-*)
+function filtrarPendentesVinculo(){
+  const evinc = document.getElementById('asFiltroVinculo');
+  if(evinc){ evinc.value = 'PENDENTE'; }
+  filtrarAssistidos();
+  // Destaca visualmente o botão/filtro ativo
+  const btn = document.querySelector('button[onclick="filtrarPendentesVinculo()"]');
+  if(btn){ btn.classList.add('btn-warning'); btn.classList.remove('btn-ghost'); }
+}
