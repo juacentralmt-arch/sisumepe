@@ -547,6 +547,7 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
             const v = row.getCell(colIdx).value;
             const tipo = classifyCell(v);
             const s = String(v||'').trim();
+            const u = s.toUpperCase();
             switch (tipo) {
               case 'processo':
                 // Se ainda não tem vinculo definido, este pode ser o vinculo
