@@ -10643,7 +10643,8 @@ function renderFluxoTab(){
   const el = content;
   if(!el) return;
   const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
-  const list = fluxoData[map[fluxoTab]] || [];
+  const ff = fluxoFiltrado();
+  const list = ff[map[fluxoTab]] || [];
   if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
   el.innerHTML = list.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition">' +
     '<div class="cursor-pointer" onclick="abrirEditarAssistido(' + a.id + ')">' +
@@ -10681,11 +10682,7 @@ async function loadFluxo(){
       protocolado: r.protocolado || [],
       concluido: r.concluido || []
     };
-    const cnt = (id, n) => { const e = document.getElementById(id); if(e) e.textContent = n; };
-    cnt('fluxoAguardandoCount', fluxoData.aguardando.length);
-    cnt('fluxoCompareceuCount', fluxoData.compareceu.length);
-    cnt('fluxoProtocoladoCount', fluxoData.protocolado.length);
-    cnt('fluxoConcluidoCount', fluxoData.concluido.length);
+    atualizarContagensFluxo();
     renderFluxoTab();
   }catch(e){ console.error(e); }
 }
@@ -10752,6 +10749,42 @@ async function loadStats(){
   }catch(e){ console.error(e); }
 }
 
+function assistidosFiltros(){
+  return {
+    nome: (document.getElementById('asFiltroNome')?.value || '').trim().toLowerCase(),
+    vinculo: (document.getElementById('asFiltroVinculo')?.value || '').trim().toLowerCase(),
+    processo: (document.getElementById('asFiltroProcesso')?.value || '').trim().toLowerCase(),
+    vara: (document.getElementById('asFiltroVara')?.value || '').trim(),
+    local: (document.getElementById('asFiltroLocal')?.value || '').trim(),
+    status: (document.getElementById('asFiltroStatus')?.value || '').trim()
+  };
+}
+function assistidoMatchFilters(a, f){
+  if (!a) return false;
+  if (f.nome && !(a.nome||'').toLowerCase().includes(f.nome)) return false;
+  if (f.vinculo && !(a.vinculo||'').toLowerCase().includes(f.vinculo)) return false;
+  if (f.processo && !(a.processo||'').toLowerCase().includes(f.processo)) return false;
+  if (f.vara && a.vara !== f.vara) return false;
+  if (f.local && a.localAssinatura !== f.local) return false;
+  if (f.status && a.status !== f.status) return false;
+  return true;
+}
+function fluxoFiltrado(){
+  const f = assistidosFiltros();
+  const out = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
+  Object.keys(out).forEach(k => {
+    (fluxoData[k] || []).forEach(a => { if (assistidoMatchFilters(a, f)) out[k].push(a); });
+  });
+  return out;
+}
+function atualizarContagensFluxo(){
+  const ff = fluxoFiltrado();
+  const cnt = (id, n) => { const e = document.getElementById(id); if(e) e.textContent = n; };
+  cnt('fluxoAguardandoCount', ff.aguardando.length);
+  cnt('fluxoCompareceuCount', ff.compareceu.length);
+  cnt('fluxoProtocoladoCount', ff.protocolado.length);
+  cnt('fluxoConcluidoCount', ff.concluido.length);
+}
 async function filtrarAssistidos(){
   const nome = document.getElementById('asFiltroNome') ? document.getElementById('asFiltroNome').value.trim() : '';
   const vinculo = document.getElementById('asFiltroVinculo') ? document.getElementById('asFiltroVinculo').value.trim() : '';
@@ -10770,6 +10803,8 @@ async function filtrarAssistidos(){
   const r = await api(url);
   assistidosData = Array.isArray(r) ? r : [];
   renderAssistidos();
+  atualizarContagensFluxo();
+  renderFluxoTab();
 }
 
 function renderAssistidos(){
