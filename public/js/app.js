@@ -10834,7 +10834,7 @@ async function verAssistido(id){
     assistidoSelecionado = id;
     const a = assistidosData.find(x=> String(x.id)===String(id));
     const det = document.getElementById('assistidoDetalhe');
-    if(det){ det.classList.remove('hidden'); det.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    if(det){ det.classList.remove('hidden'); }
     const t = document.getElementById('detalheTitulo');
     if(t) t.textContent = 'Comparecimentos — ' + (a ? a.nome : '');
     await loadComparecimentos();
