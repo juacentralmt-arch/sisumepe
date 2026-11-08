@@ -10676,7 +10676,6 @@ function renderFluxoTab(){
       '</div>' +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
-      (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
       '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
@@ -10886,6 +10885,7 @@ function renderAssistidos(){
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
       '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
+      (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
       '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</div>' +
