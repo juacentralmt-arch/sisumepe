@@ -11172,34 +11172,58 @@ function renderPaginacaoAssistidos(){
   wrap.innerHTML = html;
 }
 
+function iniciais(nome){
+  const parts = String(nome||'').trim().split(/\s+/).filter(Boolean);
+  if(parts.length === 0) return '?';
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+function corIniciais(nome){
+  const cores = ['bg-indigo-500','bg-violet-500','bg-purple-500','bg-fuchsia-500','bg-pink-500','bg-rose-500','bg-red-500','bg-orange-500','bg-amber-500','bg-yellow-500','bg-lime-500','bg-green-500','bg-emerald-500','bg-teal-500','bg-cyan-500','bg-sky-500','bg-blue-500','bg-indigo-600'];
+  let s = 0;
+  for(let i=0;i<String(nome||'').length;i++){ s = (s*31 + String(nome||'').charCodeAt(i)) % cores.length; }
+  return cores[s];
+}
 function renderAssistidos(){
   const wrap = document.getElementById('fluxoTodosWrap');
   if(!wrap) return;
-  if(!assistidosData.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 col-span-full">Nenhum assistido cadastrado.</div>'; return; }
-  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="abrirDetalheAssistido(' + a.id + ')">' +
-    '<div class="flex items-start justify-between gap-2 mb-2">' +
+  if(!assistidosData.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 col-span-full"><div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mx-auto mb-2 text-xs font-bold text-slate-500">👥</div><p class="text-sm font-medium text-slate-600">Nenhum assistido encontrado.</p><p class="text-[10px] text-slate-400 mt-1">Tente limpar os filtros ou cadastre um novo assistido.</p></div>'; return; }
+  wrap.innerHTML = assistidosData.map(a => {
+    const vinculo = String(a.vinculo||'');
+    const isPendente = vinculo.startsWith('PENDENTE-');
+    const badgePendente = isPendente ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 ml-1">⚠ PENDENTE</span>' : '';
+    const badgeVencendo = a.vencendo ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 ml-1">⚠ Vencido</span>' : (a.vencendo7d ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 ml-1">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span>' : '');
+    return '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer group" onclick="abrirDetalheAssistido(' + a.id + ')">' +
+    '<div class="flex items-start justify-between gap-3 mb-2">' +
+      '<div class="flex items-start gap-3">' +
+      '<div class="avatar w-8 h-8 text-[12px] ' + corIniciais(a.nome) + '">' + iniciais(a.nome) + '</div>' +
       '<div>' +
-        '<p class="font-bold text-sm text-slate-800 truncate">' + esc(a.nome) + '</p>' +
-        '<p class="text-[10px] text-slate-500">Vínculo: ' + esc(a.vinculo) + '</p>' +
+        '<p class="font-bold text-sm text-slate-800 truncate leading-tight">' + esc(a.nome) + badgePendente + '</p>' +
+        '<p class="text-[10px] text-slate-500 truncate">Vínculo: ' + esc(a.vinculo) + '</p>' +
       '</div>' +
+      '</div>' +
+      '<div class="flex items-center gap-1">' +
       '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span>' +
+      badgeVencendo +
+      '</div>' +
     '</div>' +
     '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
       '<div><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
       '<div><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
       '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
       '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
-      '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+      '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' <span class="text-rose-600 font-bold">(pendente juntada)</span>' : '') + '</div>' +
       (a.vencendo ? '<div class="col-span-2 p-1.5 rounded bg-rose-50 border border-rose-200"><span class="text-[9px] font-bold text-rose-700">⚠ Comparecimento vencido</span></div>' : '') +
-      (a.vencendo7d ? '<div class="col-span-2 p-1.5 rounded bg-amber-50 border border-amber-200"><span class="text-[9px] font-bold text-amber-700">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span></div>' : '') +
+      (a.vencendo7d && !a.vencendo ? '<div class="col-span-2 p-1.5 rounded bg-amber-50 border border-amber-200"><span class="text-[9px] font-bold text-amber-700">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span></div>' : '') +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
-      (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
-      '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
-      '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
-      '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
+      (!a.ultimoComparecimento ? '<button type="button" class="flex-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')"><span>+</span> Comparecimento</button>' : '') +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-indigo-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')"><span class="opacity-70">📋</span> Histórico</button>' +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-slate-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')"><span class="opacity-70">✏️</span> Editar</button>' +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-rose-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')"><span class="opacity-70">🗑️</span> Excluir</button>' +
     '</div>' +
-  '</div>').join('');
+  '</div>';
+  }).join('');
 }
 
 function toggleFormAssistido(){ const el=document.getElementById("formAssistido"); if(el) el.classList.toggle("hidden"); }
