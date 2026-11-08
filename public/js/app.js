@@ -10701,6 +10701,53 @@ function renderFluxoTab(){
   '</div>').join('');
 
 }
+async function abrirDetalheAssistido(id){
+  const wrap = document.getElementById('detAssistidoInfo');
+  const body = document.getElementById('detComparecimentosBody');
+  const pend = document.getElementById('detPendencia');
+  const title = document.getElementById('detTitulo');
+  if(wrap) wrap.innerHTML = '<div class="text-center text-slate-400 py-4">Carregando...</div>';
+  if(body) body.innerHTML = '';
+  if(pend) pend.classList.add('hidden');
+  document.getElementById('modalDetalheAssistido').classList.remove('hidden');
+  try {
+    const r = await api('/api/assistidos/' + id + '/detalhe');
+    const a = r.assistido || {};
+    if(title) title.textContent = 'Detalhe — ' + (a.nome || '');
+    if(wrap){
+      wrap.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px]">' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Nome</p><p class="font-bold truncate">' + esc(a.nome || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Vínculo</p><p class="font-bold truncate">' + esc(a.vinculo || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Processo</p><p class="font-bold truncate">' + esc(a.processo || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Vara</p><p class="font-bold truncate">' + esc(a.vara || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Local</p><p class="font-bold truncate">' + esc(a.localAssinatura || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Início</p><p class="font-bold">' + esc(fmtDataBR(a.dataInicio) || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Frequência</p><p class="font-bold">' + esc(a.frequencia || '-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Status</p><p class="font-bold ' + (a.status==='ativo'?'text-emerald-700':a.status==='concluido'?'text-blue-700':'text-slate-600') + '">' + esc(a.status||'-') + '</p></div>' +
+        '</div>';
+    }
+    const comps = Array.isArray(r.comparecimentos) ? r.comparecimentos : [];
+    if(body){
+      if(!comps.length){ body.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-slate-400">Nenhum comparecimento.</td></tr>'; }
+      else {
+        body.innerHTML = comps.map(c => '<tr class="border-t border-slate-100">' +
+          '<td class="p-2">' + esc(fmtDataBR(c.dataComparecimento)) + '</td>' +
+          '<td class="p-2">' + esc(c.policialPlantao || '—') + '</td>' +
+          '<td class="p-2">' + (String(c.juntada||'').trim() ? esc(c.juntada) : '<span class="text-amber-600 font-bold">Pendente</span>') + '</td>' +
+          '<td class="p-2 max-w-[200px] truncate" title="' + esc(c.observacoes||'') + '">' + esc(String(c.observacoes||'').slice(0,60)) + '</td>' +
+          '</tr>').join('');
+      }
+    }
+    if(pend){
+      const temPendente = comps.some(c => !String(c.juntada||'').trim());
+      pend.classList.toggle('hidden', !temPendente);
+    }
+  } catch(e) {
+    if(wrap) wrap.innerHTML = '<div class="text-center text-rose-500 py-4">Erro ao carregar detalhe.</div>';
+  }
+}
+function fecharDetalheAssistido(){ document.getElementById('modalDetalheAssistido').classList.add('hidden'); }
+
 async function carregarAuditoriaAssistidos(){
   const wrap = document.getElementById('fluxoAuditoriaWrap');
   if(!wrap) return;
@@ -10992,6 +11039,8 @@ function atualizarContagensFluxo(){
   cnt('fluxoProtocoladoCount', ff.protocolado.length);
   cnt('fluxoConcluidoCount', ff.concluido.length);
 }
+let assistidosPage = 1;
+let assistidosLimit = 20;
 async function filtrarAssistidos(){
   const nome = document.getElementById('asFiltroNome') ? document.getElementById('asFiltroNome').value.trim() : '';
   const vinculo = document.getElementById('asFiltroVinculo') ? document.getElementById('asFiltroVinculo').value.trim() : '';
@@ -11010,19 +11059,50 @@ async function filtrarAssistidos(){
   const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo') ? document.getElementById('asFiltroUsuarioProtocolo').value.trim() : '';
   if(dataProtocolo) params.set('dataProtocolo', dataProtocolo);
   if(usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
+  params.set('page', assistidosPage);
+  params.set('limit', assistidosLimit);
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
   const r = await api(url);
-  assistidosData = Array.isArray(r) ? r : [];
+  const data = r && r.items ? r : { items: Array.isArray(r) ? r : [], total: (Array.isArray(r) ? r : []).length };
+  assistidosData = data.items || [];
+  window._assistidosTotal = data.total || assistidosData.length;
   renderAssistidos();
+  renderPaginacaoAssistidos();
   atualizarContagensFluxo();
   renderFluxoTab();
+}
+function mudarPaginaAssistidos(p){
+  assistidosPage = p;
+  filtrarAssistidos();
+}
+function renderPaginacaoAssistidos(){
+  const wrap = document.getElementById('paginacaoAssistidos');
+  if(!wrap) return;
+  const total = window._assistidosTotal || 0;
+  const totalPages = Math.ceil(total / assistidosLimit) || 1;
+  if(totalPages <= 1){ wrap.innerHTML = ''; return; }
+  const btn = (p, active, label) => '<button type="button" onclick="mudarPaginaAssistidos(' + p + ')" class="text-[10px] px-2 py-1 rounded ' + (active ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100') + '">' + label + '</button>';
+  let html = '<div class="flex items-center justify-between gap-2 mt-2">';
+  html += '<span class="text-[10px] text-slate-500">Página ' + assistidosPage + ' de ' + totalPages + ' (' + total + ' registro(s))</span>';
+  html += '<div class="flex gap-1">';
+  if(assistidosPage > 1) html += btn(assistidosPage - 1, false, 'Anterior');
+  for(let i = 1; i <= totalPages; i++){
+    if(i === 1 || i === totalPages || Math.abs(i - assistidosPage) <= 1){
+      html += btn(i, i === assistidosPage, i);
+    } else if(i === 2 && assistidosPage > 3 || i === totalPages - 1 && assistidosPage < totalPages - 2){
+      html += '<span class="text-[10px] text-slate-400 px-1">…</span>';
+    }
+  }
+  if(assistidosPage < totalPages) html += btn(assistidosPage + 1, false, 'Próximo');
+  html += '</div></div>';
+  wrap.innerHTML = html;
 }
 
 function renderAssistidos(){
   const wrap = document.getElementById('fluxoTodosWrap');
   if(!wrap) return;
   if(!assistidosData.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 col-span-full">Nenhum assistido cadastrado.</div>'; return; }
-  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="abrirEditarAssistido(' + a.id + ')">' +
+  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="abrirDetalheAssistido(' + a.id + ')">' +
     '<div class="flex items-start justify-between gap-2 mb-2">' +
       '<div>' +
         '<p class="font-bold text-sm text-slate-800 truncate">' + esc(a.nome) + '</p>' +

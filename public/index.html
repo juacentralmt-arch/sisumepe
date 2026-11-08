@@ -1725,6 +1725,7 @@
           <input id="asFiltroProtoAte" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
         </div>
         <div id="fluxoTodosWrap" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-4"></div>
+        <div id="paginacaoAssistidos" class="mb-4"></div>
         <div id="fluxoContent" class="space-y-2 min-h-[60px]"></div>
       </div>
 
@@ -1754,6 +1755,32 @@
           <div class="flex gap-2 justify-end">
             <button onclick="fecharRegistrarComparecimento()" class="btn btn-ghost text-xs px-3 py-2">Cancelar</button>
             <button onclick="salvarRegistrarComparecimento()" class="btn btn-primary text-xs px-3 py-2">Registrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Detalhe do Assistido -->
+      <div id="modalDetalheAssistido" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-base text-indigo-700" id="detTitulo">Detalhe do Assistido</h3>
+            <button onclick="fecharDetalheAssistido()" class="btn btn-ghost text-xs px-3 py-1">Fechar</button>
+          </div>
+          <div id="detAssistidoInfo" class="mb-4"></div>
+          <div class="mb-3">
+            <h4 class="font-bold text-xs text-slate-600 uppercase">Comparecimentos</h4>
+            <table class="w-full text-[10px] whitespace-nowrap">
+              <thead><tr class="bg-slate-50 text-slate-600">
+                <th class="text-left p-2 font-semibold">Data</th>
+                <th class="text-left p-2 font-semibold">Policial</th>
+                <th class="text-left p-2 font-semibold">Juntada</th>
+                <th class="text-left p-2 font-semibold">Obs.</th>
+              </tr></thead>
+              <tbody id="detComparecimentosBody"></tbody>
+            </table>
+          </div>
+          <div id="detPendencia" class="mt-3 p-2 rounded-lg bg-amber-50 hidden">
+            <p class="text-[10px] text-amber-700 font-bold">⚠️ Pendência de juntada neste comparecimento.</p>
           </div>
         </div>
       </div>
