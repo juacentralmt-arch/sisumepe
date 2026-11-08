@@ -10623,7 +10623,7 @@ let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: []
 let fluxoTab = 'todos';
 function setFluxoTab(tab){
   fluxoTab = tab;
-  const ids = { todos:'tabFluxoTodos', aguardando:'tabFluxoAguardando', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido' };
+  const ids = { todos:'tabFluxoTodos', aguardando:'tabFluxoAguardando', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria' };
   Object.keys(ids).forEach(t => {
     const btn = document.getElementById(ids[t]);
     if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
@@ -10633,13 +10633,22 @@ function setFluxoTab(tab){
 function renderFluxoTab(){
   const todosWrap = document.getElementById('fluxoTodosWrap');
   const content = document.getElementById('fluxoContent');
+  const auditWrap = document.getElementById('fluxoAuditoriaWrap');
   if (fluxoTab === 'todos') {
     if(todosWrap) todosWrap.classList.remove('hidden');
     if(content) content.classList.add('hidden');
+    if(auditWrap) auditWrap.classList.add('hidden');
     return;
   }
   if(todosWrap) todosWrap.classList.add('hidden');
+  if (fluxoTab === 'auditoria') {
+    if(content) content.classList.add('hidden');
+    if(auditWrap) auditWrap.classList.remove('hidden');
+    carregarAuditoriaAssistidos();
+    return;
+  }
   if(content) content.classList.remove('hidden');
+  if(auditWrap) auditWrap.classList.add('hidden');
   const el = content;
   if(!el) return;
   const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
@@ -10674,6 +10683,33 @@ function renderFluxoTab(){
     '</div>' +
   '</div>').join('');
 
+}
+async function carregarAuditoriaAssistidos(){
+  const wrap = document.getElementById('fluxoAuditoriaWrap');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Carregando...</div>';
+  try {
+    const r = await api('/api/audit/search?kind=assistido&limit=200');
+    const list = Array.isArray(r) ? r : (r.items || []);
+    if(!list.length){ wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Nenhum registro de auditoria.</div>'; return; }
+    wrap.innerHTML = '<div class="card p-2 overflow-x-auto rounded-2xl shadow-sm"><table class="w-full text-[11px] whitespace-nowrap"><thead><tr class="bg-slate-50 text-slate-600">' +
+      '<th class="text-left p-2 font-semibold">Data</th>' +
+      '<th class="text-left p-2 font-semibold">Usuário</th>' +
+      '<th class="text-left p-2 font-semibold">Ação</th>' +
+      '<th class="text-left p-2 font-semibold">Assistido</th>' +
+      '<th class="text-left p-2 font-semibold">Resumo</th>' +
+      '</tr></thead><tbody>' +
+      list.map(x => '<tr class="border-t border-slate-100">' +
+        '<td class="p-2">' + esc(fmtDataBR(x.at || x.createdAt)) + '</td>' +
+        '<td class="p-2">' + esc(x.byName || x.byUser || '') + '</td>' +
+        '<td class="p-2 font-semibold">' + esc(x.action || '') + '</td>' +
+        '<td class="p-2">' + esc(x.personName || '') + '</td>' +
+        '<td class="p-2 max-w-[260px] truncate" title="' + esc(x.summary || '') + '">' + esc(String(x.summary || '').slice(0,80)) + '</td>' +
+      '</tr>').join('') +
+      '</tbody></table></div>';
+  } catch(e) {
+    wrap.innerHTML = '<div class="card p-4 text-center text-rose-500">Acesso restrito ou erro ao carregar auditoria.</div>';
+  }
 }
 async function loadFluxo(){
   try{
