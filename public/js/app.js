@@ -10623,7 +10623,7 @@ let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: []
 let fluxoTab = 'todos';
 function setFluxoTab(tab){
   fluxoTab = tab;
-  const ids = { todos:'tabFluxoTodos', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria' };
+  const ids = { todos:'tabFluxoTodos', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria', relatorios:'tabFluxoRelatorios' };
   Object.keys(ids).forEach(t => {
     const btn = document.getElementById(ids[t]);
     if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
@@ -10647,6 +10647,16 @@ function renderFluxoTab(){
     carregarAuditoriaAssistidos();
     return;
   }
+  const relWrap = document.getElementById('fluxoRelatoriosWrap');
+  if (fluxoTab === 'relatorios') {
+    if(todosWrap) todosWrap.classList.add('hidden');
+    if(content) content.classList.add('hidden');
+    if(auditWrap) auditWrap.classList.add('hidden');
+    if(relWrap) relWrap.classList.remove('hidden');
+    carregarRelatorioAssistidos();
+    return;
+  }
+  if(relWrap) relWrap.classList.add('hidden');
   if(content) content.classList.remove('hidden');
   if(auditWrap) auditWrap.classList.add('hidden');
   const el = content;
@@ -10715,6 +10725,78 @@ async function carregarAuditoriaAssistidos(){
   } catch(e) {
     wrap.innerHTML = '<div class="card p-4 text-center text-rose-500">Acesso restrito ou erro ao carregar auditoria.</div>';
   }
+}
+async function carregarRelatorioAssistidos(){
+  const wrap = document.getElementById('fluxoRelatoriosWrap');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Carregando relatório...</div>';
+  const params = new URLSearchParams();
+  const nome = document.getElementById('asFiltroNome')?.value?.trim();
+  const vinculo = document.getElementById('asFiltroVinculo')?.value?.trim();
+  const processo = document.getElementById('asFiltroProcesso')?.value?.trim();
+  const vara = document.getElementById('asFiltroVara')?.value;
+  const local = document.getElementById('asFiltroLocal')?.value;
+  const status = document.getElementById('asFiltroStatus')?.value;
+  const dataProtocolo = document.getElementById('asFiltroDataProtocolo')?.value;
+  const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo')?.value?.trim();
+  if (nome) params.set('nome', nome);
+  if (vinculo) params.set('vinculo', vinculo);
+  if (processo) params.set('processo', processo);
+  if (vara) params.set('vara', vara);
+  if (local) params.set('local', local);
+  if (status) params.set('status', status);
+  if (dataProtocolo) params.set('dataProtocolo', dataProtocolo);
+  if (usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
+  const url = '/api/assistidos/filtrar' + (params.toString() ? '?' + params.toString() : '');
+  try {
+    const r = await api(url);
+    const list = Array.isArray(r) ? r : [];
+    // summary
+    const porStatus = {}, porVara = {}, porLocal = {};
+    list.forEach(a => {
+      porStatus[a.status || '—'] = (porStatus[a.status || '—'] || 0) + 1;
+      porVara[a.vara || '—'] = (porVara[a.vara || '—'] || 0) + 1;
+      porLocal[a.localAssinatura || '—'] = (porLocal[a.localAssinatura || '—'] || 0) + 1;
+    });
+    const summary = (obj, title) => '<div class="card p-3 rounded-xl"><p class="text-[10px] font-bold text-slate-500 mb-1">' + title + '</p>' +
+      Object.entries(obj).map(([k,v]) => '<div class="flex justify-between text-[11px]"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('') + '</div>';
+    const table = '<div class="card p-2 overflow-x-auto rounded-2xl shadow-sm"><table class="w-full text-[10px] whitespace-nowrap"><thead><tr class="bg-slate-50 text-slate-600">' +
+      ['Vínculo','Nome','Processo','Vara','Local','Início','Status','Últ. comp.','Policial','Juntada','Prot. em','Prot. por'].map(h=>'<th class="text-left p-2 font-semibold">'+h+'</th>').join('') +
+      '</tr></thead><tbody>' +
+      list.map(a => '<tr class="border-t border-slate-100">' +
+        '<td class="p-2">' + esc(a.vinculo) + '</td>' +
+        '<td class="p-2">' + esc(a.nome) + '</td>' +
+        '<td class="p-2">' + esc(a.processo) + '</td>' +
+        '<td class="p-2">' + esc(a.vara) + '</td>' +
+        '<td class="p-2">' + esc(a.localAssinatura) + '</td>' +
+        '<td class="p-2">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
+        '<td class="p-2">' + esc(a.status) + '</td>' +
+        '<td class="p-2">' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : '—') + '</td>' +
+        '<td class="p-2">' + esc(a.policialPlantao || '—') + '</td>' +
+        '<td class="p-2 max-w-[120px] truncate" title="' + esc(a.juntada||'') + '">' + esc(a.juntada ? a.juntada.slice(0,24) : '—') + '</td>' +
+        '<td class="p-2">' + esc(a.dataProtocolacao ? fmtDataBR(a.dataProtocolacao) : '—') + '</td>' +
+        '<td class="p-2">' + esc(a.protocoladoPor || '—') + '</td>' +
+      '</tr>').join('') +
+      '</tbody></table></div>';
+    wrap.innerHTML = '<div class="mb-4 flex items-center justify-between gap-2 flex-wrap">' +
+      '<p class="text-sm font-bold text-slate-700">Relatório de assistidos (' + list.length + ' registro(s))</p>' +
+      '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-primary text-xs px-3 py-2">Exportar CSV</button>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">' +
+        summary(porStatus, 'Por status') + summary(porVara, 'Por vara') + summary(porLocal, 'Por local') +
+      '</div>' + table;
+    window._relatorioAssistidos = list;
+  } catch(e) {
+    wrap.innerHTML = '<div class="card p-4 text-center text-rose-500">Erro ao gerar relatório.</div>';
+  }
+}
+function exportarRelatorioAssistidosCSV(){
+  const list = window._relatorioAssistidos || [];
+  const rows = [['Vínculo','Nome','Processo','Vara','Local','Início','Status','Últ. comparecimento','Policial','Juntada','Protocolado em','Protocolado por']];
+  list.forEach(a => rows.push([a.vinculo,a.nome,a.processo,a.vara,a.localAssinatura,a.dataInicio,a.status,a.ultimoComparecimento,a.policialPlantao,a.juntada,a.dataProtocolacao,a.protocoladoPor]));
+  const csv = rows.map(r=> r.map(v=> '"' + String(v||'').replace(/"/g,'""') + '"').join(';')).join('\n');
+  const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+  const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='relatorio-assistidos.csv'; a.click();
 }
 async function loadFluxo(){
   try{
