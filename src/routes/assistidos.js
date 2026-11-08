@@ -18,7 +18,11 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   const enriched = list.map(a => {
     const cs = (byAssistido.get(a.id) || []).sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
     const last = cs[0] || null;
-    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !String(last.juntada || '').trim()) };
+    const prox = proximoEsperadoAssistido(a, comps);
+    const hoje = new Date().toISOString().slice(0,10);
+    const vencendo = prox && prox <= hoje;
+    const vencendo7 = prox && !vencendo && prox <= new Date(Date.now() + 7*864e5).toISOString().slice(0,10);
+    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !String(last.juntada || '').trim()), proximoEsperado: prox, vencendo: vencendo, vencendo7d: vencendo7 };
   });
   // Ordena por nome por padrão
   enriched.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
@@ -360,6 +364,15 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
 }));
 
 const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
+function proximoEsperadoAssistido(a, comps){
+  const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+  const base = last ? last.dataComparecimento : (a.dataInicio || null);
+  if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
+  const dias = FREQ_DAYS[a.frequencia] || 30;
+  const dt = new Date(String(base) + 'T00:00:00');
+  if (isNaN(dt)) return null;
+  return new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
+}
 // Pendentes de comparecimento: assistidos cujo próximo comparecimento esperado já passou
 router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();

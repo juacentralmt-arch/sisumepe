@@ -10804,6 +10804,7 @@ async function carregarRelatorioAssistidos(){
       '<button onclick="gerarRelatorioAssistidos()" class="btn btn-primary text-xs px-3 py-2">Gerar relatório</button>' +
       '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-ghost text-xs px-3 py-2">Exportar CSV</button>' +
       '<button onclick="exportarRelatorioAssistidosPDF()" class="btn btn-ghost text-xs px-3 py-2">Exportar PDF</button>' +
+      '<button onclick="exportarRelatorioAssistidosXLSX()" class="btn btn-ghost text-xs px-3 py-2">Exportar XLSX</button>' +
     '</div>' +
   '</div>' +
   '<div id="relatorioResultado"></div>';
@@ -10913,6 +10914,18 @@ function exportarRelatorioAssistidosPDF(){
   if (protoAte) params.set('protoAte', protoAte);
   const url = '/api/assistidos/relatorio/pdf' + (params.toString() ? '?' + params.toString() : '');
   window.location.href = url;
+}
+function exportarRelatorioAssistidosXLSX(){
+  const list = window._relatorioAssistidos || [];
+  const campos = window._relatorioCampos || ['vinculo','nome'];
+  const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
+  const val = (a,k) => { if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') return a[k] ? fmtDataBR(a[k]) : ''; return a[k] || ''; };
+  const wb = XLSX.utils.book_new();
+  const data = [campos.map(k=>labels[k]||k)];
+  list.forEach(a => data.push(campos.map(k=>val(a,k))));
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, 'Assistidos');
+  XLSX.writeFile(wb, 'relatorio-assistidos.xlsx');
 }
 async function loadFluxo(){
   try{
@@ -11116,6 +11129,8 @@ function renderAssistidos(){
       '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
       '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
       '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+      (a.vencendo ? '<div class="col-span-2 p-1.5 rounded bg-rose-50 border border-rose-200"><span class="text-[9px] font-bold text-rose-700">⚠ Comparecimento vencido</span></div>' : '') +
+      (a.vencendo7d ? '<div class="col-span-2 p-1.5 rounded bg-amber-50 border border-amber-200"><span class="text-[9px] font-bold text-amber-700">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span></div>' : '') +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
@@ -11250,7 +11265,8 @@ async function salvarRegistrarComparecimento(){
   const id = document.getElementById('cmpAssistidoId').value;
   const body = {
     dataComparecimento: document.getElementById('cmpData').value,
-    policialPlantao: document.getElementById('cmpPolicial').value.trim()
+    policialPlantao: document.getElementById('cmpPolicial').value.trim(),
+    assinadoPor: document.getElementById('cmpAssinadoPor') ? document.getElementById('cmpAssinadoPor').value.trim() : ''
   };
   if(!body.dataComparecimento){ if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } toast('Preencha a data'); return; }
   try{
