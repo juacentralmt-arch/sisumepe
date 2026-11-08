@@ -10605,17 +10605,41 @@ async function importarAssistidos(inp){
   const f = inp && inp.files && inp.files[0];
   if(!f){ toast('Nenhum arquivo selecionado'); return; }
   const fd = new FormData(); fd.append('arquivo', f);
+  const overlay = document.getElementById('importProgressOverlay');
+  const bar = document.getElementById('importProgressBar');
+  const label = document.getElementById('importProgressLabel');
+  const count = document.getElementById('importProgressCount');
+  const text = document.getElementById('importProgressText');
   try{
+    // Mostra overlay de progresso
+    if(overlay) overlay.classList.remove('hidden');
+    if(bar) bar.style.width = '0%';
+    if(label) label.textContent = '0%';
+    if(count) count.textContent = '0 / 0';
+    if(text) text.textContent = 'Enviando arquivo…';
+
     const r = await api('/api/assistidos/import', { method:'POST', body: fd });
+    if(r.error){ toast(r.error || 'Erro ao iniciar importação'); if(overlay) overlay.classList.add('hidden'); return; }
     toast(r.msg || 'Importação iniciada');
+
     const poll = setInterval(async () => {
       try {
         const st = await api('/api/assistidos/import/status');
-        if (st.state === 'done') { clearInterval(poll); toast('Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
-        else if (st.state === 'error') { clearInterval(poll); alert('Erro na importação: ' + (st.error || '')); }
-      } catch(e) { clearInterval(poll); }
-    }, 1500);
-  }catch(e){ console.error(e); toast('Erro ao importar: ' + (e.message||e)); }
+        if(st){
+          const pct = st.progress || 0;
+          if(bar) bar.style.width = pct + '%';
+          if(label) label.textContent = pct + '%';
+          if(count) count.textContent = (st.processed||0) + ' / ' + (st.totalRows||0);
+          if(text){
+            if(st.state === 'running') text.textContent = 'Importando dados (' + pct + '%)…';
+            else if(st.state === 'done') text.textContent = 'Finalizando…';
+          }
+        }
+        if (st && st.state === 'done') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); toast('Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
+        else if (st && st.state === 'error') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); alert('Erro na importação: ' + (st.error || '')); }
+      } catch(e) { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); }
+    }, 1000);
+  }catch(e){ console.error(e); toast('Erro ao importar: ' + (e.message||e)); if(overlay) overlay.classList.add('hidden'); }
   inp.value = '';
 }
 

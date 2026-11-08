@@ -414,7 +414,7 @@ router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']
 }));
 
 
-let lastImportStatus = { state: 'idle', total: 0, error: null, at: null };
+let lastImportStatus = { state: 'idle', total: 0, processed: 0, totalRows: 0, progress: 0, error: null, at: null };
 
 function excelSerialToISO(v) {
   if (v == null || v === '') return '';
@@ -450,7 +450,7 @@ router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res)
 router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
   const buffer = req.file.buffer;
-  lastImportStatus = { state: 'running', total: 0, error: null, at: new Date().toISOString() };
+  lastImportStatus = { state: 'running', total: 0, processed: 0, totalRows: 0, progress: 0, error: null, at: new Date().toISOString() };
   res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background.' });
   setImmediate(async () => {
     try {
@@ -458,8 +458,44 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
       let total = 0;
+      let totalRows = 0;
       const allExisting = await store.assistidos.all();
       const seenVinculo = new Set(allExisting.map(a => String(a.vinculo)));
+      for (const ws of wb.worksheets) {
+        const headerRow = ws.getRow(1);
+        const headers = [];
+        headerRow.eachCell((c, col) => { headers[col] = String(c.value || '').trim(); });
+        const findCol = (...names) => {
+          const low = headers.map(h => String(h||'').toLowerCase());
+          for (const n of names) {
+            const idx = low.indexOf(String(n).toLowerCase());
+            if (idx >= 0) return idx + 1;
+          }
+          return null;
+        };
+        const cVinculo = findCol('Vínculo','VINCULO');
+        const cNome = findCol('Nome','NOME');
+        const cProcesso = findCol('Processo','PROCESSO');
+        const cVara = findCol('Vara','VARA');
+        const cLocal = findCol('local de assinatura','Local de assinatura','LOCAL DE ASSINATURA');
+        const cInicio = findCol('Data Início','Data Inicio','DATA INÍCIO','DATA INICIO');
+        const cFreq = findCol('Frequência','FREQUENCIA','Frequencia');
+        const cComp = findCol('Data de Comparecimento','DATA DE COMPARECIMENTO');
+        const cPP = findCol('PP de Plantão','PP DE PLANTÃO','PP DE PLANTAO');
+        const cObs = findCol('Observação do PP: Em qual sistema foi protocolado e a folha','Observação do PP','OBSERVAÇÃO');
+        const rowsData = [];
+        ws.eachRow((row, idx) => {
+          if (idx === 1) return;
+          const get = (col) => col ? row.getCell(col).value : null;
+          const vinculo = String(get(cVinculo) || '').trim();
+          const nome = String(get(cNome) || '').trim();
+          if (!vinculo || !nome) return;
+          if (seenVinculo.has(vinculo)) return;
+          rowsData.push({ get, vinculo, nome });
+        });
+        totalRows += rowsData.length;
+      }
+      lastImportStatus.totalRows = totalRows;
       for (const ws of wb.worksheets) {
         const headerRow = ws.getRow(1);
         const headers = [];
@@ -521,6 +557,10 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
             }
             seenVinculo.add(vinculo);
             total++;
+            // Atualiza progresso (porcentagem) a cada linha processada
+            lastImportStatus.processed = total;
+            lastImportStatus.progress = lastImportStatus.totalRows > 0 ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
+            lastImportStatus.at = new Date().toISOString();
           } catch (e) {
             console.error('import row error', e.message);
           }

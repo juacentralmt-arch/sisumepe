@@ -1584,6 +1584,31 @@
             <button onclick="toggleFormAssistido()" class="btn bg-white text-indigo-700 text-xs px-4 py-2 shadow-lg hover:scale-105 transition font-bold">+ Novo assistido</button>
             <input id="assistidosFile" type="file" accept=".xlsx" class="hidden" onchange="importarAssistidos(this)">
             <button onclick="document.getElementById('assistidosFile').click()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition">Importar XLSX</button>
+
+            <!-- Overlay de progresso da importação (inicialmente oculto) -->
+            <div id="importProgressOverlay" class="fixed inset-0 z-[60] flex items-center justify-center hidden bg-black/60 backdrop-blur-sm">
+              <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-indigo-100">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">📥</div>
+                  <div>
+                    <h3 class="font-bold text-indigo-800 text-lg">Importando XLSX</h3>
+                    <p id="importProgressText" class="text-sm text-indigo-600/70">Processando dados…</p>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <div class="flex justify-between text-xs font-bold mb-1">
+                    <span id="importProgressLabel" class="text-indigo-700">0%</span>
+                    <span id="importProgressCount" class="text-slate-500">0 / 0</span>
+                  </div>
+                  <div class="w-full bg-indigo-50 rounded-full h-3 overflow-hidden border border-indigo-100">
+                    <div id="importProgressBar" class="bg-indigo-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div class="text-xs text-slate-500 mt-3">
+                  Não feche o navegador enquanto a importação estiver em andamento.
+                </div>
+              </div>
+            </div>
             <button onclick="exportarAssistidosCSV()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition">Exportar CSV</button>
           </div>
         </div>
