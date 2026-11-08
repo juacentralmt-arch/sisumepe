@@ -10624,7 +10624,7 @@ let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: []
 let fluxoTab = 'todos';
 function setFluxoTab(tab){
   fluxoTab = tab;
-  const ids = { todos:'tabFluxoTodos', aguardando:'tabFluxoAguardando', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria' };
+  const ids = { todos:'tabFluxoTodos', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria' };
   Object.keys(ids).forEach(t => {
     const btn = document.getElementById(ids[t]);
     if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
@@ -10652,7 +10652,7 @@ function renderFluxoTab(){
   if(auditWrap) auditWrap.classList.add('hidden');
   const el = content;
   if(!el) return;
-  const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
+  const map = { compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const ff = fluxoFiltrado();
   const list = ff[map[fluxoTab]] || [];
   if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
@@ -10679,6 +10679,7 @@ function renderFluxoTab(){
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
       '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
+      (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
       '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</div>' +
@@ -10825,7 +10826,7 @@ function assistidoMatchFilters(a, f){
 }
 function fluxoFiltrado(){
   const f = assistidosFiltros();
-  const out = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
+  const out = { compareceu: [], protocolado: [], concluido: [] };
   Object.keys(out).forEach(k => {
     (fluxoData[k] || []).forEach(a => { if (assistidoMatchFilters(a, f)) out[k].push(a); });
   });
@@ -10834,7 +10835,6 @@ function fluxoFiltrado(){
 function atualizarContagensFluxo(){
   const ff = fluxoFiltrado();
   const cnt = (id, n) => { const e = document.getElementById(id); if(e) e.textContent = n; };
-  cnt('fluxoAguardandoCount', ff.aguardando.length);
   cnt('fluxoCompareceuCount', ff.compareceu.length);
   cnt('fluxoProtocoladoCount', ff.protocolado.length);
   cnt('fluxoConcluidoCount', ff.concluido.length);
