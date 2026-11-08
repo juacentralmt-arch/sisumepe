@@ -483,81 +483,199 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
         const cComp = findCol('Data de Comparecimento','DATA DE COMPARECIMENTO');
         const cPP = findCol('PP de Plantão','PP DE PLANTÃO','PP DE PLANTAO');
         const cObs = findCol('Observação do PP: Em qual sistema foi protocolado e a folha','Observação do PP','OBSERVAÇÃO');
-        const rowsData = [];
-        ws.eachRow((row, idx) => {
-          if (idx === 1) return;
-          const get = (col) => col ? row.getCell(col).value : null;
-          const vinculo = String(get(cVinculo) || '').trim();
-          const nome = String(get(cNome) || '').trim();
-          if (!vinculo || !nome) return;
-          if (seenVinculo.has(vinculo)) return;
-          rowsData.push({ get, vinculo, nome });
-        });
-        totalRows += rowsData.length;
-      }
-      lastImportStatus.totalRows = totalRows;
-      for (const ws of wb.worksheets) {
-        const headerRow = ws.getRow(1);
-        const headers = [];
-        headerRow.eachCell((c, col) => { headers[col] = String(c.value || '').trim(); });
-        const findCol = (...names) => {
-          const low = headers.map(h => String(h||'').toLowerCase());
-          for (const n of names) {
-            const idx = low.indexOf(String(n).toLowerCase());
-            if (idx >= 0) return idx + 1;
-          }
-          return null;
-        };
-        const cVinculo = findCol('Vínculo','VINCULO');
-        const cNome = findCol('Nome','NOME');
-        const cProcesso = findCol('Processo','PROCESSO');
-        const cVara = findCol('Vara','VARA');
-        const cLocal = findCol('local de assinatura','Local de assinatura','LOCAL DE ASSINATURA');
-        const cInicio = findCol('Data Início','Data Inicio','DATA INÍCIO','DATA INICIO');
-        const cFreq = findCol('Frequência','FREQUENCIA','Frequencia');
-        const cComp = findCol('Data de Comparecimento','DATA DE COMPARECIMENTO');
-        const cPP = findCol('PP de Plantão','PP DE PLANTÃO','PP DE PLANTAO');
-        const cObs = findCol('Observação do PP: Em qual sistema foi protocolado e a folha','Observação do PP','OBSERVAÇÃO');
-        const rowsData = [];
-        ws.eachRow((row, idx) => {
-          if (idx === 1) return;
-          const get = (col) => col ? row.getCell(col).value : null;
-          const vinculo = String(get(cVinculo) || '').trim();
-          const nome = String(get(cNome) || '').trim();
-          if (!vinculo || !nome) return;
-          if (seenVinculo.has(vinculo)) return;
-          rowsData.push({ get, vinculo, nome });
-        });
-        for (const rd of rowsData) {
-          const { get, vinculo, nome } = rd;
-          try {
-            const processo = String(get(cProcesso) || '').trim();
-            const vara = String(get(cVara) || '').trim();
-            const localRaw = String(get(cLocal) || '').trim();
-            const local = LOCAIS_ASSINATURA.includes(localRaw) ? localRaw : '';
-            const inicio = excelSerialToISO(get(cInicio));
-            const freq = normFreq(get(cFreq));
-            const status = (processo.toUpperCase()==='ARQUIVADO' || vara.toUpperCase()==='ARQUIVADO') ? 'arquivado' : 'ativo';
-            if (!LOCAIS_ASSINATURA.includes(localRaw) && localRaw) {
-              console.warn('import: local inválido, ignorado:', localRaw);
+
+        // ---------------------------------------------------------------
+        // Classificador de células por conteúdo (dados estão frequentemente
+        // deslocados entre colunas na planilha de origem).
+        // ---------------------------------------------------------------
+        const LOCAIS_VALIDOS = ['COAP CARIRI','COMEP CARIRI','ALBERGADO CARIRI'];
+        const PPS_CONHECIDOS = ['ERMINIO','MARCOS','WANDERSON','JOANDERSON','JULIANA','REJANE','AILTON'];
+
+        function isProcessoLike(v) {
+          const s = String(v||'').trim();
+          if (!s) return false;
+          if (/^(ARQUIVADO|INATIVO|SEM DIGITAL)$/i.test(s)) return true;
+          return /^\d{7,}[\-\.]\d{2}[\.\-]\d{4}\.\d\.\d{2}\.\d{4}$/.test(s) ||
+                 /^\d{7,}[\-\.]\d{2}$/.test(s);
+        }
+        function isLocalLike(v) {
+          return LOCAIS_VALIDOS.includes(String(v||'').trim().toUpperCase());
+        }
+        function isFrequenciaLike(v) {
+          const s = String(v||'').trim().toUpperCase();
+          return /^(SEMANAL|MENSAL|QUINZENAL|BIMENSAL|TRIMENSAL|DIÁRIA|DIARIA|QUINQUEMESTRAL)$/.test(s);
+        }
+        function isDataLike(v) {
+          if (v instanceof Date) return true;
+          const s = String(v||'').trim();
+          if (!s) return false;
+          return /^\d{4}-\d{2}-\d{2}$/.test(s) ||
+                 /^\d{2}\/\d{2}\/\d{4}$/.test(s) ||
+                 /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s);
+        }
+        function isVaraLike(v) {
+          const s = String(v||'').trim().toUpperCase();
+          return /VARA|JUIZADO|NÚCLEO|NUCLEO/.test(s);
+        }
+        // Classifica uma célula pelo conteúdo, retornando o campo que preenche.
+        function classifyCell(val) {
+          if (val == null) return 'vazio';
+          if (val instanceof Date) return 'data';
+          const s = String(val).trim();
+          if (!s) return 'vazio';
+          const u = s.toUpperCase();
+          if (isProcessoLike(s)) return 'processo';
+          if (isLocalLike(s)) return 'local';
+          if (isFrequenciaLike(s)) return 'frequencia';
+          if (isDataLike(s)) return 'data';
+          if (isVaraLike(s)) return 'vara';
+          // PP conhecido por nome
+          if (PPS_CONHECIDOS.includes(u)) return 'pp';
+          return 'texto'; // nome, pp generico ou obs
+        }
+
+        // Lê todas as células da linha e classifica cada uma.
+        // Retorna um objeto com os campos mapeados (prioriza o conteúdo certo).
+        function lerLinhaAssistido(row) {
+          const campos = {
+            vinculo: '', nome: '', processo: '', vara: '', localAssinatura: '',
+            dataInicio: '', frequencia: 'mensal', dataComparecimento: '', policialPlantao: '',
+            observacao: '', status: 'ativo'
+          };
+          let melhorNome = '';
+          row.eachCell((c, colIdx) => {
+            const v = row.getCell(colIdx).value;
+            const tipo = classifyCell(v);
+            const s = String(v||'').trim();
+            switch (tipo) {
+              case 'processo':
+                // Se ainda não tem vinculo definido, este pode ser o vinculo
+                if (!campos.vinculo) campos.vinculo = s;
+                else if (!campos.processo) campos.processo = s;
+                break;
+              case 'local':
+                if (!campos.localAssinatura) campos.localAssinatura = s;
+                break;
+              case 'frequencia':
+                if (!campos.frequencia || campos.frequencia==='mensal') campos.frequencia = normFreq(s);
+                break;
+              case 'data': {
+                const iso = excelSerialToISO(v);
+                if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+                  if (!campos.dataInicio) campos.dataInicio = iso;
+                  else if (!campos.dataComparecimento) campos.dataComparecimento = iso;
+                }
+                break;
+              }
+              case 'vara':
+                if (!campos.vara) campos.vara = s;
+                break;
+              case 'pp':
+                if (!campos.policialPlantao) campos.policialPlantao = s;
+                break;
+              case 'texto':
+                // Pode ser nome, PP genérico ou observação.
+                // Ignora "Nº" da planilha (números curtos, apenas dígitos)
+                if (/^\d{1,4}$/.test(s)) break;
+                // Nome: texto com 2+ palavras, não é PP conhecido, não contém palavras de status.
+                if (!melhorNome && s.split(/\s+/).filter(Boolean).length >= 2 &&
+                    !/ARQUIVADO|INATIVO|SEM DIGITAL|JUNTADA|SEEU|FLS|PROTOCOL/.test(u)) {
+                  melhorNome = s;
+                } else if (!campos.observacao && s.length > 3) {
+                  campos.observacao = s;
+                }
+                break;
+              case 'status_especial': {
+                if (/ARQUIVADO/i.test(u)) campos.status = 'arquivado';
+                else if (/INATIVO/i.test(u)) campos.status = 'arquivado';
+                break;
+              }
             }
+          });
+          // Se achou um "texto" que parece nome, usa como nome
+          if (melhorNome) campos.nome = melhorNome;
+          // Se processo não foi preenchido mas vinculo tem número de processo, usa como processo
+          if (!campos.processo && campos.vinculo && isProcessoLike(campos.vinculo)) {
+            campos.processo = campos.vinculo;
+          }
+          // Ajusta frequência via normFreq (garante valor válido)
+          campos.frequencia = normFreq(campos.frequencia);
+          // Status: processo/vara com ARQUIVADO → arquivado
+          if (/ARQUIVADO/.test(String(campos.processo).toUpperCase()) || /ARQUIVADO/.test(String(campos.vara).toUpperCase())) {
+            campos.status = 'arquivado';
+          }
+          return campos;
+        }
+
+        // Primeira passagem: conta total de linhas válidas (para barra de progresso)
+        for (const ws of wb.worksheets) {
+          ws.eachRow((row, idx) => {
+            if (idx === 1) return;
+            const temVinculo = false;
+            let temDado = false;
+            row.eachCell((c) => { if (c.value != null && String(c.value).trim()) temDado = true; });
+            if (!temDado) return;
+            const campos = lerLinhaAssistido(row);
+            if (!campos.vinculo || !campos.nome) return;
+            if (seenVinculo.has(campos.vinculo)) return;
+            totalRows++;
+          });
+        }
+        lastImportStatus.totalRows = totalRows;
+
+        // Segunda passagem: processa e insere
+        // Coleta as linhas válidas primeiro (eachRow não suporta async),
+        // depois processa com await fora do callback.
+        const linhasParaProcessar = [];
+        for (const ws of wb.worksheets) {
+          ws.eachRow((row, idx) => {
+            if (idx === 1) return;
+            let temDado = false;
+            row.eachCell((c) => { if (c.value != null && String(c.value).trim()) temDado = true; });
+            if (!temDado) return;
+            const campos = lerLinhaAssistido(row);
+            const { vinculo, nome } = campos;
+            if (!vinculo || !nome) return;
+            if (seenVinculo.has(vinculo)) return;
+            linhasParaProcessar.push({ campos, row });
+          });
+        }
+        for (const { campos } of linhasParaProcessar) {
+          const { vinculo, nome } = campos;
+          if (seenVinculo.has(vinculo)) continue;
+          try {
+            // Garante local válido
+            let localFinal = campos.localAssinatura;
+            if (!LOCAIS_ASSINATURA.includes(localFinal)) localFinal = '';
+            if (!localFinal) localFinal = 'COMEP Cariri';
+
+            const processoFinal = campos.processo || '';
+            const varaFinal = campos.vara || '';
+
+            const statusFinal = (processoFinal.toUpperCase()==='ARQUIVADO' || varaFinal.toUpperCase()==='ARQUIVADO' || campos.status==='arquivado') ? 'arquivado' : 'ativo';
+
             const a = await store.assistidos.insert({
-              vinculo, nome, processo, vara, localAssinatura: local || 'COMEP Cariri', dataInicio: /^\d{4}-\d{2}-\d{2}$/.test(inicio) ? inicio : '', frequencia: freq, status
+              vinculo, nome, processo: processoFinal, vara: varaFinal,
+              localAssinatura: localFinal,
+              dataInicio: campos.dataInicio || '',
+              frequencia: campos.frequencia,
+              status: statusFinal
             });
-            const dComp = excelSerialToISO(get(cComp));
-            const pp = String(get(cPP) || '').trim();
-            const obs = String(get(cObs) || '').trim();
-            if (dComp && /^\d{4}-\d{2}-\d{2}$/.test(dComp)) {
+
+            // Comparecimento (se houver data)
+            if (campos.dataComparecimento && /^\d{4}-\d{2}-\d{2}$/.test(campos.dataComparecimento)) {
               const cmp = await store.assistidosComparecimentos.insert({
                 assistidoId: a.id,
-                dataComparecimento: dComp,
-                policialPlantao: pp || '—'
+                dataComparecimento: campos.dataComparecimento,
+                policialPlantao: campos.policialPlantao || '—'
               });
-              if (obs) await store.assistidosComparecimentos.patch(cmp.id, { juntada: obs });
+              if (campos.observacao) {
+                await store.assistidosComparecimentos.patch(cmp.id, { juntada: campos.observacao });
+              }
             }
+
             seenVinculo.add(vinculo);
             total++;
-            // Atualiza progresso (porcentagem) a cada linha processada
             lastImportStatus.processed = total;
             lastImportStatus.progress = lastImportStatus.totalRows > 0 ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
             lastImportStatus.at = new Date().toISOString();
