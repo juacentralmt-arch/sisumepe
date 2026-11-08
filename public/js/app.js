@@ -11019,7 +11019,7 @@ async function salvarRegistrarComparecimento(){
   if(!body.dataComparecimento){ alert('Preencha a data'); return; }
   try{
     await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Comparecimento registrado'); fecharRegistrarComparecimento(); loadAssistidos(); loadStats();
+    toast('Comparecimento registrado'); fecharRegistrarComparecimento(); await loadAssistidos(); setFluxoTab('compareceu'); loadStats();
   }catch(e){ alert('Erro: ' + e.message); }
 }
 async function registrarComparecimento(){
