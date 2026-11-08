@@ -1726,6 +1726,14 @@
           <option value="Albergado Cariri">Albergado Cariri</option>
           <option value="COAP Cariri">COAP Cariri</option>
         </select>
+        <select id="asFiltroFrequencia" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+          <option value="">Todas frequências</option>
+          <option value="semanal">Semanal</option>
+          <option value="quinzenal">Quinzenal</option>
+          <option value="mensal">Mensal</option>
+          <option value="bimestral">Bimestral</option>
+          <option value="trimestral">Trimestral</option>
+        </select>
         <select id="asFiltroStatus" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
           <option value="">Todos os status</option>
           <option value="ativo">Ativo</option>
@@ -1735,6 +1743,7 @@
         <input id="asFiltroDataProtocolo" type="date" placeholder="Data protocolo" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
         <input id="asFiltroUsuarioProtocolo" placeholder="Usuário protocolou" class="inp text-xs px-3 py-2" oninput="filtrarAssistidos()">
         <button onclick="filtrarPendentesVinculo()" class="btn btn-warning text-xs px-3 py-2" title="Mostrar apenas assistidos com vínculo pendente">⚠ Pendentes</button>
+        <button onclick="exportarPendentesCSV()" class="btn btn-ghost text-xs px-3 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50" title="Exportar pendentes para CSV">📥 Exportar PENDENTE</button>
       </div>
       <div class="mb-4">
         <button onclick="limparFiltrosAssistidos()" class="btn btn-ghost text-xs px-3 py-2">Limpar filtros</button>

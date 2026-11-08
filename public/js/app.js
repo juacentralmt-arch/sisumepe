@@ -10601,6 +10601,20 @@ async function exportarAssistidosCSV(){
   const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='assistidos.csv'; a.click();
 }
 
+async function exportarPendentesCSV(){
+  try {
+    const r = await api('/api/assistidos/pendentes-vinculo');
+    const list = Array.isArray(r) ? r : [];
+    if(!list.length){ toast('Nenhum pendente para exportar'); return; }
+    const rows = [['Vínculo','Nome','Processo','Vara','Local','Início','Frequência','Status']];
+    list.forEach(a => rows.push([a.vinculo,a.nome,a.processo,a.vara,a.localAssinatura,a.dataInicio,a.frequencia,a.status]));
+    const csv = rows.map(r=> r.map(v=> '"'+String(v||'').replace(/"/g,'""')+'"').join(';')).join('\n');
+    const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
+    const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='assistidos_pendentes_vinculo.csv'; a.click();
+    toast(list.length + ' pendente(s) exportado(s)');
+  }catch(e){ toast('Erro ao exportar pendentes: ' + (e.message||e)); }
+}
+
 async function importarAssistidos(inp){
   const f = inp && inp.files && inp.files[0];
   if(!f){ toast('Nenhum arquivo selecionado'); return; }
@@ -11071,6 +11085,7 @@ function assistidosFiltros(){
     processo: (document.getElementById('asFiltroProcesso')?.value || '').trim().toLowerCase(),
     vara: (document.getElementById('asFiltroVara')?.value || '').trim(),
     local: (document.getElementById('asFiltroLocal')?.value || '').trim(),
+    frequencia: (document.getElementById('asFiltroFrequencia')?.value || '').trim(),
     status: (document.getElementById('asFiltroStatus')?.value || '').trim(),
     dataProtocolo: (document.getElementById('asFiltroDataProtocolo')?.value || '').trim(),
     usuarioProtocolo: (document.getElementById('asFiltroUsuarioProtocolo')?.value || '').trim().toLowerCase(),
@@ -11085,6 +11100,7 @@ function assistidoMatchFilters(a, f){
   if (f.processo && !(a.processo||'').toLowerCase().includes(f.processo)) return false;
   if (f.vara && a.vara !== f.vara) return false;
   if (f.local && a.localAssinatura !== f.local) return false;
+  if (f.frequencia && a.frequencia !== f.frequencia) return false;
   if (f.status && a.status !== f.status) return false;
   if (f.dataProtocolo || f.usuarioProtocolo) {
     // filtering by protocolo fields only makes sense for protocolado tab; match if any comparecimento satisfies
@@ -11121,6 +11137,7 @@ async function filtrarAssistidos(){
   const processo = document.getElementById('asFiltroProcesso') ? document.getElementById('asFiltroProcesso').value.trim() : '';
   const vara = document.getElementById('asFiltroVara') ? document.getElementById('asFiltroVara').value : '';
   const local = document.getElementById('asFiltroLocal') ? document.getElementById('asFiltroLocal').value : '';
+  const frequencia = document.getElementById('asFiltroFrequencia') ? document.getElementById('asFiltroFrequencia').value : '';
   const status = document.getElementById('asFiltroStatus') ? document.getElementById('asFiltroStatus').value : '';
   const params = new URLSearchParams();
   if(nome) params.set('nome', nome);
@@ -11128,6 +11145,7 @@ async function filtrarAssistidos(){
   if(processo) params.set('processo', processo);
   if(vara) params.set('vara', vara);
   if(local) params.set('local', local);
+  if(frequencia) params.set('frequencia', frequencia);
   if(status) params.set('status', status);
   const dataProtocolo = document.getElementById('asFiltroDataProtocolo') ? document.getElementById('asFiltroDataProtocolo').value : '';
   const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo') ? document.getElementById('asFiltroUsuarioProtocolo').value.trim() : '';
@@ -11304,8 +11322,16 @@ async function salvarEdicaoAssistido(){
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
+    const aAntes = assistidosData.find(x => String(x.id) === String(id));
+    const eraPendente = aAntes && String(aAntes.vinculo||'').startsWith('PENDENTE-');
+    const agoraReal = !String(body.vinculo||'').startsWith('PENDENTE-');
     await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Atualizado'); fecharEditarAssistido(); loadAssistidos(); loadStats();
+    if(eraPendente && agoraReal){
+      toast('Vínculo vinculado com sucesso!'); 
+    } else {
+      toast('Atualizado'); 
+    }
+    fecharEditarAssistido(); loadAssistidos(); loadStats();
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
