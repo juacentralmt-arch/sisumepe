@@ -10614,17 +10614,27 @@ async function importarAssistidos(inp){
 }
 
 let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
-let fluxoTab = 'aguardando';
+let fluxoTab = 'todos';
 function setFluxoTab(tab){
   fluxoTab = tab;
-  ['aguardando','compareceu','protocolado','concluido'].forEach(t => {
-    const btn = document.getElementById('tabFluxo' + (t==='aguardando'?'Aguardando':t==='compareceu'?'Compareceu':t==='protocolado'?'Protocolado':'Concluido'));
+  const ids = { todos:'tabFluxoTodos', aguardando:'tabFluxoAguardando', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido' };
+  Object.keys(ids).forEach(t => {
+    const btn = document.getElementById(ids[t]);
     if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
   });
   renderFluxoTab();
 }
 function renderFluxoTab(){
-  const el = document.getElementById('fluxoContent');
+  const todosWrap = document.getElementById('fluxoTodosWrap');
+  const content = document.getElementById('fluxoContent');
+  if (fluxoTab === 'todos') {
+    if(todosWrap) todosWrap.classList.remove('hidden');
+    if(content) content.classList.add('hidden');
+    return;
+  }
+  if(todosWrap) todosWrap.classList.add('hidden');
+  if(content) content.classList.remove('hidden');
+  const el = content;
   if(!el) return;
   const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const list = fluxoData[map[fluxoTab]] || [];
@@ -10663,6 +10673,7 @@ async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();
   await loadFluxo();
+  setFluxoTab('todos');
 }
 
 function setAssistidosTabView(tab){
