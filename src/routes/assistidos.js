@@ -283,30 +283,39 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
     pg.drawText('Total de registros: ' + list.length, { x: M, y: H - M - 30, size: 9, font: boldFont, color: rgb(0, 0, 0) });
     let hx = M;
     pg.drawRectangle({ x: M, y: H - M - 46, width: W - 2 * M, height: 14, color: rgb(0.2, 0.3, 0.6) });
+    const colW = (W - 2 * M) / camposSel.length;
     camposSel.forEach(k => {
-      pg.drawText(labels[k] || k, { x: hx + 2, y: H - M - 42, size: 7.5, font: boldFont, color: rgb(1, 1, 1) });
-      hx += (W - 2 * M) / camposSel.length;
+      let txt = String(labels[k] || k);
+      while (txt.length > 1 && boldFont.widthOfTextAtSize(txt, 7.5) > colW - 6) {
+        txt = txt.slice(0, -1);
+      }
+      pg.drawText(txt, { x: hx + 2, y: H - M - 42, size: 7.5, font: boldFont, color: rgb(1, 1, 1) });
+      hx += colW;
     });
     return H - M - 62;
   }
 
   let cy = drawHeader(page);
+  const rowH = 14;
   list.forEach((a, i) => {
     if (cy < M + 30) {
       page = pdf.addPage([W, H]);
       cy = drawHeader(page);
     }
-    const rx = M;
-    const rowH = 14;
     if (i % 2 === 0) {
       page.drawRectangle({ x: M, y: cy - rowH + 2, width: W - 2 * M, height: rowH, color: rgb(0.97, 0.97, 0.98) });
     }
-    let px = M;
     const colW = (W - 2 * M) / camposSel.length;
+    let px = M;
     camposSel.forEach(k => {
       let v = a[k];
       if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') v = fmtBR(v);
-      page.drawText(String(v || '—').slice(0, 30), { x: px + 2, y: cy - 10, size: 7.5, font, color: rgb(0, 0, 0) });
+      let txt = String(v || '—');
+      // Trunca com base na largura real do texto para não estourar a coluna
+      while (txt.length > 1 && font.widthOfTextAtSize(txt, 7.5) > colW - 6) {
+        txt = txt.slice(0, -1);
+      }
+      page.drawText(txt, { x: px + 2, y: cy - 10, size: 7.5, font, color: rgb(0, 0, 0) });
       px += colW;
     });
     cy -= rowH + 4;
