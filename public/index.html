@@ -1729,7 +1729,16 @@
           <input type="hidden" id="cmpAssistidoId">
           <div class="grid grid-cols-1 gap-2 mb-3">
             <input id="cmpData" type="date" class="inp text-xs">
-            <input id="cmpPolicial" placeholder="Policial de plantão" class="inp text-xs">
+            <select id="cmpPolicial" class="inp text-xs">
+              <option value="">Selecione o policial de plantão</option>
+              <option value="PP Wanderson">PP Wanderson</option>
+              <option value="PP Marcos">PP Marcos</option>
+              <option value="PP Erminio">PP Erminio</option>
+              <option value="PP Kaline">PP Kaline</option>
+              <option value="PP Luis">PP Luis</option>
+              <option value="PP Junior">PP Junior</option>
+              <option value="Sem PP">Sem PP</option>
+            </select>
           </div>
           <div class="flex gap-2 justify-end">
             <button onclick="fecharRegistrarComparecimento()" class="btn btn-ghost text-xs px-3 py-2">Cancelar</button>
