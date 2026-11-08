@@ -1719,28 +1719,22 @@
 
 
       <!-- Detalhe -->
-      <div id="assistidoDetalhe" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+      <!-- Modal simples de registro de comparecimento -->
+      <div id="modalComparecimento" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-base text-indigo-700" id="detalheTitulo">Comparecimentos</h3>
-            <button onclick="fecharDetalheAssistido()" class="btn btn-ghost text-xs px-3 py-1">Fechar</button>
+            <h3 class="font-bold text-base text-indigo-700">Registrar comparecimento</h3>
+            <button onclick="fecharRegistrarComparecimento()" class="btn btn-ghost text-xs px-3 py-1">Fechar</button>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+          <input type="hidden" id="cmpAssistidoId">
+          <div class="grid grid-cols-1 gap-2 mb-3">
             <input id="cmpData" type="date" class="inp text-xs">
             <input id="cmpPolicial" placeholder="Policial de plantão" class="inp text-xs">
-            <button onclick="registrarComparecimento()" class="btn btn-primary text-xs px-3 py-2">Registrar comparecimento</button>
           </div>
-          <div id="pendenciasWrap" class="mb-3"></div>
-          <table class="w-full text-[11px] whitespace-nowrap">
-            <thead><tr class="bg-slate-50 text-slate-600">
-              <th class="text-left p-2 font-semibold">Data</th>
-              <th class="text-left p-2 font-semibold">Policial</th>
-              <th class="text-left p-2 font-semibold">Juntada</th>
-              <th class="text-left p-2 font-semibold">Obs.</th>
-              <th class="text-left p-2 font-semibold">Ações</th>
-            </tr></thead>
-            <tbody id="comparecimentosBody"></tbody>
-          </table>
+          <div class="flex gap-2 justify-end">
+            <button onclick="fecharRegistrarComparecimento()" class="btn btn-ghost text-xs px-3 py-2">Cancelar</button>
+            <button onclick="salvarRegistrarComparecimento()" class="btn btn-primary text-xs px-3 py-2">Registrar</button>
+          </div>
         </div>
       </div>
 

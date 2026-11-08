@@ -10653,7 +10653,7 @@ function renderFluxoTab(){
     (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
     (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
     '</div>' +
-    (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="verAssistido(' + a.id + ')">+ Comparecimento</button>' : '') +
+    (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
     (a.compId && !String(a.juntada||'').trim() ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg py-1" onclick="registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
   '</div>').join('');
 }
@@ -10761,7 +10761,7 @@ function renderAssistidos(){
   const wrap = document.getElementById('fluxoTodosWrap');
   if(!wrap) return;
   if(!assistidosData.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 col-span-full">Nenhum assistido cadastrado.</div>'; return; }
-  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
+  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="abrirEditarAssistido(' + a.id + ')">' +
     '<div class="flex items-start justify-between gap-2 mb-2">' +
       '<div>' +
         '<p class="font-bold text-sm text-slate-800 truncate">' + esc(a.nome) + '</p>' +
@@ -10777,7 +10777,6 @@ function renderAssistidos(){
       '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
-      '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); verAssistido(' + a.id + ')">Ver</button>' +
       '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
       '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</div>' +
@@ -10874,6 +10873,25 @@ async function loadComparecimentos(){
   '</tr>').join('') || '<tr><td colspan="5" class="p-2 text-center text-slate-400">Nenhum comparecimento.</td></tr>';
 }
 
+function abrirRegistrarComparecimento(id){
+  document.getElementById('cmpAssistidoId').value = id;
+  document.getElementById('cmpData').value = '';
+  document.getElementById('cmpPolicial').value = '';
+  document.getElementById('modalComparecimento').classList.remove('hidden');
+}
+function fecharRegistrarComparecimento(){ document.getElementById('modalComparecimento').classList.add('hidden'); }
+async function salvarRegistrarComparecimento(){
+  const id = document.getElementById('cmpAssistidoId').value;
+  const body = {
+    dataComparecimento: document.getElementById('cmpData').value,
+    policialPlantao: document.getElementById('cmpPolicial').value.trim()
+  };
+  if(!body.dataComparecimento){ alert('Preencha a data'); return; }
+  try{
+    await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Comparecimento registrado'); fecharRegistrarComparecimento(); loadAssistidos(); loadStats();
+  }catch(e){ alert('Erro: ' + e.message); }
+}
 async function registrarComparecimento(){
   if(!assistidoSelecionado) return;
   const body = {
