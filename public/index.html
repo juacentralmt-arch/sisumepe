@@ -1623,6 +1623,42 @@
         </div>
       </div>
 
+      <!-- Modal Editar Assistido -->
+      <div id="modalEditAssistido" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6">
+          <h3 class="font-bold text-base mb-4 text-indigo-700">Editar assistido</h3>
+          <input type="hidden" id="editAssistidoId">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input id="editAsVinculo" placeholder="Número de vínculo" class="inp text-xs">
+            <input id="editAsNome" placeholder="Nome completo" class="inp text-xs">
+            <input id="editAsProcesso" placeholder="Processo" class="inp text-xs">
+            <input id="editAsVara" placeholder="Vara" class="inp text-xs">
+            <select id="editAsLocal" class="inp text-xs">
+              <option value="COMEP Cariri">COMEP Cariri</option>
+              <option value="Albergado Cariri">Albergado Cariri</option>
+              <option value="COAP Cariri">COAP Cariri</option>
+            </select>
+            <input id="editAsInicio" type="date" class="inp text-xs">
+            <select id="editAsFrequencia" class="inp text-xs">
+              <option value="semanal">Semanal</option>
+              <option value="quinzenal">Quinzenal</option>
+              <option value="mensal">Mensal</option>
+              <option value="bimestral">Bimestral</option>
+              <option value="trimestral">Trimestral</option>
+            </select>
+            <select id="editAsStatus" class="inp text-xs">
+              <option value="ativo">Ativo</option>
+              <option value="concluido">Concluído</option>
+              <option value="arquivado">Arquivado</option>
+            </select>
+          </div>
+          <div class="mt-4 flex gap-2 justify-end">
+            <button onclick="fecharEditarAssistido()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>
+            <button onclick="salvarEdicaoAssistido()" class="btn btn-primary text-xs px-5 py-2">Salvar</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Quantitativos -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="card p-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white shadow-sm hover:shadow-md transition">

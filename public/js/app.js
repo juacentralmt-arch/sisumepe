@@ -10736,16 +10736,17 @@ function renderAssistidos(){
   const body = document.getElementById('assistidosBody');
   if(!body) return;
   if(!assistidosData.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido.</td></tr>'; return; }
-  body.innerHTML = assistidosData.map(a => '<tr class="border-t border-slate-100">' +
-    '<td class="p-1">' + esc(a.vinculo) + '</td>' +
-    '<td class="p-1 max-w-[180px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + ' <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span></td>' +
-    '<td class="p-1">' + esc(a.processo) + '</td>' +
-    '<td class="p-1">' + esc(a.vara) + '</td>' +
-    '<td class="p-1">' + esc(a.localAssinatura) + '</td>' +
-    '<td class="p-1">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
-    '<td class="p-1 whitespace-nowrap">' +
-      '<button class="text-indigo-600 hover:underline mr-2" onclick="verAssistido(' + a.id + ')">Ver</button>' +
-      '<button class="text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
+  body.innerHTML = assistidosData.map(a => '<tr class="border-t border-slate-100 hover:bg-indigo-50/60 cursor-pointer transition" onclick="verAssistido(' + a.id + ')">' +
+    '<td class="p-2 font-semibold text-slate-700">' + esc(a.vinculo) + '</td>' +
+    '<td class="p-2 max-w-[200px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + ' <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span></td>' +
+    '<td class="p-2">' + esc(a.processo) + '</td>' +
+    '<td class="p-2">' + esc(a.vara) + '</td>' +
+    '<td class="p-2">' + esc(a.localAssinatura) + '</td>' +
+    '<td class="p-2">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
+    '<td class="p-2 whitespace-nowrap" onclick="event.stopPropagation()">' +
+      '<button class="text-indigo-600 hover:underline mr-2 font-semibold" onclick="verAssistido(' + a.id + ')">Ver</button>' +
+      '<button class="text-slate-600 hover:underline mr-2 font-semibold" onclick="abrirEditarAssistido(' + a.id + ')">Editar</button>' +
+      '<button class="text-rose-600 hover:underline font-semibold" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</td>' +
   '</tr>').join('');
 }
@@ -10774,6 +10775,40 @@ async function excluirAssistido(id){
   if(!confirm('Excluir este assistido?')) return;
   try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); }
   catch(e){ alert('Erro: ' + e.message); }
+}
+
+function abrirEditarAssistido(id){
+  const a = assistidosData.find(x => String(x.id) === String(id));
+  if(!a) return;
+  document.getElementById('editAssistidoId').value = a.id;
+  document.getElementById('editAsVinculo').value = a.vinculo || '';
+  document.getElementById('editAsNome').value = a.nome || '';
+  document.getElementById('editAsProcesso').value = a.processo || '';
+  document.getElementById('editAsVara').value = a.vara || '';
+  document.getElementById('editAsLocal').value = a.localAssinatura || 'COMEP Cariri';
+  document.getElementById('editAsInicio').value = a.dataInicio || '';
+  document.getElementById('editAsFrequencia').value = a.frequencia || 'mensal';
+  document.getElementById('editAsStatus').value = a.status || 'ativo';
+  document.getElementById('modalEditAssistido').classList.remove('hidden');
+}
+function fecharEditarAssistido(){ document.getElementById('modalEditAssistido').classList.add('hidden'); }
+async function salvarEdicaoAssistido(){
+  const id = document.getElementById('editAssistidoId').value;
+  const body = {
+    vinculo: document.getElementById('editAsVinculo').value.trim(),
+    nome: document.getElementById('editAsNome').value.trim(),
+    processo: document.getElementById('editAsProcesso').value.trim(),
+    vara: document.getElementById('editAsVara').value.trim(),
+    localAssinatura: document.getElementById('editAsLocal').value.trim(),
+    dataInicio: document.getElementById('editAsInicio').value,
+    frequencia: document.getElementById('editAsFrequencia').value,
+    status: document.getElementById('editAsStatus').value
+  };
+  if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
+  try{
+    await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('Atualizado'); fecharEditarAssistido(); loadAssistidos();
+  }catch(e){ alert('Erro: ' + e.message); }
 }
 
 async function verAssistido(id){
