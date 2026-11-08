@@ -264,7 +264,6 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
       });
     });
   }
-  // Ordena por nome por padrão
   list = list.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').filter(Boolean);
@@ -274,70 +273,50 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const page = pdf.addPage([595.28, 841.89]);
   const W = 595.28, H = 841.89, M = 40;
+  let page = pdf.addPage([W, H]);
   let y = H - M;
 
-  page.drawText('Relatório de Assistidos — SISUMEPE Juazeiro', { x: M, y, size: 16, font: boldFont, color: rgb(0.1, 0.2, 0.5) });
-  y -= 22;
-  page.drawText('Gerado em: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }), { x: M, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
-  y -= 14;
-  page.drawText('Total de registros: ' + list.length, { x: M, y, size: 9, font: boldFont, color: rgb(0, 0, 0) });
-  y -= 26;
+  function drawHeader(pg) {
+    pg.drawText('Relatório de Assistidos — SISUMEPE Juazeiro', { x: M, y: H - M, size: 14, font: boldFont, color: rgb(0.1, 0.2, 0.5) });
+    pg.drawText('Gerado em: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }), { x: M, y: H - M - 18, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+    pg.drawText('Total de registros: ' + list.length, { x: M, y: H - M - 30, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+    let hx = M;
+    pg.drawRectangle({ x: M, y: H - M - 46, width: W - 2 * M, height: 14, color: rgb(0.2, 0.3, 0.6) });
+    camposSel.forEach(k => {
+      pg.drawText(labels[k] || k, { x: hx + 2, y: H - M - 42, size: 7.5, font: boldFont, color: rgb(1, 1, 1) });
+      hx += (W - 2 * M) / camposSel.length;
+    });
+    return H - M - 62;
+  }
 
-  // Cabeçalho da tabela
-  const colW = {};
-  let availW = W - 2 * M;
-  const perCol = availW / Math.max(camposSel.length, 1);
-  camposSel.forEach(k => { colW[k] = perCol; });
-  let x = M;
-  page.drawText('Relatório de Assistidos', { x: M, y: y + 6, size: 10, font: boldFont, color: rgb(1,1,1) }); // placeholder
-  // desenha cabeçalho
-  const headerY = y;
-  camposSel.forEach(k => {
-    page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
-    x += colW[k];
-  });
-  // linha de fundo do cabeçalho
-  page.drawRectangle({ x: M, y: headerY - 14, width: availW, height: 14, color: rgb(0.2, 0.3, 0.6) });
-  // redesenha texto do cabeçalho por cima (cor branca já feita)
-  x = M;
-  camposSel.forEach(k => {
-    page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
-    x += colW[k];
-  });
-  y = headerY - 18;
-
-  // Linhas
+  let cy = drawHeader(page);
   list.forEach((a, i) => {
-    if (y < M + 40) {
-      page.drawRectangle({ x: M, y: headerY - 14, width: availW, height: 14, color: rgb(0.2, 0.3, 0.6) });
-      x = M;
-      camposSel.forEach(k => {
-        page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
-        x += colW[k];
-      });
-      pdf.addPage([W, H]);
-      page = pdf.getPage(pdf.getPageCount() - 1);
-      y = H - M;
+    if (cy < M + 30) {
+      page = pdf.addPage([W, H]);
+      cy = drawHeader(page);
     }
-    const rowY = y;
-    const fill = i % 2 === 0 ? rgb(0.97, 0.97, 0.98) : null;
-    if (fill) page.drawRectangle({ x: M, y: rowY - 10, width: availW, height: 14, color: fill });
-    x = M;
+    const rx = M;
+    const rowH = 14;
+    if (i % 2 === 0) {
+      page.drawRectangle({ x: M, y: cy - rowH + 2, width: W - 2 * M, height: rowH, color: rgb(0.97, 0.97, 0.98) });
+    }
+    let px = M;
+    const colW = (W - 2 * M) / camposSel.length;
     camposSel.forEach(k => {
       let v = a[k];
       if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') v = fmtBR(v);
-      page.drawText(String(v || '—').slice(0, 28), { x: x + 2, y: rowY - 8, size: 7.5, font, color: rgb(0, 0, 0) });
-      x += colW[k];
+      page.drawText(String(v || '—').slice(0, 30), { x: px + 2, y: cy - 10, size: 7.5, font, color: rgb(0, 0, 0) });
+      px += colW;
     });
-    y = rowY - 16;
+    cy -= rowH + 4;
   });
 
   const bytes = await pdf.save();
+  const buf = Buffer.from(bytes);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="relatorio-assistidos.pdf"');
-  res.send(Buffer.from(bytes));
+  res.send(buf);
 }));
 
 const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
