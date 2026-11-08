@@ -10700,7 +10700,7 @@ async function carregarAuditoriaAssistidos(){
       '<th class="text-left p-2 font-semibold">Resumo</th>' +
       '</tr></thead><tbody>' +
       list.map(x => '<tr class="border-t border-slate-100">' +
-        '<td class="p-2">' + esc(fmtDataBR(x.at || x.createdAt)) + '</td>' +
+        '<td class="p-2">' + esc(fmtDataBR(x.at || x.createdAt)) + ' ' + esc((() => { const d = new Date(x.at || x.createdAt); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); })()) + '</td>' +
         '<td class="p-2">' + esc(x.byName || x.byUser || '') + '</td>' +
         '<td class="p-2 font-semibold">' + esc(x.action || '') + '</td>' +
         '<td class="p-2">' + esc(x.personName || '') + '</td>' +
