@@ -10715,20 +10715,11 @@ async function carregarAuditoriaAssistidos(){
 async function loadFluxo(){
   try{
     const r = await api('/api/assistidos/fluxo');
-    const comps = await store.assistidosComparecimentos.all();
-    const byAssistido = new Map();
-    comps.forEach(c => { const arr = byAssistido.get(c.assistidoId) || []; arr.push(c); byAssistido.set(c.assistidoId, arr); });
-    const enrich = (a) => {
-      const cs = (byAssistido.get(a.id) || []).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
-      const last = cs[0] || null;
-      const proto = cs.find(c => String(c.juntada||'').trim()) || null;
-      return { ...a, ultimoComparecimento: a.ultimoComparecimento || (last ? last.dataComparecimento : null), pendenteJuntada: !!(last && !String(last.juntada||'').trim()), compId: a.compId || (last ? last.id : null), juntada: a.juntada || (last ? last.juntada : ''), dataProtocolacao: proto ? proto.dataProtocolacao : (last ? last.dataProtocolacao : null), protocoladoPor: proto ? proto.protocoladoPor : (last ? last.protocoladoPor : null) };
-    };
     fluxoData = {
-      aguardando: (r.aguardando || []).map(enrich),
-      compareceu: (r.compareceu || []).map(enrich),
-      protocolado: (r.protocolado || []).map(enrich),
-      concluido: (r.concluido || []).map(enrich)
+      aguardando: r.aguardando || [],
+      compareceu: r.compareceu || [],
+      protocolado: r.protocolado || [],
+      concluido: r.concluido || []
     };
     atualizarContagensFluxo();
     renderFluxoTab();
