@@ -10743,13 +10743,15 @@ async function carregarRelatorioAssistidos(){
     { key:'dataProtocolacao', label:'Protocolado em' },
     { key:'protocoladoPor', label:'Protocolado por' }
   ];
-  if (!window._relatorioCampos) window._relatorioCampos = campos.map(c=>c.key);
+  if (!window._relatorioCampos) { try { const saved = JSON.parse(localStorage.getItem('relatorioCamposAssistidos') || 'null'); window._relatorioCampos = Array.isArray(saved) ? saved : campos.map(c=>c.key); } catch(e) { window._relatorioCampos = campos.map(c=>c.key); } }
   wrap.innerHTML = '<div class="card p-4 rounded-2xl mb-4">' +
     '<p class="text-sm font-bold text-slate-700 mb-2">Selecione as informações para o relatório</p>' +
     '<div class="flex flex-wrap gap-3 mb-3">' +
     campos.map(c => '<label class="flex items-center gap-1 text-xs"><input type="checkbox" value="' + c.key + '" ' + (window._relatorioCampos.includes(c.key)?'checked':'') + ' onchange="toggleCampoRelatorio(this)"> ' + c.label + '</label>').join('') +
     '</div>' +
-    '<div class="flex gap-2">' +
+    '<div class="flex gap-2 flex-wrap">' +
+      '<button onclick="selecionarTodosCamposRelatorio(true)" class="btn btn-ghost text-xs px-3 py-2">Selecionar todos</button>' +
+      '<button onclick="selecionarTodosCamposRelatorio(false)" class="btn btn-ghost text-xs px-3 py-2">Limpar seleção</button>' +
       '<button onclick="gerarRelatorioAssistidos()" class="btn btn-primary text-xs px-3 py-2">Gerar relatório</button>' +
       '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-ghost text-xs px-3 py-2">Exportar CSV</button>' +
     '</div>' +
@@ -10760,6 +10762,18 @@ function toggleCampoRelatorio(cb){
   if (!window._relatorioCampos) window._relatorioCampos = [];
   if (cb.checked) { if (!window._relatorioCampos.includes(cb.value)) window._relatorioCampos.push(cb.value); }
   else { window._relatorioCampos = window._relatorioCampos.filter(x=>x!==cb.value); }
+  try { localStorage.setItem('relatorioCamposAssistidos', JSON.stringify(window._relatorioCampos)); } catch(e){}
+}
+function selecionarTodosCamposRelatorio(all){
+  const campos = ['vinculo','nome','processo','vara','localAssinatura','dataInicio','status','ultimoComparecimento','policialPlantao','juntada','dataProtocolacao','protocoladoPor'];
+  window._relatorioCampos = all ? [...campos] : [];
+  try { localStorage.setItem('relatorioCamposAssistidos', JSON.stringify(window._relatorioCampos)); } catch(e){}
+  carregarRelatorioAssistidos();
+}
+function ordenarRelatorio(key){
+  if (!window._relatorioSort || window._relatorioSort.key !== key) window._relatorioSort = { key, dir: 'asc' };
+  else window._relatorioSort.dir = window._relatorioSort.dir === 'asc' ? 'desc' : 'asc';
+  gerarRelatorioAssistidos();
 }
 async function gerarRelatorioAssistidos(){
   const wrap = document.getElementById('relatorioResultado');
@@ -10785,7 +10799,16 @@ async function gerarRelatorioAssistidos(){
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?' + params.toString() : '');
   try {
     const r = await api(url);
-    const list = Array.isArray(r) ? r : [];
+    let list = Array.isArray(r) ? r : [];
+    if (window._relatorioSort && window._relatorioSort.key) {
+      const { key, dir } = window._relatorioSort;
+      list = list.slice().sort((a,b) => {
+        const va = a[key] || ''; const vb = b[key] || '';
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
     window._relatorioAssistidos = list;
     const campos = window._relatorioCampos || [];
     const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
@@ -10794,7 +10817,7 @@ async function gerarRelatorioAssistidos(){
       return a[k] || '—';
     };
     const table = '<div class="card p-2 overflow-x-auto rounded-2xl shadow-sm"><table class="w-full text-[10px] whitespace-nowrap"><thead><tr class="bg-slate-50 text-slate-600">' +
-      campos.map(k=>'<th class="text-left p-2 font-semibold">'+labels[k]+'</th>').join('') +
+      campos.map(k=>'<th class="text-left p-2 font-semibold cursor-pointer select-none" onclick="ordenarRelatorio(\''+k+'\')">'+labels[k]+(window._relatorioSort && window._relatorioSort.key===k ? (window._relatorioSort.dir==='asc'?' ↑':' ↓') : '')+'</th>').join('') +
       '</tr></thead><tbody>' +
       list.map(a => '<tr class="border-t border-slate-100">' + campos.map(k=>'<td class="p-2">' + esc(String(val(a,k)).slice(0,40)) + '</td>').join('') + '</tr>').join('') +
       '</tbody></table></div>';
