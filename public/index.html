@@ -1616,6 +1616,15 @@
             <option value="concluido">Concluído</option>
             <option value="arquivado">Arquivado</option>
           </select>
+          <select id="asSistema" class="inp text-xs">
+            <option value="spacecom" selected>Spacecom</option>
+            <option value="infinity">Infinity</option>
+          </select>
+          <select id="asContrato" class="inp text-xs">
+            <option value="CE01" selected>CE01</option>
+            <option value="CE02">CE02</option>
+            <option value="INF">INF</option>
+          </select>
         </div>
         <div class="mt-4 flex gap-2">
           <button onclick="salvarAssistido()" class="btn btn-primary text-xs px-5 py-2 shadow-md hover:shadow-lg transition">Salvar</button>
@@ -1715,9 +1724,11 @@
           <button id="tabFluxoConcluido" onclick="setFluxoTab('concluido')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Concluído/Arquivado <span id="fluxoConcluidoCount" class="ml-1 bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">0</span></button>
           <button id="tabFluxoAuditoria" onclick="setFluxoTab('auditoria')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Auditoria</button>
           <button id="tabFluxoRelatorios" onclick="setFluxoTab('relatorios')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Relatórios</button>
+          <button id="tabFluxoDashboard" onclick="setFluxoTab('dashboard')" class="btn btn-ghost text-xs px-4 py-2 rounded-full">Dashboard</button>
         </div>
         <div id="fluxoAuditoriaWrap" class="hidden"></div>
         <div id="fluxoRelatoriosWrap" class="hidden"></div>
+        <div id="fluxoDashboardWrap" class="hidden"></div>
         <div id="fluxoProtocoladoRange" class="mb-4 flex flex-nowrap gap-2 items-center">
           <span class="text-xs font-semibold text-slate-600">Protocolado de:</span>
           <input id="asFiltroProtoDe" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">

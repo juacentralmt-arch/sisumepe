@@ -39,6 +39,8 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
 
 const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
 const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
+const SISTEMAS_ASSISTIDO = ['spacecom', 'infinity'];
+const CONTRATOS_ASSISTIDO = ['CE01', 'CE02', 'INF'];
 
 router.get('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req, res) => {
   const row = await store.assistidos.byId(req.params.id);
@@ -56,6 +58,8 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
   const freq = PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim()) ? String(b.frequencia).trim() : 'mensal';
+  const sistema = SISTEMAS_ASSISTIDO.includes(String(b.sistema || '').trim()) ? String(b.sistema).trim() : 'spacecom';
+  const contrato = CONTRATOS_ASSISTIDO.includes(String(b.contrato || '').trim()) ? String(b.contrato).trim() : (sistema === 'infinity' ? 'INF' : 'CE01');
   const all = await store.assistidos.all();
   if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
@@ -66,6 +70,8 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
     localAssinatura: String(b.localAssinatura).trim(),
     dataInicio: String(b.dataInicio).trim(),
     frequencia: freq,
+    sistema: sistema,
+    contrato: contrato,
     status: 'ativo'
   });
   try { await store.audit.insert({ kind:'assistido', action:'criado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido cadastrado: ' + row.nome }); } catch(e){}
@@ -86,6 +92,8 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
   const fields = {};
   for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio']) if (b[k] !== undefined) fields[k] = b[k];
   if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
+  if (b.sistema !== undefined && SISTEMAS_ASSISTIDO.includes(String(b.sistema).trim())) fields.sistema = String(b.sistema).trim();
+  if (b.contrato !== undefined && CONTRATOS_ASSISTIDO.includes(String(b.contrato).trim())) fields.contrato = String(b.contrato).trim();
   if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   const row = await store.assistidos.patch(req.params.id, fields);
@@ -199,7 +207,15 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
   const porVara = {};
   const porPolicial = {};
   const porMes = {};
+  const porStatus = {};
+  const porLocal = {};
+  const porSistema = {};
+  const porContrato = {};
   assistidos.forEach(a => { porVara[a.vara || '—'] = (porVara[a.vara || '—'] || 0) + 1; });
+  assistidos.forEach(a => { porStatus[a.status || '—'] = (porStatus[a.status || '—'] || 0) + 1; });
+  assistidos.forEach(a => { porLocal[a.localAssinatura || '—'] = (porLocal[a.localAssinatura || '—'] || 0) + 1; });
+  assistidos.forEach(a => { porSistema[a.sistema || '—'] = (porSistema[a.sistema || '—'] || 0) + 1; });
+  assistidos.forEach(a => { porContrato[a.contrato || '—'] = (porContrato[a.contrato || '—'] || 0) + 1; });
   comps.forEach(c => {
     const p = c.policialPlantao || '—';
     porPolicial[p] = (porPolicial[p] || 0) + 1;
@@ -213,7 +229,11 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
     totalProtocolados: comps.length - pend.length,
     porVara: Object.entries(porVara).map(([vara,total]) => ({ vara, total })).sort((a,b)=>b.total-a.total),
     porPolicial: Object.entries(porPolicial).map(([policial,total]) => ({ policial, total })).sort((a,b)=>b.total-a.total),
-    porMes: Object.entries(porMes).map(([mes,total]) => ({ mes, total })).sort((a,b)=>a.mes.localeCompare(b.mes))
+    porMes: Object.entries(porMes).map(([mes,total]) => ({ mes, total })).sort((a,b)=>a.mes.localeCompare(b.mes)),
+    porStatus: Object.entries(porStatus).map(([s,total]) => ({ status: s, total })).sort((a,b)=>b.total-a.total),
+    porLocal: Object.entries(porLocal).map(([l,total]) => ({ local: l, total })).sort((a,b)=>b.total-a.total),
+    porSistema: Object.entries(porSistema).map(([s,total]) => ({ sistema: s, total })).sort((a,b)=>b.total-a.total),
+    porContrato: Object.entries(porContrato).map(([c,total]) => ({ contrato: c, total })).sort((a,b)=>b.total-a.total)
   });
 }));
 

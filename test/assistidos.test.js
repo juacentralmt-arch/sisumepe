@@ -62,7 +62,8 @@ async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}
   // Listar
   const listRes = await fetch(BASE + '/api/assistidos', { headers: await auth('admin','admin','Admin') });
   assert(listRes.status === 200, 'GET admin: 200');
-  const list = await listRes.json();
+  const listResJson = await listRes.json();
+  const list = listResJson.items || listResJson;
   assert(Array.isArray(list) && list.some(x => String(x.id) === String(id)), 'GET: contém criado');
 
   // Buscar por ID
@@ -145,7 +146,8 @@ async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}
   assert(fluxo.concluido.some(x => String(x.id) === String(id)), 'Fluxo: assistido em concluído');
 
   // Filtros
-  const filtros = await (await fetch(BASE + '/api/assistidos/filtrar?nome=Fulano', { headers: await auth('admin','admin','Admin') })).json();
+  const filtrosRes = await (await fetch(BASE + '/api/assistidos/filtrar?nome=Fulano', { headers: await auth('admin','admin','Admin') })).json();
+  const filtros = filtrosRes.items || filtrosRes;
   assert(Array.isArray(filtros) && filtros.some(x => String(x.id) === String(id)), 'Filtro nome: encontrado');
 
   // Excluir (admin)

@@ -10623,7 +10623,7 @@ let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: []
 let fluxoTab = 'todos';
 function setFluxoTab(tab){
   fluxoTab = tab;
-  const ids = { todos:'tabFluxoTodos', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria', relatorios:'tabFluxoRelatorios' };
+  const ids = { todos:'tabFluxoTodos', compareceu:'tabFluxoCompareceu', protocolado:'tabFluxoProtocolado', concluido:'tabFluxoConcluido', auditoria:'tabFluxoAuditoria', relatorios:'tabFluxoRelatorios', dashboard:'tabFluxoDashboard' };
   Object.keys(ids).forEach(t => {
     const btn = document.getElementById(ids[t]);
     if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
@@ -10658,7 +10658,18 @@ function renderFluxoTab(){
     carregarRelatorioAssistidos();
     return;
   }
+  const dashWrap = document.getElementById('fluxoDashboardWrap');
+  if (fluxoTab === 'dashboard') {
+    if(todosWrap) todosWrap.classList.add('hidden');
+    if(content) content.classList.add('hidden');
+    if(auditWrap) auditWrap.classList.add('hidden');
+    if(relWrap) relWrap.classList.add('hidden');
+    if(dashWrap) dashWrap.classList.remove('hidden');
+    carregarDashboardAssistidos();
+    return;
+  }
   if(relWrap) relWrap.classList.add('hidden');
+  if(dashWrap) dashWrap.classList.add('hidden');
   if(content) content.classList.remove('hidden');
   if(auditWrap) auditWrap.classList.add('hidden');
   const el = content;
@@ -10724,6 +10735,8 @@ async function abrirDetalheAssistido(id){
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Início</p><p class="font-bold">' + esc(fmtDataBR(a.dataInicio) || '-') + '</p></div>' +
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Frequência</p><p class="font-bold">' + esc(a.frequencia || '-') + '</p></div>' +
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Status</p><p class="font-bold ' + (a.status==='ativo'?'text-emerald-700':a.status==='concluido'?'text-blue-700':'text-slate-600') + '">' + esc(a.status||'-') + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Sistema</p><p class="font-bold truncate">' + esc((a.sistema||'spacecom').toUpperCase()) + '</p></div>' +
+        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Contrato</p><p class="font-bold truncate">' + esc(a.contrato || '-') + '</p></div>' +
         '</div>';
     }
     const comps = Array.isArray(r.comparecimentos) ? r.comparecimentos : [];
@@ -10748,6 +10761,30 @@ async function abrirDetalheAssistido(id){
 }
 function fecharDetalheAssistido(){ document.getElementById('modalDetalheAssistido').classList.add('hidden'); }
 
+async function carregarDashboardAssistidos(){
+  const wrap = document.getElementById('fluxoDashboardWrap');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Carregando dashboard...</div>';
+  try {
+    const s = await api('/api/assistidos/stats');
+    const porStatusHtml = Object.entries(s.porStatus || {}).map(([k,v]) => '<div class="flex justify-between text-[10px]"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('');
+    const porVaraHtml = Object.entries(s.porVara || {}).map(([k,v]) => '<div class="flex justify-between text-[10px]"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('');
+    const porLocalHtml = Object.entries(s.porLocal || {}).map(([k,v]) => '<div class="flex justify-between text-[10px]"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('');
+    wrap.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">' +
+      '<div class="card p-4 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Total assistidos</p><p class="text-2xl font-bold text-indigo-600">' + s.totalAssistidos + '</p></div>' +
+      '<div class="card p-4 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Comparecimentos</p><p class="text-2xl font-bold text-blue-600">' + s.totalComparecimentos + '</p></div>' +
+      '<div class="card p-4 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Pendências</p><p class="text-2xl font-bold text-amber-600">' + s.totalPendencias + '</p></div>' +
+      '<div class="card p-4 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-1">Protocolados</p><p class="text-2xl font-bold text-emerald-600">' + s.totalProtocolados + '</p></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">' +
+      '<div class="card p-3 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-2">Por status</p>' + porStatusHtml + '</div>' +
+      '<div class="card p-3 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-2">Por vara</p>' + porVaraHtml + '</div>' +
+      '<div class="card p-3 rounded-xl"><p class="text-[10px] font-bold text-slate-500 uppercase mb-2">Por local</p>' + porLocalHtml + '</div>' +
+      '</div>';
+  } catch(e) {
+    wrap.innerHTML = '<div class="card p-4 text-center text-rose-500">Erro ao carregar dashboard.</div>';
+  }
+}
 async function carregarAuditoriaAssistidos(){
   const wrap = document.getElementById('fluxoAuditoriaWrap');
   if(!wrap) return;
@@ -11151,13 +11188,15 @@ async function salvarAssistido(){
     localAssinatura: document.getElementById('asLocal').value.trim(),
     dataInicio: document.getElementById('asInicio').value,
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
-    status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo'
+    status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo',
+    sistema: document.getElementById('asSistema') ? document.getElementById('asSistema').value : 'spacecom',
+    contrato: document.getElementById('asContrato') ? document.getElementById('asContrato').value : 'CE01'
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ toast('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
-    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asSistema','asContrato'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
