@@ -10667,6 +10667,8 @@ function renderFluxoTab(){
     '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
+      '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
+      '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
       '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
       '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</div>' +
@@ -10859,6 +10861,27 @@ async function excluirAssistido(id){
   catch(e){ alert('Erro: ' + e.message); }
 }
 
+async function abrirHistoricoAssistido(id){
+  const a = assistidosData.find(x => String(x.id) === String(id)) || (fluxoData && Object.values(fluxoData).flat().find(x => String(x.id) === String(id)));
+  const title = document.getElementById('histTitulo');
+  if(title) title.textContent = 'Histórico de comparecimentos — ' + (a ? a.nome : '');
+  const body = document.getElementById('histComparecimentosBody');
+  if(body) body.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-slate-400">Carregando...</td></tr>';
+  document.getElementById('modalHistoricoAssistido').classList.remove('hidden');
+  try {
+    const r = await api('/api/assistidos/' + id + '/comparecimentos');
+    const list = Array.isArray(r) ? r : [];
+    if(!body) return;
+    if(!list.length){ body.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-slate-400">Nenhum comparecimento.</td></tr>'; return; }
+    body.innerHTML = list.map(c => '<tr class="border-t border-slate-100">' +
+      '<td class="p-2">' + esc(fmtDataBR(c.dataComparecimento)) + '</td>' +
+      '<td class="p-2">' + esc(c.policialPlantao) + '</td>' +
+      '<td class="p-2">' + (String(c.juntada||'').trim() ? esc(c.juntada) : '<span class="text-amber-600 font-bold">Pendente</span>') + '</td>' +
+      '<td class="p-2 max-w-[200px] truncate" title="' + esc(c.observacoes||'') + '">' + esc(String(c.observacoes||'').slice(0,80)) + '</td>' +
+    '</tr>').join('');
+  } catch(e) { if(body) body.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-rose-500">Erro ao carregar.</td></tr>'; }
+}
+function fecharHistoricoAssistido(){ document.getElementById('modalHistoricoAssistido').classList.add('hidden'); }
 function abrirEditarAssistido(id){
   const a = assistidosData.find(x => String(x.id) === String(id));
   if(!a) return;

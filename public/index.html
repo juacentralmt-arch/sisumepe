@@ -1747,7 +1747,25 @@
         </div>
       </div>
 
-      <!-- Modal Juntada -->
+      <!-- Modal Histórico de Comparecimentos -->
+      <div id="modalHistoricoAssistido" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-base text-indigo-700" id="histTitulo">Histórico de comparecimentos</h3>
+            <button onclick="fecharHistoricoAssistido()" class="btn btn-ghost text-xs px-3 py-1">Fechar</button>
+          </div>
+          <table class="w-full text-[11px] whitespace-nowrap">
+            <thead><tr class="bg-slate-50 text-slate-600">
+              <th class="text-left p-2 font-semibold">Data</th>
+              <th class="text-left p-2 font-semibold">Policial</th>
+              <th class="text-left p-2 font-semibold">Juntada</th>
+              <th class="text-left p-2 font-semibold">Obs.</th>
+            </tr></thead>
+            <tbody id="histComparecimentosBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div id="modalJuntada" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[fadeIn_.2s_ease]">
           <h3 class="font-display font-bold text-lg mb-3 text-indigo-700">Registrar Juntada</h3>
