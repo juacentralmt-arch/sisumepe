@@ -10761,10 +10761,10 @@ function renderAssistidos(){
       '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
       '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
     '</div>' +
-    '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
-      '<button class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="verAssistido(' + a.id + ')">Ver</button>' +
-      '<button class="text-[10px] font-bold text-slate-600 hover:underline" onclick="abrirEditarAssistido(' + a.id + ')">Editar</button>' +
-      '<button class="text-[10px] font-bold text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
+    '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
+      '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); verAssistido(' + a.id + ')">Ver</button>' +
+      '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
+      '<button type="button" class="text-[10px] font-bold text-rose-600 hover:underline" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')">Excluir</button>' +
     '</div>' +
   '</div>').join('');
 }
