@@ -10937,6 +10937,12 @@ function assistidoMatchFilters(a, f){
     // filtering by protocolo fields only makes sense for protocolado tab; match if any comparecimento satisfies
     // We don't have protocolado data on assistido object; skip client-side (backend handles). 
   }
+  if (f.protoDe || f.protoAte) {
+    const d = a.dataProtocolacao;
+    if (!d) return false;
+    if (f.protoDe && String(d) < f.protoDe) return false;
+    if (f.protoAte && String(d) > f.protoAte) return false;
+  }
   return true;
 }
 function fluxoFiltrado(){
