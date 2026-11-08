@@ -7257,7 +7257,7 @@ async function restoreEstoque(input){
 }
 // Inicialização: garante visibilidade do campo seriais ao carregar (default TZPR04/UPR04 = com lote)
 try{ toggleEstSeriais(); toggleTransSeriais(); }catch(e){}
-document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); document.getElementById('estoqueUnidadeFiltro').value=estoqueUnidadeAtiva; document.getElementById('estUnidade').value=estoqueUnidadeAtiva; }catch(e){} });
+document.addEventListener('DOMContentLoaded', ()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); toggleEstMovTipo(); document.getElementById('estoqueUnidadeFiltro').value=estoqueUnidadeAtiva; document.getElementById('estUnidade').value=estoqueUnidadeAtiva; }catch(e){} });
 setTimeout(()=>{ try{ toggleEstSeriais(); toggleTransSeriais(); const s=document.getElementById('estoqueUnidadeFiltro'); if(s) s.value=estoqueUnidadeAtiva; const f=document.getElementById('estUnidade'); if(f) f.value=estoqueUnidadeAtiva; }catch(e){} }, 300);
 async function loadEstoqueAlertas(){
   try{
@@ -10621,12 +10621,15 @@ async function loadFluxo(){
       const cnt = document.getElementById(id+'Count');
       if(cnt) cnt.textContent = list.length;
       if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
-      el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm hover:shadow-md transition cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
+      el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm"><div class="cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
         '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
         '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
         '<p class="text-[10px] text-slate-400 truncate">' + esc(a.processo) + '</p>' +
         (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
         (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
+        '</div>' +
+        (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="verAssistido(' + a.id + ')">+ Comparecimento</button>' : '') +
+        (a.compId && !String(a.juntada||'').trim() ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg py-1" onclick="registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
       '</div>').join('');
     };
     renderCol('fluxoAguardando', r.aguardando||[]);
@@ -10639,21 +10642,19 @@ async function loadFluxo(){
 async function loadAssistidos(){
   await loadStats();
   await filtrarAssistidos();
-  await loadCompPendencias();
-  await loadJuntPendencias();
   await loadFluxo();
 }
 
 function setAssistidosTabView(tab){
   assTabView = tab;
-  const ids = { todos: 'assistidosWrap', comp: 'viewComp', junt: 'viewJunt', fluxo: 'viewFluxo' };
+  const ids = { todos: 'assistidosWrap', fluxo: 'viewFluxo' };
   Object.entries(ids).forEach(([k,v]) => {
     const el = document.getElementById(v);
     if(el) el.classList.toggle('hidden', k !== tab);
   });
-  ['tabAssTodos','tabAssComp','tabAssJunt','tabAssFluxo'].forEach((bid,i) => {
+  ['tabAssTodos','tabAssFluxo'].forEach((bid,i) => {
     const el = document.getElementById(bid);
-    if(el) el.className = 'btn ' + (['todos','comp','junt','fluxo'][i]===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-3 py-2';
+    if(el) el.className = 'btn ' + (['todos','fluxo'][i]===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-5 py-2 rounded-full';
   });
 }
 

@@ -1597,7 +1597,12 @@
           <input id="asNome" placeholder="Nome completo" class="inp text-xs">
           <input id="asProcesso" placeholder="Processo" class="inp text-xs">
           <input id="asVara" placeholder="Vara" class="inp text-xs">
-          <input id="asLocal" placeholder="Local de assinatura" class="inp text-xs">
+          <select id="asLocal" class="inp text-xs">
+            <option value="">Local de assinatura</option>
+            <option value="COMEP Cariri">COMEP Cariri</option>
+            <option value="Albergado Cariri">Albergado Cariri</option>
+            <option value="COAP Cariri">COAP Cariri</option>
+          </select>
           <input id="asInicio" type="date" class="inp text-xs">
           <select id="asFrequencia" class="inp text-xs">
             <option value="semanal">Semanal</option>
@@ -1641,8 +1646,6 @@
       <!-- Abas -->
       <div class="flex gap-2 mb-4 flex-wrap">
         <button id="tabAssTodos" onclick="setAssistidosTabView('todos')" class="btn btn-primary text-xs px-5 py-2 rounded-full shadow-sm">Todos</button>
-        <button id="tabAssComp" onclick="setAssistidosTabView('comp')" class="btn btn-ghost text-xs px-5 py-2 rounded-full">Pendentes de comparecimento</button>
-        <button id="tabAssJunt" onclick="setAssistidosTabView('junt')" class="btn btn-ghost text-xs px-5 py-2 rounded-full">Pendentes de Juntada</button>
         <button id="tabAssFluxo" onclick="setAssistidosTabView('fluxo')" class="btn btn-ghost text-xs px-5 py-2 rounded-full">Fluxo</button>
       </div>
 

@@ -9,14 +9,24 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   res.json(list);
 }));
 
+const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
+const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
+
+router.get('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req, res) => {
+  const row = await store.assistidos.byId(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Não encontrado' });
+  res.json(row);
+}));
+
 router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.nome || !String(b.nome).trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!b.vinculo || !String(b.vinculo).trim()) return res.status(400).json({ error: 'Número de vínculo é obrigatório' });
   if (!b.processo || !String(b.processo).trim()) return res.status(400).json({ error: 'Processo é obrigatório' });
   if (!b.vara || !String(b.vara).trim()) return res.status(400).json({ error: 'Vara é obrigatória' });
-  if (!b.localAssinatura || !String(b.localAssinatura).trim()) return res.status(400).json({ error: 'Local de assinatura é obrigatório' });
+  if (!LOCAIS_ASSINATURA.includes(String(b.localAssinatura || '').trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
+  const freq = PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim()) ? String(b.frequencia).trim() : 'mensal';
   const all = await store.assistidos.all();
   if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
@@ -26,7 +36,7 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
     vara: String(b.vara).trim(),
     localAssinatura: String(b.localAssinatura).trim(),
     dataInicio: String(b.dataInicio).trim(),
-    frequencia: b.frequencia || 'mensal',
+    frequencia: freq,
     status: 'ativo'
   });
   try { await store.audit.insert({ kind:'assistido', action:'criado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido cadastrado: ' + row.nome }); } catch(e){}
@@ -59,13 +69,12 @@ router.get('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(
 router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
-  if (!b.policialPlantao || !String(b.policialPlantao).trim()) return res.status(400).json({ error: 'Policial de plantão é obrigatório' });
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
-    policialPlantao: String(b.policialPlantao).trim()
+    policialPlantao: String(b.policialPlantao || '').trim() || '—'
   });
   try { await store.audit.insert({ kind:'assistido', action:'comparecimento', personName: a.nome, ref: 'comparecimento#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Comparecimento registrado: ' + row.dataComparecimento }); } catch(e){}
   broadcast();
@@ -88,8 +97,12 @@ router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','te
 // Registrar juntada (coluna Juntada) de um comparecimento
 router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
+  const val = String(b.juntada || '').trim();
+  if (!val) return res.status(400).json({ error: 'Dados da juntada são obrigatórios' });
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
-    juntada: String(b.juntada || '').trim()
+    juntada: val,
+    protocolado: true,
+    dataProtocolacao: new Date().toISOString().slice(0, 10)
   });
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   broadcast();
