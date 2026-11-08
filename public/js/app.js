@@ -106,7 +106,7 @@ async function doLogin(){
   if(!setBtnLoading(btn, true, 'Entrando...')) return;
   try{
     const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
-    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword };
+    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword, token: s.token };
     role = s.role;
     localStorage.setItem('te_session', JSON.stringify(session));
     document.getElementById('loginPass').value = '';
@@ -370,8 +370,9 @@ function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;',
 function initials(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 
 function authHeaders(h){
-  // Autenticação exclusivamente por cookie httpOnly (SameSite=Strict).
-  return h || {};
+  h = h || {};
+  if (session && session.token) h['X-Session'] = session.token;
+  return h;
 }
 async function api(p, opt){
   opt = opt || {};
@@ -6912,8 +6913,8 @@ function closeAccount(){ document.getElementById('modalAccount').classList.add('
 async function saveAccount(){
   const err = document.getElementById('accErr');
   try{
-    await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
-    if (session) { session.mustChangePassword = false; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
+    const r = await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
+    if (session) { session.mustChangePassword = false; if (r && r.token) session.token = r.token; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
     closeAccount(); toast('Senha atualizada!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
