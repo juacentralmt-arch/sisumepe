@@ -361,6 +361,7 @@ function go(tab){
   if(tab==='estoque') loadEstoque();
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   if(tab==='arquivos') loadArquivos();
+  const gsb = document.getElementById('globalStatsBar'); if(gsb) gsb.classList.toggle('hidden', tab === 'assistidos');
   if(tab==='assistidos') loadAssistidos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
