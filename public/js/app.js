@@ -10671,6 +10671,7 @@ function renderFluxoTab(){
         '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
         '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
         '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+        (a.policialPlantao ? '<div><span class="font-semibold">Policial:</span> ' + esc(a.policialPlantao) + '</div>' : '') +
         (a.dataProtocolacao ? '<div><span class="font-semibold">Protocolado em:</span> ' + esc(fmtDataBR(a.dataProtocolacao)) + (a.protocoladoPor ? ' (por: ' + esc(a.protocoladoPor) + ')' : '') + '</div>' : '') +
         (a.compId ? '<div><span class="font-semibold">Juntada:</span> ' + esc(a.juntada ? a.juntada.slice(0,24) : 'pendente') + '</div>' : '') +
       '</div>' +
