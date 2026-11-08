@@ -11461,3 +11461,132 @@ function filtrarPendentesVinculo(){
   const btn = document.querySelector('button[onclick="filtrarPendentesVinculo()"]');
   if(btn){ btn.classList.add('btn-warning'); btn.classList.remove('btn-ghost'); }
 }
+
+// ===== Drag & Drop Menu Sidebar =====
+const MENU_ORDER_KEY = 'sisumepe_menu_order';
+
+function getDefaultMenuOrder(){
+  return ['fila','checkin','psico','tecnico','agenda','termos','visao','dash','usuarios','auditoria','estoque','pdf','arquivos','assistidos'];
+}
+
+function getMenuOrder(){
+  try{
+    const raw = localStorage.getItem(MENU_ORDER_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      const def = getDefaultMenuOrder();
+      // Mantém apenas itens válidos e adiciona os que faltam no final
+      const valid = saved.filter(t => def.includes(t));
+      def.forEach(t => { if(!valid.includes(t)) valid.push(t); });
+      return valid;
+    }
+  }catch(e){}
+  return getDefaultMenuOrder();
+}
+
+function saveMenuOrder(order){
+  try{ localStorage.setItem(MENU_ORDER_KEY, JSON.stringify(order)); }catch(e){}
+}
+
+function applyMenuOrder(order){
+  const nav = document.getElementById('sidebarNav');
+  if(!nav) return;
+  const buttons = Array.from(nav.querySelectorAll('button[data-menutab]'));
+  const byTab = new Map();
+  buttons.forEach(b => byTab.set(b.getAttribute('data-menutab'), b));
+  order.forEach(tab => {
+    const b = byTab.get(tab);
+    if(b) nav.appendChild(b);
+  });
+}
+
+function initMenuDragDrop(){
+  const nav = document.getElementById('sidebarNav');
+  if(!nav) return;
+
+  // Aplica ordem salva
+  const saved = getMenuOrder();
+  applyMenuOrder(saved);
+
+  let dragged = null;
+  let dragOverBtn = null;
+
+  const buttons = Array.from(nav.querySelectorAll('button[data-menutab]'));
+
+  buttons.forEach(btn => {
+    btn.addEventListener('dragstart', (e) => {
+      dragged = btn;
+      btn.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', btn.getAttribute('data-menutab'));
+      // Pequeno atraso para permitir que o dragstart complete antes de ocultar
+      setTimeout(() => btn.classList.add('opacity-0'), 0);
+    });
+
+    btn.addEventListener('dragend', () => {
+      btn.classList.remove('dragging', 'opacity-0');
+      dragged = null;
+      // Remove classes de sobrescrita
+      nav.querySelectorAll('button[data-menutab]').forEach(b => {
+        b.classList.remove('drag-over', 'drag-above', 'drag-below');
+      });
+      dragOverBtn = null;
+      // Salva nova ordem
+      saveMenuOrder(getCurrentMenuOrder());
+    });
+
+    btn.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if(dragged && btn !== dragged) {
+        // Remove classes anteriores
+        nav.querySelectorAll('button[data-menutab]').forEach(b => {
+          b.classList.remove('drag-over', 'drag-above', 'drag-below');
+        });
+        const rect = btn.getBoundingClientRect();
+        const middle = rect.top + rect.height / 2;
+        if(e.clientY < middle) {
+          btn.classList.add('drag-above');
+        } else {
+          btn.classList.add('drag-below');
+        }
+        dragOverBtn = btn;
+      }
+    });
+
+    btn.addEventListener('dragleave', () => {
+      btn.classList.remove('drag-over', 'drag-above', 'drag-below');
+    });
+
+    btn.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if(!dragged || btn === dragged) return;
+      nav.querySelectorAll('button[data-menutab]').forEach(b => {
+        b.classList.remove('drag-over', 'drag-above', 'drag-below');
+      });
+      const rect = btn.getBoundingClientRect();
+      const middle = rect.top + rect.height / 2;
+      if(e.clientY < middle) {
+        btn.before(dragged);
+      } else {
+        btn.after(dragged);
+      }
+      dragged = null;
+      dragOverBtn = null;
+      saveMenuOrder(getCurrentMenuOrder());
+    });
+  });
+}
+
+function getCurrentMenuOrder(){
+  const nav = document.getElementById('sidebarNav');
+  if(!nav) return getDefaultMenuOrder();
+  return Array.from(nav.querySelectorAll('button[data-menutab]')).map(b => b.getAttribute('data-menutab'));
+}
+
+// Inicializa quando o DOM estiver pronto
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', initMenuDragDrop);
+} else {
+  initMenuDragDrop();
+}

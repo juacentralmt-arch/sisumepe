@@ -103,3 +103,10 @@
   #sidebar{transition:transform .25s ease}
   #sidebarToggle{transition:transform .2s ease}
   body.sb-collapsed #sidebarToggle svg{transform:rotate(180deg)}
+
+  /* ===== Drag & Drop Menu Sidebar ===== */
+  .drag-handle{user-select:none;-webkit-user-select:none}
+  .snav.dragging{opacity:0.4;border:2px dashed #6366f1;background:rgba(99,102,241,.1);cursor:grabbing}
+  .snav.drag-over{border:2px dashed #6366f1;background:rgba(99,102,241,.05);border-radius:.75rem;margin:-4px 0;padding:4px 0}
+  .snav.drag-above{border-top:2px solid #6366f1;padding-top:4px}
+  .snav.drag-below{border-bottom:2px solid #6366f1;padding-bottom:4px}
