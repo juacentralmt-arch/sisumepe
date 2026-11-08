@@ -109,6 +109,7 @@ router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','te
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
     protocolado: true,
     dataProtocolacao: b.dataProtocolacao || new Date().toISOString().slice(0,10),
+    protocoladoPor: req.auth.name || req.auth.user,
     observacoes: b.observacoes || ''
   });
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
@@ -125,7 +126,8 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
     juntada: val,
     protocolado: true,
-    dataProtocolacao: new Date().toISOString().slice(0, 10)
+    dataProtocolacao: new Date().toISOString().slice(0, 10),
+    protocoladoPor: req.auth.name || req.auth.user
   });
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   try { await store.audit.insert({ kind:'assistido', action:'juntada', personName: '', ref: 'comparecimento#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' }); } catch(e){}
@@ -171,7 +173,7 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
 
 // Filtro de listagem
 router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara, nome, vinculo, processo, local, status } = req.query || {};
+  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo } = req.query || {};
   let list = await store.assistidos.all();
   if (q) {
     const t = String(q).toLowerCase();
@@ -192,6 +194,23 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
   if (vara) list = list.filter(a => a.vara === vara);
   if (local) list = list.filter(a => a.localAssinatura === local);
   if (status) list = list.filter(a => a.status === status);
+  if (dataProtocolo || usuarioProtocolo) {
+    const comps = await store.assistidosComparecimentos.all();
+    const byAssistido = new Map();
+    comps.forEach(c => {
+      const arr = byAssistido.get(c.assistidoId) || [];
+      arr.push(c);
+      byAssistido.set(c.assistidoId, arr);
+    });
+    list = list.filter(a => {
+      const cs = byAssistido.get(a.id) || [];
+      return cs.some(c => {
+        if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
+        if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
+        return true;
+      });
+    });
+  }
   res.json(list);
 }));
 

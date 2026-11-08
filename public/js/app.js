@@ -10661,6 +10661,7 @@ function renderFluxoTab(){
         '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
         '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
         '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+        (a.dataProtocolacao ? '<div><span class="font-semibold">Protocolado em:</span> ' + esc(fmtDataBR(a.dataProtocolacao)) + (a.protocoladoPor ? ' (por: ' + esc(a.protocoladoPor) + ')' : '') + '</div>' : '') +
         (a.compId ? '<div><span class="font-semibold">Juntada:</span> ' + esc(a.juntada ? a.juntada.slice(0,24) : 'pendente') + '</div>' : '') +
       '</div>' +
     '</div>' +
@@ -10677,11 +10678,20 @@ function renderFluxoTab(){
 async function loadFluxo(){
   try{
     const r = await api('/api/assistidos/fluxo');
+    const comps = await store.assistidosComparecimentos.all();
+    const byAssistido = new Map();
+    comps.forEach(c => { const arr = byAssistido.get(c.assistidoId) || []; arr.push(c); byAssistido.set(c.assistidoId, arr); });
+    const enrich = (a) => {
+      const cs = (byAssistido.get(a.id) || []).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
+      const last = cs[0] || null;
+      const proto = cs.find(c => String(c.juntada||'').trim()) || null;
+      return { ...a, ultimoComparecimento: a.ultimoComparecimento || (last ? last.dataComparecimento : null), pendenteJuntada: !!(last && !String(last.juntada||'').trim()), compId: a.compId || (last ? last.id : null), juntada: a.juntada || (last ? last.juntada : ''), dataProtocolacao: proto ? proto.dataProtocolacao : (last ? last.dataProtocolacao : null), protocoladoPor: proto ? proto.protocoladoPor : (last ? last.protocoladoPor : null) };
+    };
     fluxoData = {
-      aguardando: r.aguardando || [],
-      compareceu: r.compareceu || [],
-      protocolado: r.protocolado || [],
-      concluido: r.concluido || []
+      aguardando: (r.aguardando || []).map(enrich),
+      compareceu: (r.compareceu || []).map(enrich),
+      protocolado: (r.protocolado || []).map(enrich),
+      concluido: (r.concluido || []).map(enrich)
     };
     atualizarContagensFluxo();
     renderFluxoTab();
@@ -10757,7 +10767,9 @@ function assistidosFiltros(){
     processo: (document.getElementById('asFiltroProcesso')?.value || '').trim().toLowerCase(),
     vara: (document.getElementById('asFiltroVara')?.value || '').trim(),
     local: (document.getElementById('asFiltroLocal')?.value || '').trim(),
-    status: (document.getElementById('asFiltroStatus')?.value || '').trim()
+    status: (document.getElementById('asFiltroStatus')?.value || '').trim(),
+    dataProtocolo: (document.getElementById('asFiltroDataProtocolo')?.value || '').trim(),
+    usuarioProtocolo: (document.getElementById('asFiltroUsuarioProtocolo')?.value || '').trim().toLowerCase()
   };
 }
 function assistidoMatchFilters(a, f){
@@ -10768,6 +10780,10 @@ function assistidoMatchFilters(a, f){
   if (f.vara && a.vara !== f.vara) return false;
   if (f.local && a.localAssinatura !== f.local) return false;
   if (f.status && a.status !== f.status) return false;
+  if (f.dataProtocolo || f.usuarioProtocolo) {
+    // filtering by protocolo fields only makes sense for protocolado tab; match if any comparecimento satisfies
+    // We don't have protocolado data on assistido object; skip client-side (backend handles). 
+  }
   return true;
 }
 function fluxoFiltrado(){
@@ -10800,6 +10816,10 @@ async function filtrarAssistidos(){
   if(vara) params.set('vara', vara);
   if(local) params.set('local', local);
   if(status) params.set('status', status);
+  const dataProtocolo = document.getElementById('asFiltroDataProtocolo') ? document.getElementById('asFiltroDataProtocolo').value : '';
+  const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo') ? document.getElementById('asFiltroUsuarioProtocolo').value.trim() : '';
+  if(dataProtocolo) params.set('dataProtocolo', dataProtocolo);
+  if(usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
   const r = await api(url);
   assistidosData = Array.isArray(r) ? r : [];

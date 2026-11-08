@@ -18,7 +18,9 @@ create table if not exists assistidos_comparecimentos (
   policial_plantao text default '',
   protocolado boolean default false,
   data_protocolacao text default '',
+  protocolado_por text default '',
   observacoes text default '',
+  juntada text default '',
   createdat timestamptz default now()
 );
 
@@ -29,6 +31,10 @@ alter table assistidos add column if not exists processo text default '';
 alter table assistidos add column if not exists vara text default '';
 alter table assistidos add column if not exists local_assinatura text default '';
 alter table assistidos add column if not exists data_inicio text default '';
+alter table assistidos add column if not exists frequencia text default 'mensal';
+alter table assistidos add column if not exists status text default 'ativo';
+alter table assistidos_comparecimentos add column if not exists protocolado_por text default '';
+alter table assistidos_comparecimentos add column if not exists juntada text default '';
 
 create index if not exists idx_assistidos_nome on assistidos (nome);
 create index if not exists idx_assistidos_processo on assistidos (processo);
