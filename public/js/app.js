@@ -10732,11 +10732,19 @@ async function loadStats(){
 }
 
 async function filtrarAssistidos(){
-  const busca = document.getElementById('asBusca') ? document.getElementById('asBusca').value : '';
+  const nome = document.getElementById('asFiltroNome') ? document.getElementById('asFiltroNome').value.trim() : '';
+  const vinculo = document.getElementById('asFiltroVinculo') ? document.getElementById('asFiltroVinculo').value.trim() : '';
+  const processo = document.getElementById('asFiltroProcesso') ? document.getElementById('asFiltroProcesso').value.trim() : '';
   const vara = document.getElementById('asFiltroVara') ? document.getElementById('asFiltroVara').value : '';
+  const local = document.getElementById('asFiltroLocal') ? document.getElementById('asFiltroLocal').value : '';
+  const status = document.getElementById('asFiltroStatus') ? document.getElementById('asFiltroStatus').value : '';
   const params = new URLSearchParams();
-  if(busca) params.set('q', busca);
+  if(nome) params.set('nome', nome);
+  if(vinculo) params.set('vinculo', vinculo);
+  if(processo) params.set('processo', processo);
   if(vara) params.set('vara', vara);
+  if(local) params.set('local', local);
+  if(status) params.set('status', status);
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
   const r = await api(url);
   assistidosData = Array.isArray(r) ? r : [];

@@ -152,13 +152,27 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
 
 // Filtro de listagem
 router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara } = req.query || {};
+  const { q, vara, nome, vinculo, processo, local, status } = req.query || {};
   let list = await store.assistidos.all();
   if (q) {
     const t = String(q).toLowerCase();
     list = list.filter(a => (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vinculo||'').toLowerCase().includes(t));
   }
+  if (nome) {
+    const t = String(nome).toLowerCase();
+    list = list.filter(a => (a.nome||'').toLowerCase().includes(t));
+  }
+  if (vinculo) {
+    const t = String(vinculo).toLowerCase();
+    list = list.filter(a => (a.vinculo||'').toLowerCase().includes(t));
+  }
+  if (processo) {
+    const t = String(processo).toLowerCase();
+    list = list.filter(a => (a.processo||'').toLowerCase().includes(t));
+  }
   if (vara) list = list.filter(a => a.vara === vara);
+  if (local) list = list.filter(a => a.localAssinatura === local);
+  if (status) list = list.filter(a => a.status === status);
   res.json(list);
 }));
 

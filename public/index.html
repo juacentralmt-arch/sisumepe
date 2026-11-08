@@ -1681,9 +1681,23 @@
 
 
       <!-- Filtros -->
-      <div class="mb-4 flex flex-wrap gap-2">
-        <input id="asBusca" placeholder="Buscar nome/processo/vínculo..." class="inp text-xs px-3 py-2" style="min-width:220px" oninput="filtrarAssistidos()">
+      <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
+        <input id="asFiltroNome" placeholder="Nome" class="inp text-xs px-3 py-2" oninput="filtrarAssistidos()">
+        <input id="asFiltroVinculo" placeholder="Vínculo" class="inp text-xs px-3 py-2" oninput="filtrarAssistidos()">
+        <input id="asFiltroProcesso" placeholder="Processo" class="inp text-xs px-3 py-2" oninput="filtrarAssistidos()">
         <select id="asFiltroVara" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()"><option value="">Todas as varas</option></select>
+        <select id="asFiltroLocal" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+          <option value="">Todos os locais</option>
+          <option value="COMEP Cariri">COMEP Cariri</option>
+          <option value="Albergado Cariri">Albergado Cariri</option>
+          <option value="COAP Cariri">COAP Cariri</option>
+        </select>
+        <select id="asFiltroStatus" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+          <option value="">Todos os status</option>
+          <option value="ativo">Ativo</option>
+          <option value="concluido">Concluído</option>
+          <option value="arquivado">Arquivado</option>
+        </select>
       </div>
 
 
