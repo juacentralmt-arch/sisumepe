@@ -10612,30 +10612,49 @@ async function importarAssistidos(inp){
   inp.value = '';
 }
 
+let fluxoData = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
+let fluxoTab = 'aguardando';
+function setFluxoTab(tab){
+  fluxoTab = tab;
+  ['aguardando','compareceu','protocolado','concluido'].forEach(t => {
+    const btn = document.getElementById('tabFluxo' + (t==='aguardando'?'Aguardando':t==='compareceu'?'Compareceu':t==='protocolado'?'Protocolado':'Concluido'));
+    if(btn) btn.className = 'btn ' + (t===tab ? 'btn-primary' : 'btn-ghost') + ' text-xs px-4 py-2 rounded-full';
+  });
+  renderFluxoTab();
+}
+function renderFluxoTab(){
+  const el = document.getElementById('fluxoContent');
+  if(!el) return;
+  const map = { aguardando: 'aguardando', compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
+  const list = fluxoData[map[fluxoTab]] || [];
+  if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
+  el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">' +
+    '<div class="cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
+    '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
+    '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
+    '<p class="text-[10px] text-slate-400 truncate">' + esc(a.processo) + '</p>' +
+    (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
+    (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
+    '</div>' +
+    (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="verAssistido(' + a.id + ')">+ Comparecimento</button>' : '') +
+    (a.compId && !String(a.juntada||'').trim() ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg py-1" onclick="registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
+  '</div>').join('');
+}
 async function loadFluxo(){
   try{
     const r = await api('/api/assistidos/fluxo');
-    const renderCol = (id, list) => {
-      const el = document.getElementById(id);
-      if(!el) return;
-      const cnt = document.getElementById(id+'Count');
-      if(cnt) cnt.textContent = list.length;
-      if(!list.length){ el.innerHTML = '<p class="text-[10px] text-slate-400 text-center py-4">Vazio</p>'; return; }
-      el.innerHTML = list.map(a => '<div class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm"><div class="cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
-        '<p class="font-bold text-[11px] truncate">' + esc(a.nome) + '</p>' +
-        '<p class="text-[10px] text-slate-500 truncate">' + esc(a.vinculo) + ' • ' + esc(a.vara) + '</p>' +
-        '<p class="text-[10px] text-slate-400 truncate">' + esc(a.processo) + '</p>' +
-        (a.ultimoComparecimento ? '<p class="text-[10px] text-indigo-500 mt-1">Comp.: ' + esc(fmtDataBR(a.ultimoComparecimento)) + '</p>' : '<p class="text-[10px] text-amber-500 mt-1">Sem comparecimento</p>') +
-        (a.compId ? '<p class="text-[10px] text-slate-400">Juntada: ' + (a.juntada ? esc(a.juntada).slice(0,30) : 'pendente') + '</p>' : '') +
-        '</div>' +
-        (!a.ultimoComparecimento ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg py-1" onclick="verAssistido(' + a.id + ')">+ Comparecimento</button>' : '') +
-        (a.compId && !String(a.juntada||'').trim() ? '<button class="mt-2 w-full text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg py-1" onclick="registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
-      '</div>').join('');
+    fluxoData = {
+      aguardando: r.aguardando || [],
+      compareceu: r.compareceu || [],
+      protocolado: r.protocolado || [],
+      concluido: r.concluido || []
     };
-    renderCol('fluxoAguardando', r.aguardando||[]);
-    renderCol('fluxoCompareceu', r.compareceu||[]);
-    renderCol('fluxoProtocolado', r.protocolado||[]);
-    renderCol('fluxoConcluido', r.concluido||[]);
+    const cnt = (id, n) => { const e = document.getElementById(id); if(e) e.textContent = n; };
+    cnt('fluxoAguardandoCount', fluxoData.aguardando.length);
+    cnt('fluxoCompareceuCount', fluxoData.compareceu.length);
+    cnt('fluxoProtocoladoCount', fluxoData.protocolado.length);
+    cnt('fluxoConcluidoCount', fluxoData.concluido.length);
+    renderFluxoTab();
   }catch(e){ console.error(e); }
 }
 
