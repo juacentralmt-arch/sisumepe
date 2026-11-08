@@ -8,6 +8,7 @@
 const { spawnSync } = require('child_process');
 
 const suites = [
+  'test/assistidos.test.js',
   'test/estoqueIA.test.js',
   'test/estoqueIA.ativacoes.test.js',
   'test/autoRenomear.test.js',

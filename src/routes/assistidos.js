@@ -57,8 +57,16 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   res.status(201).json(row);
 }));
 
-router.patch('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
+router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
+  const target = await store.assistidos.byId(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Não encontrado' });
+  // Técnico só edita assistidos de sua responsabilidade (único comparecimento registrado por ele ou assistido sem técnico definido).
+  if (req.auth.role === 'tecnico') {
+    const comps = await store.assistidosComparecimentos.all(req.params.id);
+    const meu = comps.some(c => String(c.policialPlantao || '').toLowerCase() === String(req.auth.name || req.auth.user).toLowerCase());
+    if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
+  }
   const fields = {};
   for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio']) if (b[k] !== undefined) fields[k] = b[k];
   if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
@@ -93,6 +101,11 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataComparecimento).trim())) return res.status(400).json({ error: 'Data de comparecimento inválida (use AAAA-MM-DD)' });
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
+  // Bloqueia comparecimento duplicado no mesmo dia para o mesmo assistido
+  const comps = await store.assistidosComparecimentos.all(req.params.id);
+  if (comps.some(c => String(c.dataComparecimento).trim() === String(b.dataComparecimento).trim())) {
+    return res.status(409).json({ error: 'Já existe comparecimento registrado nesta data para este assistido.' });
+  }
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
@@ -130,6 +143,13 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
     protocoladoPor: req.auth.name || req.auth.user
   });
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
+  // Transição automática: assistido passa a concluído após juntada
+  try {
+    const assistido = await store.assistidos.byId(req.params.id);
+    if (assistido && assistido.status === 'ativo') {
+      await store.assistidos.patch(req.params.id, { status: 'concluido' });
+    }
+  } catch (e) {}
   try { await store.audit.insert({ kind:'assistido', action:'juntada', personName: '', ref: 'comparecimento#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' }); } catch(e){}
   broadcast();
   res.json(row);
