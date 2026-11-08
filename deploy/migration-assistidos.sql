@@ -16,6 +16,7 @@ create table if not exists assistidos_comparecimentos (
   assistido_id integer references assistidos(id) on delete cascade,
   data_comparecimento text default '',
   policial_plantao text default '',
+  assinado_por text default '',
   protocolado boolean default false,
   data_protocolacao text default '',
   protocolado_por text default '',
@@ -35,6 +36,7 @@ alter table assistidos add column if not exists frequencia text default 'mensal'
 alter table assistidos add column if not exists status text default 'ativo';
 alter table assistidos_comparecimentos add column if not exists protocolado_por text default '';
 alter table assistidos_comparecimentos add column if not exists juntada text default '';
+alter table assistidos_comparecimentos add column if not exists assinado_por text default '';
 
 create index if not exists idx_assistidos_nome on assistidos (nome);
 create index if not exists idx_assistidos_processo on assistidos (processo);

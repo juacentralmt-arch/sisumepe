@@ -493,7 +493,7 @@ const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
   policialPlantao: 'policial_plantao', protocolado: 'protocolado',
   dataProtocolacao: 'data_protocolacao', protocoladoPor: 'protocolado_por',
-  observacoes: 'observacoes', juntada: 'juntada', createdAt: 'createdat'
+  observacoes: 'observacoes', juntada: 'juntada', assinadoPor: 'assinado_por', createdAt: 'createdat'
 };
 const EST = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'

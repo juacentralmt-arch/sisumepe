@@ -6,6 +6,7 @@ const router = express.Router();
 
 // Cadastro de assistido
 router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => {
+  const { page, limit } = req.query || {};
   const list = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const byAssistido = new Map();
@@ -19,7 +20,17 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
     const last = cs[0] || null;
     return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !String(last.juntada || '').trim()) };
   });
-  res.json(enriched);
+  // Ordena por nome por padrão
+  enriched.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const total = enriched.length;
+  let paged = enriched;
+  if (page !== undefined && limit !== undefined) {
+    const p = Math.max(Number(page) || 1, 1);
+    const l = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const start = (p - 1) * l;
+    paged = enriched.slice(start, start + l);
+  }
+  res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
 const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
@@ -96,6 +107,15 @@ router.get('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(
   res.json(list);
 }));
 
+router.get('/api/assistidos/:id/detalhe', auth(['admin','tecnico']), ah(async (req, res) => {
+  const a = await store.assistidos.byId(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Não encontrado' });
+  const comps = await store.assistidosComparecimentos.all(req.params.id);
+  const sorted = comps.slice().sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
+  const pendentes = comps.filter(c => !String(c.juntada || '').trim());
+  res.json({ assistido: a, comparecimentos: sorted, pendentes: pendentes.length, total: comps.length });
+}));
+
 router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
@@ -110,7 +130,8 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
-    policialPlantao: String(b.policialPlantao || '').trim() || '—'
+    policialPlantao: String(b.policialPlantao || '').trim() || '—',
+    assinadoPor: String(b.assinadoPor || '').trim() || null
   });
   try { await store.audit.insert({ kind:'assistido', action:'comparecimento', personName: a.nome, ref: 'comparecimento#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Comparecimento registrado: ' + row.dataComparecimento }); } catch(e){}
   broadcast();
@@ -232,7 +253,17 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
       });
     });
   }
-  res.json(list);
+  // Paginação
+  const { page, limit } = req.query || {};
+  const total = list.length;
+  let paged = list;
+  if (page !== undefined && limit !== undefined) {
+    const p = Math.max(Number(page) || 1, 1);
+    const l = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const start = (p - 1) * l;
+    paged = list.slice(start, start + l);
+  }
+  res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
 // Relatório em PDF — aplica os mesmos filtros de /filtrar e gera PDF para download
