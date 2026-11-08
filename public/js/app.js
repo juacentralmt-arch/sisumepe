@@ -10744,22 +10744,29 @@ async function filtrarAssistidos(){
 }
 
 function renderAssistidos(){
-  const body = document.getElementById('assistidosBody');
-  if(!body) return;
-  if(!assistidosData.length){ body.innerHTML = '<tr><td colspan="7" class="p-2 text-center text-slate-400">Nenhum assistido.</td></tr>'; return; }
-  body.innerHTML = assistidosData.map(a => '<tr class="border-t border-slate-100 hover:bg-indigo-50/60 cursor-pointer transition" onclick="verAssistido(' + a.id + ')">' +
-    '<td class="p-2 font-semibold text-slate-700">' + esc(a.vinculo) + '</td>' +
-    '<td class="p-2 max-w-[200px] truncate" title="' + esc(a.nome) + '">' + esc(a.nome) + ' <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span></td>' +
-    '<td class="p-2">' + esc(a.processo) + '</td>' +
-    '<td class="p-2">' + esc(a.vara) + '</td>' +
-    '<td class="p-2">' + esc(a.localAssinatura) + '</td>' +
-    '<td class="p-2">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
-    '<td class="p-2 whitespace-nowrap" onclick="event.stopPropagation()">' +
-      '<button class="text-indigo-600 hover:underline mr-2 font-semibold" onclick="verAssistido(' + a.id + ')">Ver</button>' +
-      '<button class="text-slate-600 hover:underline mr-2 font-semibold" onclick="abrirEditarAssistido(' + a.id + ')">Editar</button>' +
-      '<button class="text-rose-600 hover:underline font-semibold" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
-    '</td>' +
-  '</tr>').join('');
+  const wrap = document.getElementById('fluxoTodosWrap');
+  if(!wrap) return;
+  if(!assistidosData.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 col-span-full">Nenhum assistido cadastrado.</div>'; return; }
+  wrap.innerHTML = assistidosData.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer" onclick="verAssistido(' + a.id + ')">' +
+    '<div class="flex items-start justify-between gap-2 mb-2">' +
+      '<div>' +
+        '<p class="font-bold text-sm text-slate-800 truncate">' + esc(a.nome) + '</p>' +
+        '<p class="text-[10px] text-slate-500">Vínculo: ' + esc(a.vinculo) + '</p>' +
+      '</div>' +
+      '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full ' + (a.status==='ativo'?'bg-emerald-100 text-emerald-700':a.status==='concluido'?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-600') + '">' + esc(a.status||'') + '</span>' +
+    '</div>' +
+    '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
+      '<div><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
+      '<div><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
+      '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
+      '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
+    '</div>' +
+    '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
+      '<button class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="verAssistido(' + a.id + ')">Ver</button>' +
+      '<button class="text-[10px] font-bold text-slate-600 hover:underline" onclick="abrirEditarAssistido(' + a.id + ')">Editar</button>' +
+      '<button class="text-[10px] font-bold text-rose-600 hover:underline" onclick="excluirAssistido(' + a.id + ')">Excluir</button>' +
+    '</div>' +
+  '</div>').join('');
 }
 
 function toggleFormAssistido(){ const el=document.getElementById("formAssistido"); if(el) el.classList.toggle("hidden"); }
