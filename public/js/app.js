@@ -10634,6 +10634,8 @@ function renderFluxoTab(){
   const todosWrap = document.getElementById('fluxoTodosWrap');
   const content = document.getElementById('fluxoContent');
   const auditWrap = document.getElementById('fluxoAuditoriaWrap');
+  const protoRange = document.getElementById('fluxoProtocoladoRange');
+  if (protoRange) protoRange.classList.toggle('hidden', fluxoTab !== 'protocolado');
   if (fluxoTab === 'todos') {
     if(todosWrap) todosWrap.classList.remove('hidden');
     if(content) content.classList.add('hidden');
@@ -10922,7 +10924,9 @@ function assistidosFiltros(){
     local: (document.getElementById('asFiltroLocal')?.value || '').trim(),
     status: (document.getElementById('asFiltroStatus')?.value || '').trim(),
     dataProtocolo: (document.getElementById('asFiltroDataProtocolo')?.value || '').trim(),
-    usuarioProtocolo: (document.getElementById('asFiltroUsuarioProtocolo')?.value || '').trim().toLowerCase()
+    usuarioProtocolo: (document.getElementById('asFiltroUsuarioProtocolo')?.value || '').trim().toLowerCase(),
+    protoDe: (document.getElementById('asFiltroProtoDe')?.value || '').trim(),
+    protoAte: (document.getElementById('asFiltroProtoAte')?.value || '').trim()
   };
 }
 function assistidoMatchFilters(a, f){
@@ -10937,7 +10941,7 @@ function assistidoMatchFilters(a, f){
     // filtering by protocolo fields only makes sense for protocolado tab; match if any comparecimento satisfies
     // We don't have protocolado data on assistido object; skip client-side (backend handles). 
   }
-  if (f.protoDe || f.protoAte) {
+  if ((fluxoTab || 'todos') === 'protocolado' && (f.protoDe || f.protoAte)) {
     const d = a.dataProtocolacao;
     if (!d) return false;
     if (f.protoDe && String(d) < f.protoDe) return false;
