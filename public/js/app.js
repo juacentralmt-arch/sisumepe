@@ -10634,8 +10634,8 @@ function renderFluxoTab(){
   const todosWrap = document.getElementById('fluxoTodosWrap');
   const content = document.getElementById('fluxoContent');
   const auditWrap = document.getElementById('fluxoAuditoriaWrap');
-  const protoEls = document.querySelectorAll('#protoRangeLabel, #asFiltroProtoDe, #protoRangeLabelAte, #asFiltroProtoAte');
-  protoEls.forEach(el => el.style.display = fluxoTab === 'protocolado' ? '' : 'none');
+  const protoRange = document.getElementById('fluxoProtocoladoRange');
+  if (protoRange) protoRange.classList.toggle('hidden', fluxoTab !== 'protocolado');
   if (fluxoTab === 'todos') {
     if(todosWrap) todosWrap.classList.remove('hidden');
     if(content) content.classList.add('hidden');

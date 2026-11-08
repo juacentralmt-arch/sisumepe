@@ -1700,10 +1700,6 @@
         </select>
         <input id="asFiltroDataProtocolo" type="date" placeholder="Data protocolo" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
         <input id="asFiltroUsuarioProtocolo" placeholder="Usuário protocolou" class="inp text-xs px-3 py-2" oninput="filtrarAssistidos()">
-        <span id="protoRangeLabel" class="text-xs font-semibold text-slate-600" style="display:none">Protocolado de:</span>
-        <input id="asFiltroProtoDe" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()" style="display:none">
-        <span id="protoRangeLabelAte" class="text-xs font-semibold text-slate-600" style="display:none">até:</span>
-        <input id="asFiltroProtoAte" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()" style="display:none">
       </div>
       <div class="mb-4">
         <button onclick="limparFiltrosAssistidos()" class="btn btn-ghost text-xs px-3 py-2">Limpar filtros</button>
@@ -1722,6 +1718,12 @@
         </div>
         <div id="fluxoAuditoriaWrap" class="hidden"></div>
         <div id="fluxoRelatoriosWrap" class="hidden"></div>
+        <div id="fluxoProtocoladoRange" class="mb-4 flex flex-wrap gap-2 items-center">
+          <span class="text-xs font-semibold text-slate-600">Protocolado de:</span>
+          <input id="asFiltroProtoDe" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+          <span class="text-xs font-semibold text-slate-600">até:</span>
+          <input id="asFiltroProtoAte" type="date" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+        </div>
         <div id="fluxoTodosWrap" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-4"></div>
         <div id="fluxoContent" class="space-y-2 min-h-[60px]"></div>
       </div>
