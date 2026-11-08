@@ -10654,6 +10654,8 @@ function renderFluxoTab(){
   const map = { compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const ff = fluxoFiltrado();
   const list = ff[map[fluxoTab]] || [];
+  window._juntadaTextos = window._juntadaTextos || {};
+  list.forEach(a => { if (a.compId) window._juntadaTextos[a.compId] = a.juntada || ''; });
   if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
   el.innerHTML = list.map(a => '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition">' +
     '<div class="cursor-pointer" onclick="abrirEditarAssistido(' + a.id + ')">' +
@@ -10678,6 +10680,7 @@ function renderFluxoTab(){
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
       (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
+      (a.compId && String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirEditarJuntada(' + a.compId + ')">Editar juntada</button>' : '') +
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
       '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')">Histórico</button>' +
       '<button type="button" class="text-[10px] font-bold text-slate-600 hover:underline" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')">Editar</button>' +
@@ -11042,6 +11045,11 @@ async function protocolar(id){
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
+function abrirEditarJuntada(id){
+  document.getElementById('juntadaId').value = id;
+  document.getElementById('juntadaTexto').value = (window._juntadaTextos && window._juntadaTextos[id]) ? window._juntadaTextos[id] : '';
+  document.getElementById('modalJuntada').classList.remove('hidden');
+}
 function abrirModalJuntada(id){
   document.getElementById('juntadaId').value = id;
   document.getElementById('juntadaTexto').value = '';
@@ -11054,7 +11062,7 @@ async function salvarJuntada(){
   if(!val){ alert('Informe os dados da juntada'); return; }
   try{
     await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val }) });
-    toast('Juntada registrada'); fecharModalJuntada(); loadComparecimentos(); loadPendencias(); loadStats();
+    toast('Juntada registrada'); fecharModalJuntada(); loadAssistidos(); loadStats();
   }catch(e){ toast('Erro: ' + e.message); }
 }
 async function registrarJuntada(id){ abrirModalJuntada(id); }
