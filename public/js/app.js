@@ -10729,7 +10729,42 @@ async function carregarAuditoriaAssistidos(){
 async function carregarRelatorioAssistidos(){
   const wrap = document.getElementById('fluxoRelatoriosWrap');
   if(!wrap) return;
-  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Carregando relatório...</div>';
+  const campos = [
+    { key:'vinculo', label:'Vínculo' },
+    { key:'nome', label:'Nome' },
+    { key:'processo', label:'Processo' },
+    { key:'vara', label:'Vara' },
+    { key:'localAssinatura', label:'Local' },
+    { key:'dataInicio', label:'Início' },
+    { key:'status', label:'Status' },
+    { key:'ultimoComparecimento', label:'Últ. comparecimento' },
+    { key:'policialPlantao', label:'Policial' },
+    { key:'juntada', label:'Juntada' },
+    { key:'dataProtocolacao', label:'Protocolado em' },
+    { key:'protocoladoPor', label:'Protocolado por' }
+  ];
+  if (!window._relatorioCampos) window._relatorioCampos = campos.map(c=>c.key);
+  wrap.innerHTML = '<div class="card p-4 rounded-2xl mb-4">' +
+    '<p class="text-sm font-bold text-slate-700 mb-2">Selecione as informações para o relatório</p>' +
+    '<div class="flex flex-wrap gap-3 mb-3">' +
+    campos.map(c => '<label class="flex items-center gap-1 text-xs"><input type="checkbox" value="' + c.key + '" ' + (window._relatorioCampos.includes(c.key)?'checked':'') + ' onchange="toggleCampoRelatorio(this)"> ' + c.label + '</label>').join('') +
+    '</div>' +
+    '<div class="flex gap-2">' +
+      '<button onclick="gerarRelatorioAssistidos()" class="btn btn-primary text-xs px-3 py-2">Gerar relatório</button>' +
+      '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-ghost text-xs px-3 py-2">Exportar CSV</button>' +
+    '</div>' +
+  '</div>' +
+  '<div id="relatorioResultado"></div>';
+}
+function toggleCampoRelatorio(cb){
+  if (!window._relatorioCampos) window._relatorioCampos = [];
+  if (cb.checked) { if (!window._relatorioCampos.includes(cb.value)) window._relatorioCampos.push(cb.value); }
+  else { window._relatorioCampos = window._relatorioCampos.filter(x=>x!==cb.value); }
+}
+async function gerarRelatorioAssistidos(){
+  const wrap = document.getElementById('relatorioResultado');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400">Carregando...</div>';
   const params = new URLSearchParams();
   const nome = document.getElementById('asFiltroNome')?.value?.trim();
   const vinculo = document.getElementById('asFiltroVinculo')?.value?.trim();
@@ -10751,49 +10786,30 @@ async function carregarRelatorioAssistidos(){
   try {
     const r = await api(url);
     const list = Array.isArray(r) ? r : [];
-    // summary
-    const porStatus = {}, porVara = {}, porLocal = {};
-    list.forEach(a => {
-      porStatus[a.status || '—'] = (porStatus[a.status || '—'] || 0) + 1;
-      porVara[a.vara || '—'] = (porVara[a.vara || '—'] || 0) + 1;
-      porLocal[a.localAssinatura || '—'] = (porLocal[a.localAssinatura || '—'] || 0) + 1;
-    });
-    const summary = (obj, title) => '<div class="card p-3 rounded-xl"><p class="text-[10px] font-bold text-slate-500 mb-1">' + title + '</p>' +
-      Object.entries(obj).map(([k,v]) => '<div class="flex justify-between text-[11px]"><span>' + esc(k) + '</span><b>' + v + '</b></div>').join('') + '</div>';
-    const table = '<div class="card p-2 overflow-x-auto rounded-2xl shadow-sm"><table class="w-full text-[10px] whitespace-nowrap"><thead><tr class="bg-slate-50 text-slate-600">' +
-      ['Vínculo','Nome','Processo','Vara','Local','Início','Status','Últ. comp.','Policial','Juntada','Prot. em','Prot. por'].map(h=>'<th class="text-left p-2 font-semibold">'+h+'</th>').join('') +
-      '</tr></thead><tbody>' +
-      list.map(a => '<tr class="border-t border-slate-100">' +
-        '<td class="p-2">' + esc(a.vinculo) + '</td>' +
-        '<td class="p-2">' + esc(a.nome) + '</td>' +
-        '<td class="p-2">' + esc(a.processo) + '</td>' +
-        '<td class="p-2">' + esc(a.vara) + '</td>' +
-        '<td class="p-2">' + esc(a.localAssinatura) + '</td>' +
-        '<td class="p-2">' + esc(fmtDataBR(a.dataInicio)) + '</td>' +
-        '<td class="p-2">' + esc(a.status) + '</td>' +
-        '<td class="p-2">' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : '—') + '</td>' +
-        '<td class="p-2">' + esc(a.policialPlantao || '—') + '</td>' +
-        '<td class="p-2 max-w-[120px] truncate" title="' + esc(a.juntada||'') + '">' + esc(a.juntada ? a.juntada.slice(0,24) : '—') + '</td>' +
-        '<td class="p-2">' + esc(a.dataProtocolacao ? fmtDataBR(a.dataProtocolacao) : '—') + '</td>' +
-        '<td class="p-2">' + esc(a.protocoladoPor || '—') + '</td>' +
-      '</tr>').join('') +
-      '</tbody></table></div>';
-    wrap.innerHTML = '<div class="mb-4 flex items-center justify-between gap-2 flex-wrap">' +
-      '<p class="text-sm font-bold text-slate-700">Relatório de assistidos (' + list.length + ' registro(s))</p>' +
-      '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-primary text-xs px-3 py-2">Exportar CSV</button>' +
-      '</div>' +
-      '<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">' +
-        summary(porStatus, 'Por status') + summary(porVara, 'Por vara') + summary(porLocal, 'Por local') +
-      '</div>' + table;
     window._relatorioAssistidos = list;
+    const campos = window._relatorioCampos || [];
+    const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
+    const val = (a,k) => {
+      if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') return a[k] ? fmtDataBR(a[k]) : '—';
+      return a[k] || '—';
+    };
+    const table = '<div class="card p-2 overflow-x-auto rounded-2xl shadow-sm"><table class="w-full text-[10px] whitespace-nowrap"><thead><tr class="bg-slate-50 text-slate-600">' +
+      campos.map(k=>'<th class="text-left p-2 font-semibold">'+labels[k]+'</th>').join('') +
+      '</tr></thead><tbody>' +
+      list.map(a => '<tr class="border-t border-slate-100">' + campos.map(k=>'<td class="p-2">' + esc(String(val(a,k)).slice(0,40)) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table></div>';
+    wrap.innerHTML = '<p class="text-sm font-bold text-slate-700 mb-2">Relatório (' + list.length + ' registro(s))</p>' + table;
   } catch(e) {
     wrap.innerHTML = '<div class="card p-4 text-center text-rose-500">Erro ao gerar relatório.</div>';
   }
 }
 function exportarRelatorioAssistidosCSV(){
   const list = window._relatorioAssistidos || [];
-  const rows = [['Vínculo','Nome','Processo','Vara','Local','Início','Status','Últ. comparecimento','Policial','Juntada','Protocolado em','Protocolado por']];
-  list.forEach(a => rows.push([a.vinculo,a.nome,a.processo,a.vara,a.localAssinatura,a.dataInicio,a.status,a.ultimoComparecimento,a.policialPlantao,a.juntada,a.dataProtocolacao,a.protocoladoPor]));
+  const campos = window._relatorioCampos || ['vinculo','nome'];
+  const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
+  const val = (a,k) => { if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') return a[k] ? fmtDataBR(a[k]) : ''; return a[k] || ''; };
+  const rows = [campos.map(k=>labels[k]||k)];
+  list.forEach(a => rows.push(campos.map(k=>val(a,k))));
   const csv = rows.map(r=> r.map(v=> '"' + String(v||'').replace(/"/g,'""') + '"').join(';')).join('\n');
   const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='relatorio-assistidos.csv'; a.click();
