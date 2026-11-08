@@ -10607,8 +10607,14 @@ async function importarAssistidos(inp){
   const fd = new FormData(); fd.append('arquivo', f);
   try{
     const r = await api('/api/assistidos/import', { method:'POST', body: fd });
-    alert(r.msg || 'Importação iniciada');
-    setTimeout(loadAssistidos, 3000);
+    toast(r.msg || 'Importação iniciada');
+    const poll = setInterval(async () => {
+      try {
+        const st = await api('/api/assistidos/import/status');
+        if (st.state === 'done') { clearInterval(poll); toast('Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
+        else if (st.state === 'error') { clearInterval(poll); alert('Erro na importação: ' + (st.error || '')); }
+      } catch(e) { clearInterval(poll); }
+    }, 1500);
   }catch(e){ console.error(e); alert('Erro ao importar: ' + (e.message||e)); }
   inp.value = '';
 }
@@ -10768,6 +10774,7 @@ function renderAssistidos(){
       '<div><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
       '<div><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
       '<div><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
+      '<div><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
       '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); verAssistido(' + a.id + ')">Ver</button>' +
@@ -10792,14 +10799,14 @@ async function salvarAssistido(){
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos();
+    toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
     ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ alert('Erro: ' + e.message); }
 }
 
 async function excluirAssistido(id){
   if(!confirm('Excluir este assistido?')) return;
-  try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); }
+  try{ await api('/api/assistidos/'+id, { method:'DELETE' }); toast('Excluido'); loadAssistidos(); loadStats(); }
   catch(e){ alert('Erro: ' + e.message); }
 }
 
@@ -10833,7 +10840,7 @@ async function salvarEdicaoAssistido(){
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Atualizado'); fecharEditarAssistido(); loadAssistidos();
+    toast('Atualizado'); fecharEditarAssistido(); loadAssistidos(); loadStats();
   }catch(e){ alert('Erro: ' + e.message); }
 }
 
@@ -10850,6 +10857,7 @@ async function verAssistido(id){
   } catch(e){ console.error('verAssistido', e); alert('Erro ao abrir detalhe: ' + (e.message||e)); }
 }
 
+function fecharDetalheAssistido(){ const el = document.getElementById('assistidoDetalhe'); if(el) el.classList.add('hidden'); }
 async function loadComparecimentos(){
   const body = document.getElementById('comparecimentosBody');
   if(!body || !assistidoSelecionado) return;
@@ -10903,7 +10911,7 @@ async function salvarJuntada(){
   if(!val){ alert('Informe os dados da juntada'); return; }
   try{
     await api('/api/assistidos/comparecimentos/'+id+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ juntada: val }) });
-    toast('Juntada registrada'); fecharModalJuntada(); loadComparecimentos(); loadPendencias(); loadJuntPendencias();
+    toast('Juntada registrada'); fecharModalJuntada(); loadComparecimentos(); loadPendencias(); loadStats();
   }catch(e){ alert('Erro: ' + e.message); }
 }
 async function registrarJuntada(id){ abrirModalJuntada(id); }
@@ -10918,4 +10926,9 @@ async function loadPendencias(){
     '<div class="text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1">' +
     esc(p.assistido ? p.assistido.nome : '') + ' — compareceu em ' + esc(fmtDataBR(p.dataComparecimento)) + ' (policial: ' + esc(p.policialPlantao) + ')</div>'
   ).join('');
+}
+function limparFiltrosAssistidos(){
+  ['asFiltroNome','asFiltroVinculo','asFiltroProcesso'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  ['asFiltroVara','asFiltroLocal','asFiltroStatus'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  filtrarAssistidos();
 }
