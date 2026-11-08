@@ -1,6 +1,7 @@
 const express = require('express');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, upload } = shared;
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const router = express.Router();
 
 // Cadastro de assistido
@@ -232,6 +233,111 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
     });
   }
   res.json(list);
+}));
+
+// Relatório em PDF — aplica os mesmos filtros de /filtrar e gera PDF para download
+router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async (req, res) => {
+  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo, protoDe, protoAte, campos } = req.query || {};
+  let list = await store.assistidos.all();
+  if (q) {
+    const t = String(q).toLowerCase();
+    list = list.filter(a => (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vinculo||'').toLowerCase().includes(t));
+  }
+  if (nome) { const t = String(nome).toLowerCase(); list = list.filter(a => (a.nome||'').toLowerCase().includes(t)); }
+  if (vinculo) { const t = String(vinculo).toLowerCase(); list = list.filter(a => (a.vinculo||'').toLowerCase().includes(t)); }
+  if (processo) { const t = String(processo).toLowerCase(); list = list.filter(a => (a.processo||'').toLowerCase().includes(t)); }
+  if (vara) list = list.filter(a => a.vara === vara);
+  if (local) list = list.filter(a => a.localAssinatura === local);
+  if (status) list = list.filter(a => a.status === status);
+  if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
+    const comps = await store.assistidosComparecimentos.all();
+    const byAssistido = new Map();
+    comps.forEach(c => { const arr = byAssistido.get(c.assistidoId) || []; arr.push(c); byAssistido.set(c.assistidoId, arr); });
+    list = list.filter(a => {
+      const cs = byAssistido.get(a.id) || [];
+      return cs.some(c => {
+        if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
+        if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
+        if (protoDe && c.dataProtocolacao && String(c.dataProtocolacao) < protoDe) return false;
+        if (protoAte && c.dataProtocolacao && String(c.dataProtocolacao) > protoAte) return false;
+        return true;
+      });
+    });
+  }
+  // Ordena por nome por padrão
+  list = list.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').filter(Boolean);
+  const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. Comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
+  const fmtBR = (v) => { if (!v) return '—'; const s = String(v).trim(); if (/^\d{4}-\d{2}-\d{2}/.test(s)) { const [y,m,d] = s.slice(0,10).split('-'); return d+'/'+m+'/'+y; } return s; };
+
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const page = pdf.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89, M = 40;
+  let y = H - M;
+
+  page.drawText('Relatório de Assistidos — SISUMEPE Juazeiro', { x: M, y, size: 16, font: boldFont, color: rgb(0.1, 0.2, 0.5) });
+  y -= 22;
+  page.drawText('Gerado em: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }), { x: M, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+  y -= 14;
+  page.drawText('Total de registros: ' + list.length, { x: M, y, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+  y -= 26;
+
+  // Cabeçalho da tabela
+  const colW = {};
+  let availW = W - 2 * M;
+  const perCol = availW / Math.max(camposSel.length, 1);
+  camposSel.forEach(k => { colW[k] = perCol; });
+  let x = M;
+  page.drawText('Relatório de Assistidos', { x: M, y: y + 6, size: 10, font: boldFont, color: rgb(1,1,1) }); // placeholder
+  // desenha cabeçalho
+  const headerY = y;
+  camposSel.forEach(k => {
+    page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
+    x += colW[k];
+  });
+  // linha de fundo do cabeçalho
+  page.drawRectangle({ x: M, y: headerY - 14, width: availW, height: 14, color: rgb(0.2, 0.3, 0.6) });
+  // redesenha texto do cabeçalho por cima (cor branca já feita)
+  x = M;
+  camposSel.forEach(k => {
+    page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
+    x += colW[k];
+  });
+  y = headerY - 18;
+
+  // Linhas
+  list.forEach((a, i) => {
+    if (y < M + 40) {
+      page.drawRectangle({ x: M, y: headerY - 14, width: availW, height: 14, color: rgb(0.2, 0.3, 0.6) });
+      x = M;
+      camposSel.forEach(k => {
+        page.drawText(labels[k] || k, { x: x + 2, y: headerY - 8, size: 7.5, font: boldFont, color: rgb(1,1,1) });
+        x += colW[k];
+      });
+      pdf.addPage([W, H]);
+      page = pdf.getPage(pdf.getPageCount() - 1);
+      y = H - M;
+    }
+    const rowY = y;
+    const fill = i % 2 === 0 ? rgb(0.97, 0.97, 0.98) : null;
+    if (fill) page.drawRectangle({ x: M, y: rowY - 10, width: availW, height: 14, color: fill });
+    x = M;
+    camposSel.forEach(k => {
+      let v = a[k];
+      if (k === 'dataInicio' || k === 'ultimoComparecimento' || k === 'dataProtocolacao') v = fmtBR(v);
+      page.drawText(String(v || '—').slice(0, 28), { x: x + 2, y: rowY - 8, size: 7.5, font, color: rgb(0, 0, 0) });
+      x += colW[k];
+    });
+    y = rowY - 16;
+  });
+
+  const bytes = await pdf.save();
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="relatorio-assistidos.pdf"');
+  res.send(Buffer.from(bytes));
 }));
 
 const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };

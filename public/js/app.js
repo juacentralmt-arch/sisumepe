@@ -10756,6 +10756,7 @@ async function carregarRelatorioAssistidos(){
       '<button onclick="selecionarTodosCamposRelatorio(false)" class="btn btn-ghost text-xs px-3 py-2">Limpar seleção</button>' +
       '<button onclick="gerarRelatorioAssistidos()" class="btn btn-primary text-xs px-3 py-2">Gerar relatório</button>' +
       '<button onclick="exportarRelatorioAssistidosCSV()" class="btn btn-ghost text-xs px-3 py-2">Exportar CSV</button>' +
+      '<button onclick="exportarRelatorioAssistidosPDF()" class="btn btn-ghost text-xs px-3 py-2">Exportar PDF</button>' +
     '</div>' +
   '</div>' +
   '<div id="relatorioResultado"></div>';
@@ -10838,6 +10839,33 @@ function exportarRelatorioAssistidosCSV(){
   const csv = rows.map(r=> r.map(v=> '"' + String(v||'').replace(/"/g,'""') + '"').join(';')).join('\n');
   const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8'});
   const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=u; a.download='relatorio-assistidos.csv'; a.click();
+}
+function exportarRelatorioAssistidosPDF(){
+  const campos = window._relatorioCampos || [];
+  const params = new URLSearchParams();
+  if (campos.length) params.set('campos', campos.join(','));
+  const nome = document.getElementById('asFiltroNome')?.value?.trim();
+  const vinculo = document.getElementById('asFiltroVinculo')?.value?.trim();
+  const processo = document.getElementById('asFiltroProcesso')?.value?.trim();
+  const vara = document.getElementById('asFiltroVara')?.value;
+  const local = document.getElementById('asFiltroLocal')?.value;
+  const status = document.getElementById('asFiltroStatus')?.value;
+  const dataProtocolo = document.getElementById('asFiltroDataProtocolo')?.value;
+  const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo')?.value?.trim();
+  const protoDe = document.getElementById('asFiltroProtoDe')?.value;
+  const protoAte = document.getElementById('asFiltroProtoAte')?.value;
+  if (nome) params.set('nome', nome);
+  if (vinculo) params.set('vinculo', vinculo);
+  if (processo) params.set('processo', processo);
+  if (vara) params.set('vara', vara);
+  if (local) params.set('local', local);
+  if (status) params.set('status', status);
+  if (dataProtocolo) params.set('dataProtocolo', dataProtocolo);
+  if (usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
+  if (protoDe) params.set('protoDe', protoDe);
+  if (protoAte) params.set('protoAte', protoAte);
+  const url = '/api/assistidos/relatorio/pdf' + (params.toString() ? '?' + params.toString() : '');
+  window.location.href = url;
 }
 async function loadFluxo(){
   try{
