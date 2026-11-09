@@ -95,7 +95,7 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   res.status(201).json(row);
 }));
 
-router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, res) => {
+router.patch('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Não encontrado' });
@@ -126,7 +126,7 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
   res.json(row);
 }));
 
-router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
+router.delete('/api/assistidos/:id(\\d+)', auth(['admin']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
   const comps = await store.assistidosComparecimentos.all(req.params.id);
   for (const c of comps) await store.assistidosComparecimentos.remove(c.id);
@@ -137,12 +137,12 @@ router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
 }));
 
 // Comparecimentos
-router.get('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
+router.get('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
   const list = await store.assistidosComparecimentos.all(req.params.id);
   res.json(list);
 }));
 
-router.get('/api/assistidos/:id/detalhe', auth(['admin','tecnico']), ah(async (req, res) => {
+router.get('/api/assistidos/:id(\\d+)/detalhe', auth(['admin','tecnico']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Não encontrado' });
   const comps = await store.assistidosComparecimentos.all(req.params.id);
@@ -151,7 +151,7 @@ router.get('/api/assistidos/:id/detalhe', auth(['admin','tecnico']), ah(async (r
   res.json({ assistido: a, comparecimentos: sorted, pendentes: pendentes.length, total: comps.length });
 }));
 
-router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
+router.post('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataComparecimento).trim())) return res.status(400).json({ error: 'Data de comparecimento inválida (use AAAA-MM-DD)' });
@@ -174,7 +174,7 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
 }));
 
 // Protocolar pendência (marcar comparecimento como protocolado + observações)
-router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','tecnico']), ah(async (req, res) => {
+router.patch('/api/assistidos/comparecimentos/:id(\\d+)/protocolar', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
     protocolado: true,
@@ -189,7 +189,7 @@ router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','te
 }));
 
 // Registrar juntada (coluna Juntada) de um comparecimento
-router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecnico']), ah(async (req, res) => {
+router.patch('/api/assistidos/comparecimentos/:id(\\d+)/juntada', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   const val = String(b.juntada || '').trim();
   if (!val) return res.status(400).json({ error: 'Dados da juntada são obrigatórios' });
@@ -893,7 +893,7 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
 // =====================================================================
 //  Etiquetar/desetiquetar assistido (Verificado/Pendente)
 // =====================================================================
-router.patch('/api/assistidos/:id/etiqueta', auth(['admin','tecnico']), ah(async (req, res) => {
+router.patch('/api/assistidos/:id(\\d+)/etiqueta', auth(['admin','tecnico']), ah(async (req, res) => {
   const { etiqueta } = req.body || {};
   if (!['verificado', 'pendente', ''].includes(etiqueta)) {
     return res.status(400).json({ error: 'Etiqueta inválida. Use: verificado, pendente ou vazio' });
