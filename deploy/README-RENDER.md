@@ -18,7 +18,7 @@ no **Supabase** (plano free). O sistema detecta sozinho: com `SUPABASE_URL` e
    e clique em **New project**. Anote a senha do banco. Região: `South America (São Paulo)`.
 2. Com o projeto aberto: **SQL Editor → New query**, cole **todo** o conteúdo de
    `deploy/supabase-schema.sql` e clique **Run** (cria tabelas, bucket e função).
-3. Confira em **Storage** que existe o bucket público `anexos`.
+3. Confira em **Storage** que existe o bucket **privado** `anexos`. O download é feito pelo proxy autenticado `/api/files`; não habilite leitura pública.
 4. Em **Project Settings → API**, copie:
    - `Project URL` → vira `SUPABASE_URL`
    - `service_role` **secret** → vira `SUPABASE_KEY` (nunca exponha no frontend!)

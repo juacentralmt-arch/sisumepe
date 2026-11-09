@@ -3,9 +3,10 @@ const shared = require('../src/lib/shared');
 
 async function verificarAlertasProativos() {
   try {
-    const alertas = await store.estoque.alertas({});
+    const resultado = await store.estoque.alertas({});
+    const alertas = Array.isArray(resultado && resultado.itens) ? resultado.itens : [];
     
-    if (!alertas || alertas.length === 0) {
+    if (alertas.length === 0) {
       console.log('[alertas-proativos] Nenhum alerta encontrado');
       return [];
     }

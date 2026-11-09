@@ -1,5 +1,7 @@
 node_modules/
 .env
+cookies.txt
+*.log
 db.json
 db.json.tmp
 db.json.bak*

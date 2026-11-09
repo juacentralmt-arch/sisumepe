@@ -39,15 +39,16 @@ Guia completo em `deploy/README-RENDER.md`. Resumo:
 3. Render: Web Service Node (`npm install` / `node server.js`) com as envs do `render.yaml`.
 4. Opcional: migre os dados via **Usuários → Baixar backup** (PC) → **Restaurar backup** (nuvem).
 
-> A cada boot na nuvem o servidor recria **automaticamente** as contas padrão
-> ausentes (`recepcao`, `joanderson`, `adailton`, `psicologo`, `secretaria`, `admin`
-> — senha inicial `<usuário>123`). Contas existentes **nunca** são alteradas.
+> O auto-seed é **desativado por padrão** em produção. Para recriar as contas
+> padrão ausentes (`recepcao`, `joanderson`, `adailton`, `psicologo`, `secretaria`, `admin`
+> — senha inicial `<usuário>123`), defina `AUTO_SEED_USERS=1` no ambiente e
+> troque as senhas no primeiro acesso. Contas existentes **nunca** são alteradas.
 
 ## Segurança embutida
 
 - **Chat e chamadas privados**: mensagens diretas e sinalização WebRTC (SSE) chegam somente ao autor e ao destinatário — nunca a toda a equipe.
 - **`db.json` à prova de crash**: gravação atômica (arquivo temporário + rename) — um desligamento abrupto nunca corrompe o banco local.
-- **Painel TV com nome completo**: `/api/tv` exibe e anuncia o nome completo do atendido (texto + voz).
+- **Painel TV com nome abreviado**: `/api/tv` exibe e anuncia o nome abreviado do atendido por padrão (texto + voz); `TV_NOME_COMPLETO=1` restaura o nome completo.
 - **Graceful shutdown**: em redeploys (SIGTERM), o servidor responde o que está em voo antes de sair.
 - **Heartbeat SSE** a cada 25s, evitando cortes de conexão por proxies ociosos.
 - **Rotas `/api/*` desconhecidas** retornam 404 JSON (não caem na SPA).

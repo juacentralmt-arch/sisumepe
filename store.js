@@ -257,10 +257,6 @@ function loadFile() {
     if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
     if (!Array.isArray(mem.termos)) mem.termos = [];
     if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
-    if (!Array.isArray(mem.assistidos)) mem.assistidos = [];
-    if (!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
-    if (!Array.isArray(mem.assistidosComparecimentos)) mem.assistidosComparecimentos = [];
-    if (!mem.seqAssistidoComp) mem.seqAssistidoComp = mem.assistidosComparecimentos.length ? Math.max(...mem.assistidosComparecimentos.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoque)) mem.estoque = [];
     if (!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
@@ -341,7 +337,7 @@ if(!Array.isArray(mem.estoqueNotas)) mem.estoqueNotas=[];
     if(needSave||added) saveFile();
     return mem;
   } catch {
-    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoqueNotas: [], assistidos: [], assistidosComparecimentos: [], seqEstoqueNota: 0, seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1, seqAssistido: 1, seqAssistidoComp: 1 };
+    mem = { persons: [], tickets: [], chat: [], audit: [], users: seedUsers(), sessions: {}, agenda: [], googleTokens: {}, termos: [], estoque: [], estoqueMov: [], estoqueSerial: [], estoqueNotas: [], seqPerson: 1, seqTicket: 1, seqChat: 1, seqAudit: 1, seqAgenda: 1, seqTermo: 1, seqEstoque: 1, seqEstoqueMov: 1, seqEstoqueSerial: 1, seqAssistido: 1, seqAssistidoComp: 1 };
     const matsInit={ spacecom: MATERIAIS_SPACECOM, infinity: MATERIAIS_INFINITY };
     [...CONTRATOS_SPACECOM.map(c=> ({sis:'spacecom', c})), {sis:'infinity', c:CONTRATO_INFINITY}].forEach(({sis, c})=> matsInit[sis].forEach(m=> UNIDADES.forEach(u=> mem.estoque.push({ id: mem.seqEstoque++, sistema:sis, contrato:c, material:m, unidade:u, saldo:0, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() }) )));
     return mem;
@@ -362,11 +358,7 @@ if(!mem.agenda) mem.agenda = [];
 if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
 if(!mem.googleTokens) mem.googleTokens = {};
 if(!mem.termos) mem.termos = [];
-if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
-if(!Array.isArray(mem.assistidos)) mem.assistidos = [];
-if(!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
-if(!Array.isArray(mem.assistidosComparecimentos)) mem.assistidosComparecimentos = [];
-if(!mem.seqAssistidoComp) mem.seqAssistidoComp = mem.assistidosComparecimentos.length ? Math.max(...mem.assistidosComparecimentos.map(x=>x.id))+1 : 1;
+if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque)) mem.estoque=[];
 if(!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
@@ -1874,9 +1866,9 @@ const store = {
     // restauração/verificação saiba quais arquivos deveriam existir.
     const fullAudit = MODE === 'file' ? [...mem.audit] : (await selectAll('audit')).map(appA);
     const fullChat = MODE === 'file' ? [...mem.chat] : (await selectAll('chat')).map(appC);
-    const [persons, tickets, users, agenda, termos, psi, assistidos, estoque, estoqueMov, estoqueSerial] = await Promise.all([
+    const [persons, tickets, users, agenda, termos, psi, estoque, estoqueMov, estoqueSerial] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.users.all(),
-      store.agenda.all().catch(() => []), store.termos.all().catch(() => []), store.psi.all().catch(() => []), store.assistidos.all().catch(() => []),
+      store.agenda.all().catch(() => []), store.termos.all().catch(() => []), store.psi.all().catch(() => []),
       store.estoque.all(), store.estoqueMov.all({ limit: 'all' }), store.estoqueSerial.all({ limit: 'all' })
     ]);
     const filesManifest = [];
@@ -1890,13 +1882,12 @@ const store = {
       format: 'sisumepe-backup-v2',
       generatedAt: new Date().toISOString(),
       storeMode: MODE,
-      persons, tickets, chat: fullChat, audit: fullAudit, users, agenda, termos, psi, assistidos,
+      persons, tickets, chat: fullChat, audit: fullAudit, users, agenda, termos, psi,
       estoque, estoqueMov, estoqueSerial,
       estoqueNotas: (mem.estoqueNotas || []),
       filesManifest,
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
       seqChat: mx(fullChat) + 1, seqAudit: mx(fullAudit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1,
-      seqAssistido: mx(assistidos) + 1,
       seqEstoque: mx(estoque) + 1, seqEstoqueMov: mx(estoqueMov) + 1, seqEstoqueSerial: mx(estoqueSerial) + 1
     };
   },
@@ -1928,14 +1919,12 @@ const store = {
         googleTokens: keepTokens,
         termos: Array.isArray(dump.termos) ? dump.termos : keepTermos,
         psi: Array.isArray(dump.psi) ? dump.psi : keepPsi,
-        assistidos: Array.isArray(dump.assistidos) ? dump.assistidos : (mem.assistidos || []),
         estoque: Array.isArray(dump.estoque) ? dump.estoque : [],
         estoqueMov: Array.isArray(dump.estoqueMov) ? dump.estoqueMov : [],
         estoqueSerial: Array.isArray(dump.estoqueSerial) ? dump.estoqueSerial : [],
         estoqueNotas: Array.isArray(dump.estoqueNotas) ? dump.estoqueNotas : (mem.estoqueNotas || []),
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
         seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi,
-        seqAssistido: dump.seqAssistido || ((dump.assistidos || []).reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1),
         seqEstoque: dump.seqEstoque || keepSeqEstoque, seqEstoqueMov: dump.seqEstoqueMov || keepSeqEstoqueMov, seqEstoqueSerial: dump.seqEstoqueSerial || keepSeqEstoqueSerial
       };
       saveFile();
@@ -1972,14 +1961,6 @@ const store = {
         }
       }catch(e){}
     }
-    if (Array.isArray(dump.assistidos) && dump.assistidos.length) {
-      try {
-        const allAs = await selectAll('assistidos', { select: 'id' });
-        for (let i = 0; i < allAs.length; i += 200) {
-          must(await supa.from('assistidos').delete().in('id', allAs.slice(i, i + 200).map(x => x.id)), 'restore.assistidos.del');
-        }
-      } catch (e) {}
-    }
     const cur = await supa.from('users').select('user');
     if (!cur.error && cur.data.length) must(await supa.from('users').delete().neq('user', '__impossivel__'), 'restore.usersdel');
     const chunk = async (table, rows, map) => {
@@ -1992,9 +1973,6 @@ const store = {
     await chunk('chat', (dump.chat || []).map(m => ({ id: m.id, user: m.user, name: m.name, role: m.role, to: m.to, text: m.text, anexos: m.anexos || [] })), { id: 'id', user: 'user', name: 'name', role: 'role', to: 'to', text: 'text', anexos: 'anexos' });
     await chunk('audit', (dump.audit || []), A);
     await chunk('users', dump.users, { user: 'user', name: 'name', role: 'role', pass: 'pass', active: 'active', sistema: 'sistema' });
-    if (Array.isArray(dump.assistidos) && dump.assistidos.length) {
-      try{ await chunk('assistidos', dump.assistidos, ASS); }catch(e){}
-    }
     if (Array.isArray(dump.agenda) && dump.agenda.length) {
       try{ await chunk('agenda', dump.agenda, AG); }catch(e){}
     }
@@ -2227,252 +2205,6 @@ const store = {
   }
 };
 
-// Assistidos (Planilha Geral)
-store.assistidos = {
-  async all() {
-    if (MODE === 'file') return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
-    try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const r = must(await supa.from('assistidos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1), 'assistidos.all');
-        out.push(...r.map(appASS));
-        if (r.length < pageSize) break;
-        from += pageSize;
-      }
-      return out;
-    } catch (e) {
-      throw e;
-    }
-  },
-  async allIncludingDeleted() {
-    if (MODE === 'file') return [...(mem.assistidos || [])];
-    try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.allIncludingDeleted');
-        out.push(...r.map(appASS));
-        if (r.length < pageSize) break;
-        from += pageSize;
-      }
-      return out;
-    } catch (e) {
-      throw e;
-    }
-  },
-  async byId(id) {
-    if (MODE === 'file') {
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      return r && r.deleted_at ? null : r || null;
-    }
-    try {
-      const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
-      if (!r.length) return null;
-      const row = appASS(r[0]);
-      return row.deleted_at ? null : row;
-    } catch (e) { throw e; }
-  },
-  async insert(r) {
-    if (MODE === 'file') {
-      const row = {
-        id: mem.seqAssistido++,
-        ...r,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        deleted_at: null,
-        status: r.status || 'ativo',
-        frequencia: r.frequencia || 'mensal',
-        etiquetaCor: r.etiquetaCor || '#4f46e5'
-      };
-      mem.assistidos.push(row); saveFile(); return row;
-    }
-    try {
-      const rr = must(await supa.from('assistidos').insert(toRow(r, ASS)).select().single(), 'assistidos.insert');
-      return appASS(rr);
-    } catch (e) {
-      throw e;
-    }
-  },
-  async bulkInsert(rows) {
-    const out = [];
-    const now = new Date().toISOString();
-    const normalized = rows.map(r => ({
-      ...r,
-      createdAt: r.createdAt || now,
-      updatedAt: now,
-      deleted_at: null,
-      status: r.status || 'ativo',
-      frequencia: r.frequencia || 'mensal',
-      etiquetaCor: r.etiquetaCor || '#4f46e5'
-    }));
-    if (MODE === 'supabase') {
-      const chunkSize = 100;
-      for (let i = 0; i < normalized.length; i += chunkSize) {
-        const chunk = normalized.slice(i, i + chunkSize);
-        try {
-          const rr = must(await supa.from('assistidos').insert(chunk.map(x => toRow(x, ASS))).select(), 'assistidos.bulkInsert');
-          out.push(...rr.map(appASS));
-        } catch (e) {
-          throw e;
-        }
-      }
-      return out;
-    }
-    for (const r of normalized) {
-      const row = { id: mem.seqAssistido++, ...r };
-      mem.assistidos.push(row);
-      out.push(row);
-    }
-    saveFile();
-    return out;
-  },
-  async patch(id, fields) {
-    if (MODE === 'file') {
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      if (!r) return null;
-      if (r.deleted_at) return null; // não edita excluído
-      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
-      saveFile(); return r;
-    }
-    try {
-      const rr = must(await supa.from('assistidos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
-      return rr.length ? appASS(rr[0]) : null;
-    } catch (e) {
-      throw e;
-    }
-  },
-  async remove(id) {
-    // Soft-delete: marca deleted_at em vez de apagar fisicamente.
-    // Comparecimentos vinculados tambem recebem soft-delete (preserva historico).
-    if (MODE === 'file') {
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      if (!r) return;
-      const agora = new Date().toISOString();
-      r.deleted_at = agora;
-      // Soft-delete dos comparecimentos vinculados (nao apaga fisicamente)
-      (mem.assistidosComparecimentos || []).forEach(c => {
-        if (eqi(c.assistidoId, id) && !c.deleted_at) {
-          c.deleted_at = agora;
-          c.updatedAt = agora;
-        }
-      });
-      saveFile(); return;
-    }
-    try {
-      await must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
-      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('assistido_id', Number(id)).is('deleted_at', null), 'assistidos.remove_comp');
-    } catch (e) { throw e; }
-  }
-};
-
-
-// Assistidos - Comparecimentos (soft-delete aplicavel; pendencia = sem juntada)
-store.assistidosComparecimentos = {
-  async all(assistidoId) {
-    if (MODE === 'file') {
-      const list = (mem.assistidosComparecimentos || []).filter(x => !x.deleted_at);
-      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
-    }
-    try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
-        if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
-        const r = must(await q, 'assistidosComparecimentos.all');
-        out.push(...r.map(appACC));
-        if (r.length < pageSize) break;
-        from += pageSize;
-      }
-      return out;
-    } catch (e) {
-      throw e;
-    }
-  },
-  async allIncludingDeleted() {
-    if (MODE === 'file') return [...(mem.assistidosComparecimentos || [])];
-    try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        let q = supa.from('assistidos_comparecimentos').select('*').order('id').range(from, from + pageSize - 1);
-        const r = must(await q, 'assistidosComparecimentos.allIncludingDeleted');
-        out.push(...r.map(appACC));
-        if (r.length < pageSize) break;
-        from += pageSize;
-      }
-      return out;
-    } catch (e) {
-      throw e;
-    }
-  },
-  async byId(id) {
-    if (MODE === 'file') {
-      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
-      return r && r.deleted_at ? null : r || null;
-    }
-    try {
-      const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
-      if (!r.length) return null;
-      const row = appACC(r[0]);
-      return row.deleted_at ? null : row;
-    } catch (e) { throw e; }
-  },
-  async insert(r) {
-    if (MODE === 'file') {
-      const row = {
-        id: mem.seqAssistidoComp++,
-        ...r,
-        protocolado: false,
-        deleted_at: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      mem.assistidosComparecimentos.push(row); saveFile(); return row;
-    }
-    try {
-      const rr = must(await supa.from('assistidos_comparecimentos').insert(toRow(r, ACC)).select().single(), 'assistidosComparecimentos.insert');
-      return appACC(rr);
-    } catch (e) { throw e; }
-  },
-  async patch(id, fields) {
-    if (MODE === 'file') {
-      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
-      if (!r) return null;
-      if (r.deleted_at) return null;
-      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
-      saveFile(); return r;
-    }
-    try {
-      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ACC)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidosComparecimentos.patch');
-      return rr.length ? appACC(rr[0]) : null;
-    } catch (e) { throw e; }
-  },
-  async remove(id) {
-    // Soft-delete do comparecimento (preserva historico)
-    if (MODE === 'file') {
-      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
-      if (!r) return;
-      const agora = new Date().toISOString();
-      r.deleted_at = agora;
-      r.updatedAt = agora;
-      saveFile(); return;
-    }
-    try {
-      must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidosComparecimentos.remove');
-    } catch (e) { throw e; }
-  },
-  async pendencias() {
-    const list = await this.all();
-    return list.filter(x => !x.protocolado);
-  }
-};
-
 module.exports = store;
 module.exports.normalizeSistema = normalizeSistema;
 module.exports.normalizeContrato = normalizeContrato;
@@ -2489,3 +2221,5 @@ module.exports.MATERIAIS_INFINITY = MATERIAIS_INFINITY;
 module.exports.MATERIAIS_COM_SERIAL = MATERIAIS_COM_SERIAL;
 module.exports.materiaisDoSistema = materiaisDoSistema;
 module.exports.materialDoSerial = materialDoSerial;
+
+

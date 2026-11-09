@@ -1,0 +1,23 @@
+process.env.SUPABASE_URL=''; process.env.SUPABASE_KEY='';
+const express=require('express');
+const shared=require('./src/lib/shared');
+shared.auth=(roles)=>(req,res,next)=>{ if(!req.auth) return res.status(401).json({error:'noauth'}); if(roles&&roles.length&&!roles.includes(req.auth.role)) return res.status(403).json({error:'forbidden'}); next(); };
+const router=require('./src/routes/estoque');
+const app=express(); app.use(express.json({limit:'2mb'}));
+app.use((req,res,next)=>{ req.auth={role:'admin',user:'admin',name:'Admin',sistema:null,token:'t'}; next(); });
+app.use(router);
+const server=app.listen(0);
+const BASE='http://127.0.0.1:'+server.address().port;
+const get=async(p)=>{const r=await fetch(BASE+p);return {status:r.status,body:await r.json()};};
+const post=async(p,b)=>{const r=await fetch(BASE+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});return {status:r.status,body:await r.json()};};
+(async()=>{
+  await post('/api/estoque/movimentar',{sistema:'spacecom',contrato:'CE01',unidade:'UMEPE Juazeiro',material:'CINTA',qtd:10,tipo:'entrada',motivo:'teste setup'});
+  const before=await get('/api/estoque?contrato=CE01&sistema=spacecom');
+  const find=(u)=>before.body.find(e=>e.material==='CINTA'&&e.unidade===u);
+  console.log('ANTES origem UMEPE:', find('UMEPE Juazeiro')?.saldo, 'destino UP-Cariri:', find('UP-Cariri')?.saldo);
+  const r=await post('/api/estoque/transferir',{sistema:'spacecom',contrato:'CE01',material:'CINTA',qtd:3,motivo:'transfer test',unidadeOrigem:'UMEPE Juazeiro',unidadeDestino:'UP-Cariri'});
+  console.log('transfer response:', r.status, JSON.stringify(r.body).slice(0,200));
+  const after=await get('/api/estoque?contrato=CE01&sistema=spacecom');
+  console.log('DEPOIS origem UMEPE:', after.body.find(e=>e.material==='CINTA'&&e.unidade==='UMEPE Juazeiro')?.saldo, 'destino UP-Cariri:', after.body.find(e=>e.material==='CINTA'&&e.unidade==='UP-Cariri')?.saldo);
+  server.close(); process.exit(0);
+})().catch(e=>{console.error(e);server.close();process.exit(1);});
