@@ -10729,17 +10729,17 @@ function renderFluxoTab(){
       (a.pendenteJuntada ? ' <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendente juntada</span>' : '') +
       '</div>' +
       '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
-        '<div class="truncate"><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
-        '<div class="truncate"><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
-        '<div class="truncate"><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
-        '<div class="truncate"><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
-        '<div class="col-span-2 truncate"><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
+        '<div class="truncate min-w-0"><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
+        '<div class="truncate min-w-0"><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
+        '<div class="truncate min-w-0"><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
+        '<div class="truncate min-w-0"><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
+        '<div class="col-span-2 truncate min-w-0"><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' (pendente)' : '') + '</div>' +
         (a.policialPlantao ? '<div><span class="font-semibold">Policial:</span> ' + esc(a.policialPlantao) + '</div>' : '') +
         (a.dataProtocolacao ? '<div><span class="font-semibold">Protocolado em:</span> ' + esc(fmtDataBR(a.dataProtocolacao)) + (a.protocoladoPor ? ' (por: ' + esc(a.protocoladoPor) + ')' : '') + '</div>' : '') +
         (a.compId ? '<div><span class="font-semibold">Juntada:</span> ' + esc(a.juntada ? a.juntada.slice(0,24) : 'pendente') + '</div>' : '') +
       '</div>' +
     '</div>' +
-    '<div class="flex gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
+    '<div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100" onclick="event.stopPropagation()">' +
       (a.compId && !String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); registrarJuntada(' + a.compId + ')">+ Juntada</button>' : '') +
       (a.compId && String(a.juntada||'').trim() ? '<button type="button" class="text-[10px] font-bold text-indigo-600 hover:underline" onclick="event.stopPropagation(); abrirEditarJuntada(' + a.compId + ')">Editar juntada</button>' : '') +
       (!a.ultimoComparecimento ? '<button type="button" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')">+ Comparecimento</button>' : '') +
@@ -11231,16 +11231,16 @@ function renderAssistidos(){
       '</div>' +
     '</div>' +
     '<div class="grid grid-cols-2 gap-1 text-[10px] text-slate-600 mb-3">' +
-      '<div class="truncate"><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
-      '<div class="truncate"><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
-      '<div class="truncate"><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
-      '<div class="truncate"><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
-      '<div class="col-span-2 truncate"><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' <span class="text-rose-600 font-bold">(pendente juntada)</span>' : '') + '</div>' +
+      '<div class="truncate min-w-0"><span class="font-semibold">Processo:</span> ' + esc(a.processo) + '</div>' +
+      '<div class="truncate min-w-0"><span class="font-semibold">Vara:</span> ' + esc(a.vara) + '</div>' +
+      '<div class="truncate min-w-0"><span class="font-semibold">Local:</span> ' + esc(a.localAssinatura) + '</div>' +
+      '<div class="truncate min-w-0"><span class="font-semibold">Início:</span> ' + esc(fmtDataBR(a.dataInicio)) + '</div>' +
+      '<div class="col-span-2 truncate min-w-0"><span class="font-semibold">Últ. comp.:</span> ' + esc(a.ultimoComparecimento ? fmtDataBR(a.ultimoComparecimento) : 'Nunca') + (a.pendenteJuntada ? ' <span class="text-rose-600 font-bold">(pendente juntada)</span>' : '') + '</div>' +
       (a.vencendo ? '<div class="col-span-2 p-1.5 rounded bg-rose-50 border border-rose-200"><span class="text-[9px] font-bold text-rose-700">⚠ Comparecimento vencido</span></div>' : '') +
       (a.vencendo7d && !a.vencendo ? '<div class="col-span-2 p-1.5 rounded bg-amber-50 border border-amber-200"><span class="text-[9px] font-bold text-amber-700">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span></div>' : '') +
     '</div>' +
     '<div class="flex gap-2 pt-2 border-t border-slate-100">' +
-      (!a.ultimoComparecimento ? '<button type="button" class="flex-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')"><span>+</span> Comparecimento</button>' : '') +
+      (!a.ultimoComparecimento ? '<button type="button" class="flex-1 min-w-[110px] text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')"><span>+</span> Comparecimento</button>' : '') +
       '<button type="button" class="flex-1 min-w-[90px] text-[10px] font-bold text-indigo-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')"><span class="opacity-70">📋</span> Histórico</button>' +
       '<button type="button" class="flex-1 min-w-[90px] text-[10px] font-bold text-slate-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')"><span class="opacity-70">✏️</span> Editar</button>' +
       (a.etiqueta === 'verificado' ? '<button type="button" class="flex-1 min-w-[90px] text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'\')"><span class="opacity-70">✅</span> Verificado</button>' : '<button type="button" class="flex-1 min-w-[90px] text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'verificado\')"><span class="opacity-70">✅</span> Verificado</button>') +
