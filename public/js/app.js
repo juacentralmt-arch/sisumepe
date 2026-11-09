@@ -10715,6 +10715,9 @@ function renderFluxoTab(){
   const map = { compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const ff = fluxoFiltrado();
   const list = ff[map[fluxoTab]] || [];
+  if(fluxoTab === 'compareceu'){
+    toast('[fluxo] compareceu bruto=' + (fluxoData.compareceu||[]).length + ' filtrado=' + ff.compareceu.length + ' list=' + list.length);
+  }
   console.log('[fluxo] tab=', fluxoTab, 'fluxoData counts=', { aguardando: (fluxoData.aguardando||[]).length, compareceu: (fluxoData.compareceu||[]).length, protocolado: (fluxoData.protocolado||[]).length, concluido: (fluxoData.concluido||[]).length }, 'filtered=', { compareceu: ff.compareceu.length, protocolado: ff.protocolado.length, concluido: ff.concluido.length }, 'list=', list.length);
   window._juntadaTextos = window._juntadaTextos || {};
   list.forEach(a => { if (a.compId) window._juntadaTextos[a.compId] = a.juntada || ''; });
