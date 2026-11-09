@@ -490,7 +490,7 @@ const ASS = {
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
   situacaoJuridica: 'situacao_juridica', tipoMedida: 'tipo_medida', cargaHoraria: 'carga_horaria',
   etiqueta: 'etiqueta',
-  frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
+  frequencia: 'frequencia', status: 'status', deleted_at: 'deleted_at', createdAt: 'createdat'
 };
 const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
@@ -2242,8 +2242,7 @@ store.assistidos = {
       }
       return out.filter(x => !x.deleted_at);
     } catch (e) {
-      console.warn('assistidos.all fallback', e.message);
-      return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
+      throw e;
     }
   },
   async allIncludingDeleted() {
@@ -2260,8 +2259,7 @@ store.assistidos = {
       }
       return out;
     } catch (e) {
-      console.warn('assistidos.allIncludingDeleted fallback', e.message);
-      return [...(mem.assistidos || [])];
+      throw e;
     }
   },
   async byId(id) {
@@ -2274,10 +2272,7 @@ store.assistidos = {
       if (!r.length) return null;
       const row = appASS(r[0]);
       return row.deleted_at ? null : row;
-    } catch (e) {
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      return r && r.deleted_at ? null : r || null;
-    }
+    } catch (e) { throw e; }
   },
   async insert(r) {
     if (MODE === 'file') {
@@ -2288,9 +2283,7 @@ store.assistidos = {
       const rr = must(await supa.from('assistidos').insert(toRow(r, ASS)).select().single(), 'assistidos.insert');
       return appASS(rr);
     } catch (e) {
-      console.warn('assistidos.insert fallback', e.message);
-      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), deleted_at: null };
-      mem.assistidos.push(row); saveFile(); return row;
+      throw e;
     }
   },
   async bulkInsert(rows) {
@@ -2303,8 +2296,7 @@ store.assistidos = {
           const rr = must(await supa.from('assistidos').insert(chunk.map(x => toRow(x, ASS))).select(), 'assistidos.bulkInsert');
           out.push(...rr.map(appASS));
         } catch (e) {
-          console.warn('assistidos.bulkInsert fallback', e.message);
-          for (const r of chunk) out.push(await this.insert(r));
+          throw e;
         }
       }
       return out;
@@ -2323,10 +2315,7 @@ store.assistidos = {
       const rr = must(await supa.from('assistidos').update(toRow(fields, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) {
-      console.warn('assistidos.patch fallback', e.message);
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      if (!r || r.deleted_at) return null;
-      Object.assign(r, fields); return r;
+      throw e;
     }
   },
   async remove(id) {
@@ -2339,10 +2328,7 @@ store.assistidos = {
     }
     try {
       must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
-    } catch (e) {
-      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      if (r) { r.deleted_at = new Date().toISOString(); }
-    }
+    } catch (e) { throw e; }
   }
 };
 
@@ -2355,13 +2341,20 @@ store.assistidosComparecimentos = {
       return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
     }
     try {
-      let q = supa.from('assistidos_comparecimentos').select('*').order('id');
-      if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
-      const r = must(await q, 'assistidosComparecimentos.all');
-      return r.map(appACC);
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        let q = supa.from('assistidos_comparecimentos').select('*').order('id').range(from, from + pageSize - 1);
+        if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
+        const r = must(await q, 'assistidosComparecimentos.all');
+        out.push(...r.map(appACC));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
     } catch (e) {
-      const list = mem.assistidosComparecimentos || [];
-      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
+      throw e;
     }
   },
   async byId(id) {
@@ -2369,7 +2362,7 @@ store.assistidosComparecimentos = {
     try {
       const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
       return r.length ? appACC(r[0]) : null;
-    } catch (e) { return (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id)) || null; }
+    } catch (e) { throw e; }
   },
   async insert(r) {
     if (MODE === 'file') {
@@ -2379,10 +2372,7 @@ store.assistidosComparecimentos = {
     try {
       const rr = must(await supa.from('assistidos_comparecimentos').insert(toRow(r, ACC)).select().single(), 'assistidosComparecimentos.insert');
       return appACC(rr);
-    } catch (e) {
-      const row = { id: mem.seqAssistidoComp++, ...r, protocolado: false, createdAt: new Date().toISOString() };
-      mem.assistidosComparecimentos.push(row); saveFile(); return row;
-    }
+    } catch (e) { throw e; }
   },
   async patch(id, fields) {
     if (MODE === 'file') {
@@ -2393,15 +2383,11 @@ store.assistidosComparecimentos = {
     try {
       const rr = must(await supa.from('assistidos_comparecimentos').update(toRow(fields, ACC)).eq('id', Number(id)).select(), 'assistidosComparecimentos.patch');
       return rr.length ? appACC(rr[0]) : null;
-    } catch (e) {
-      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
-      if (!r) return null;
-      Object.assign(r, fields); return r;
-    }
+    } catch (e) { throw e; }
   },
   async remove(id) {
     if (MODE === 'file') { mem.assistidosComparecimentos = (mem.assistidosComparecimentos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
-    try { must(await supa.from('assistidos_comparecimentos').delete().eq('id', Number(id)), 'assistidosComparecimentos.remove'); } catch (e) { mem.assistidosComparecimentos = (mem.assistidosComparecimentos || []).filter(x => !eqi(x.id, id)); }
+    must(await supa.from('assistidos_comparecimentos').delete().eq('id', Number(id)), 'assistidosComparecimentos.remove');
   },
   async pendencias() {
     const list = await this.all();
