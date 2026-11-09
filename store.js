@@ -486,7 +486,9 @@ const PSI = {
 };
 const ASS = {
   id: 'id', vinculo: 'vinculo', nome: 'nome', processo: 'processo', vara: 'vara',
-  localAssinatura: 'local_assinatura', dataInicio: 'data_inicio',
+  localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', dataFim: 'data_fim',
+  cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
+  situacaoJuridica: 'situacao_juridica', tipoMedida: 'tipo_medida', cargaHoraria: 'carga_horaria',
   frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
 };
 const ACC = {
@@ -2232,12 +2234,12 @@ store.assistidos = {
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const r = must(await supa.from('assistidos').select('*').is('deleted_at', null).order('id').range(from, from + pageSize - 1), 'assistidos.all');
+        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.all');
         out.push(...r.map(appASS));
         if (r.length < pageSize) break;
         from += pageSize;
       }
-      return out;
+      return out.filter(x => !x.deleted_at);
     } catch (e) {
       console.warn('assistidos.all fallback', e.message);
       return [...(mem.assistidos || [])].filter(x => !x.deleted_at);

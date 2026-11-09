@@ -48,6 +48,14 @@ router.get('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req
   res.json(row);
 }));
 
+// Validação de número CNJ (número único nacional do processo judicial brasileiro)
+function validarCNJ(cnpjStr) {
+  const cnpj = String(cnpjStr || '').replace(/[.\-/]/g, '');
+  if (!/^\d{20}$/.test(cnpj)) return false;
+  // Validação básica: número CNJ tem 20 dígitos
+  return true;
+}
+
 router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.nome || !String(b.nome).trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -57,16 +65,25 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!LOCAIS_ASSINATURA.includes(String(b.localAssinatura || '').trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
+  if (b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
   const freq = PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim()) ? String(b.frequencia).trim() : 'mensal';
   const all = await store.assistidos.all();
   if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
     vinculo: String(b.vinculo).trim(),
     nome: String(b.nome).trim(),
+    cpf: String(b.cpf || '').trim(),
+    telefone: String(b.telefone || '').trim(),
+    endereco: String(b.endereco || '').trim(),
     processo: String(b.processo).trim(),
     vara: String(b.vara).trim(),
+    situacaoJuridica: String(b.situacaoJuridica || '').trim(),
+    tipoMedida: String(b.tipoMedida || '').trim(),
     localAssinatura: String(b.localAssinatura).trim(),
     dataInicio: String(b.dataInicio).trim(),
+    dataFim: String(b.dataFim || '').trim(),
+    cargaHoraria: String(b.cargaHoraria || '').trim(),
     frequencia: freq,
     status: 'ativo'
   });
@@ -86,11 +103,13 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
     if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
   }
   const fields = {};
-  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio']) if (b[k] !== undefined) fields[k] = b[k];
+  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim']) if (b[k] !== undefined) fields[k] = b[k];
   if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
 
   if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
+  if (b.cpf !== undefined && b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
   // Validação: vínculo não pode ser duplicado em outro assistido
   if (fields.vinculo !== undefined && String(fields.vinculo).trim()) {
     const todos = await store.assistidos.allIncludingDeleted();
@@ -773,5 +792,99 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
     detalhes
   });
 }));
+
+// =====================================================================
+//  Alertas automáticos — calcula dias desde última juntada
+//  Semáforo: EM DIA (0-30 dias) / ATENÇÃO (31-60 dias) / CRÍTICO (>60 dias)
+// =====================================================================
+router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, res) => {
+  const assistidos = await store.assistidos.all();
+  const comps = await store.assistidosComparecimentos.all();
+  const hoje = new Date().toISOString().slice(0,10);
+  const hojeDate = new Date(hoje);
+  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
+
+  // Último comparecimento por assistido
+  const ultimoPorAssistido = {};
+  comps.forEach(c => {
+    const aid = String(c.assistidoId);
+    if (!ultimoPorAssistido[aid] || String(c.dataComparecimento) > String(ultimoPorAssistido[aid].dataComparecimento)) {
+      ultimoPorAssistido[aid] = c;
+    }
+  });
+
+  const alertas = [];
+  for (const a of assistidos) {
+    if (a.status !== 'ativo') continue;
+    const last = ultimoPorAssistido[String(a.id)];
+    if (!last) continue; // sem comparecimento registrado
+
+    const ultimaData = new Date(last.dataComparecimento);
+    const diasDiff = Math.floor((hojeDate - ultimaDate) / (1000 * 60 * 60 * 24));
+    const freqDias = FREQ_DAYS[a.frequencia] || 30;
+    const diasAteProximo = freqDias - diasDiff;
+
+    let tipo = 'EM_DIA';
+    if (diasDiff > 60) tipo = 'CRITICO';
+    else if (diasDiff > 30) tipo = 'ATENCAO';
+
+    // Só alerta se já passou do prazo ou está prestes a vencer (7 dias)
+    if (diasDiff > freqDias || diasAteProximo <= 7) {
+      alertas.push({
+        assistidoId: a.id,
+        nome: a.nome,
+        vinculo: a.vinculo,
+        tipo,
+        diasUltimaJuntada: diasDiff,
+        diasAteProximo: diasAteProximo > 0 ? diasAteProximo : 0,
+        frequencia: a.frequencia,
+        ultimaJuntada: last.dataComparecimento,
+        ultimoComparecimento: last.dataComparecimento,
+        local: a.localAssinatura,
+        vara: a.vara
+      });
+    }
+  }
+
+  alertas.sort((a, b) => {
+    const ordem = { CRITICO: 0, ATENCAO: 1, EM_DIA: 2 };
+    return (ordem[a.tipo] || 99) - (ordem[b.tipo] || 99);
+  });
+
+  res.json(alertas);
+}));
+
+// =====================================================================
+//  Busca fuzzy por nome — detecta duplicidades e nomes similares
+// =====================================================================
+router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, res) => {
+  const { q } = req.query || {};
+  if (!q || String(q).trim().length < 3) {
+    return res.status(400).json({ error: 'Informe pelo menos 3 caracteres para busca' });
+  }
+
+  const qLower = String(q).trim().toLowerCase();
+  const assistidos = await store.assistidos.all();
+
+  // Busca exata primeiro
+  const exatos = assistidos.filter(a => String(a.nome || '').toLowerCase().includes(qLower));
+
+  // Busca fuzzy: detecta nomes similares (mesmas palavras em ordem diferente)
+  const palavrasQ = qLower.split(/\s+/).filter(Boolean);
+  const fuzzy = assistidos.filter(a => {
+    const nome = String(a.nome || '').toLowerCase();
+    const palavrasNome = nome.split(/\s+/).filter(Boolean);
+    // Se todas as palavras da busca aparecem no nome
+    return palavrasQ.every(p => palavrasNome.some(pn => pn.includes(p) || pn.startsWith(p)));
+  }).filter(a => !exitos.includes(a)); // remove duplicatas com exatos
+
+  res.json({
+    exatos,
+    fuzzy,
+    total: exatos.length + fuzzy.length
+  });
+}));
+
+module.exports = router;
 
 module.exports = router;
