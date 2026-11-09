@@ -106,7 +106,8 @@ async function doLogin(){
   if(!setBtnLoading(btn, true, 'Entrando...')) return;
   try{
     const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
-    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword, token: s.token };
+    // A sessão fica no cookie httpOnly; o token não é persistido no navegador.
+    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword };
     role = s.role;
     localStorage.setItem('te_session', JSON.stringify(session));
     document.getElementById('loginPass').value = '';
@@ -367,6 +368,11 @@ function go(tab){
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Valida CNJ: 20 dígitos numéricos, pontuação opcional
+function validarCNJ(valor){
+  const cnj = String(valor || '').replace(/[.\-\/]/g, '');
+  return /^\d{20}$/.test(cnj);
+}
 function initials(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 
 function authHeaders(h){
@@ -6914,7 +6920,7 @@ async function saveAccount(){
   const err = document.getElementById('accErr');
   try{
     const r = await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
-    if (session) { session.mustChangePassword = false; if (r && r.token) session.token = r.token; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
+    if (session) { session.mustChangePassword = false; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
     closeAccount(); toast('Senha atualizada!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
@@ -11274,10 +11280,6 @@ async function salvarAssistido(){
     telefone: document.getElementById('asTelefone').value.trim(),
     endereco: document.getElementById('asEndereco').value.trim(),
     situacaoJuridica: document.getElementById('asSituacaoJuridica').value.trim(),
-    tipoMedida: document.getElementById('asTipoMedida').value.trim(),
-    cargaHoraria: document.getElementById('asCargaHoraria').value.trim(),
-    dataFim: document.getElementById('asDataFim').value,
-    etiqueta: document.getElementById('asEtiqueta') ? document.getElementById('asEtiqueta').value : '',
     etiquetaTexto: document.getElementById('asEtiquetaTexto') ? document.getElementById('asEtiquetaTexto').value : '',
     etiquetaCor: document.getElementById('asEtiquetaCor') ? document.getElementById('asEtiquetaCor').value : '#4f46e5',
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
@@ -11291,7 +11293,7 @@ async function salvarAssistido(){
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
-    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asCpf','asTelefone','asEndereco','asSituacaoJuridica','asTipoMedida','asCargaHoraria','asDataFim','asEtiqueta','asEtiquetaTexto'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asCpf','asTelefone','asEndereco','asSituacaoJuridica','asEtiquetaTexto'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
     const cor = document.getElementById('asEtiquetaCor'); if(cor) cor.value = '#4f46e5';
   }catch(e){ toast('Erro: ' + e.message); }
 }
@@ -11337,9 +11339,6 @@ function abrirEditarAssistido(id){
   document.getElementById('editAsTelefone').value = a.telefone || '';
   document.getElementById('editAsEndereco').value = a.endereco || '';
   document.getElementById('editAsSituacaoJuridica').value = a.situacaoJuridica || '';
-  document.getElementById('editAsTipoMedida').value = a.tipoMedida || '';
-  document.getElementById('editAsCargaHoraria').value = a.cargaHoraria || '';
-  document.getElementById('editAsDataFim').value = a.dataFim || '';
   document.getElementById('editAsFrequencia').value = a.frequencia || 'mensal';
   document.getElementById('editAsStatus').value = a.status || 'ativo';
   document.getElementById('editAsEtiqueta').value = a.etiqueta || '';
@@ -11361,9 +11360,6 @@ async function salvarEdicaoAssistido(){
     telefone: document.getElementById('editAsTelefone').value.trim(),
     endereco: document.getElementById('editAsEndereco').value.trim(),
     situacaoJuridica: document.getElementById('editAsSituacaoJuridica').value.trim(),
-    tipoMedida: document.getElementById('editAsTipoMedida').value.trim(),
-    cargaHoraria: document.getElementById('editAsCargaHoraria').value.trim(),
-    dataFim: document.getElementById('editAsDataFim').value,
     etiqueta: document.getElementById('editAsEtiqueta') ? document.getElementById('editAsEtiqueta').value : '',
     etiquetaTexto: document.getElementById('editAsEtiquetaTexto') ? document.getElementById('editAsEtiquetaTexto').value : '',
     etiquetaCor: document.getElementById('editAsEtiquetaCor') ? document.getElementById('editAsEtiquetaCor').value : '#4f46e5',

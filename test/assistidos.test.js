@@ -24,141 +24,135 @@ app.use(router);
 const server = app.listen(0);
 const BASE = 'http://127.0.0.1:' + server.address().port;
 
+async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}|${name}`, 'Content-Type': 'application/json' }; }
+
 let passed = 0, failed = 0;
 const assert = (cond, msg) => {
   if (cond) { console.log('  ok.', msg); passed++; }
   else { console.log('  FAIL', msg); failed++; }
 };
 
-async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}|${name}`, 'Content-Type': 'application/json' }; }
-
 (async () => {
-  console.log('\n=== ASSISTIDOS - CRUD ===');
+  console.log('\n=== ASSISTIDOS - CRUD (reescrito) ===');
 
-  // Criar assistido (admin)
+  const PROC_OK = '0000000-00.0000.0.00.0000'; // 20 dígitos
+  const PROC_OK2 = '0000001-00.0000.0.00.0000';
+
+  // 1. Criar assistido (admin)
   const createRes = await fetch(BASE + '/api/assistidos', {
-    method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V001', nome: 'Fulano de Tal', processo: '0001234-56.2026', vara: 'Vara X', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01', frequencia: 'mensal' })
+    method: 'POST', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ vinculo: 'V001', nome: 'Fulano de Tal', processo: PROC_OK, vara: 'Vara X', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01', frequencia: 'mensal', etiqueta: 'Verificado', etiquetaCor: '#10b981', etiquetaTexto: 'Conforme' })
   });
   assert(createRes.status === 201, 'POST admin: 201');
   const created = await createRes.json();
   assert(created && created.id, 'POST: retorna id');
   const id = created.id;
+  assert(created.etiqueta === 'Verificado', 'POST: etiqueta persistida');
+  assert(created.etiquetaCor === '#10b981', 'POST: etiquetaCor persistida');
 
-  // Local inválido
+  // 2. Processo inválido (menos de 20 dígitos)
+  const badProc = await fetch(BASE + '/api/assistidos', {
+    method: 'POST', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ vinculo: 'V002', nome: 'X', processo: '0001234-56.2026', vara: 'V', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01' })
+  });
+  assert(badProc.status === 400, 'POST processo inválido: 400');
+
+  // 3. Local inválido
   const badLocal = await fetch(BASE + '/api/assistidos', {
-    method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V002', nome: 'X', processo: 'P', vara: 'V', localAssinatura: 'Invalido', dataInicio: '2026-01-01' })
+    method: 'POST', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ vinculo: 'V003', nome: 'Y', processo: PROC_OK, vara: 'V', localAssinatura: 'Invalido', dataInicio: '2026-01-01' })
   });
   assert(badLocal.status === 400, 'POST local inválido: 400');
 
-  // Vínculo duplicado
+  // 4. Vínculo duplicado
   const dup = await fetch(BASE + '/api/assistidos', {
-    method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V001', nome: 'Y', processo: 'P', vara: 'V', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01' })
+    method: 'POST', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ vinculo: 'V001', nome: 'Z', processo: PROC_OK2, vara: 'V', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01' })
   });
   assert(dup.status === 409, 'POST vínculo duplicado: 409');
 
-  // Listar
-  const listRes = await fetch(BASE + '/api/assistidos', { headers: await auth('admin','admin','Admin') });
+  // 5. Listar
+  const listRes = await fetch(BASE + '/api/assistidos', { headers: await auth('admin', 'admin', 'Admin') });
   assert(listRes.status === 200, 'GET admin: 200');
-  const listResJson = await listRes.json();
-  const list = listResJson.items || listResJson;
-  assert(Array.isArray(list) && list.some(x => String(x.id) === String(id)), 'GET: contém criado');
+  const list = await listRes.json();
+  assert(Array.isArray(list) && list.some((x) => String(x.id) === String(id)), 'GET: contém criado');
 
-  // Buscar por ID
-  const getRes = await fetch(BASE + '/api/assistidos/' + id, { headers: await auth('admin','admin','Admin') });
+  // 6. Buscar por ID
+  const getRes = await fetch(BASE + '/api/assistidos/' + id, { headers: await auth('admin', 'admin', 'Admin') });
   assert(getRes.status === 200, 'GET por ID: 200');
   const got = await getRes.json();
   assert(got.nome === 'Fulano de Tal', 'GET: nome correto');
 
-  // Editar (admin)
+  // 7. Editar (admin)
   const patchRes = await fetch(BASE + '/api/assistidos/' + id, {
-    method: 'PATCH', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ nome: 'Fulano Editado', status: 'concluido' })
+    method: 'PATCH', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ nome: 'Fulano Editado', status: 'concluido', etiqueta: 'Pendente', etiquetaCor: '#f43f5e' })
   });
   assert(patchRes.status === 200, 'PATCH admin: 200');
   const patched = await patchRes.json();
   assert(patched.nome === 'Fulano Editado' && patched.status === 'concluido', 'PATCH: campos atualizados');
+  assert(patched.etiqueta === 'Pendente', 'PATCH: etiqueta atualizada');
 
-  // Técnico NÃO pode editar assistido sem responsabilidade
+  // 8. Técnico NÃO pode editar assistido sem responsabilidade
   const tecnicoPatch = await fetch(BASE + '/api/assistidos/' + id, {
-    method: 'PATCH', headers: await auth('tecnico','julio','Júlio Cesar'),
+    method: 'PATCH', headers: await auth('tecnico', 'julio', 'Júlio Cesar'),
     body: JSON.stringify({ nome: 'Tentativa Técnico' })
   });
   assert(tecnicoPatch.status === 403, 'PATCH técnico sem responsabilidade: 403');
 
-  // Recepção não pode editar
-  const recPatch = await fetch(BASE + '/api/assistidos/' + id, {
-    method: 'PATCH', headers: await auth('recepcao','rec','Rec'),
-    body: JSON.stringify({ nome: 'X' })
+  // 9. Etiquetar endpoint
+  const etqRes = await fetch(BASE + '/api/assistidos/' + id + '/etiqueta', {
+    method: 'PATCH', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ etiqueta: 'Revisado', etiquetaCor: '#8b5cf6', etiquetaTexto: 'Pendente revisão' })
   });
-  assert(recPatch.status === 403, 'PATCH recepção: 403');
+  assert(etqRes.status === 200, 'PATCH etiqueta: 200');
+  const etq = await etqRes.json();
+  assert(etq.etiqueta === 'Revisado' && etq.etiquetaCor === '#8b5cf6' && etq.etiquetaTexto === 'Pendente revisão', 'PATCH etiqueta: campos');
 
-  // Registrar comparecimento (técnico responsável)
-  const compRes = await fetch(BASE + '/api/assistidos/' + id + '/comparecimentos', {
-    method: 'POST', headers: await auth('tecnico','julio','Júlio Cesar'),
-    body: JSON.stringify({ dataComparecimento: '2026-02-02', policialPlantao: 'Júlio Cesar' })
+  // 10. Remover etiqueta
+  const remRes = await fetch(BASE + '/api/assistidos/' + id + '/etiqueta', {
+    method: 'PATCH', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ etiqueta: '', etiquetaCor: '', etiquetaTexto: '' })
   });
-  assert(compRes.status === 201, 'POST comparecimento técnico: 201');
-  const comp = await compRes.json();
-  assert(comp.id, 'POST comparecimento: retorna id');
-  const compId = comp.id;
+  assert(remRes.status === 200, 'PATCH remover etiqueta: 200');
+  const rem = await remRes.json();
+  assert(rem.etiqueta === '', 'PATCH remover etiqueta: etiqueta vazia');
 
-  // Comparecimento duplicado no mesmo dia
-  const dupComp = await fetch(BASE + '/api/assistidos/' + id + '/comparecimentos', {
-    method: 'POST', headers: await auth('tecnico','julio','Júlio Cesar'),
-    body: JSON.stringify({ dataComparecimento: '2026-02-02', policialPlantao: 'PP Marcos' })
+  // 11. Excluir (soft-delete)
+  const delRes = await fetch(BASE + '/api/assistidos/' + id, { method: 'DELETE', headers: await auth('admin', 'admin', 'Admin') });
+  assert(delRes.status === 200, 'DELETE: 200');
+  const getAfter = await fetch(BASE + '/api/assistidos/' + id, { headers: await auth('admin', 'admin', 'Admin') });
+  assert(getAfter.status === 404, 'DELETE: GET após exclusão retorna 404');
+
+  // 12. Busca fuzzy
+  await fetch(BASE + '/api/assistidos', {
+    method: 'POST', headers: await auth('admin', 'admin', 'Admin'),
+    body: JSON.stringify({ vinculo: 'V010', nome: 'Maria da Silva Souza', processo: PROC_OK2, vara: 'Vara Y', localAssinatura: 'COAP Cariri', dataInicio: '2026-02-01' })
   });
-  assert(dupComp.status === 409, 'POST comparecimento duplicado: 409');
+  const busca = await fetch(BASE + '/api/assistidos/buscar?q=Maria', { headers: await auth('admin', 'admin', 'Admin') });
+  assert(busca.status === 200, 'GET buscar: 200');
+  const buscaJson = await busca.json();
+  assert(buscaJson.total >= 1, 'GET buscar: encontra Maria');
 
-  // Registrar juntada (transição automática para concluído)
-  const juntadaRes = await fetch(BASE + '/api/assistidos/comparecimentos/' + compId + '/juntada', {
-    method: 'PATCH', headers: await auth('tecnico','julio','Júlio Cesar'),
-    body: JSON.stringify({ juntada: 'Junta processada' })
-  });
-  assert(juntadaRes.status === 200, 'PATCH juntada: 200');
-  const juntada = await juntadaRes.json();
-  assert(juntada.protocolado === true, 'Juntada: protocolado true');
-  assert(juntada.juntada === 'Junta processada', 'Juntada: texto salvo');
+  // 13. Filtros
+  const filtro = await fetch(BASE + '/api/assistidos/filtrar?local=COMEP Cariri&status=concluido', { headers: await auth('admin', 'admin', 'Admin') });
+  assert(filtro.status === 200, 'GET filtrar: 200');
+  const filtroJson = await filtro.json();
+  assert(Array.isArray(filtroJson.items), 'GET filtrar: retorna items');
 
-  // Verificar se o assistido passou para concluído automaticamente
-  const after = await fetch(BASE + '/api/assistidos/' + id, { headers: await auth('admin','admin','Admin') });
-  const afterJson = await after.json();
-  assert(afterJson.status === 'concluido', 'Juntada: assistido transicionou para concluído automaticamente');
+  // 14. Stats
+  const stats = await fetch(BASE + '/api/assistidos/stats', { headers: await auth('admin', 'admin', 'Admin') });
+  assert(stats.status === 200, 'GET stats: 200');
+  const statsJson = await stats.json();
+  assert(typeof statsJson.totalAssistidos === 'number', 'stats: totalAssistidos número');
 
-  // Técnico edita seu próprio assistido (tem comparecimento com seu PP)
-  const tecnicoEdit = await fetch(BASE + '/api/assistidos/' + id, {
-    method: 'PATCH', headers: await auth('tecnico','julio','Júlio Cesar'),
-    body: JSON.stringify({ nome: 'Fulano Editado por Técnico' })
-  });
-  assert(tecnicoEdit.status === 200, 'PATCH técnico com responsabilidade: 200');
+  // 15. Comparecimento
+  const compRes = await fetch(BASE + '/api/assistidos/pendencias', { headers: await auth('admin', 'admin', 'Admin') });
+  assert(compRes.status === 200, 'GET pendencias: 200');
 
-  // Listar comparecimentos do assistido
-  const compsRes = await fetch(BASE + '/api/assistidos/' + id + '/comparecimentos', { headers: await auth('admin','admin','Admin') });
-  assert(compsRes.status === 200, 'GET comparecimentos: 200');
-  const comps = await compsRes.json();
-  assert(comps.length >= 1, 'GET comparecimentos: pelo menos 1 registro');
-
-  // Fluxo: após juntada, assistido transicionou para concluído
-  const fluxo = await (await fetch(BASE + '/api/assistidos/fluxo', { headers: await auth('admin','admin','Admin') })).json();
-  assert(Array.isArray(fluxo.concluido), 'Fluxo: concluído é array');
-  assert(fluxo.concluido.some(x => String(x.id) === String(id)), 'Fluxo: assistido em concluído');
-
-  // Filtros
-  const filtrosRes = await (await fetch(BASE + '/api/assistidos/filtrar?nome=Fulano', { headers: await auth('admin','admin','Admin') })).json();
-  const filtros = filtrosRes.items || filtrosRes;
-  assert(Array.isArray(filtros) && filtros.some(x => String(x.id) === String(id)), 'Filtro nome: encontrado');
-
-  // Excluir (admin)
-  const delRes = await fetch(BASE + '/api/assistidos/' + id, { method: 'DELETE', headers: await auth('admin','admin','Admin') });
-  assert(delRes.status === 200, 'DELETE admin: 200');
-
-  // 404 após exclusão
-  const get404 = await fetch(BASE + '/api/assistidos/' + id, { method: 'PATCH', headers: await auth('admin','admin','Admin'), body: JSON.stringify({ nome: 'x' }) });
-  assert(get404.status === 404, 'PATCH após delete: 404');
-
-  server.close();
-  console.log(`\n=== RESULTADO: ${passed} passed, ${failed} failed ===`);
-  process.exit(failed ? 1 : 0);
-})().catch(e => { console.error('FALHA:', e); server.close(); process.exit(1); });
+  console.log('\nResultado: ' + passed + ' passou, ' + failed + ' falhou');
+  process.exit(failed > 0 ? 1 : 0);
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

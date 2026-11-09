@@ -83,8 +83,12 @@ create table if not exists audit (
   byrole text default '',
   changes jsonb default '[]'::jsonb,
   summary text default '',
+  prevhash text default null,
+  hash text default null,
   at timestamptz default now()
 );
+alter table audit add column if not exists prevhash text;
+alter table audit add column if not exists hash text;
 
 create table if not exists users (
   "user" text primary key,
@@ -109,9 +113,11 @@ create table if not exists sessions (
   role text,
   name text,
   sistema text,
+  mustchangepassword boolean default false,
   exp timestamptz
 );
 alter table sessions add column if not exists sistema text;
+alter table sessions add column if not exists mustchangepassword boolean default false;
 
 -- Agenda do técnico (com Google Calendar opcional)
 create table if not exists agenda (
@@ -255,21 +261,17 @@ do $$ begin
 end $$;
 
 -- =====================================================================
---  STORAGE (anexos/fotos) — bucket público
+--  STORAGE (anexos/fotos) — bucket privado
+--  O navegador baixa via proxy autenticado /api/files; a service role
+--  do servidor acessa o bucket diretamente.
 -- =====================================================================
 insert into storage.buckets (id, name, public)
-values ('anexos', 'anexos', true)
+values ('anexos', 'anexos', false)
 on conflict (id) do nothing;
+update storage.buckets set public = false where id = 'anexos';
 
 drop policy if exists "leitura publica anexos" on storage.objects;
-create policy "leitura publica anexos"
-  on storage.objects for select
-  using (bucket_id = 'anexos');
-
 drop policy if exists "upload anexos" on storage.objects;
-create policy "upload anexos"
-  on storage.objects for insert
-  with check (bucket_id = 'anexos');
 
 -- =====================================================================
 --  Módulo Assistidos
@@ -284,15 +286,24 @@ create table if not exists assistidos (
   processo text default '',
   vara text default '',
   situacao_juridica text default '',
-  tipo_medida text default '',
   local_assinatura text default '',
   data_inicio text default '',
   data_fim text default '',
-  carga_horaria text default '',
+  frequencia text default 'mensal',
+  etiqueta text default '',
+  etiqueta_texto text default '',
+  etiqueta_cor text default '#4f46e5',
   status text default 'ativo',
   deleted_at timestamptz default null,
-  createdat timestamptz default now()
+  createdat timestamptz default now(),
+  updatedat timestamptz default now()
 );
+alter table assistidos add column if not exists frequencia text default 'mensal';
+alter table assistidos add column if not exists etiqueta text default '';
+alter table assistidos add column if not exists etiqueta_texto text default '';
+alter table assistidos add column if not exists etiqueta_cor text default '#4f46e5';
+alter table assistidos add column if not exists deleted_at timestamptz default null;
+alter table assistidos add column if not exists updatedat timestamptz default now();
 
 create table if not exists assistidos_alertas (
   id serial primary key,

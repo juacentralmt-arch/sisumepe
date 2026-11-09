@@ -11,7 +11,7 @@ const { diaLocal } = require('./src/lib/datas');
 
 const MODE = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) ? 'supabase' : 'file';
 const ROOT = path.join(__dirname);
-const DB_FILE = path.join(ROOT, 'db.json');
+const DB_FILE = process.env.DB_FILE ? path.resolve(process.env.DB_FILE) : path.join(ROOT, 'db.json');
 const UPLOAD_DIR = path.join(ROOT, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -488,9 +488,8 @@ const ASS = {
   id: 'id', vinculo: 'vinculo', nome: 'nome', processo: 'processo', vara: 'vara',
   localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', dataFim: 'data_fim',
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
-  situacaoJuridica: 'situacao_juridica', tipoMedida: 'tipo_medida', cargaHoraria: 'carga_horaria',
-  etiqueta: 'etiqueta', etiquetaTexto: 'etiqueta_texto', etiquetaCor: 'etiqueta_cor',
-  frequencia: 'frequencia', status: 'status', deleted_at: 'deleted_at', createdAt: 'createdat'
+  situacaoJuridica: 'situacao_juridica', etiqueta: 'etiqueta', etiquetaTexto: 'etiqueta_texto', etiquetaCor: 'etiqueta_cor',
+  deletedAt: 'deleted_at', frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
 };
 const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
