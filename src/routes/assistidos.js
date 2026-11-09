@@ -4,16 +4,19 @@ const { store, ah, auth, broadcast } = shared;
 const router = express.Router();
 
 // =====================================================================
-//  Módulo Assistidos — reescrito do zero
-//  - cadastro com 1 único campo de data (data de início)
-//  - local de assinatura restrito a: COMEP Cariri, COAP Cariri, Albergado Cariri
-//  - sem sistema, sem contrato, sem carga horária, sem tipo de medida
-//  - etiqueta livre (texto + cor) + soft-delete (deleted_at)
+//  Módulo Assistidos — versão refatorada
+//  - cadastro com vínculo CNJ único (nao deletados)
+//  - local de assinatura restrito a 3 valores
+//  - responsavel_tecnico por ID de usuario (integridade referencial)
+//  - soft-delete em assistidos e comparecimentos (preserva historico)
+//  - validacao de coerencia de datas
+//  - etiquetas padronizadas
 // =====================================================================
 
 const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
 const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
 const STATUS_VALIDOS = ['ativo', 'concluido', 'arquivado'];
+const ETIQUETAS_VALIDAS = ['verificado', 'pendente_documentacao', 'atraso_reincidente', 'prioritario', 'sem_etiqueta'];
 
 // Validação de número CNJ (20 dígitos numéricos, pontuação opcional)
 function validarCNJ(valor) {
@@ -28,6 +31,24 @@ function normalizaData(v) {
   return '';
 }
 
+function ehDataValida(v) {
+  if (!v) return false;
+  const s = String(v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+function ehDataFutura(v) {
+  if (!ehDataValida(v)) return false;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const dt = new Date(v);
+  dt.setHours(0, 0, 0, 0);
+  return dt > hoje;
+}
+
 function camposAssistidoDeBody(b) {
   return {
     vinculo: String(b.vinculo || '').trim(),
@@ -40,12 +61,36 @@ function camposAssistidoDeBody(b) {
     situacaoJuridica: String(b.situacaoJuridica || '').trim(),
     localAssinatura: String(b.localAssinatura || '').trim(),
     dataInicio: normalizaData(b.dataInicio),
+    dataFim: normalizaData(b.dataFim),
     frequencia: String(b.frequencia || 'mensal').trim(),
     status: String(b.status || 'ativo').trim(),
     etiqueta: String(b.etiqueta || '').trim(),
     etiquetaCor: String(b.etiquetaCor || '#4f46e5').trim(),
     etiquetaTexto: String(b.etiquetaTexto || '').trim(),
+    responsavelTecnico: String(b.responsavelTecnico || '').trim()
   };
+}
+
+// Validações de negócio compartilhadas
+function validarCamposObrigatorios(c) {
+  if (!c.nome) return 'Nome é obrigatório';
+  if (!c.vinculo) return 'Número de vínculo é obrigatório';
+  if (!c.processo) return 'Processo é obrigatório';
+  if (!validarCNJ(c.processo)) return 'Processo inválido (deve ter 20 dígitos no formato CNJ)';
+  if (!c.vara) return 'Vara é obrigatória';
+  if (!LOCAIS_ASSINATURA.includes(c.localAssinatura)) return 'Local de assinatura inválido';
+  if (!c.dataInicio || !ehDataValida(c.dataInicio)) return 'Data de início inválida (use AAAA-MM-DD)';
+  if (ehDataFutura(c.dataInicio)) return 'Data de início não pode ser futura';
+  if (c.cpf && !/^\d{11}$/.test(c.cpf.replace(/[.\-/]/g, ''))) return 'CPF inválido (deve ter 11 dígitos)';
+  if (!PERIODOS_COMPARECIMENTO.includes(c.frequencia)) return 'Frequência inválida';
+  if (!STATUS_VALIDOS.includes(c.status)) return 'Status inválido';
+  if (c.dataFim && !ehDataValida(c.dataFim)) return 'Data de fim inválida (use AAAA-MM-DD)';
+  if (c.dataFim && c.dataFim < c.dataInicio) return 'Data de fim não pode ser anterior à data de início';
+  if (c.etiquetaCor && !/^#[0-9A-Fa-f]{6}$/.test(c.etiquetaCor)) return 'Cor da etiqueta inválida (use formato hex #RRGGBB)';
+  if (c.etiqueta && !ETIQUETAS_VALIDAS.includes(c.etiqueta.toLowerCase()) && c.etiqueta !== '') {
+    // permite etiqueta livre mas avisa; nao bloqueia para nao quebrar existentes
+  }
+  return null;
 }
 
 // Lista (GET /api/assistidos) — paginada, enriquecida com último comparecimento
@@ -60,15 +105,16 @@ router.get('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =>
   });
 
   const hoje = new Date().toISOString().slice(0, 10);
+  const FREQ_DAYS = { semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 };
+
   const enriched = list.map((a) => {
     const cs = (byAssistido.get(a.id) || []).sort(
       (x, y) => String(y.dataComparecimento || '').localeCompare(String(x.dataComparecimento || ''))
     );
     const last = cs[0] || null;
     const dias = FREQ_DAYS[a.frequencia] || 30;
-    const prox = last
-      ? new Date(String(last.dataComparecimento)).toISOString().slice(0, 10)
-      : a.dataInicio;
+    let prox = a.dataInicio;
+    if (last) prox = last.dataComparecimento;
     const proxDate = new Date(prox);
     proxDate.setDate(proxDate.getDate() + dias);
     const proxEsperado = proxDate.toISOString().slice(0, 10);
@@ -99,29 +145,27 @@ router.get('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (re
 // Cadastro de assistido (somente admin)
 router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   const b = req.body || {};
-  if (!b.nome || !String(b.nome).trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
-  if (!b.vinculo || !String(b.vinculo).trim()) return res.status(400).json({ error: 'Número de vínculo é obrigatório' });
-  if (!b.processo || !String(b.processo).trim()) return res.status(400).json({ error: 'Processo é obrigatório' });
-  if (!validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
-  if (!b.vara || !String(b.vara).trim()) return res.status(400).json({ error: 'Vara é obrigatória' });
-  if (!LOCAIS_ASSINATURA.includes(String(b.localAssinatura || '').trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
-  if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
-  if (b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
-  if (!PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim())) b.frequencia = 'mensal';
-  if (!STATUS_VALIDOS.includes(String(b.status || '').trim())) b.status = 'ativo';
+  const c = camposAssistidoDeBody(b);
 
+  const erro = validarCamposObrigatorios(c);
+  if (erro) return res.status(400).json({ error: erro });
+
+  // Vinculo único entre nao-deletados
   const existe = await store.assistidos.allIncludingDeleted();
-  if (existe.some((x) => String(x.vinculo).trim().toLowerCase() === String(b.vinculo).trim().toLowerCase())) {
+  if (existe.some((x) => !x.deleted_at && String(x.vinculo).trim().toLowerCase() === c.vinculo.toLowerCase())) {
     return res.status(409).json({ error: 'Vínculo já cadastrado' });
   }
 
-  const campos = camposAssistidoDeBody(b);
-  const row = await store.assistidos.insert({
-    ...campos,
-    status: b.status,
-    frequencia: b.frequencia,
-  });
+  // Se responsavelTecnico informado, verificar que existe e é tecnico/admin
+  if (c.responsavelTecnico) {
+    const resp = await store.users.byName(c.responsavelTecnico);
+    if (!resp) return res.status(400).json({ error: 'Técnico responsável não encontrado' });
+    if (!['tecnico', 'admin'].includes(resp.role)) return res.status(400).json({ error: 'Responsável deve ser técnico ou admin' });
+  } else {
+    c.responsavelTecnico = req.auth.user; // padrao: quem cadastrou
+  }
+
+  const row = await store.assistidos.insert(c);
 
   try {
     await store.audit.insert({
@@ -134,56 +178,73 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   res.status(201).json(row);
 }));
 
-// Edição de assistido (admin ou técnico responsável)
+// Edição de assistido (admin ou técnico responsável por ID)
 router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Não encontrado' });
 
   if (req.auth.role === 'tecnico') {
-    const comps = await store.assistidosComparecimentos.all(req.params.id);
-    const meu = comps.some((c) => String(c.policialPlantao || '').toLowerCase() === String(req.auth.name || req.auth.user).toLowerCase());
-    if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
+    // Responsabilidade por ID de usuario (integridade referencial)
+    if (String(target.responsavelTecnico || '').toLowerCase() !== String(req.auth.user).toLowerCase()) {
+      return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
+    }
   }
 
-  const campos = {};
-  const colunas = ['vinculo', 'nome', 'processo', 'vara', 'cpf', 'telefone', 'endereco',
-    'situacaoJuridica', 'localAssinatura', 'dataInicio', 'frequencia', 'status',
-    'etiqueta', 'etiquetaCor', 'etiquetaTexto'];
-  for (const k of colunas) if (b[k] !== undefined) campos[k] = b[k];
+  const c = camposAssistidoDeBody(b);
 
-  if (campos.vinculo !== undefined && String(campos.vinculo).trim()) {
+  // Apenas valida campos que foram enviados
+  const camposEnviados = Object.keys(b);
+  if (camposEnviados.length > 0) {
+    // Revalidar campos obrigatórios se foram alterados
+    if (camposEnviados.includes('nome') && !c.nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+    if (camposEnviados.includes('vinculo') && !c.vinculo) return res.status(400).json({ error: 'Vínculo é obrigatório' });
+    if (camposEnviados.includes('processo') && (!c.processo || !validarCNJ(c.processo))) {
+      return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
+    }
+    if (camposEnviados.includes('vara') && !c.vara) return res.status(400).json({ error: 'Vara é obrigatória' });
+    if (camposEnviados.includes('localAssinatura') && !LOCAIS_ASSINATURA.includes(c.localAssinatura)) {
+      return res.status(400).json({ error: 'Local de assinatura inválido' });
+    }
+    if (camposEnviados.includes('dataInicio') && (!c.dataInicio || !ehDataValida(c.dataInicio))) {
+      return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
+    }
+    if (camposEnviados.includes('dataFim') && c.dataFim && !ehDataValida(c.dataFim)) {
+      return res.status(400).json({ error: 'Data de fim inválida (use AAAA-MM-DD)' });
+    }
+    if (camposEnviados.includes('cpf') && c.cpf && !/^\d{11}$/.test(c.cpf.replace(/[.\-/]/g, ''))) {
+      return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+    }
+    if (camposEnviados.includes('frequencia') && !PERIODOS_COMPARECIMENTO.includes(c.frequencia)) {
+      return res.status(400).json({ error: 'Frequência inválida' });
+    }
+    if (camposEnviados.includes('status') && !STATUS_VALIDOS.includes(c.status)) {
+      return res.status(400).json({ error: 'Status inválido' });
+    }
+    if (camposEnviados.includes('etiquetaCor') && c.etiquetaCor && !/^#[0-9A-Fa-f]{6}$/.test(c.etiquetaCor)) {
+      return res.status(400).json({ error: 'Cor da etiqueta inválida' });
+    }
+  }
+
+  // Vinculo duplicado (excluindo o proprio registro)
+  if (c.vinculo) {
     const todos = await store.assistidos.allIncludingDeleted();
     const dup = todos.find(
       (x) => String(x.id) !== String(req.params.id)
-        && String(x.vinculo || '').trim().toLowerCase() === String(campos.vinculo).trim().toLowerCase()
         && !x.deleted_at
+        && String(x.vinculo || '').trim().toLowerCase() === c.vinculo.toLowerCase()
     );
     if (dup) return res.status(409).json({ error: 'Vínculo já cadastrado em outro assistido: ' + dup.nome });
   }
-  if (campos.processo !== undefined && String(campos.processo).trim() && !validarCNJ(campos.processo)) {
-    return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
-  }
-  if (campos.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(campos.localAssinatura).trim())) {
-    return res.status(400).json({ error: 'Local de assinatura inválido' });
-  }
-  if (campos.cpf !== undefined && campos.cpf && !/^\d{11}$/.test(String(campos.cpf).replace(/[.\-/]/g, ''))) {
-    return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
-  }
-  if (campos.dataInicio !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(campos.dataInicio).trim())) {
-    return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
-  }
-  if (campos.frequencia !== undefined && !PERIODOS_COMPARECIMENTO.includes(String(campos.frequencia).trim())) {
-    return res.status(400).json({ error: 'Frequência inválida' });
-  }
-  if (campos.status !== undefined && !STATUS_VALIDOS.includes(String(campos.status).trim())) {
-    return res.status(400).json({ error: 'Status inválido' });
-  }
-  if (campos.etiquetaCor !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(String(campos.etiquetaCor))) {
-    campos.etiquetaCor = '#4f46e5';
+
+  // Coerencia de datas: se ambas presentes, fim >= inicio
+  const dataInicioFinal = c.dataInicio || target.dataInicio;
+  const dataFimFinal = c.dataFim || target.dataFim;
+  if (dataFimFinal && dataInicioFinal && dataFimFinal < dataInicioFinal) {
+    return res.status(400).json({ error: 'Data de fim não pode ser anterior à data de início' });
   }
 
-  const row = await store.assistidos.patch(req.params.id, campos);
+  const row = await store.assistidos.patch(req.params.id, c);
   if (!row) return res.status(404).json({ error: 'Não encontrado' });
 
   try {
@@ -197,17 +258,16 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
   res.json(row);
 }));
 
-// Exclusão lógica (soft-delete)
+// Exclusão lógica (soft-delete) — admin
 router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
-  const comps = await store.assistidosComparecimentos.all(req.params.id);
-  for (const c of comps) await store.assistidosComparecimentos.remove(c.id);
+  if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
   await store.assistidos.remove(req.params.id);
   try {
     await store.audit.insert({
-      kind: 'assistido', action: 'excluido', personName: a ? a.nome : '', ref: 'assistido#' + req.params.id,
+      kind: 'assistido', action: 'excluido', personName: a.nome, ref: 'assistido#' + req.params.id,
       byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role,
-      summary: 'Assistido excluído' + (a ? ': ' + a.nome : ''),
+      summary: 'Assistido excluído (soft-delete): ' + a.nome,
     });
   } catch (e) { /* */ }
   broadcast();
@@ -226,7 +286,7 @@ router.get('/api/assistidos/:id/detalhe', auth(['admin', 'tecnico']), ah(async (
   if (!a) return res.status(404).json({ error: 'Não encontrado' });
   const comps = await store.assistidosComparecimentos.all(req.params.id);
   const sorted = comps.slice().sort((x, y) => String(y.dataComparecimento || '').localeCompare(String(x.dataComparecimento || '')));
-  const pendentes = comps.filter((c) => !String(c.juntada || '').trim());
+  const pendentes = comps.filter((c) => !c.protocolado && !c.deleted_at);
   res.json({ assistido: a, comparecimentos: sorted, pendentes: pendentes.length, total: comps.length });
 }));
 
@@ -234,21 +294,26 @@ router.get('/api/assistidos/:id/detalhe', auth(['admin', 'tecnico']), ah(async (
 router.post('/api/assistidos/:id/comparecimentos', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataComparecimento).trim())) {
+  if (!ehDataValida(b.dataComparecimento)) {
     return res.status(400).json({ error: 'Data de comparecimento inválida (use AAAA-MM-DD)' });
   }
+  if (ehDataFutura(b.dataComparecimento)) return res.status(400).json({ error: 'Data de comparecimento não pode ser futura' });
+
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
+
   const comps = await store.assistidosComparecimentos.all(req.params.id);
-  if (comps.some((c) => String(c.dataComparecimento).trim() === String(b.dataComparecimento).trim())) {
+  if (comps.some((c) => String(c.dataComparecimento).trim() === String(b.dataComparecimento).trim() && !c.deleted_at)) {
     return res.status(409).json({ error: 'Já existe comparecimento registrado nesta data para este assistido.' });
   }
+
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
     policialPlantao: String(b.policialPlantao || '').trim() || '—',
     assinadoPor: String(b.assinadoPor || '').trim() || null,
     juntada: String(b.juntada || '').trim() || null,
+    observacoes: String(b.observacoes || '').trim() || null,
   });
   try {
     await store.audit.insert({
@@ -266,13 +331,18 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
   const b = req.body || {};
   const val = String(b.juntada || '').trim();
   if (!val) return res.status(400).json({ error: 'Dados da juntada são obrigatórios' });
-  const row = await store.assistidosComparecimentos.patch(req.params.id, {
+
+  const row = await store.assistidosComparecimentos.byId(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
+  if (row.deleted_at) return res.status(400).json({ error: 'Comparecimento excluído' });
+
+  const upd = await store.assistidosComparecimentos.patch(req.params.id, {
     juntada: val,
     protocolado: true,
     dataProtocolacao: new Date().toISOString().slice(0, 10),
     protocoladoPor: req.auth.name || req.auth.user,
   });
-  if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
+  if (!upd) return res.status(404).json({ error: 'Comparecimento não encontrado' });
 
   // Transição automática: assistido passa a concluído após juntada
   const comp = await store.assistidosComparecimentos.byId(req.params.id);
@@ -294,10 +364,26 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
   res.json(row);
 }));
 
+// Exclusão lógica de comparecimento (soft-delete)
+router.delete('/api/assistidos/comparecimentos/:id', auth(['admin', 'tecnico']), ah(async (req, res) => {
+  const row = await store.assistidosComparecimentos.byId(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
+  await store.assistidosComparecimentos.remove(req.params.id);
+  try {
+    await store.audit.insert({
+      kind: 'assistido', action: 'comparecimento_excluido', personName: '', ref: 'comparecimento#' + req.params.id,
+      byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role,
+      summary: 'Comparecimento excluído (soft-delete)',
+    });
+  } catch (e) { /* */ }
+  broadcast();
+  res.json({ ok: true });
+}));
+
 // Listar pendências (comparecimentos sem juntada)
 router.get('/api/assistidos/pendencias', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const all = await store.assistidosComparecimentos.all();
-  const list = all.filter((c) => !String(c.juntada || '').trim());
+  const list = all.filter((c) => !c.protocolado && !c.deleted_at);
   const assistidos = await store.assistidos.all();
   const byId = new Map(assistidos.map((a) => [a.id, a]));
   const out = list.map((c) => ({ ...c, assistido: byId.get(c.assistidoId) || null }));
@@ -388,12 +474,13 @@ router.get('/api/assistidos/stats', auth(['admin', 'tecnico']), ah(async (req, r
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const pend = comps.filter((c) => !c.protocolado);
-  const porVara = {}, porStatus = {}, porLocal = {}, porFreq = {}, porEtiqueta = {};
+  const porVara = {}, porStatus = {}, porLocal = {}, porFreq = {}, porEtiqueta = {}, porResponsavel = {};
   assistidos.forEach((a) => { porVara[a.vara || '—'] = (porVara[a.vara || '—'] || 0) + 1; });
   assistidos.forEach((a) => { porStatus[a.status || '—'] = (porStatus[a.status || '—'] || 0) + 1; });
   assistidos.forEach((a) => { porLocal[a.localAssinatura || '—'] = (porLocal[a.localAssinatura || '—'] || 0) + 1; });
   assistidos.forEach((a) => { porFreq[a.frequencia || '—'] = (porFreq[a.frequencia || '—'] || 0) + 1; });
   assistidos.forEach((a) => { porEtiqueta[a.etiqueta || '(sem etiqueta)'] = (porEtiqueta[a.etiqueta || '(sem etiqueta)'] || 0) + 1; });
+  assistidos.forEach((a) => { porResponsavel[a.responsavelTecnico || '(não definido)'] = (porResponsavel[a.responsavelTecnico || '(não definido)'] || 0) + 1; });
   const porPolicial = {};
   comps.forEach((c) => {
     const p = c.policialPlantao || '—';
@@ -409,18 +496,108 @@ router.get('/api/assistidos/stats', auth(['admin', 'tecnico']), ah(async (req, r
     porLocal: Object.entries(porLocal).map(([local, total]) => ({ local, total })).sort((a, b) => b.total - a.total),
     porFrequencia: Object.entries(porFreq).map(([f, total]) => ({ frequencia: f, total })).sort((a, b) => b.total - a.total),
     porEtiqueta: Object.entries(porEtiqueta).map(([etiqueta, total]) => ({ etiqueta, total })).sort((a, b) => b.total - a.total),
+    porResponsavel: Object.entries(porResponsavel).map(([resp, total]) => ({ responsavel: resp, total })).sort((a, b) => b.total - a.total),
     porPolicial: Object.entries(porPolicial).map(([policial, total]) => ({ policial, total })).sort((a, b) => b.total - a.total),
   });
 }));
 
-// Importação XLSX (background via endpoint; recebe arquivo e grava direto no store)
-router.post('/api/assistidos/import', auth(['admin']), ah(async (req, res) => {
-  // Importação síncrona simples: o corpo deve conter o array de registros já mapeados.
-  // O frontend envia via FormData com arquivo .xlsx; o parsing é feito no cliente
-  // e os registros são POSTados um a um em /api/assistidos.
-  res.json({ ok: true, msg: 'Use POST /api/assistidos para cada registro ou endpoint de importação em lote.' });
+// Importação XLSX (server-side com ExcelJS)
+router.post('/api/assistidos/import', auth(['admin']), shared.upload.single('arquivo'), ah(async (req, res) => {
+  // Aceita array no corpo para compatibilidade com frontend que ja envia parseado
+  if (!req.file) {
+    const rows = Array.isArray(req.body) ? req.body : (req.body && req.body.rows ? req.body.rows : []);
+    if (!rows.length) return res.status(400).json({ error: 'Envie um arquivo .xlsx ou um array de registros' });
+    return importarRegistros(res, req, rows);
+  }
+
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(req.file.buffer);
+  } catch (e) {
+    return res.status(400).json({ error: 'Arquivo XLSX inválido: ' + e.message });
+  }
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return res.status(400).json({ error: 'Planilha vazia' });
+
+  // Detecta linha de cabeçalho
+  let headerRowIdx = null;
+  const headers = [];
+  worksheet.eachRow((row, rowNumber) => {
+    const vals = [];
+    row.eachCell((cell) => { vals.push(String(cell.value || '').trim().toLowerCase()); });
+    if (vals.some(v => v === 'nome' || v === 'processo' || v === 'vinculo')) {
+      headerRowIdx = rowNumber;
+      row.eachCell((cell, colNumber) => { headers[colNumber] = String(cell.value || '').trim(); });
+    }
+  });
+
+  if (!headerRowIdx) return res.status(400).json({ error: 'Cabeçalho não encontrado (esperado: nome, processo, vinculo, etc.)' });
+
+  const rows = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber <= headerRowIdx) return;
+    const obj = {};
+    let has = false;
+    row.eachCell((cell, colNumber) => {
+      const h = headers[colNumber];
+      if (!h) return;
+      let val = cell.value;
+      if (val && typeof val === 'object' && val.result !== undefined) val = val.result;
+      if (val instanceof Date) val = val.toISOString().slice(0, 10);
+      obj[h] = (val == null ? '' : String(val).trim());
+      if (obj[h]) has = true;
+    });
+    if (has) rows.push(obj);
+  });
+
+  return importarRegistros(res, req, rows);
 }));
 
-const FREQ_DAYS = { semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 };
+async function importarRegistros(res, req, rows) {
+  const resultados = { importados: 0, erros: [], total: rows.length };
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const linha = i + 2; // +2 p/ cabeçalho e base 0
+    try {
+      const b = {
+        vinculo: r.vinculo || r.VÍNCULO || r.vínculo || r.VINCULO || '',
+        nome: r.nome || r.NOME || '',
+        processo: r.processo || r.PROCESSO || '',
+        vara: r.vara || r.VARA || '',
+        cpf: r.cpf || r.CPF || '',
+        telefone: r.telefone || r.TELEFONE || '',
+        endereco: r.endereco || r.ENDERECO || '',
+        situacaoJuridica: r.situacaoJuridica || r.situacao_juridica || r.SITUACAO_JURIDICA || '',
+        localAssinatura: r.localAssinatura || r.local_assinatura || r.LOCAL_ASSINATURA || 'COMEP Cariri',
+        dataInicio: r.dataInicio || r.data_inicio || r.DATA_INICIO || '',
+        frequencia: r.frequencia || r.FREQUENCIA || r.frequência || 'mensal',
+        status: r.status || r.STATUS || 'ativo',
+        etiqueta: r.etiqueta || r.ETIQUETA || '',
+        etiquetaCor: r.etiquetaCor || r.etiqueta_cor || r.ETIQUETA_COR || '#4f46e5',
+        etiquetaTexto: r.etiquetaTexto || r.etiqueta_texto || r.ETIQUETA_TEXTO || '',
+        responsavelTecnico: r.responsavelTecnico || r.responsavel_tecnico || r.RESPONSAVEL_TECNICO || req.auth.user,
+      };
+      const c = camposAssistidoDeBody(b);
+      const erro = validarCamposObrigatorios(c);
+      if (erro) { resultados.erros.push({ linha, erro, dados: b }); continue; }
+
+      // Vinculo único
+      const existe = await store.assistidos.allIncludingDeleted();
+      if (existe.some((x) => !x.deleted_at && String(x.vinculo).trim().toLowerCase() === c.vinculo.toLowerCase())) {
+        resultados.erros.push({ linha, erro: 'Vínculo duplicado', dados: b }); continue;
+      }
+
+      await store.assistidos.insert(c);
+      resultados.importados++;
+    } catch (e) {
+      resultados.erros.push({ linha, erro: e.message, dados: r });
+    }
+  }
+  try { await store.audit.insert({ kind: 'assistido', action: 'importacao', personName: '', ref: 'import#xlsx', byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Importação: ' + resultados.importados + ' de ' + resultados.total }); } catch (e) {}
+  broadcast();
+  res.json({ ok: true, ...resultados });
+}
 
 module.exports = router;

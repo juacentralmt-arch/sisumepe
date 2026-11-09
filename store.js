@@ -489,13 +489,15 @@ const ASS = {
   localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', dataFim: 'data_fim',
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
   situacaoJuridica: 'situacao_juridica', etiqueta: 'etiqueta', etiquetaTexto: 'etiqueta_texto', etiquetaCor: 'etiqueta_cor',
-  deletedAt: 'deleted_at', frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
+  responsavelTecnico: 'responsavel_tecnico',
+  deletedAt: 'deleted_at', frequencia: 'frequencia', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
   policialPlantao: 'policial_plantao', protocolado: 'protocolado',
   dataProtocolacao: 'data_protocolacao', protocoladoPor: 'protocolado_por',
-  observacoes: 'observacoes', juntada: 'juntada', assinadoPor: 'assinado_por', createdAt: 'createdat'
+  observacoes: 'observacoes', juntada: 'juntada', assinadoPor: 'assinado_por',
+  deletedAt: 'deleted_at', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const EST = {
   id: 'id', sistema: 'sistema', contrato: 'contrato', material: 'material', unidade: 'unidade', saldo: 'saldo', createdAt: 'createdat', updatedAt: 'updatedat'
@@ -2234,12 +2236,12 @@ store.assistidos = {
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.all');
+        const r = must(await supa.from('assistidos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1), 'assistidos.all');
         out.push(...r.map(appASS));
         if (r.length < pageSize) break;
         from += pageSize;
       }
-      return out.filter(x => !x.deleted_at);
+      return out;
     } catch (e) {
       throw e;
     }
@@ -2275,7 +2277,16 @@ store.assistidos = {
   },
   async insert(r) {
     if (MODE === 'file') {
-      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), deleted_at: null };
+      const row = {
+        id: mem.seqAssistido++,
+        ...r,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deleted_at: null,
+        status: r.status || 'ativo',
+        frequencia: r.frequencia || 'mensal',
+        etiquetaCor: r.etiquetaCor || '#4f46e5'
+      };
       mem.assistidos.push(row); saveFile(); return row;
     }
     try {
@@ -2287,10 +2298,20 @@ store.assistidos = {
   },
   async bulkInsert(rows) {
     const out = [];
+    const now = new Date().toISOString();
+    const normalized = rows.map(r => ({
+      ...r,
+      createdAt: r.createdAt || now,
+      updatedAt: now,
+      deleted_at: null,
+      status: r.status || 'ativo',
+      frequencia: r.frequencia || 'mensal',
+      etiquetaCor: r.etiquetaCor || '#4f46e5'
+    }));
     if (MODE === 'supabase') {
       const chunkSize = 100;
-      for (let i = 0; i < rows.length; i += chunkSize) {
-        const chunk = rows.slice(i, i + chunkSize);
+      for (let i = 0; i < normalized.length; i += chunkSize) {
+        const chunk = normalized.slice(i, i + chunkSize);
         try {
           const rr = must(await supa.from('assistidos').insert(chunk.map(x => toRow(x, ASS))).select(), 'assistidos.bulkInsert');
           out.push(...rr.map(appASS));
@@ -2300,7 +2321,12 @@ store.assistidos = {
       }
       return out;
     }
-    for (const r of rows) out.push(await this.insert(r));
+    for (const r of normalized) {
+      const row = { id: mem.seqAssistido++, ...r };
+      mem.assistidos.push(row);
+      out.push(row);
+    }
+    saveFile();
     return out;
   },
   async patch(id, fields) {
@@ -2308,35 +2334,46 @@ store.assistidos = {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return null;
       if (r.deleted_at) return null; // não edita excluído
-      Object.assign(r, fields); saveFile(); return r;
+      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
+      saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos').update(toRow(fields, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
+      const rr = must(await supa.from('assistidos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) {
       throw e;
     }
   },
   async remove(id) {
-    // Soft-delete: marca deleted_at em vez de apagar fisicamente
+    // Soft-delete: marca deleted_at em vez de apagar fisicamente.
+    // Comparecimentos vinculados tambem recebem soft-delete (preserva historico).
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return;
-      r.deleted_at = new Date().toISOString();
+      const agora = new Date().toISOString();
+      r.deleted_at = agora;
+      // Soft-delete dos comparecimentos vinculados (nao apaga fisicamente)
+      (mem.assistidosComparecimentos || []).forEach(c => {
+        if (eqi(c.assistidoId, id) && !c.deleted_at) {
+          c.deleted_at = agora;
+          c.updatedAt = agora;
+        }
+      });
       saveFile(); return;
     }
     try {
-      must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
+      await must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
+      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('assistido_id', Number(id)).is('deleted_at', null), 'assistidos.remove_comp');
     } catch (e) { throw e; }
   }
 };
 
 
-// Assistidos - Comparecimentos (cada registro gera pendência de protocolação)
+// Assistidos - Comparecimentos (soft-delete aplicavel; pendencia = sem juntada)
 store.assistidosComparecimentos = {
   async all(assistidoId) {
     if (MODE === 'file') {
-      const list = mem.assistidosComparecimentos || [];
+      const list = (mem.assistidosComparecimentos || []).filter(x => !x.deleted_at);
       return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
     }
     try {
@@ -2344,7 +2381,7 @@ store.assistidosComparecimentos = {
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        let q = supa.from('assistidos_comparecimentos').select('*').order('id').range(from, from + pageSize - 1);
+        let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
         if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
         const r = must(await q, 'assistidosComparecimentos.all');
         out.push(...r.map(appACC));
@@ -2356,16 +2393,46 @@ store.assistidosComparecimentos = {
       throw e;
     }
   },
+  async allIncludingDeleted() {
+    if (MODE === 'file') return [...(mem.assistidosComparecimentos || [])];
+    try {
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        let q = supa.from('assistidos_comparecimentos').select('*').order('id').range(from, from + pageSize - 1);
+        const r = must(await q, 'assistidosComparecimentos.allIncludingDeleted');
+        out.push(...r.map(appACC));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
+    } catch (e) {
+      throw e;
+    }
+  },
   async byId(id) {
-    if (MODE === 'file') return (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id)) || null;
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      return r && r.deleted_at ? null : r || null;
+    }
     try {
       const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
-      return r.length ? appACC(r[0]) : null;
+      if (!r.length) return null;
+      const row = appACC(r[0]);
+      return row.deleted_at ? null : row;
     } catch (e) { throw e; }
   },
   async insert(r) {
     if (MODE === 'file') {
-      const row = { id: mem.seqAssistidoComp++, ...r, protocolado: false, createdAt: new Date().toISOString() };
+      const row = {
+        id: mem.seqAssistidoComp++,
+        ...r,
+        protocolado: false,
+        deleted_at: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       mem.assistidosComparecimentos.push(row); saveFile(); return row;
     }
     try {
@@ -2377,16 +2444,28 @@ store.assistidosComparecimentos = {
     if (MODE === 'file') {
       const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
       if (!r) return null;
-      Object.assign(r, fields); saveFile(); return r;
+      if (r.deleted_at) return null;
+      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
+      saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow(fields, ACC)).eq('id', Number(id)).select(), 'assistidosComparecimentos.patch');
+      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ACC)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidosComparecimentos.patch');
       return rr.length ? appACC(rr[0]) : null;
     } catch (e) { throw e; }
   },
   async remove(id) {
-    if (MODE === 'file') { mem.assistidosComparecimentos = (mem.assistidosComparecimentos || []).filter(x => !eqi(x.id, id)); saveFile(); return; }
-    must(await supa.from('assistidos_comparecimentos').delete().eq('id', Number(id)), 'assistidosComparecimentos.remove');
+    // Soft-delete do comparecimento (preserva historico)
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      if (!r) return;
+      const agora = new Date().toISOString();
+      r.deleted_at = agora;
+      r.updatedAt = agora;
+      saveFile(); return;
+    }
+    try {
+      must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidosComparecimentos.remove');
+    } catch (e) { throw e; }
   },
   async pendencias() {
     const list = await this.all();
