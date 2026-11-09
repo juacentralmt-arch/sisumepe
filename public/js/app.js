@@ -10715,6 +10715,7 @@ function renderFluxoTab(){
   const map = { compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const ff = fluxoFiltrado();
   const list = ff[map[fluxoTab]] || [];
+  console.debug('[fluxo] tab=', fluxoTab, 'fluxoData counts=', { aguardando: (fluxoData.aguardando||[]).length, compareceu: (fluxoData.compareceu||[]).length, protocolado: (fluxoData.protocolado||[]).length, concluido: (fluxoData.concluido||[]).length }, 'filtered=', { compareceu: ff.compareceu.length, protocolado: ff.protocolado.length, concluido: ff.concluido.length }, 'list=', list.length);
   window._juntadaTextos = window._juntadaTextos || {};
   list.forEach(a => { if (a.compId) window._juntadaTextos[a.compId] = a.juntada || ''; });
   if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
@@ -11002,6 +11003,7 @@ function exportarRelatorioAssistidosXLSX(){
 }
 async function loadFluxo(){
   const r = await api('/api/assistidos/fluxo');
+  console.debug('[fluxo] API resposta=', { aguardando: (r.aguardando||[]).length, compareceu: (r.compareceu||[]).length, protocolado: (r.protocolado||[]).length, concluido: (r.concluido||[]).length });
   fluxoData = {
     aguardando: r.aguardando || [],
     compareceu: r.compareceu || [],
