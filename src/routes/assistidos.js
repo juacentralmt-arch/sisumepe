@@ -901,6 +901,7 @@ router.patch('/api/assistidos/:id(\\d+)/etiqueta', auth(['admin','tecnico']), ah
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
   const row = await store.assistidos.patch(req.params.id, { etiqueta });
+  if (!row) return res.status(404).json({ error: 'Assistido não encontrado ou não foi possível atualizar (verifique se a coluna etiqueta existe no Supabase)' });
   try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + etiqueta }); } catch(e){}
   res.json({ id: row.id, etiqueta: row.etiqueta });
 }));
