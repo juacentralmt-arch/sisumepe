@@ -7,8 +7,6 @@ create table if not exists assistidos (
   vara text default '',
   local_assinatura text default '',
   data_inicio text default '',
-  sistema text default 'spacecom',
-  contrato text default 'CE01',
   status text default 'ativo',
   deleted_at timestamptz default null,
   createdat timestamptz default now()
@@ -37,9 +35,6 @@ alter table assistidos add column if not exists vara text default '';
 alter table assistidos add column if not exists local_assinatura text default '';
 alter table assistidos add column if not exists data_inicio text default '';
 alter table assistidos add column if not exists frequencia text default 'mensal';
-alter table assistidos add column if not exists status text default 'ativo';
-alter table assistidos add column if not exists sistema text default 'spacecom';
-alter table assistidos add column if not exists contrato text default 'CE01';
 alter table assistidos add column if not exists status text default 'ativo';
 alter table assistidos add column if not exists deleted_at timestamptz default null;
 alter table assistidos_comparecimentos add column if not exists protocolado_por text default '';

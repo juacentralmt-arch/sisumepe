@@ -282,8 +282,6 @@ create table if not exists assistidos (
   vara text default '',
   local_assinatura text default '',
   data_inicio text default '',
-  sistema text default 'spacecom',
-  contrato text default 'CE01',
   status text default 'ativo',
   deleted_at timestamptz default null,
   createdat timestamptz default now()

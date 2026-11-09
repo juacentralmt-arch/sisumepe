@@ -11255,14 +11255,12 @@ async function salvarAssistido(){
     dataInicio: document.getElementById('asInicio').value,
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
     status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo',
-    sistema: document.getElementById('asSistema') ? document.getElementById('asSistema').value : 'spacecom',
-    contrato: document.getElementById('asContrato') ? document.getElementById('asContrato').value : 'CE01'
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ toast('Preencha todos os campos'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
-    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asSistema','asContrato'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
