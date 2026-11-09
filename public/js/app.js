@@ -10773,8 +10773,6 @@ async function abrirDetalheAssistido(id){
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Início</p><p class="font-bold">' + esc(fmtDataBR(a.dataInicio) || '-') + '</p></div>' +
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Frequência</p><p class="font-bold">' + esc(a.frequencia || '-') + '</p></div>' +
         '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Status</p><p class="font-bold ' + (a.status==='ativo'?'text-emerald-700':a.status==='concluido'?'text-blue-700':'text-slate-600') + '">' + esc(a.status||'-') + '</p></div>' +
-        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Sistema</p><p class="font-bold truncate">' + esc((a.sistema||'spacecom').toUpperCase()) + '</p></div>' +
-        '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Contrato</p><p class="font-bold truncate">' + esc(a.contrato || '-') + '</p></div>' +
         '</div>';
     }
     const comps = Array.isArray(r.comparecimentos) ? r.comparecimentos : [];
@@ -11334,19 +11332,11 @@ async function salvarEdicaoAssistido(){
     vara: document.getElementById('editAsVara').value.trim(),
     localAssinatura: document.getElementById('editAsLocal').value.trim(),
     dataInicio: document.getElementById('editAsInicio').value,
-    cpf: document.getElementById('editAsCpf').value.trim(),
-    telefone: document.getElementById('editAsTelefone').value.trim(),
-    endereco: document.getElementById('editAsEndereco').value.trim(),
-    situacaoJuridica: document.getElementById('editAsSituacaoJuridica').value.trim(),
-    tipoMedida: document.getElementById('editAsTipoMedida').value.trim(),
-    cargaHoraria: document.getElementById('editAsCargaHoraria').value.trim(),
-    dataFim: document.getElementById('editAsDataFim').value,
     etiqueta: document.getElementById('editAsEtiqueta') ? document.getElementById('editAsEtiqueta').value : '',
     frequencia: document.getElementById('editAsFrequencia').value,
     status: document.getElementById('editAsStatus').value
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ alert('Preencha todos os campos'); return; }
-  if (body.cpf && !/^\d{11}$/.test(body.cpf.replace(/[.\-/]/g, ''))) { alert('CPF inválido (deve ter 11 dígitos)'); return; }
   if (body.processo && !validarCNJ(body.processo)) { alert('Processo inválido (deve ter 20 dígitos no formato CNJ)'); return; }
   try{
     const aAntes = assistidosData.find(x => String(x.id) === String(id));

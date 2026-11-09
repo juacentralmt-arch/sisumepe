@@ -202,9 +202,10 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   // Transição automática: assistido passa a concluído após juntada
   try {
-    const assistido = await store.assistidos.byId(row.assistidoId);
+    const aid = Number(row.assistidoId);
+    const assistido = await store.assistidos.byId(aid);
     if (assistido && assistido.status === 'ativo') {
-      await store.assistidos.patch(row.assistidoId, { status: 'concluido' });
+      await store.assistidos.patch(aid, { status: 'concluido' });
     }
   } catch (e) {}
   try { await store.audit.insert({ kind:'assistido', action:'juntada', personName: '', ref: 'comparecimento#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' }); } catch(e){}
@@ -259,7 +260,7 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
 
 // Filtro de listagem
 router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo } = req.query || {};
+  const { q, vara, nome, vinculo, processo, local, status, frequencia, etiqueta, dataProtocolo, usuarioProtocolo } = req.query || {};
   let list = await store.assistidos.all();
   if (q) {
     const t = String(q).toLowerCase();
@@ -280,6 +281,8 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
   if (vara) list = list.filter(a => a.vara === vara);
   if (local) list = list.filter(a => a.localAssinatura === local);
   if (status) list = list.filter(a => a.status === status);
+  if (frequencia) list = list.filter(a => a.frequencia === frequencia);
+  if (etiqueta) list = list.filter(a => a.etiqueta === etiqueta);
   if (dataProtocolo || usuarioProtocolo) {
     const comps = await store.assistidosComparecimentos.all();
     const byAssistido = new Map();
@@ -313,7 +316,7 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
 
 // Relatório em PDF — aplica os mesmos filtros de /filtrar e gera PDF para download
 router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo, protoDe, protoAte, campos } = req.query || {};
+  const { q, vara, nome, vinculo, processo, local, status, frequencia, etiqueta, dataProtocolo, usuarioProtocolo, protoDe, protoAte, campos } = req.query || {};
   let list = await store.assistidos.all();
   if (q) {
     const t = String(q).toLowerCase();
@@ -325,12 +328,14 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   if (vara) list = list.filter(a => a.vara === vara);
   if (local) list = list.filter(a => a.localAssinatura === local);
   if (status) list = list.filter(a => a.status === status);
+  if (frequencia) list = list.filter(a => a.frequencia === frequencia);
+  if (etiqueta) list = list.filter(a => a.etiqueta === etiqueta);
   if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
     const comps = await store.assistidosComparecimentos.all();
     const byAssistido = new Map();
-    comps.forEach(c => { const arr = byAssistido.get(c.assistidoId) || []; arr.push(c); byAssistido.set(c.assistidoId, arr); });
+    comps.forEach(c => { const key = String(c.assistidoId); const arr = byAssistido.get(key) || []; arr.push(c); byAssistido.set(key, arr); });
     list = list.filter(a => {
-      const cs = byAssistido.get(a.id) || [];
+      const cs = byAssistido.get(String(a.id)) || [];
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
@@ -890,7 +895,7 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
 // =====================================================================
 router.patch('/api/assistidos/:id/etiqueta', auth(['admin','tecnico']), ah(async (req, res) => {
   const { etiqueta } = req.body || {};
-  if (!etiqueta || !['verificado', 'pendente', ''].includes(etiqueta)) {
+  if (!['verificado', 'pendente', ''].includes(etiqueta)) {
     return res.status(400).json({ error: 'Etiqueta inválida. Use: verificado, pendente ou vazio' });
   }
   const target = await store.assistidos.byId(req.params.id);
