@@ -43,6 +43,31 @@ const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
 const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
 const SISTEMAS_ASSISTIDO = ['spacecom', 'infinity'];
 const CONTRATOS_ASSISTIDO = ['CE01', 'CE02', 'INF'];
+const FREQ_DAYS = { semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 };
+
+// Calcula o próximo comparecimento esperado de um assistido com base no
+// último comparecimento (ou na data de início se nunca compareceu).
+function proximoEsperadoAssistido(a, comps){
+  const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+  const base = last ? last.dataComparecimento : (a.dataInicio || null);
+  if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
+  const dias = FREQ_DAYS[a.frequencia] || 30;
+  const dt = new Date(String(base) + 'T00:00:00');
+  if (isNaN(dt)) return null;
+  return new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
+}
+
+// Dias de tolerância por tipo de alerta (baseados na frequência do assistido)
+function alertaDiasCritico(frequencia) {
+  const fd = FREQ_DAYS[frequencia] || 30;
+  // Crítico quando já passou do prazo da frequência
+  return fd;
+}
+function alertaDiasAtencao(frequencia) {
+  const fd = FREQ_DAYS[frequencia] || 30;
+  // Atenção quando faltam <= 7 dias ou já passou 50% da frequência
+  return Math.ceil(fd * 0.5);
+}
 
 router.get('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req, res) => {
   const row = await store.assistidos.byId(req.params.id);
@@ -69,7 +94,11 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
   if (b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
   if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
-  const freq = PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim()) ? String(b.frequencia).trim() : 'mensal';
+  const freqRaw = String(b.frequencia || '').trim();
+  if (freqRaw && !PERIODOS_COMPARECIMENTO.includes(freqRaw)) return res.status(400).json({ error: 'Frequência inválida. Use: semanal, quinzenal, mensal, bimestral ou trimestral' });
+  const freq = freqRaw || 'mensal';
+  if (b.dataFim && !/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataFim).trim())) return res.status(400).json({ error: 'Data de fim inválida (use AAAA-MM-DD)' });
+  if (b.dataFim && String(b.dataFim).trim() < String(b.dataInicio).trim()) return res.status(400).json({ error: 'Data de fim não pode ser anterior à data de início' });
   const all = await store.assistidos.all();
   if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
@@ -113,6 +142,8 @@ router.patch('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (r
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   if (b.cpf !== undefined && b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
   if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
+  if (b.dataFim !== undefined && b.dataFim && !/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataFim).trim())) return res.status(400).json({ error: 'Data de fim inválida (use AAAA-MM-DD)' });
+  if (b.dataFim !== undefined && b.dataFim && b.dataInicio && String(b.dataFim).trim() < String(b.dataInicio).trim()) return res.status(400).json({ error: 'Data de fim não pode ser anterior à data de início' });
   // Validação: vínculo não pode ser duplicado em outro assistido
   if (fields.vinculo !== undefined && String(fields.vinculo).trim()) {
     const todos = await store.assistidos.allIncludingDeleted();
@@ -220,7 +251,18 @@ router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (re
   const assistidos = await store.assistidos.all();
   const byId = new Map(assistidos.map(a => [String(a.id), a]));
   const out = list.map(c => ({ ...c, assistido: byId.get(String(c.assistidoId)) || null }));
-  res.json(out);
+
+  // Paginação
+  const { page, limit } = req.query || {};
+  const total = out.length;
+  let paged = out;
+  if (page !== undefined && limit !== undefined) {
+    const p = Math.max(Number(page) || 1, 1);
+    const l = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const start = (p - 1) * l;
+    paged = out.slice(start, start + l);
+  }
+  res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
 // Filtros + quantitativos
@@ -278,11 +320,11 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
     const t = String(processo).toLowerCase();
     list = list.filter(a => (a.processo||'').toLowerCase().includes(t));
   }
-  if (vara) list = list.filter(a => a.vara === vara);
-  if (local) list = list.filter(a => a.localAssinatura === local);
-  if (status) list = list.filter(a => a.status === status);
-  if (frequencia) list = list.filter(a => a.frequencia === frequencia);
-  if (etiqueta) list = list.filter(a => a.etiqueta === etiqueta);
+  if (vara) { const t = String(vara).toLowerCase(); list = list.filter(a => (a.vara||'').toLowerCase().includes(t)); }
+  if (local) { const t = String(local).toLowerCase(); list = list.filter(a => (a.localAssinatura||'').toLowerCase().includes(t)); }
+  if (status) { const t = String(status).toLowerCase(); list = list.filter(a => (a.status||'').toLowerCase().includes(t)); }
+  if (frequencia) { const t = String(frequencia).toLowerCase(); list = list.filter(a => (a.frequencia||'').toLowerCase().includes(t)); }
+  if (etiqueta) { const t = String(etiqueta).toLowerCase(); list = list.filter(a => (a.etiqueta||'').toLowerCase().includes(t)); }
   if (dataProtocolo || usuarioProtocolo) {
     const comps = await store.assistidosComparecimentos.all();
     const byAssistido = new Map();
@@ -347,7 +389,16 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   }
   list = list.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
-  const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').filter(Boolean);
+  // Limite de registros para evitar PDFs excessivamente grandes
+  const MAX_PDF_ROWS = 500;
+  const pdfTruncado = list.length > MAX_PDF_ROWS;
+  list = list.slice(0, MAX_PDF_ROWS);
+
+  const CAMPOS_PERMITIDOS = ['vinculo','nome','processo','vara','localAssinatura','dataInicio','status','ultimoComparecimento','policialPlantao','juntada','dataProtocolacao','protocoladoPor','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim','frequencia','etiqueta'];
+  const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').filter(Boolean).filter(k => CAMPOS_PERMITIDOS.includes(k));
+  if (camposSel.length === 0) {
+    camposSel.push('vinculo','nome','processo','vara','localAssinatura','dataInicio','status');
+  }
   const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. Comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
   const fmtBR = (v) => { if (!v) return '—'; const s = String(v).trim(); if (/^\d{4}-\d{2}-\d{2}/.test(s)) { const [y,m,d] = s.slice(0,10).split('-'); return d+'/'+m+'/'+y; } return s; };
 
@@ -358,10 +409,16 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   let page = pdf.addPage([W, H]);
   let y = H - M;
 
-  function drawHeader(pg) {
+  let totalPages = 1;
+  let currentPage = 0;
+
+  function drawHeader(pg, pageNum) {
     pg.drawText('Relatório de Assistidos — SISUMEPE Juazeiro', { x: M, y: H - M, size: 14, font: boldFont, color: rgb(0.1, 0.2, 0.5) });
     pg.drawText('Gerado em: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }), { x: M, y: H - M - 18, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-    pg.drawText('Total de registros: ' + list.length, { x: M, y: H - M - 30, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+    const totalMsg = 'Total de registros: ' + list.length + (pdfTruncado ? ' (limite de ' + MAX_PDF_ROWS + ' aplicado)' : '');
+    pg.drawText(totalMsg, { x: M, y: H - M - 30, size: 9, font: boldFont, color: rgb(0, 0, 0) });
+    // Número da página no canto superior direito
+    pg.drawText('Página ' + pageNum + ' de ' + totalPages, { x: W - M - 80, y: H - M, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
     let hx = M;
     pg.drawRectangle({ x: M, y: H - M - 46, width: W - 2 * M, height: 14, color: rgb(0.2, 0.3, 0.6) });
     const colW = (W - 2 * M) / camposSel.length;
@@ -376,12 +433,18 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
     return H - M - 62;
   }
 
-  let cy = drawHeader(page);
+  // Primeira passagem para contar páginas (estimar)
+  const estRowsPerPage = Math.floor((H - 2 * M - 80) / (rowH + 4));
+  totalPages = Math.max(1, Math.ceil(list.length / estRowsPerPage));
+  currentPage = 1;
+
+  let cy = drawHeader(page, currentPage);
   const rowH = 14;
   list.forEach((a, i) => {
     if (cy < M + 30) {
+      currentPage++;
       page = pdf.addPage([W, H]);
-      cy = drawHeader(page);
+      cy = drawHeader(page, currentPage);
     }
     if (i % 2 === 0) {
       page.drawRectangle({ x: M, y: cy - rowH + 2, width: W - 2 * M, height: rowH, color: rgb(0.97, 0.97, 0.98) });
@@ -409,16 +472,6 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   res.send(buf);
 }));
 
-const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
-function proximoEsperadoAssistido(a, comps){
-  const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
-  const base = last ? last.dataComparecimento : (a.dataInicio || null);
-  if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
-  const dias = FREQ_DAYS[a.frequencia] || 30;
-  const dt = new Date(String(base) + 'T00:00:00');
-  if (isNaN(dt)) return null;
-  return new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
-}
 // Pendentes de comparecimento: assistidos cujo próximo comparecimento esperado já passou
 router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
@@ -427,16 +480,24 @@ router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']
   const out = [];
   for (const a of assistidos) {
     if (a.status && a.status !== 'ativo') continue;
-    const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
-    const base = last ? last.dataComparecimento : (a.dataInicio || hoje);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(base))) continue;
-    const dias = FREQ_DAYS[a.frequencia] || 30;
-    const dt = new Date(String(base) + 'T00:00:00');
-    if (isNaN(dt)) continue;
-    const prox = new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
-    if (prox <= hoje) out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null, proximoEsperado: prox });
+    const prox = proximoEsperadoAssistido(a, comps);
+    if (!prox) continue;
+    if (prox <= hoje) {
+      const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+      out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null, proximoEsperado: prox });
+    }
   }
-  res.json(out);
+  // Paginação
+  const { page, limit } = req.query || {};
+  const total = out.length;
+  let paged = out;
+  if (page !== undefined && limit !== undefined) {
+    const p = Math.max(Number(page) || 1, 1);
+    const l = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const start = (p - 1) * l;
+    paged = out.slice(start, start + l);
+  }
+  res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
 
@@ -722,15 +783,53 @@ router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, re
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const hoje = new Date().toISOString().slice(0,10);
-  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
-  const etapas = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
+  const etapas = { aguardando: [], compareceu: [], atrasado: [], protocolado: [], concluido: [] };
+
+  // Último comparecimento por assistido (mais recente)
+  const ultimoPorAssistido = {};
+  comps.forEach(c => {
+    const aid = String(c.assistidoId);
+    if (!ultimoPorAssistido[aid] || String(c.dataComparecimento) > String(ultimoPorAssistido[aid].dataComparecimento)) {
+      ultimoPorAssistido[aid] = c;
+    }
+  });
+
   for (const a of assistidos) {
     if (a.status === 'concluido' || a.status === 'arquivado') { etapas.concluido.push(a); continue; }
-    const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    const last = ultimoPorAssistido[String(a.id)];
     if (!last) { etapas.aguardando.push(a); continue; }
-    const proto = comps.filter(c => String(c.assistidoId) === String(a.id)).find(c => String(c.juntada||'').trim());
-    if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor }); continue; }
-    etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor });
+
+    const base = String(last.dataComparecimento || '');
+    const prox = base && /^\d{4}-\d{2}-\d{2}$/.test(base)
+      ? new Date(new Date(base + 'T00:00:00').getTime() + (FREQ_DAYS[a.frequencia] || 30) * 864e5).toISOString().slice(0, 10)
+      : null;
+    const vencido = prox && prox <= hoje;
+
+    if (String(last.juntada || '').trim()) {
+      // Último comparecimento tem juntada → protocolo
+      etapas.protocolado.push({
+        ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id,
+        juntada: last.juntada, policialPlantao: last.policialPlantao,
+        dataProtocolacao: last.dataProtocolacao || null, protocoladoPor: last.protocoladoPor || null,
+        proximoEsperado: prox, vencido
+      });
+    } else if (vencido) {
+      // Sem juntada e já passou do prazo esperado
+      etapas.atrasado.push({
+        ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id,
+        juntada: last.juntada, policialPlantao: last.policialPlantao,
+        dataProtocolacao: last.dataProtocolacao || null, protocoladoPor: last.protocoladoPor || null,
+        proximoEsperado: prox, vencido: true
+      });
+    } else {
+      // Sem juntada, ainda dentro do prazo
+      etapas.compareceu.push({
+        ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id,
+        juntada: last.juntada, policialPlantao: last.policialPlantao,
+        dataProtocolacao: last.dataProtocolacao || null, protocoladoPor: last.protocoladoPor || null,
+        proximoEsperado: prox, vencido: false
+      });
+    }
   }
   res.json(etapas);
 }));
@@ -749,6 +848,14 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
     return res.status(400).json({ error: 'Informe a lista de itens para atualizar' });
   }
 
+  // Carrega todos os assistidos uma única vez (evita N+1 queries dentro do loop)
+  const todos = await store.assistidos.allIncludingDeleted();
+  const vinculosEmUso = new Map();
+  todos.forEach(x => {
+    if (x.deleted_at) return;
+    vinculosEmUso.set(String(x.vinculo||'').trim().toLowerCase(), String(x.id));
+  });
+
   let atualizados = 0;
   let erros = 0;
   const detalhes = [];
@@ -761,18 +868,25 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
       continue;
     }
 
+    const vinculoNorm = String(vinculo).trim();
+    const vinculoKey = vinculoNorm.toLowerCase();
+
     try {
-      // Verifica se o vínculo já existe em outro assistido
-      const todos = await store.assistidos.allIncludingDeleted();
-      const dup = todos.find(x => String(x.id) !== String(id) && String(x.vinculo||'').trim().toLowerCase() === String(vinculo).trim().toLowerCase() && !x.deleted_at);
-      if (dup) {
+      // Verifica se o vínculo já existe em outro assistido (incluindo itens já processados neste lote)
+      const existingId = vinculosEmUso.get(vinculoKey);
+      if (existingId && String(existingId) !== String(id)) {
+        const dup = todos.find(x => String(x.id) === String(existingId));
         erros++;
-        detalhes.push({ id, vinculo, erro: `Vínculo já cadastrado em outro assistido (${dup.nome})` });
+        detalhes.push({ id, vinculo: vinculoNorm, erro: `Vínculo já cadastrado em outro assistido (${dup ? dup.nome : 'desconhecido'})` });
         continue;
       }
 
-      const atualizado = await store.assistidos.patch(id, { vinculo: String(vinculo).trim() });
+      const atualizado = await store.assistidos.patch(id, { vinculo: vinculoNorm });
       if (atualizado) {
+        // Atualiza o mapa de vínculos em uso para evitar duplicatas dentro do mesmo lote
+        const oldKey = String((todos.find(x => String(x.id) === String(id)) || {}).vinculo || '').trim().toLowerCase();
+        if (oldKey && oldKey !== vinculoKey) vinculosEmUso.delete(oldKey);
+        vinculosEmUso.set(vinculoKey, String(id));
         atualizados++;
         detalhes.push({ id, vinculo: atualizado.vinculo, status: 'atualizado' });
       } else {
@@ -786,8 +900,8 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
   }
 
   // Rebusca os pendentes restantes para retornar ao frontend
-  const todos = await store.assistidos.allIncludingDeleted();
-  const pendentes = todos.filter(a => String(a.vinculo||'').startsWith('PENDENTE-') && !a.deleted_at);
+  const todosApós = await store.assistidos.allIncludingDeleted();
+  const pendentes = todosApós.filter(a => String(a.vinculo||'').startsWith('PENDENTE-') && !a.deleted_at);
 
   res.json({
     atualizados,
@@ -799,15 +913,17 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
 }));
 
 // =====================================================================
-//  Alertas automáticos — calcula dias desde última juntada
-//  Semáforo: EM DIA (0-30 dias) / ATENÇÃO (31-60 dias) / CRÍTICO (>60 dias)
+//  Alertas automáticos — calcula dias desde última juntada / data de início
+//  Semáforo baseado na frequência do assistido:
+//  CRITICO: já passou do prazo da frequência (venceu)
+//  ATENCAO: faltam <= 7 dias para vencer ou já passou 50% da frequência
+//  EM_DIA: dentro do prazo
 // =====================================================================
 router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const hoje = new Date().toISOString().slice(0,10);
   const hojeDate = new Date(hoje);
-  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
 
   // Último comparecimento por assistido
   const ultimoPorAssistido = {};
@@ -821,17 +937,21 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
   const alertas = [];
   for (const a of assistidos) {
     if (a.status !== 'ativo') continue;
-    const last = ultimoPorAssistido[String(a.id)];
-    if (!last) continue; // sem comparecimento registrado
-
-    const ultimaData = new Date(last.dataComparecimento);
-    const diasDiff = Math.floor((hojeDate - ultimaDate) / (1000 * 60 * 60 * 24));
     const freqDias = FREQ_DAYS[a.frequencia] || 30;
+
+    // Base: último comparecimento, ou data de início se nunca compareceu
+    const last = ultimoPorAssistido[String(a.id)];
+    const base = last ? last.dataComparecimento : a.dataInicio;
+    if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) continue;
+
+    const ultimaData = new Date(base + 'T00:00:00');
+    if (isNaN(ultimaData)) continue;
+    const diasDiff = Math.floor((hojeDate - ultimaData) / (1000 * 60 * 60 * 24));
     const diasAteProximo = freqDias - diasDiff;
 
     let tipo = 'EM_DIA';
-    if (diasDiff > 60) tipo = 'CRITICO';
-    else if (diasDiff > 30) tipo = 'ATENCAO';
+    if (diasDiff > freqDias) tipo = 'CRITICO';
+    else if (diasAteProximo <= 7 || diasDiff > Math.ceil(freqDias * 0.5)) tipo = 'ATENCAO';
 
     // Só alerta se já passou do prazo ou está prestes a vencer (7 dias)
     if (diasDiff > freqDias || diasAteProximo <= 7) {
@@ -843,8 +963,9 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
         diasUltimaJuntada: diasDiff,
         diasAteProximo: diasAteProximo > 0 ? diasAteProximo : 0,
         frequencia: a.frequencia,
-        ultimaJuntada: last.dataComparecimento,
-        ultimoComparecimento: last.dataComparecimento,
+        ultimaJuntada: last ? last.dataComparecimento : null,
+        ultimoComparecimento: last ? last.dataComparecimento : null,
+        base,
         local: a.localAssinatura,
         vara: a.vara
       });
@@ -856,7 +977,17 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
     return (ordem[a.tipo] || 99) - (ordem[b.tipo] || 99);
   });
 
-  res.json(alertas);
+  // Paginação
+  const { page, limit } = req.query || {};
+  const total = alertas.length;
+  let paged = alertas;
+  if (page !== undefined && limit !== undefined) {
+    const p = Math.max(Number(page) || 1, 1);
+    const l = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const start = (p - 1) * l;
+    paged = alertas.slice(start, start + l);
+  }
+  res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
 // =====================================================================
@@ -871,17 +1002,32 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
   const qLower = String(q).trim().toLowerCase();
   const assistidos = await store.assistidos.all();
 
-  // Busca exata primeiro
-  const exatos = assistidos.filter(a => String(a.nome || '').toLowerCase().includes(qLower));
-
-  // Busca fuzzy: detecta nomes similares (mesmas palavras em ordem diferente)
-  const palavrasQ = qLower.split(/\s+/).filter(Boolean);
-  const fuzzy = assistidos.filter(a => {
+  // Calcula score de relevância para um assistido dado a busca
+  function scoreRelevancia(a) {
     const nome = String(a.nome || '').toLowerCase();
-    const palavrasNome = nome.split(/\s+/).filter(Boolean);
-    // Se todas as palavras da busca aparecem no nome
-    return palavrasQ.every(p => palavrasNome.some(pn => pn.includes(p) || pn.startsWith(p)));
-  }).filter(a => !exatos.includes(a)); // remove duplicatas com exatos
+    const vinculo = String(a.vinculo || '').toLowerCase();
+    const processo = String(a.processo || '').toLowerCase();
+    let score = 0;
+    // Nome começa com a busca = maior relevância
+    if (nome.startsWith(qLower)) score += 100;
+    else if (nome.includes(qLower)) score += 50;
+    // Vínculo exato ou começa com
+    if (vinculo === qLower) score += 80;
+    else if (vinculo.startsWith(qLower)) score += 60;
+    else if (vinculo.includes(qLower)) score += 30;
+    // Processo inclui
+    if (processo.includes(qLower)) score += 40;
+    return score;
+  }
+
+  // Busca em nome, vinculo e processo
+  const resultados = assistidos
+    .map(a => ({ a, score: scoreRelevancia(a) }))
+    .filter(({ score }) => score > 0)
+    .sort((x, y) => y.score - x.score);
+
+  const exatos = resultados.filter(r => r.a.nome.toLowerCase().includes(qLower)).map(r => r.a);
+  const fuzzy = resultados.filter(r => !exatos.includes(r.a)).map(r => r.a);
 
   res.json({
     exatos,
@@ -900,6 +1046,12 @@ router.patch('/api/assistidos/:id(\\d+)/etiqueta', auth(['admin','tecnico']), ah
   }
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
+  // Técnico só pode etiquetar assistidos de sua responsabilidade
+  if (req.auth.role === 'tecnico') {
+    const comps = await store.assistidosComparecimentos.all(req.params.id);
+    const meu = comps.some(c => String(c.policialPlantao || '').toLowerCase() === String(req.auth.name || req.auth.user).toLowerCase());
+    if (!meu) return res.status(403).json({ error: 'Técnico só pode etiquetar assistidos de sua responsabilidade.' });
+  }
   const row = await store.assistidos.patch(req.params.id, { etiqueta });
   if (!row) return res.status(404).json({ error: 'Assistido não encontrado ou não foi possível atualizar (verifique se a coluna etiqueta existe no Supabase)' });
   try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + etiqueta }); } catch(e){}
