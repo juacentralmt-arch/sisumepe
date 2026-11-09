@@ -1657,6 +1657,11 @@
             <option value="concluido">Concluído</option>
             <option value="arquivado">Arquivado</option>
           </select>
+          <select id="asEtiqueta" class="inp text-xs">
+            <option value="">Sem etiqueta</option>
+            <option value="verificado">✅ Verificado</option>
+            <option value="pendente">⚠️ Pendente</option>
+          </select>
         </div>
         <div class="mt-4 flex gap-2">
           <button onclick="salvarAssistido()" class="btn btn-primary text-xs px-5 py-2 shadow-md hover:shadow-lg transition">Salvar</button>
@@ -1691,6 +1696,11 @@
               <option value="ativo">Ativo</option>
               <option value="concluido">Concluído</option>
               <option value="arquivado">Arquivado</option>
+            </select>
+            <select id="editAsEtiqueta" class="inp text-xs">
+              <option value="">Sem etiqueta</option>
+              <option value="verificado">✅ Verificado</option>
+              <option value="pendente">⚠️ Pendente</option>
             </select>
           </div>
           <div class="mt-4 flex gap-2 justify-end">
@@ -1740,6 +1750,11 @@
           <option value="mensal">Mensal</option>
           <option value="bimestral">Bimestral</option>
           <option value="trimestral">Trimestral</option>
+        </select>
+        <select id="asFiltroEtiqueta" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
+          <option value="">Todas etiquetas</option>
+          <option value="verificado">✅ Verificado</option>
+          <option value="pendente">⚠️ Pendente</option>
         </select>
         <select id="asFiltroStatus" class="inp text-xs px-3 py-2" onchange="filtrarAssistidos()">
           <option value="">Todos os status</option>

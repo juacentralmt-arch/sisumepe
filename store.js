@@ -489,6 +489,7 @@ const ASS = {
   localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', dataFim: 'data_fim',
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
   situacaoJuridica: 'situacao_juridica', tipoMedida: 'tipo_medida', cargaHoraria: 'carga_horaria',
+  etiqueta: 'etiqueta',
   frequencia: 'frequencia', status: 'status', createdAt: 'createdat'
 };
 const ACC = {

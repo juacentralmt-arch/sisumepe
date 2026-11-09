@@ -885,6 +885,21 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
   });
 }));
 
+// =====================================================================
+//  Etiquetar/desetiquetar assistido (Verificado/Pendente)
+// =====================================================================
+router.patch('/api/assistidos/:id/etiqueta', auth(['admin','tecnico']), ah(async (req, res) => {
+  const { etiqueta } = req.body || {};
+  if (!etiqueta || !['verificado', 'pendente', ''].includes(etiqueta)) {
+    return res.status(400).json({ error: 'Etiqueta inválida. Use: verificado, pendente ou vazio' });
+  }
+  const target = await store.assistidos.byId(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
+  const row = await store.assistidos.patch(req.params.id, { etiqueta });
+  try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + etiqueta }); } catch(e){}
+  res.json({ id: row.id, etiqueta: row.etiqueta });
+}));
+
 module.exports = router;
 
 module.exports = router;
