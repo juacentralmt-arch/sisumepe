@@ -22,7 +22,8 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
     const hoje = new Date().toISOString().slice(0,10);
     const vencendo = prox && prox <= hoje;
     const vencendo7 = prox && !vencendo && prox <= new Date(Date.now() + 7*864e5).toISOString().slice(0,10);
-    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !String(last.juntada || '').trim()), proximoEsperado: prox, vencendo: vencendo, vencendo7d: vencendo7 };
+    const pendenteJuntada = cs.some(c => !String(c.juntada || '').trim());
+    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada, proximoEsperado: prox, vencendo: vencendo, vencendo7d: vencendo7 };
   });
   // Ordena por nome por padrão
   enriched.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
@@ -199,9 +200,9 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   // Transição automática: assistido passa a concluído após juntada
   try {
-    const assistido = await store.assistidos.byId(req.params.id);
+    const assistido = await store.assistidos.byId(row.assistidoId);
     if (assistido && assistido.status === 'ativo') {
-      await store.assistidos.patch(req.params.id, { status: 'concluido' });
+      await store.assistidos.patch(row.assistidoId, { status: 'concluido' });
     }
   } catch (e) {}
   try { await store.audit.insert({ kind:'assistido', action:'juntada', personName: '', ref: 'comparecimento#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' }); } catch(e){}
@@ -603,11 +604,7 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
                   campos.observacao = s;
                 }
                 break;
-              case 'status_especial': {
-                if (/ARQUIVADO/i.test(u)) campos.status = 'arquivado';
-                else if (/INATIVO/i.test(u)) campos.status = 'arquivado';
-                break;
-              }
+              // status_especial removido: classifyCell nunca retorna esse tipo (código morto)
             }
           });
           // Se achou um "texto" que parece nome, usa como nome
@@ -876,7 +873,7 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
     const palavrasNome = nome.split(/\s+/).filter(Boolean);
     // Se todas as palavras da busca aparecem no nome
     return palavrasQ.every(p => palavrasNome.some(pn => pn.includes(p) || pn.startsWith(p)));
-  }).filter(a => !exitos.includes(a)); // remove duplicatas com exatos
+  }).filter(a => !exatos.includes(a)); // remove duplicatas com exatos
 
   res.json({
     exatos,
@@ -899,7 +896,5 @@ router.patch('/api/assistidos/:id/etiqueta', auth(['admin','tecnico']), ah(async
   try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + etiqueta }); } catch(e){}
   res.json({ id: row.id, etiqueta: row.etiqueta });
 }));
-
-module.exports = router;
 
 module.exports = router;

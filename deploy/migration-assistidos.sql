@@ -65,6 +65,7 @@ alter table assistidos add column if not exists data_inicio text default '';
 alter table assistidos add column if not exists frequencia text default 'mensal';
 alter table assistidos add column if not exists status text default 'ativo';
 alter table assistidos add column if not exists deleted_at timestamptz default null;
+alter table assistidos add column if not exists etiqueta text default '';
 alter table assistidos_comparecimentos add column if not exists protocolado_por text default '';
 alter table assistidos_comparecimentos add column if not exists juntada text default '';
 alter table assistidos_comparecimentos add column if not exists assinado_por text default '';

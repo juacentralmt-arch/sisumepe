@@ -38,7 +38,7 @@ async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}
   // Criar assistido (admin)
   const createRes = await fetch(BASE + '/api/assistidos', {
     method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V001', nome: 'Fulano de Tal', processo: '0001234-56.2026', vara: 'Vara X', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01', frequencia: 'mensal' })
+    body: JSON.stringify({ vinculo: 'V001', nome: 'Fulano de Tal', processo: '0001234-56.2024.8.06.0001', vara: 'Vara X', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01', frequencia: 'mensal' })
   });
   assert(createRes.status === 201, 'POST admin: 201');
   const created = await createRes.json();
@@ -48,14 +48,14 @@ async function auth(role, user, name) { return { 'X-Test-Auth': `${role}|${user}
   // Local inválido
   const badLocal = await fetch(BASE + '/api/assistidos', {
     method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V002', nome: 'X', processo: 'P', vara: 'V', localAssinatura: 'Invalido', dataInicio: '2026-01-01' })
+    body: JSON.stringify({ vinculo: 'V002', nome: 'X', processo: '0001234-56.2024.8.06.0001', vara: 'V', localAssinatura: 'Invalido', dataInicio: '2026-01-01' })
   });
   assert(badLocal.status === 400, 'POST local inválido: 400');
 
   // Vínculo duplicado
   const dup = await fetch(BASE + '/api/assistidos', {
     method: 'POST', headers: await auth('admin','admin','Admin'),
-    body: JSON.stringify({ vinculo: 'V001', nome: 'Y', processo: 'P', vara: 'V', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01' })
+    body: JSON.stringify({ vinculo: 'V001', nome: 'Y', processo: '0001234-56.2024.8.06.0001', vara: 'V', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01' })
   });
   assert(dup.status === 409, 'POST vínculo duplicado: 409');
 

@@ -289,6 +289,8 @@ create table if not exists assistidos (
   data_inicio text default '',
   data_fim text default '',
   carga_horaria text default '',
+  frequencia text default 'mensal',
+  etiqueta text default '',
   status text default 'ativo',
   deleted_at timestamptz default null,
   createdat timestamptz default now()
