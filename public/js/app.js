@@ -10715,10 +10715,6 @@ function renderFluxoTab(){
   const map = { compareceu: 'compareceu', protocolado: 'protocolado', concluido: 'concluido' };
   const ff = fluxoFiltrado();
   const list = ff[map[fluxoTab]] || [];
-  if(fluxoTab === 'compareceu'){
-    toast('[fluxo] compareceu bruto=' + (fluxoData.compareceu||[]).length + ' filtrado=' + ff.compareceu.length + ' list=' + list.length);
-  }
-  console.log('[fluxo] tab=', fluxoTab, 'fluxoData counts=', { aguardando: (fluxoData.aguardando||[]).length, compareceu: (fluxoData.compareceu||[]).length, protocolado: (fluxoData.protocolado||[]).length, concluido: (fluxoData.concluido||[]).length }, 'filtered=', { compareceu: ff.compareceu.length, protocolado: ff.protocolado.length, concluido: ff.concluido.length }, 'list=', list.length);
   window._juntadaTextos = window._juntadaTextos || {};
   list.forEach(a => { if (a.compId) window._juntadaTextos[a.compId] = a.juntada || ''; });
   if(!list.length){ el.innerHTML = '<div class="card p-6 text-center text-slate-400">Vazio</div>'; return; }
@@ -11005,10 +11001,7 @@ function exportarRelatorioAssistidosXLSX(){
   XLSX.writeFile(wb, 'relatorio-assistidos.xlsx');
 }
 async function loadFluxo(){
-  toast('[diag] loadFluxo: chamando API /api/assistidos/fluxo');
   const r = await api('/api/assistidos/fluxo');
-  console.log('[fluxo] API resposta=', { aguardando: (r.aguardando||[]).length, compareceu: (r.compareceu||[]).length, protocolado: (r.protocolado||[]).length, concluido: (r.concluido||[]).length });
-  toast('[diag] loadFluxo: API retornou compareceu=' + (r.compareceu||[]).length);
   fluxoData = {
     aguardando: r.aguardando || [],
     compareceu: r.compareceu || [],
@@ -11020,12 +11013,9 @@ async function loadFluxo(){
 }
 
 async function loadAssistidos(){
-  toast('[diag] loadAssistidos iniciado');
   await loadStats();
   await filtrarAssistidos().catch(e => console.error('filtrarAssistidos falhou:', e));
-  toast('[diag] loadAssistidos: filtrarAssistidos OK');
   await loadFluxo().catch(e => { console.error('loadFluxo falhou:', e); toast('Falha ao carregar fluxo de assistidos'); });
-  toast('[diag] loadAssistidos: loadFluxo OK');
   setFluxoTab('todos');
 }
 
@@ -11408,34 +11398,24 @@ function fecharRegistrarComparecimento(){ document.getElementById('modalComparec
 async function salvarRegistrarComparecimento(){
   const btn = document.querySelector('#modalComparecimento button[onclick="salvarRegistrarComparecimento()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
-  const idEl = document.getElementById('cmpAssistidoId');
-  const dataEl = document.getElementById('cmpData');
-  const policialEl = document.getElementById('cmpPolicial');
-  const assinadoEl = document.getElementById('cmpAssinadoPor');
-  if(!idEl || !dataEl || !policialEl){ toast('Erro: formulário de comparecimento não encontrado'); if(btn){btn.disabled=false;btn.textContent='Registrar';} return; }
-  const id = idEl.value;
+  const id = document.getElementById('cmpAssistidoId').value;
   const body = {
-    dataComparecimento: dataEl.value,
-    policialPlantao: policialEl.value.trim(),
-    assinadoPor: assinadoEl ? assinadoEl.value.trim() : ''
+    dataComparecimento: document.getElementById('cmpData').value,
+    policialPlantao: document.getElementById('cmpPolicial').value.trim(),
+    assinadoPor: document.getElementById('cmpAssinadoPor') ? document.getElementById('cmpAssinadoPor').value.trim() : ''
   };
   if(!body.dataComparecimento){ if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } toast('Preencha a data'); return; }
   try{
     await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('[diag] POST comparecimento OK, chamando loadAssistidos...');
     toast('Comparecimento registrado'); fecharRegistrarComparecimento(); await loadAssistidos(); setFluxoTab('compareceu'); loadStats();
-    toast('[diag] setFluxoTab(compareceu) executado');
-  }catch(e){ console.error('salvarRegistrarComparecimento falhou:', e); toast('Erro: ' + (e.message || e.status || String(e) || 'Erro desconhecido')); }
+  }catch(e){ toast('Erro: ' + e.message); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } }
 }
 async function registrarComparecimento(){
   if(!assistidoSelecionado) return;
-  const dataEl = document.getElementById('cmpData');
-  const policialEl = document.getElementById('cmpPolicial');
-  if(!dataEl || !policialEl){ toast('Erro: formulário de comparecimento não encontrado'); return; }
   const body = {
-    dataComparecimento: dataEl.value,
-    policialPlantao: policialEl.value.trim()
+    dataComparecimento: document.getElementById('cmpData').value,
+    policialPlantao: document.getElementById('cmpPolicial').value.trim()
   };
   if(!body.dataComparecimento || !body.policialPlantao){ alert('Preencha data e policial'); return; }
   try{
@@ -11446,8 +11426,8 @@ async function registrarComparecimento(){
     loadComparecimentos(); loadPendencias();
     await loadAssistidos();
     setFluxoTab('compareceu');
-    dataEl.value=''; policialEl.value='';
-  }catch(e){ console.error('registrarComparecimento falhou:', e); toast('Erro: ' + (e.message || e.status || String(e) || 'Erro desconhecido')); }
+    document.getElementById('cmpData').value=''; document.getElementById('cmpPolicial').value='';
+  }catch(e){ toast('Erro: ' + e.message); }
 }
 
 async function protocolar(id){
