@@ -272,6 +272,49 @@ create policy "upload anexos"
   with check (bucket_id = 'anexos');
 
 -- =====================================================================
+--  Módulo Assistidos
+-- =====================================================================
+create table if not exists assistidos (
+  id serial primary key,
+  vinculo text default '',
+  nome text default '',
+  processo text default '',
+  vara text default '',
+  local_assinatura text default '',
+  data_inicio text default '',
+  sistema text default 'spacecom',
+  contrato text default 'CE01',
+  status text default 'ativo',
+  deleted_at timestamptz default null,
+  createdat timestamptz default now()
+);
+
+create table if not exists assistidos_comparecimentos (
+  id serial primary key,
+  assistido_id integer references assistidos(id) on delete cascade,
+  data_comparecimento text default '',
+  policial_plantao text default '',
+  assinado_por text default '',
+  protocolado boolean default false,
+  data_protocolacao text default '',
+  protocolado_por text default '',
+  observacoes text default '',
+  juntada text default '',
+  createdat timestamptz default now()
+);
+
+-- Índices
+create index if not exists idx_assistidos_nome on assistidos (nome);
+create index if not exists idx_assistidos_processo on assistidos (processo);
+create index if not exists idx_assistidos_vinculo on assistidos (vinculo);
+create index if not exists idx_assistidos_vara on assistidos (vara);
+create index if not exists idx_assistidos_local on assistidos (local_assinatura);
+create index if not exists idx_assistidos_status on assistidos (status);
+create index if not exists idx_assistidos_deleted on assistidos (deleted_at);
+create index if not exists idx_assistidos_comp_assistido on assistidos_comparecimentos (assistido_id);
+create index if not exists idx_assistidos_comp_pend on assistidos_comparecimentos (protocolado);
+
+-- =====================================================================
 --  Função usada pela restauração de backup (reajusta os contadores)
 -- =====================================================================
 create or replace function reset_sequences() returns void language plpgsql as $$
@@ -282,4 +325,6 @@ begin
   perform setval(pg_get_serial_sequence('audit', 'id'), coalesce((select max(id) from audit), 0) + 1, false);
   perform setval(pg_get_serial_sequence('agenda', 'id'), coalesce((select max(id) from agenda), 0) + 1, false);
   perform setval(pg_get_serial_sequence('termos', 'id'), coalesce((select max(id) from termos), 0) + 1, false);
+  perform setval(pg_get_serial_sequence('assistidos', 'id'), coalesce((select max(id) from assistidos), 0) + 1, false);
+  perform setval(pg_get_serial_sequence('assistidos_comparecimentos', 'id'), coalesce((select max(id) from assistidos_comparecimentos), 0) + 1, false);
 end $$;

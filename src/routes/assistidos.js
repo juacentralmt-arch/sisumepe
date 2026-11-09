@@ -726,4 +726,60 @@ router.get('/api/assistidos/pendentes-vinculo', auth(['admin','tecnico']), ah(as
   res.json(pendentes.sort((a, b) => String(a.vinculo||'').localeCompare(String(b.vinculo||''))));
 }));
 
+// Edição em lote de vínculos pendentes (atualiza múltiplos assistidos de uma vez)
+router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res) => {
+  const { items } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Informe a lista de itens para atualizar' });
+  }
+
+  let atualizados = 0;
+  let erros = 0;
+  const detalhes = [];
+
+  for (const item of items) {
+    const { id, vinculo } = item;
+    if (!id || !vinculo || String(vinculo).trim() === '') {
+      erros++;
+      detalhes.push({ id, erro: 'ID e vínculo são obrigatórios' });
+      continue;
+    }
+
+    try {
+      // Verifica se o vínculo já existe em outro assistido
+      const todos = await store.assistidos.allIncludingDeleted();
+      const dup = todos.find(x => String(x.id) !== String(id) && String(x.vinculo||'').trim().toLowerCase() === String(vinculo).trim().toLowerCase() && !x.deleted_at);
+      if (dup) {
+        erros++;
+        detalhes.push({ id, vinculo, erro: `Vínculo já cadastrado em outro assistido (${dup.nome})` });
+        continue;
+      }
+
+      const atualizado = await store.assistidos.patch(id, { vinculo: String(vinculo).trim() });
+      if (atualizado) {
+        atualizados++;
+        detalhes.push({ id, vinculo: atualizado.vinculo, status: 'atualizado' });
+      } else {
+        erros++;
+        detalhes.push({ id, erro: 'Assistido não encontrado' });
+      }
+    } catch (e) {
+      erros++;
+      detalhes.push({ id, erro: e.message });
+    }
+  }
+
+  // Rebusca os pendentes restantes para retornar ao frontend
+  const todos = await store.assistidos.allIncludingDeleted();
+  const pendentes = todos.filter(a => String(a.vinculo||'').startsWith('PENDENTE-') && !a.deleted_at);
+
+  res.json({
+    atualizados,
+    erros,
+    total: items.length,
+    pendentesRestantes: pendentes.length,
+    detalhes
+  });
+}));
+
 module.exports = router;

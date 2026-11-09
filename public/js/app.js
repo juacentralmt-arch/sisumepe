@@ -11460,7 +11460,23 @@ function filtrarPendentesVinculo(){
   // Destaca visualmente o botão/filtro ativo
   const btn = document.querySelector('button[onclick="filtrarPendentesVinculo()"]');
   if(btn){ btn.classList.add('btn-warning'); btn.classList.remove('btn-ghost'); }
+  carregarContadorPendentes();
 }
+
+// Carrega a contagem de assistidos com vínculo pendente
+async function carregarContadorPendentes(){
+  try {
+    const r = await api('/api/assistidos/pendentes-vinculo');
+    const list = Array.isArray(r) ? r : [];
+    const el = document.getElementById('pendentesCount');
+    if(el){ el.textContent = list.length; el.classList.toggle('hidden', list.length === 0); }
+  } catch(e) { console.error('Erro ao carregar contador pendentes:', e); }
+}
+
+// Inicializa contador de pendentes ao carregar a página
+document.addEventListener('DOMContentLoaded', () => {
+  carregarContadorPendentes();
+});
 
 // ===== Drag & Drop Menu Sidebar =====
 const MENU_ORDER_KEY = 'sisumepe_menu_order';
