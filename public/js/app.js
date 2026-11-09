@@ -11005,8 +11005,10 @@ function exportarRelatorioAssistidosXLSX(){
   XLSX.writeFile(wb, 'relatorio-assistidos.xlsx');
 }
 async function loadFluxo(){
+  toast('[diag] loadFluxo: chamando API /api/assistidos/fluxo');
   const r = await api('/api/assistidos/fluxo');
   console.log('[fluxo] API resposta=', { aguardando: (r.aguardando||[]).length, compareceu: (r.compareceu||[]).length, protocolado: (r.protocolado||[]).length, concluido: (r.concluido||[]).length });
+  toast('[diag] loadFluxo: API retornou compareceu=' + (r.compareceu||[]).length);
   fluxoData = {
     aguardando: r.aguardando || [],
     compareceu: r.compareceu || [],
@@ -11018,9 +11020,12 @@ async function loadFluxo(){
 }
 
 async function loadAssistidos(){
+  toast('[diag] loadAssistidos iniciado');
   await loadStats();
   await filtrarAssistidos().catch(e => console.error('filtrarAssistidos falhou:', e));
+  toast('[diag] loadAssistidos: filtrarAssistidos OK');
   await loadFluxo().catch(e => { console.error('loadFluxo falhou:', e); toast('Falha ao carregar fluxo de assistidos'); });
+  toast('[diag] loadAssistidos: loadFluxo OK');
   setFluxoTab('todos');
 }
 
@@ -11417,7 +11422,9 @@ async function salvarRegistrarComparecimento(){
   if(!body.dataComparecimento){ if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } toast('Preencha a data'); return; }
   try{
     await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    toast('[diag] POST comparecimento OK, chamando loadAssistidos...');
     toast('Comparecimento registrado'); fecharRegistrarComparecimento(); await loadAssistidos(); setFluxoTab('compareceu'); loadStats();
+    toast('[diag] setFluxoTab(compareceu) executado');
   }catch(e){ console.error('salvarRegistrarComparecimento falhou:', e); toast('Erro: ' + (e.message || e.status || String(e) || 'Erro desconhecido')); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Registrar'; } }
 }
