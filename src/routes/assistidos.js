@@ -11,12 +11,13 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   const comps = await store.assistidosComparecimentos.all();
   const byAssistido = new Map();
   comps.forEach(c => {
-    const arr = byAssistido.get(c.assistidoId) || [];
+    const key = String(c.assistidoId);
+    const arr = byAssistido.get(key) || [];
     arr.push(c);
-    byAssistido.set(c.assistidoId, arr);
+    byAssistido.set(key, arr);
   });
   const enriched = list.map(a => {
-    const cs = (byAssistido.get(a.id) || []).sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
+    const cs = (byAssistido.get(String(a.id)) || []).sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
     const last = cs[0] || null;
     const prox = proximoEsperadoAssistido(a, comps);
     const hoje = new Date().toISOString().slice(0,10);
@@ -86,7 +87,8 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
     dataFim: String(b.dataFim || '').trim(),
     cargaHoraria: String(b.cargaHoraria || '').trim(),
     frequencia: freq,
-    status: 'ativo'
+    etiqueta: String(b.etiqueta || '').trim(),
+    status: ['ativo','concluido','arquivado'].includes(String(b.status || '').trim()) ? String(b.status).trim() : 'ativo'
   });
   try { await store.audit.insert({ kind:'assistido', action:'criado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido cadastrado: ' + row.nome }); } catch(e){}
   broadcast();
@@ -104,7 +106,7 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
     if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
   }
   const fields = {};
-  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim']) if (b[k] !== undefined) fields[k] = b[k];
+  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim','etiqueta']) if (b[k] !== undefined) fields[k] = b[k];
   if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
 
   if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
@@ -215,8 +217,8 @@ router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (re
   const all = await store.assistidosComparecimentos.all();
   const list = all.filter(c => !String(c.juntada||'').trim());
   const assistidos = await store.assistidos.all();
-  const byId = new Map(assistidos.map(a => [a.id, a]));
-  const out = list.map(c => ({ ...c, assistido: byId.get(c.assistidoId) || null }));
+  const byId = new Map(assistidos.map(a => [String(a.id), a]));
+  const out = list.map(c => ({ ...c, assistido: byId.get(String(c.assistidoId)) || null }));
   res.json(out);
 }));
 
@@ -282,12 +284,13 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
     const comps = await store.assistidosComparecimentos.all();
     const byAssistido = new Map();
     comps.forEach(c => {
-      const arr = byAssistido.get(c.assistidoId) || [];
+      const key = String(c.assistidoId);
+      const arr = byAssistido.get(key) || [];
       arr.push(c);
-      byAssistido.set(c.assistidoId, arr);
+      byAssistido.set(key, arr);
     });
     list = list.filter(a => {
-      const cs = byAssistido.get(a.id) || [];
+      const cs = byAssistido.get(String(a.id)) || [];
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
@@ -403,7 +406,7 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
 
 const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
 function proximoEsperadoAssistido(a, comps){
-  const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+  const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
   const base = last ? last.dataComparecimento : (a.dataInicio || null);
   if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
   const dias = FREQ_DAYS[a.frequencia] || 30;
@@ -419,7 +422,7 @@ router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']
   const out = [];
   for (const a of assistidos) {
     if (a.status && a.status !== 'ativo') continue;
-    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
     const base = last ? last.dataComparecimento : (a.dataInicio || hoje);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(base))) continue;
     const dias = FREQ_DAYS[a.frequencia] || 30;
@@ -718,9 +721,9 @@ router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, re
   const etapas = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
   for (const a of assistidos) {
     if (a.status === 'concluido' || a.status === 'arquivado') { etapas.concluido.push(a); continue; }
-    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    const last = comps.filter(c => String(c.assistidoId) === String(a.id)).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
     if (!last) { etapas.aguardando.push(a); continue; }
-    const proto = comps.filter(c => c.assistidoId === a.id).find(c => String(c.juntada||'').trim());
+    const proto = comps.filter(c => String(c.assistidoId) === String(a.id)).find(c => String(c.juntada||'').trim());
     if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor }); continue; }
     etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor });
   }
