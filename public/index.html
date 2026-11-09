@@ -1662,6 +1662,8 @@
             <option value="verificado">✅ Verificado</option>
             <option value="pendente">⚠️ Pendente</option>
           </select>
+          <input id="asEtiquetaTexto" type="text" placeholder="Texto da etiqueta" class="inp text-xs">
+          <input id="asEtiquetaCor" type="color" class="inp text-xs">
         </div>
         <div class="mt-4 flex gap-2">
           <button onclick="salvarAssistido()" class="btn btn-primary text-xs px-5 py-2 shadow-md hover:shadow-lg transition">Salvar</button>
@@ -1685,6 +1687,13 @@
               <option value="COAP Cariri">COAP Cariri</option>
             </select>
             <input id="editAsInicio" type="date" class="inp text-xs">
+            <input id="editAsCpf" placeholder="CPF (11 dígitos)" class="inp text-xs">
+            <input id="editAsTelefone" placeholder="Telefone" class="inp text-xs">
+            <input id="editAsEndereco" placeholder="Endereço" class="inp text-xs">
+            <input id="editAsSituacaoJuridica" placeholder="Situação jurídico-penal" class="inp text-xs">
+            <input id="editAsTipoMedida" placeholder="Tipo de medida (PSC, LA...)" class="inp text-xs">
+            <input id="editAsCargaHoraria" placeholder="Carga horária" class="inp text-xs">
+            <input id="editAsDataFim" type="date" class="inp text-xs" placeholder="Previsão término">
             <select id="editAsFrequencia" class="inp text-xs">
               <option value="semanal">Semanal</option>
               <option value="quinzenal">Quinzenal</option>
@@ -1702,6 +1711,8 @@
               <option value="verificado">✅ Verificado</option>
               <option value="pendente">⚠️ Pendente</option>
             </select>
+            <input id="editAsEtiquetaCor" type="color" class="inp text-xs">
+            <input id="editAsEtiquetaTexto" type="text" placeholder="Texto da etiqueta" class="inp text-xs">
           </div>
           <div class="mt-4 flex gap-2 justify-end">
             <button onclick="fecharEditarAssistido()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>

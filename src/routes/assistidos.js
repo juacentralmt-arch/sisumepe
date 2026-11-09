@@ -2,27 +2,34 @@ const express = require('express');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, upload } = shared;
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const {
+  LOCAIS_ASSINATURA, PERIODOS_COMPARECIMENTO, FREQ_DAYS, STATUS_ASSISTIDO,
+  isoDate, cpfValido, agruparComparecimentos, comparecimentoProtocolado,
+  nomeKey, filtrarAssistidosBase, proximoEsperadoAssistido
+} = require('../lib/assistidos');
 const router = express.Router();
+
+async function temResponsabilidade(req, assistidoId) {
+  if (req.auth.role === 'admin') return true;
+  const comps = await store.assistidosComparecimentos.all(assistidoId);
+  const meuNome = nomeKey(req.auth.name || req.auth.user);
+  return comps.some(c => nomeKey(c.policialPlantao) === meuNome);
+}
 
 // Cadastro de assistido
 router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => {
   const { page, limit } = req.query || {};
   const list = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
-  const byAssistido = new Map();
-  comps.forEach(c => {
-    const arr = byAssistido.get(c.assistidoId) || [];
-    arr.push(c);
-    byAssistido.set(c.assistidoId, arr);
-  });
+  const byAssistido = agruparComparecimentos(comps);
   const enriched = list.map(a => {
-    const cs = (byAssistido.get(a.id) || []).sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
+    const cs = byAssistido.get(String(a.id)) || [];
     const last = cs[0] || null;
-    const prox = proximoEsperadoAssistido(a, comps);
+    const prox = proximoEsperadoAssistido(a, cs);
     const hoje = new Date().toISOString().slice(0,10);
     const vencendo = prox && prox <= hoje;
     const vencendo7 = prox && !vencendo && prox <= new Date(Date.now() + 7*864e5).toISOString().slice(0,10);
-    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !String(last.juntada || '').trim()), proximoEsperado: prox, vencendo: vencendo, vencendo7d: vencendo7 };
+    return { ...a, ultimoComparecimento: last ? last.dataComparecimento : null, pendenteJuntada: !!(last && !comparecimentoProtocolado(last)), proximoEsperado: prox, vencendo: vencendo, vencendo7d: vencendo7 };
   });
   // Ordena por nome por padrão
   enriched.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
@@ -37,8 +44,6 @@ router.get('/api/assistidos', auth(['admin','tecnico']), ah(async (req, res) => 
   res.json({ items: paged, total, page: page ? Number(page) : 1, limit: limit ? Number(limit) : total });
 }));
 
-const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
-const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
 const SISTEMAS_ASSISTIDO = ['spacecom', 'infinity'];
 const CONTRATOS_ASSISTIDO = ['CE01', 'CE02', 'INF'];
 
@@ -64,12 +69,17 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!b.vara || !String(b.vara).trim()) return res.status(400).json({ error: 'Vara é obrigatória' });
   if (!LOCAIS_ASSINATURA.includes(String(b.localAssinatura || '').trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
-  if (b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (!isoDate(b.dataInicio)) return res.status(400).json({ error: 'Data de início inválida (use uma data real no formato AAAA-MM-DD)' });
+  if (b.dataFim && !isoDate(b.dataFim)) return res.status(400).json({ error: 'Data de término inválida' });
+  if (b.cpf && !cpfValido(b.cpf)) return res.status(400).json({ error: 'CPF inválido' });
   if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
-  const freq = PERIODOS_COMPARECIMENTO.includes(String(b.frequencia || '').trim()) ? String(b.frequencia).trim() : 'mensal';
+  const freq = String(b.frequencia || 'mensal').trim();
+  if (!PERIODOS_COMPARECIMENTO.includes(freq)) return res.status(400).json({ error: 'Frequência inválida' });
+  const etiqueta = String(b.etiqueta || '').trim().slice(0, 40);
+  const etiquetaTexto = String(b.etiquetaTexto || '').trim().slice(0, 60);
+  const etiquetaCor = /^#[0-9A-Fa-f]{6}$/.test(String(b.etiquetaCor || '')) ? String(b.etiquetaCor) : '#4f46e5';
   const all = await store.assistidos.all();
-  if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) return res.status(409).json({ error: 'Vínculo já cadastrado' });
+  if (all.some(x => String(x.vinculo || '').trim().toLocaleLowerCase('pt-BR') === String(b.vinculo).trim().toLocaleLowerCase('pt-BR'))) return res.status(409).json({ error: 'Vínculo já cadastrado' });
   const row = await store.assistidos.insert({
     vinculo: String(b.vinculo).trim(),
     nome: String(b.nome).trim(),
@@ -85,6 +95,9 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
     dataFim: String(b.dataFim || '').trim(),
     cargaHoraria: String(b.cargaHoraria || '').trim(),
     frequencia: freq,
+    etiqueta,
+    etiquetaTexto,
+    etiquetaCor,
     status: 'ativo'
   });
   try { await store.audit.insert({ kind:'assistido', action:'criado', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido cadastrado: ' + row.nome }); } catch(e){}
@@ -92,23 +105,39 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   res.status(201).json(row);
 }));
 
-router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, res) => {
+router.patch('/api/assistidos/:id(\\d+)', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Não encontrado' });
   // Técnico só edita assistidos de sua responsabilidade (único comparecimento registrado por ele ou assistido sem técnico definido).
   if (req.auth.role === 'tecnico') {
-    const comps = await store.assistidosComparecimentos.all(req.params.id);
-    const meu = comps.some(c => String(c.policialPlantao || '').toLowerCase() === String(req.auth.name || req.auth.user).toLowerCase());
-    if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
+    if (!await temResponsabilidade(req, req.params.id)) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
   }
   const fields = {};
-  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim']) if (b[k] !== undefined) fields[k] = b[k];
-  if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) fields.frequencia = String(b.frequencia).trim();
+  const requiredFields = new Set(['vinculo','nome','processo','vara','localAssinatura','dataInicio']);
+  for (const k of ['vinculo','nome','processo','vara','localAssinatura','dataInicio','cpf','telefone','endereco','situacaoJuridica','tipoMedida','cargaHoraria','dataFim']) {
+    if (b[k] === undefined) continue;
+    fields[k] = String(b[k] == null ? '' : b[k]).trim();
+    if (requiredFields.has(k) && !fields[k]) return res.status(400).json({ error: `${k} é obrigatório` });
+  }
+  if (b.frequencia !== undefined) {
+    const freq = String(b.frequencia).trim();
+    if (!PERIODOS_COMPARECIMENTO.includes(freq)) return res.status(400).json({ error: 'Frequência inválida' });
+    fields.frequencia = freq;
+  }
+  if (b.etiqueta !== undefined) fields.etiqueta = String(b.etiqueta || '').trim().slice(0, 40);
+  if (b.etiquetaTexto !== undefined) fields.etiquetaTexto = String(b.etiquetaTexto || '').trim().slice(0, 60);
+  if (b.etiquetaCor !== undefined) fields.etiquetaCor = /^#[0-9A-Fa-f]{6}$/.test(String(b.etiquetaCor)) ? String(b.etiquetaCor) : '#4f46e5';
 
-  if (b.status !== undefined && ['ativo','concluido','arquivado'].includes(String(b.status).trim())) fields.status = String(b.status).trim();
+  if (b.status !== undefined) {
+    const status = String(b.status).trim();
+    if (!STATUS_ASSISTIDO.includes(status)) return res.status(400).json({ error: 'Status inválido' });
+    fields.status = status;
+  }
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
-  if (b.cpf !== undefined && b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (b.cpf !== undefined && b.cpf && !cpfValido(b.cpf)) return res.status(400).json({ error: 'CPF inválido' });
+  if (b.dataInicio !== undefined && !isoDate(b.dataInicio)) return res.status(400).json({ error: 'Data de início inválida' });
+  if (b.dataFim !== undefined && b.dataFim !== '' && !isoDate(b.dataFim)) return res.status(400).json({ error: 'Data de término inválida' });
   if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
   // Validação: vínculo não pode ser duplicado em outro assistido
   if (fields.vinculo !== undefined && String(fields.vinculo).trim()) {
@@ -123,10 +152,9 @@ router.patch('/api/assistidos/:id', auth(['admin','tecnico']), ah(async (req, re
   res.json(row);
 }));
 
-router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
+router.delete('/api/assistidos/:id(\\d+)', auth(['admin']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
-  const comps = await store.assistidosComparecimentos.all(req.params.id);
-  for (const c of comps) await store.assistidosComparecimentos.remove(c.id);
+  if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
   await store.assistidos.remove(req.params.id);
   try { await store.audit.insert({ kind:'assistido', action:'excluido', personName: a ? a.nome : '', ref: 'assistido#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Assistido excluído' + (a ? ': ' + a.nome : '') }); } catch(e){}
   broadcast();
@@ -135,6 +163,7 @@ router.delete('/api/assistidos/:id', auth(['admin']), ah(async (req, res) => {
 
 // Comparecimentos
 router.get('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
+  if (!await store.assistidos.byId(req.params.id)) return res.status(404).json({ error: 'Assistido não encontrado' });
   const list = await store.assistidosComparecimentos.all(req.params.id);
   res.json(list);
 }));
@@ -144,14 +173,14 @@ router.get('/api/assistidos/:id/detalhe', auth(['admin','tecnico']), ah(async (r
   if (!a) return res.status(404).json({ error: 'Não encontrado' });
   const comps = await store.assistidosComparecimentos.all(req.params.id);
   const sorted = comps.slice().sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
-  const pendentes = comps.filter(c => !String(c.juntada || '').trim());
+  const pendentes = comps.filter(c => !comparecimentoProtocolado(c));
   res.json({ assistido: a, comparecimentos: sorted, pendentes: pendentes.length, total: comps.length });
 }));
 
 router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataComparecimento).trim())) return res.status(400).json({ error: 'Data de comparecimento inválida (use AAAA-MM-DD)' });
+  if (!isoDate(b.dataComparecimento)) return res.status(400).json({ error: 'Data de comparecimento inválida (use uma data real no formato AAAA-MM-DD)' });
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
   // Bloqueia comparecimento duplicado no mesmo dia para o mesmo assistido
@@ -162,7 +191,9 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
-    policialPlantao: String(b.policialPlantao || '').trim() || '—',
+    policialPlantao: req.auth.role === 'tecnico'
+      ? String(req.auth.name || req.auth.user || '').trim()
+      : String(b.policialPlantao || '').trim() || '—',
     assinadoPor: String(b.assinadoPor || '').trim() || null
   });
   try { await store.audit.insert({ kind:'assistido', action:'comparecimento', personName: a.nome, ref: 'comparecimento#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Comparecimento registrado: ' + row.dataComparecimento }); } catch(e){}
@@ -173,6 +204,7 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin','tecnico']), ah
 // Protocolar pendência (marcar comparecimento como protocolado + observações)
 router.patch('/api/assistidos/comparecimentos/:id/protocolar', auth(['admin','tecnico']), ah(async (req, res) => {
   const b = req.body || {};
+  if (b.dataProtocolacao && !isoDate(b.dataProtocolacao)) return res.status(400).json({ error: 'Data de protocolação inválida' });
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
     protocolado: true,
     dataProtocolacao: b.dataProtocolacao || new Date().toISOString().slice(0,10),
@@ -199,11 +231,11 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   // Transição automática: assistido passa a concluído após juntada
   try {
-    const assistido = await store.assistidos.byId(req.params.id);
+    const assistido = await store.assistidos.byId(row.assistidoId);
     if (assistido && assistido.status === 'ativo') {
-      await store.assistidos.patch(req.params.id, { status: 'concluido' });
+      await store.assistidos.patch(assistido.id, { status: 'concluido' });
     }
-  } catch (e) {}
+  } catch (e) { throw e; }
   try { await store.audit.insert({ kind:'assistido', action:'juntada', personName: '', ref: 'comparecimento#'+req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' }); } catch(e){}
   broadcast();
   res.json(row);
@@ -212,10 +244,9 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin','tecni
 // Listar pendências (comparecimentos sem juntada)
 router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (req, res) => {
   const all = await store.assistidosComparecimentos.all();
-  const list = all.filter(c => !String(c.juntada||'').trim());
   const assistidos = await store.assistidos.all();
-  const byId = new Map(assistidos.map(a => [a.id, a]));
-  const out = list.map(c => ({ ...c, assistido: byId.get(c.assistidoId) || null }));
+  const byId = new Map(assistidos.map(a => [String(a.id), a]));
+  const out = all.filter(c => !comparecimentoProtocolado(c) && byId.has(String(c.assistidoId))).map(c => ({ ...c, assistido: byId.get(String(c.assistidoId)) }));
   res.json(out);
 }));
 
@@ -223,7 +254,7 @@ router.get('/api/assistidos/pendencias', auth(['admin','tecnico']), ah(async (re
 router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
-  const pend = comps.filter(c => !c.protocolado);
+  const pend = comps.filter(c => !comparecimentoProtocolado(c));
   const porVara = {};
   const porPolicial = {};
   const porMes = {};
@@ -256,44 +287,24 @@ router.get('/api/assistidos/stats', auth(['admin','tecnico']), ah(async (req, re
 
 // Filtro de listagem
 router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo } = req.query || {};
-  let list = await store.assistidos.all();
-  if (q) {
-    const t = String(q).toLowerCase();
-    list = list.filter(a => (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vinculo||'').toLowerCase().includes(t));
-  }
-  if (nome) {
-    const t = String(nome).toLowerCase();
-    list = list.filter(a => (a.nome||'').toLowerCase().includes(t));
-  }
-  if (vinculo) {
-    const t = String(vinculo).toLowerCase();
-    list = list.filter(a => (a.vinculo||'').toLowerCase().includes(t));
-  }
-  if (processo) {
-    const t = String(processo).toLowerCase();
-    list = list.filter(a => (a.processo||'').toLowerCase().includes(t));
-  }
-  if (vara) list = list.filter(a => a.vara === vara);
-  if (local) list = list.filter(a => a.localAssinatura === local);
-  if (status) list = list.filter(a => a.status === status);
-  if (dataProtocolo || usuarioProtocolo) {
+  const query = req.query || {};
+  let list = filtrarAssistidosBase(await store.assistidos.all(), query);
+  const { dataProtocolo, usuarioProtocolo, protoDe, protoAte } = query;
+  if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
     const comps = await store.assistidosComparecimentos.all();
-    const byAssistido = new Map();
-    comps.forEach(c => {
-      const arr = byAssistido.get(c.assistidoId) || [];
-      arr.push(c);
-      byAssistido.set(c.assistidoId, arr);
-    });
+    const byAssistido = agruparComparecimentos(comps);
     list = list.filter(a => {
-      const cs = byAssistido.get(a.id) || [];
+      const cs = byAssistido.get(String(a.id)) || [];
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
+        if (protoDe && (!c.dataProtocolacao || String(c.dataProtocolacao) < protoDe)) return false;
+        if (protoAte && (!c.dataProtocolacao || String(c.dataProtocolacao) > protoAte)) return false;
         return true;
       });
     });
   }
+  list.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   // Paginação
   const { page, limit } = req.query || {};
   const total = list.length;
@@ -309,36 +320,33 @@ router.get('/api/assistidos/filtrar', auth(['admin','tecnico']), ah(async (req, 
 
 // Relatório em PDF — aplica os mesmos filtros de /filtrar e gera PDF para download
 router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { q, vara, nome, vinculo, processo, local, status, dataProtocolo, usuarioProtocolo, protoDe, protoAte, campos } = req.query || {};
-  let list = await store.assistidos.all();
-  if (q) {
-    const t = String(q).toLowerCase();
-    list = list.filter(a => (a.nome||'').toLowerCase().includes(t) || (a.processo||'').toLowerCase().includes(t) || (a.vinculo||'').toLowerCase().includes(t));
-  }
-  if (nome) { const t = String(nome).toLowerCase(); list = list.filter(a => (a.nome||'').toLowerCase().includes(t)); }
-  if (vinculo) { const t = String(vinculo).toLowerCase(); list = list.filter(a => (a.vinculo||'').toLowerCase().includes(t)); }
-  if (processo) { const t = String(processo).toLowerCase(); list = list.filter(a => (a.processo||'').toLowerCase().includes(t)); }
-  if (vara) list = list.filter(a => a.vara === vara);
-  if (local) list = list.filter(a => a.localAssinatura === local);
-  if (status) list = list.filter(a => a.status === status);
+  const query = req.query || {};
+  const { dataProtocolo, usuarioProtocolo, protoDe, protoAte, campos } = query;
+  let list = filtrarAssistidosBase(await store.assistidos.all(), query);
+  const comps = await store.assistidosComparecimentos.all();
+  const byAssistido = agruparComparecimentos(comps);
   if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
-    const comps = await store.assistidosComparecimentos.all();
-    const byAssistido = new Map();
-    comps.forEach(c => { const arr = byAssistido.get(c.assistidoId) || []; arr.push(c); byAssistido.set(c.assistidoId, arr); });
     list = list.filter(a => {
-      const cs = byAssistido.get(a.id) || [];
+      const cs = byAssistido.get(String(a.id)) || [];
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
-        if (protoDe && c.dataProtocolacao && String(c.dataProtocolacao) < protoDe) return false;
-        if (protoAte && c.dataProtocolacao && String(c.dataProtocolacao) > protoAte) return false;
+        if (protoDe && (!c.dataProtocolacao || String(c.dataProtocolacao) < protoDe)) return false;
+        if (protoAte && (!c.dataProtocolacao || String(c.dataProtocolacao) > protoAte)) return false;
         return true;
       });
     });
   }
-  list = list.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  list = list.map(a => {
+    const cs = byAssistido.get(String(a.id)) || [];
+    const last = cs[0] || {};
+    const protocolado = cs.find(comparecimentoProtocolado) || {};
+    return { ...a, ultimoComparecimento: last.dataComparecimento || null, policialPlantao: last.policialPlantao || null, juntada: last.juntada || null, dataProtocolacao: protocolado.dataProtocolacao || last.dataProtocolacao || null, protocoladoPor: protocolado.protocoladoPor || last.protocoladoPor || null };
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
-  const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').filter(Boolean);
+  const camposPermitidos = new Set(['vinculo','nome','processo','vara','localAssinatura','dataInicio','status','ultimoComparecimento','policialPlantao','juntada','dataProtocolacao','protocoladoPor']);
+  const camposSel = (campos || 'vinculo,nome,processo,vara,localAssinatura,dataInicio,status,ultimoComparecimento,policialPlantao,juntada,dataProtocolacao,protocoladoPor').split(',').map(x => x.trim()).filter(k => camposPermitidos.has(k));
+  if (!camposSel.length) camposSel.push('vinculo', 'nome');
   const labels = { vinculo:'Vínculo', nome:'Nome', processo:'Processo', vara:'Vara', localAssinatura:'Local', dataInicio:'Início', status:'Status', ultimoComparecimento:'Últ. Comparecimento', policialPlantao:'Policial', juntada:'Juntada', dataProtocolacao:'Protocolado em', protocoladoPor:'Protocolado por' };
   const fmtBR = (v) => { if (!v) return '—'; const s = String(v).trim(); if (/^\d{4}-\d{2}-\d{2}/.test(s)) { const [y,m,d] = s.slice(0,10).split('-'); return d+'/'+m+'/'+y; } return s; };
 
@@ -400,29 +408,21 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin','tecnico']), ah(async 
   res.send(buf);
 }));
 
-const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
-function proximoEsperadoAssistido(a, comps){
-  const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
-  const base = last ? last.dataComparecimento : (a.dataInicio || null);
-  if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
-  const dias = FREQ_DAYS[a.frequencia] || 30;
-  const dt = new Date(String(base) + 'T00:00:00');
-  if (isNaN(dt)) return null;
-  return new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
-}
 // Pendentes de comparecimento: assistidos cujo próximo comparecimento esperado já passou
 router.get('/api/assistidos/pendencias-comparecimento', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const hoje = new Date().toISOString().slice(0,10);
   const out = [];
+  const byAssistido = agruparComparecimentos(comps);
   for (const a of assistidos) {
     if (a.status && a.status !== 'ativo') continue;
-    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    const last = (byAssistido.get(String(a.id)) || [])[0];
     const base = last ? last.dataComparecimento : (a.dataInicio || hoje);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(base))) continue;
+    if (!isoDate(base)) continue;
     const dias = FREQ_DAYS[a.frequencia] || 30;
-    const dt = new Date(String(base) + 'T00:00:00');
+    const [y, m, d] = String(base).split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
     if (isNaN(dt)) continue;
     const prox = new Date(dt.getTime() + dias*864e5).toISOString().slice(0,10);
     if (prox <= hoje) out.push({ ...a, ultimoComparecimento: last ? last.dataComparecimento : null, proximoEsperado: prox });
@@ -435,9 +435,12 @@ let lastImportStatus = { state: 'idle', total: 0, processed: 0, totalRows: 0, pr
 
 function excelSerialToISO(v) {
   if (v == null || v === '') return '';
-  if (v instanceof Date) return v.toISOString().slice(0,10);
+  if (v instanceof Date) {
+    const iso = v.toISOString().slice(0,10);
+    return isoDate(iso) ? iso : '';
+  }
   const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return isoDate(s.slice(0,10)) ? s.slice(0,10) : '';
   if (/^\d{4,6}$/.test(s)) {
     const d = new Date((Number(s) - 25569) * 86400 * 1000);
     if (!isNaN(d)) return d.toISOString().slice(0,10);
@@ -446,8 +449,9 @@ function excelSerialToISO(v) {
   if (m) {
     let [,dd,mm,yyyy] = m;
     if (yyyy.length === 2) yyyy = '20' + yyyy;
-    const d = new Date(Number(yyyy), Number(mm)-1, Number(dd));
-    if (!isNaN(d)) return d.toISOString().slice(0,10);
+    const y = Number(yyyy), m = Number(mm), day = Number(dd);
+    const d = new Date(Date.UTC(y, m-1, day));
+    if (!isNaN(d) && d.getUTCFullYear() === y && d.getUTCMonth() === m-1 && d.getUTCDate() === day) return d.toISOString().slice(0,10);
   }
   return s;
 }
@@ -467,39 +471,20 @@ router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res)
 router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
   const buffer = req.file.buffer;
+  if (lastImportStatus.state === 'running') return res.status(409).json({ error: 'Já existe uma importação em andamento.' });
   lastImportStatus = { state: 'running', total: 0, processed: 0, totalRows: 0, progress: 0, error: null, at: new Date().toISOString() };
   res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background.' });
   setImmediate(async () => {
+    let total = 0;
+    let failedRows = 0;
     try {
       const ExcelJS = require('exceljs');
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      let total = 0;
       let totalRows = 0;
       const allExisting = await store.assistidos.all();
-      const seenVinculo = new Set(allExisting.map(a => String(a.vinculo)));
-      for (const ws of wb.worksheets) {
-        const headerRow = ws.getRow(1);
-        const headers = [];
-        headerRow.eachCell((c, col) => { headers[col] = String(c.value || '').trim(); });
-        const findCol = (...names) => {
-          const low = headers.map(h => String(h||'').toLowerCase());
-          for (const n of names) {
-            const idx = low.indexOf(String(n).toLowerCase());
-            if (idx >= 0) return idx + 1;
-          }
-          return null;
-        };
-        const cVinculo = findCol('Vínculo','VINCULO');
-        const cNome = findCol('Nome','NOME');
-        const cProcesso = findCol('Processo','PROCESSO');
-        const cVara = findCol('Vara','VARA');
-        const cLocal = findCol('local de assinatura','Local de assinatura','LOCAL DE ASSINATURA');
-        const cInicio = findCol('Data Início','Data Inicio','DATA INÍCIO','DATA INICIO');
-        const cFreq = findCol('Frequência','FREQUENCIA','Frequencia');
-        const cComp = findCol('Data de Comparecimento','DATA DE COMPARECIMENTO');
-        const cPP = findCol('PP de Plantão','PP DE PLANTÃO','PP DE PLANTAO');
-        const cObs = findCol('Observação do PP: Em qual sistema foi protocolado e a folha','Observação do PP','OBSERVAÇÃO');
+      const seenVinculo = new Set(allExisting.map(a => String(a.vinculo || '').trim().toLocaleLowerCase('pt-BR')));
+      {
 
         // ---------------------------------------------------------------
         // Classificador de células por conteúdo (dados estão frequentemente
@@ -629,13 +614,12 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
         for (const ws of wb.worksheets) {
           ws.eachRow((row, idx) => {
             if (idx === 1) return;
-            const temVinculo = false;
             let temDado = false;
             row.eachCell((c) => { if (c.value != null && String(c.value).trim()) temDado = true; });
             if (!temDado) return;
             const campos = lerLinhaAssistido(row);
             if (!campos.vinculo || !campos.nome) return;
-            if (seenVinculo.has(campos.vinculo)) return;
+            if (seenVinculo.has(String(campos.vinculo).trim().toLocaleLowerCase('pt-BR'))) return;
             totalRows++;
           });
         }
@@ -654,13 +638,13 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
             const campos = lerLinhaAssistido(row);
             const { vinculo, nome } = campos;
             if (!vinculo || !nome) return;
-            if (seenVinculo.has(vinculo)) return;
+            if (seenVinculo.has(String(vinculo).trim().toLocaleLowerCase('pt-BR'))) return;
             linhasParaProcessar.push({ campos, row });
           });
         }
         for (const { campos } of linhasParaProcessar) {
           const { vinculo, nome } = campos;
-          if (seenVinculo.has(vinculo)) continue;
+          if (seenVinculo.has(String(vinculo).trim().toLocaleLowerCase('pt-BR'))) continue;
           try {
             // Garante local válido
             let localFinal = campos.localAssinatura;
@@ -679,6 +663,12 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
               frequencia: campos.frequencia,
               status: statusFinal
             });
+            seenVinculo.add(String(vinculo).trim().toLocaleLowerCase('pt-BR'));
+            total++;
+            lastImportStatus.processed = total;
+            lastImportStatus.progress = lastImportStatus.totalRows > 0 ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
+            lastImportStatus.at = new Date().toISOString();
+            try { await store.audit.insert({ kind:'assistido', action:'importado', personName: a.nome, ref:'assistido#'+a.id, byUser:'import', byName:'Importação Excel', byRole:'admin', summary:'Assistido importado: '+a.nome }); } catch (auditError) {}
 
             // Comparecimento (se houver data)
             if (campos.dataComparecimento && /^\d{4}-\d{2}-\d{2}$/.test(campos.dataComparecimento)) {
@@ -692,22 +682,20 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
               }
             }
 
-            seenVinculo.add(vinculo);
-            total++;
-            lastImportStatus.processed = total;
-            lastImportStatus.progress = lastImportStatus.totalRows > 0 ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
-            lastImportStatus.at = new Date().toISOString();
           } catch (e) {
+            failedRows++;
+            lastImportStatus.failures = failedRows;
+            lastImportStatus.lastError = String(e && e.message || e).slice(0, 250);
             console.error('import row error', e.message);
           }
         }
       }
-      lastImportStatus = { state: 'done', total, error: null, at: new Date().toISOString() };
+      lastImportStatus = { state: failedRows ? 'done_with_errors' : 'done', total, failures: failedRows, error: null, at: new Date().toISOString() };
       shared.broadcast({ type: 'assistidos_import_done', total });
       console.log('[assistidos] importação concluída:', total);
     } catch (e) {
       console.error('[assistidos] importação falhou:', e && e.stack ? e.stack : e.message);
-      lastImportStatus = { state: 'error', total: 0, error: String(e && e.message ? e.message : e), at: new Date().toISOString() };
+      lastImportStatus = { state: 'error', total, failures: failedRows, error: String(e && e.message ? e.message : e), at: new Date().toISOString() };
     }
   });
 }));
@@ -716,15 +704,15 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
 router.get('/api/assistidos/fluxo', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
-  const hoje = new Date().toISOString().slice(0,10);
-  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
+  const byAssistido = agruparComparecimentos(comps);
   const etapas = { aguardando: [], compareceu: [], protocolado: [], concluido: [] };
   for (const a of assistidos) {
     if (a.status === 'concluido' || a.status === 'arquivado') { etapas.concluido.push(a); continue; }
-    const last = comps.filter(c => c.assistidoId === a.id).sort((x,y)=> String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
+    const cs = byAssistido.get(String(a.id)) || [];
+    const last = cs[0];
     if (!last) { etapas.aguardando.push(a); continue; }
-    const proto = comps.filter(c => c.assistidoId === a.id).find(c => String(c.juntada||'').trim());
-    if (!String(last.juntada||'').trim()) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor }); continue; }
+    const proto = cs.find(comparecimentoProtocolado);
+    if (!comparecimentoProtocolado(last)) { etapas.compareceu.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor }); continue; }
     etapas.protocolado.push({ ...a, ultimoComparecimento: last.dataComparecimento, compId: last.id, juntada: last.juntada, policialPlantao: last.policialPlantao, dataProtocolacao: proto ? proto.dataProtocolacao : last.dataProtocolacao, protocoladoPor: proto ? proto.protocoladoPor : last.protocoladoPor });
   }
   res.json(etapas);
@@ -794,30 +782,27 @@ router.patch('/api/assistidos/bulk-vinculo', auth(['admin']), ah(async (req, res
 }));
 
 // =====================================================================
-//  Alertas automáticos — calcula dias desde última juntada
-//  Semáforo: EM DIA (0-30 dias) / ATENÇÃO (31-60 dias) / CRÍTICO (>60 dias)
+//  Alertas automáticos por intervalo da frequência do assistido
 // =====================================================================
 router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
   const hoje = new Date().toISOString().slice(0,10);
   const hojeDate = new Date(hoje);
-  const FREQ_DAYS = { semanal:7, quinzenal:15, mensal:30, bimestral:60, trimestral:90 };
 
-  // Último comparecimento por assistido
-  const ultimoPorAssistido = {};
-  comps.forEach(c => {
-    const aid = String(c.assistidoId);
-    if (!ultimoPorAssistido[aid] || String(c.dataComparecimento) > String(ultimoPorAssistido[aid].dataComparecimento)) {
-      ultimoPorAssistido[aid] = c;
-    }
-  });
+  const ultimoPorAssistido = agruparComparecimentos(comps);
 
   const alertas = [];
   for (const a of assistidos) {
     if (a.status !== 'ativo') continue;
-    const last = ultimoPorAssistido[String(a.id)];
+    const historico = ultimoPorAssistido.get(String(a.id)) || [];
+    const last = historico[0];
     if (!last) continue; // sem comparecimento registrado
+    if (!isoDate(last.dataComparecimento)) continue;
+    const ultimoProtocolo = historico.find(comparecimentoProtocolado);
+    const diasDesdeProtocolacao = ultimoProtocolo && isoDate(ultimoProtocolo.dataProtocolacao)
+      ? Math.floor((hojeDate - new Date(ultimoProtocolo.dataProtocolacao)) / 86400000)
+      : null;
 
     const ultimaData = new Date(last.dataComparecimento);
     const diasDiff = Math.floor((hojeDate - ultimaDate) / (1000 * 60 * 60 * 24));
@@ -825,8 +810,8 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
     const diasAteProximo = freqDias - diasDiff;
 
     let tipo = 'EM_DIA';
-    if (diasDiff > 60) tipo = 'CRITICO';
-    else if (diasDiff > 30) tipo = 'ATENCAO';
+    if (diasDiff > freqDias * 2) tipo = 'CRITICO';
+    else if (diasDiff > freqDias) tipo = 'ATENCAO';
 
     // Só alerta se já passou do prazo ou está prestes a vencer (7 dias)
     if (diasDiff > freqDias || diasAteProximo <= 7) {
@@ -835,10 +820,11 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
         nome: a.nome,
         vinculo: a.vinculo,
         tipo,
-        diasUltimaJuntada: diasDiff,
+        diasUltimaJuntada: diasDesdeProtocolacao,
+        diasUltimoComparecimento: diasDiff,
         diasAteProximo: diasAteProximo > 0 ? diasAteProximo : 0,
         frequencia: a.frequencia,
-        ultimaJuntada: last.dataComparecimento,
+        ultimaJuntada: ultimoProtocolo ? ultimoProtocolo.dataProtocolacao : null,
         ultimoComparecimento: last.dataComparecimento,
         local: a.localAssinatura,
         vara: a.vara
@@ -848,7 +834,7 @@ router.get('/api/assistidos/alertas', auth(['admin','tecnico']), ah(async (req, 
 
   alertas.sort((a, b) => {
     const ordem = { CRITICO: 0, ATENCAO: 1, EM_DIA: 2 };
-    return (ordem[a.tipo] || 99) - (ordem[b.tipo] || 99);
+    return (ordem[a.tipo] ?? 99) - (ordem[b.tipo] ?? 99);
   });
 
   res.json(alertas);
@@ -876,7 +862,7 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
     const palavrasNome = nome.split(/\s+/).filter(Boolean);
     // Se todas as palavras da busca aparecem no nome
     return palavrasQ.every(p => palavrasNome.some(pn => pn.includes(p) || pn.startsWith(p)));
-  }).filter(a => !exitos.includes(a)); // remove duplicatas com exatos
+  }).filter(a => !exatos.includes(a)); // remove duplicatas com exatos
 
   res.json({
     exatos,
@@ -886,20 +872,24 @@ router.get('/api/assistidos/buscar', auth(['admin','tecnico']), ah(async (req, r
 }));
 
 // =====================================================================
-//  Etiquetar/desetiquetar assistido (Verificado/Pendente)
+//  Etiquetar/desetiquetar assistido (etiqueta personalizada com cor)
 // =====================================================================
 router.patch('/api/assistidos/:id/etiqueta', auth(['admin','tecnico']), ah(async (req, res) => {
-  const { etiqueta } = req.body || {};
-  if (!etiqueta || !['verificado', 'pendente', ''].includes(etiqueta)) {
-    return res.status(400).json({ error: 'Etiqueta inválida. Use: verificado, pendente ou vazio' });
-  }
+  const { etiqueta, etiquetaCor } = req.body || {};
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
-  const row = await store.assistidos.patch(req.params.id, { etiqueta });
-  try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + etiqueta }); } catch(e){}
-  res.json({ id: row.id, etiqueta: row.etiqueta });
+  const texto = String(etiqueta || '').trim().slice(0, 40);
+  if (!texto) {
+    const row = await store.assistidos.patch(req.params.id, { etiqueta: '', etiquetaCor: '' });
+    if (!row) return res.status(404).json({ error: 'Assistido não encontrado' });
+    try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta removida' }); } catch(e){}
+    return res.json({ id: row.id, etiqueta: row.etiqueta, etiquetaCor: row.etiquetaCor });
+  }
+  const etiquetaCorValida = /^#[0-9A-Fa-f]{6}$/.test(String(etiquetaCor || '')) ? String(etiquetaCor) : '#4f46e5';
+  const row = await store.assistidos.patch(req.params.id, { etiqueta: texto, etiquetaCor: etiquetaCorValida });
+  if (!row) return res.status(404).json({ error: 'Assistido não encontrado' });
+  try { await store.audit.insert({ kind:'assistido', action:'etiqueta', personName: row.nome, ref: 'assistido#'+row.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Etiqueta: ' + texto + ' (' + etiquetaCorValida + ')' }); } catch(e){}
+  res.json({ id: row.id, etiqueta: row.etiqueta, etiquetaCor: row.etiquetaCor });
 }));
-
-module.exports = router;
 
 module.exports = router;

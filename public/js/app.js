@@ -10646,10 +10646,10 @@ async function importarAssistidos(inp){
           if(count) count.textContent = (st.processed||0) + ' / ' + (st.totalRows||0);
           if(text){
             if(st.state === 'running') text.textContent = 'Importando dados (' + pct + '%)…';
-            else if(st.state === 'done') text.textContent = 'Finalizando…';
+            else if(st.state === 'done' || st.state === 'done_with_errors') text.textContent = 'Finalizando…';
           }
         }
-        if (st && st.state === 'done') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); toast('Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
+        if (st && (st.state === 'done' || st.state === 'done_with_errors')) { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); toast('Importação: ' + st.total + ' incluído(s), ' + (st.failures || 0) + ' erro(s).'); loadAssistidos(); loadStats(); }
         else if (st && st.state === 'error') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); alert('Erro na importação: ' + (st.error || '')); }
       } catch(e) { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); }
     }, 1000);
@@ -11017,6 +11017,7 @@ async function loadFluxo(){
 }
 
 async function loadAssistidos(){
+  assistidosPage = 1;
   await loadStats();
   await filtrarAssistidos();
   await loadFluxo();
@@ -11104,10 +11105,8 @@ function assistidoMatchFilters(a, f){
   if (f.frequencia && a.frequencia !== f.frequencia) return false;
   if (f.etiqueta && a.etiqueta !== f.etiqueta) return false;
   if (f.status && a.status !== f.status) return false;
-  if (f.dataProtocolo || f.usuarioProtocolo) {
-    // filtering by protocolo fields only makes sense for protocolado tab; match if any comparecimento satisfies
-    // We don't have protocolado data on assistido object; skip client-side (backend handles). 
-  }
+  if (f.dataProtocolo && !String(a.dataProtocolacao || '').includes(f.dataProtocolo)) return false;
+  if (f.usuarioProtocolo && !String(a.protocoladoPor || '').toLowerCase().includes(f.usuarioProtocolo)) return false;
   if ((fluxoTab || 'todos') === 'protocolado' && (f.protoDe || f.protoAte)) {
     const d = a.dataProtocolacao;
     if (!d) return false;
@@ -11133,7 +11132,8 @@ function atualizarContagensFluxo(){
 }
 let assistidosPage = 1;
 let assistidosLimit = 20;
-async function filtrarAssistidos(){
+async function filtrarAssistidos(resetPage = true){
+  if(resetPage) assistidosPage = 1;
   const nome = document.getElementById('asFiltroNome') ? document.getElementById('asFiltroNome').value.trim() : '';
   const vinculo = document.getElementById('asFiltroVinculo') ? document.getElementById('asFiltroVinculo').value.trim() : '';
   const processo = document.getElementById('asFiltroProcesso') ? document.getElementById('asFiltroProcesso').value.trim() : '';
@@ -11153,8 +11153,12 @@ async function filtrarAssistidos(){
   if(status) params.set('status', status);
   const dataProtocolo = document.getElementById('asFiltroDataProtocolo') ? document.getElementById('asFiltroDataProtocolo').value : '';
   const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo') ? document.getElementById('asFiltroUsuarioProtocolo').value.trim() : '';
+  const protoDe = document.getElementById('asFiltroProtoDe') ? document.getElementById('asFiltroProtoDe').value : '';
+  const protoAte = document.getElementById('asFiltroProtoAte') ? document.getElementById('asFiltroProtoAte').value : '';
   if(dataProtocolo) params.set('dataProtocolo', dataProtocolo);
   if(usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
+  if(protoDe) params.set('protoDe', protoDe);
+  if(protoAte) params.set('protoAte', protoAte);
   params.set('page', assistidosPage);
   params.set('limit', assistidosLimit);
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
@@ -11169,7 +11173,7 @@ async function filtrarAssistidos(){
 }
 function mudarPaginaAssistidos(p){
   assistidosPage = p;
-  filtrarAssistidos();
+  filtrarAssistidos(false);
 }
 function renderPaginacaoAssistidos(){
   const wrap = document.getElementById('paginacaoAssistidos');
@@ -11214,15 +11218,19 @@ function renderAssistidos(){
     const vinculo = String(a.vinculo||'');
     const isPendente = vinculo.startsWith('PENDENTE-');
     const badgePendente = isPendente ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 ml-1">⚠ PENDENTE</span>' : '';
-    const etiqueta = a.etiqueta || '';
-    const etiquetaBadge = etiqueta === 'verificado' ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 ml-1">✅ Verificado</span>' : (etiqueta === 'pendente' ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 ml-1">⚠️ Pendente</span>' : '');
+    // Badge de etiqueta personalizada com cor
+    let etiquetaBadgeHtml = '';
+    if (a.etiqueta && a.etiqueta.trim()) {
+      const etiquetaCor = /^#[0-9a-f]{6}$/i.test(a.etiquetaCor || '') ? a.etiquetaCor : '#4f46e5';
+      etiquetaBadgeHtml = '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full ml-1" style="border:1px solid ' + etiquetaCor + '; background-color:' + etiquetaCor + '; color:#ffffff;">' + esc(a.etiquetaTexto || a.etiqueta) + '</span>';
+    }
     const badgeVencendo = a.vencendo ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 ml-1">⚠ Vencido</span>' : (a.vencendo7d ? '<span class="text-[8px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 ml-1">⏰ Vence em ' + esc(fmtDataBR(a.proximoEsperado)) + '</span>' : '');
     return '<div class="card p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition cursor-pointer group" onclick="abrirDetalheAssistido(' + a.id + ')">' +
     '<div class="flex items-start justify-between gap-3 mb-2">' +
       '<div class="flex items-start gap-3">' +
       '<div class="avatar w-8 h-8 text-[12px] ' + corIniciais(a.nome) + '">' + iniciais(a.nome) + '</div>' +
       '<div>' +
-        '<p class="font-bold text-sm text-slate-800 truncate leading-tight">' + esc(a.nome) + badgePendente + etiquetaBadge + '</p>' +
+        '<p class="font-bold text-sm text-slate-800 truncate leading-tight">' + esc(a.nome) + badgePendente + etiquetaBadgeHtml + '</p>' +
         '<p class="text-[10px] text-slate-500 truncate">Vínculo: ' + esc(a.vinculo) + '</p>' +
       '</div>' +
       '</div>' +
@@ -11244,8 +11252,9 @@ function renderAssistidos(){
       (!a.ultimoComparecimento ? '<button type="button" class="flex-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirRegistrarComparecimento(' + a.id + ')"><span>+</span> Comparecimento</button>' : '') +
       '<button type="button" class="flex-1 text-[10px] font-bold text-indigo-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirHistoricoAssistido(' + a.id + ')"><span class="opacity-70">📋</span> Histórico</button>' +
       '<button type="button" class="flex-1 text-[10px] font-bold text-slate-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); abrirEditarAssistido(' + a.id + ')"><span class="opacity-70">✏️</span> Editar</button>' +
-      (a.etiqueta === 'verificado' ? '<button type="button" class="flex-1 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'\')"><span class="opacity-70">✅</span> Verificado</button>' : '<button type="button" class="flex-1 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'verificado\')"><span class="opacity-70">✅</span> Verificado</button>') +
-      (a.etiqueta === 'pendente' ? '<button type="button" class="flex-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'\')"><span class="opacity-70">⚠️</span> Pendente</button>' : '<button type="button" class="flex-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'pendente\')"><span class="opacity-70">⚠️</span> Pendente</button>') +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'verificado\', \'#10b981\')"><span class="opacity-70">✅</span> Verificado</button>' +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'pendente\', \'#f43f5e\')"><span class="opacity-70">⚠️</span> Pendente</button>' +
+      '<button type="button" class="flex-1 text-[10px] font-bold text-slate-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); etiquetarAssistido(' + a.id + ', \'\', \'\')"><span class="opacity-70">🗑️</span> Limpar etiqueta</button>' +
       '<button type="button" class="flex-1 text-[10px] font-bold text-rose-600 hover:underline flex items-center justify-center gap-1" onclick="event.stopPropagation(); excluirAssistido(' + a.id + ')"><span class="opacity-70">🗑️</span> Excluir</button>' +
     '</div>' +
   '</div>';
@@ -11269,6 +11278,8 @@ async function salvarAssistido(){
     cargaHoraria: document.getElementById('asCargaHoraria').value.trim(),
     dataFim: document.getElementById('asDataFim').value,
     etiqueta: document.getElementById('asEtiqueta') ? document.getElementById('asEtiqueta').value : '',
+    etiquetaTexto: document.getElementById('asEtiquetaTexto') ? document.getElementById('asEtiquetaTexto').value : '',
+    etiquetaCor: document.getElementById('asEtiquetaCor') ? document.getElementById('asEtiquetaCor').value : '#4f46e5',
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
     status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo',
   };
@@ -11280,7 +11291,8 @@ async function salvarAssistido(){
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
-    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asCpf','asTelefone','asEndereco','asSituacaoJuridica','asTipoMedida','asCargaHoraria','asDataFim','asEtiqueta'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asCpf','asTelefone','asEndereco','asSituacaoJuridica','asTipoMedida','asCargaHoraria','asDataFim','asEtiqueta','asEtiquetaTexto'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    const cor = document.getElementById('asEtiquetaCor'); if(cor) cor.value = '#4f46e5';
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
@@ -11321,9 +11333,18 @@ function abrirEditarAssistido(id){
   document.getElementById('editAsVara').value = a.vara || '';
   document.getElementById('editAsLocal').value = a.localAssinatura || 'COMEP Cariri';
   document.getElementById('editAsInicio').value = a.dataInicio || '';
+  document.getElementById('editAsCpf').value = a.cpf || '';
+  document.getElementById('editAsTelefone').value = a.telefone || '';
+  document.getElementById('editAsEndereco').value = a.endereco || '';
+  document.getElementById('editAsSituacaoJuridica').value = a.situacaoJuridica || '';
+  document.getElementById('editAsTipoMedida').value = a.tipoMedida || '';
+  document.getElementById('editAsCargaHoraria').value = a.cargaHoraria || '';
+  document.getElementById('editAsDataFim').value = a.dataFim || '';
   document.getElementById('editAsFrequencia').value = a.frequencia || 'mensal';
   document.getElementById('editAsStatus').value = a.status || 'ativo';
   document.getElementById('editAsEtiqueta').value = a.etiqueta || '';
+  document.getElementById('editAsEtiquetaCor').value = a.etiquetaCor || '#4f46e5';
+  document.getElementById('editAsEtiquetaTexto').value = a.etiquetaTexto || '';
   document.getElementById('modalEditAssistido').classList.remove('hidden');
 }
 function fecharEditarAssistido(){ document.getElementById('modalEditAssistido').classList.add('hidden'); }
@@ -11344,6 +11365,8 @@ async function salvarEdicaoAssistido(){
     cargaHoraria: document.getElementById('editAsCargaHoraria').value.trim(),
     dataFim: document.getElementById('editAsDataFim').value,
     etiqueta: document.getElementById('editAsEtiqueta') ? document.getElementById('editAsEtiqueta').value : '',
+    etiquetaTexto: document.getElementById('editAsEtiquetaTexto') ? document.getElementById('editAsEtiquetaTexto').value : '',
+    etiquetaCor: document.getElementById('editAsEtiquetaCor') ? document.getElementById('editAsEtiquetaCor').value : '#4f46e5',
     frequencia: document.getElementById('editAsFrequencia').value,
     status: document.getElementById('editAsStatus').value
   };
@@ -11364,10 +11387,10 @@ async function salvarEdicaoAssistido(){
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
-async function etiquetarAssistido(id, etiqueta){
+async function etiquetarAssistido(id, etiqueta, etiquetaCor = '#4f46e5'){
   try{
-    const r = await api('/api/assistidos/' + id + '/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta }) });
-    toast('Etiqueta atualizada: ' + (etiqueta === 'verificado' ? '✅ Verificado' : etiqueta === 'pendente' ? '⚠️ Pendente' : 'Removido'));
+    const r = await api('/api/assistidos/' + id + '/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta, etiquetaCor: etiquetaCor }) });
+    toast('Etiqueta atualizada: ' + (etiqueta ? etiqueta : 'removida'));
     loadAssistidos(); loadStats(); carregarContadorPendentes();
   }catch(e){ toast('Erro: ' + e.message); }
 }
