@@ -2,15 +2,17 @@ const express = require('express');
 const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, upload } = shared;
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const {
+  LOCAIS_ASSINATURA, PERIODOS_COMPARECIMENTO, FREQ_DAYS,
+  STATUS_ASSISTIDO: STATUS_VALIDOS, isoDate, cpfValido,
+  agruparComparecimentos: groupCompsByAssistido,
+  comparecimentoProtocolado, nomeKey, proximoEsperadoAssistido
+} = require('../lib/assistidos');
 const router = express.Router();
 
 // =====================================================================
 // Constantes de domínio (únicas, usadas por todas as rotas do módulo)
 // =====================================================================
-const LOCAIS_ASSINATURA = ['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri'];
-const PERIODOS_COMPARECIMENTO = ['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral'];
-const FREQ_DAYS = { semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 };
-const STATUS_VALIDOS = ['ativo', 'concluido', 'arquivado'];
 const ETIQUETAS_VALIDAS = ['verificado', 'pendente', ''];
 const MAX_PDF_ROWS = 500;
 
@@ -20,18 +22,6 @@ const MAX_PDF_ROWS = 500;
 
 // Calcula o próximo comparecimento esperado com base no último comparecimento
 // (ou na data de início se nunca compareceu). Retorna string AAAA-MM-DD ou null.
-function proximoEsperadoAssistido(a, comps){
-  const last = comps
-    .filter(c => String(c.assistidoId) === String(a.id))
-    .sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)))[0];
-  const base = last ? last.dataComparecimento : (a.dataInicio || null);
-  if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) return null;
-  const dias = FREQ_DAYS[a.frequencia] || 30;
-  const dt = new Date(String(base) + 'T00:00:00');
-  if (isNaN(dt)) return null;
-  return new Date(dt.getTime() + dias * 864e5).toISOString().slice(0, 10);
-}
-
 // Dias de tolerância para alerta CRITICO (já passou do prazo da frequência)
 function alertaDiasCritico(frequencia) {
   return FREQ_DAYS[frequencia] || 30;
@@ -49,20 +39,6 @@ function validarCNJ(cnpjStr) {
 }
 
 // Agrupa comparecimentos por assistido (Map id -> array ordenado decrescente)
-function groupCompsByAssistido(comps) {
-  const byAssistido = new Map();
-  comps.forEach(c => {
-    const key = String(c.assistidoId);
-    const arr = byAssistido.get(key) || [];
-    arr.push(c);
-    byAssistido.set(key, arr);
-  });
-  byAssistido.forEach(arr => {
-    arr.sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
-  });
-  return byAssistido;
-}
-
 // Último comparecimento por assistido
 function ultimoCompPorAssistido(comps) {
   const ultimo = {};
@@ -78,7 +54,7 @@ function ultimoCompPorAssistido(comps) {
 // Enriquece um assistido com dados de comparecimento
 function enriquecerAssistido(a, ultimo, compsMap, hoje) {
   const cs = compsMap.get(String(a.id)) || [];
-  const pendenteJuntada = cs.some(c => !String(c.juntada || '').trim());
+  const pendenteJuntada = cs.some(c => !comparecimentoProtocolado(c));
   const prox = ultimo
     ? proximoEsperadoAssistidoFromBase(ultimo.dataComparecimento, a.frequencia)
     : proximoEsperadoAssistido(a, cs);
@@ -161,9 +137,10 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   if (!b.vara || !String(b.vara).trim()) return res.status(400).json({ error: 'Vara é obrigatória' });
   if (!LOCAIS_ASSINATURA.includes(String(b.localAssinatura || '').trim())) return res.status(400).json({ error: 'Local de assinatura inválido' });
   if (!b.dataInicio) return res.status(400).json({ error: 'Data de início é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataInicio).trim())) return res.status(400).json({ error: 'Data de início inválida (use AAAA-MM-DD)' });
-  if (b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (!isoDate(b.dataInicio)) return res.status(400).json({ error: 'Data de início inválida (informe uma data real em AAAA-MM-DD)' });
+  if (b.cpf && !cpfValido(b.cpf)) return res.status(400).json({ error: 'CPF inválido' });
   if (b.processo && !validarCNJ(b.processo)) return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
+  if (b.etiqueta !== undefined && !ETIQUETAS_VALIDAS.includes(String(b.etiqueta).trim())) return res.status(400).json({ error: 'Etiqueta inválida' });
 
   const freqRaw = String(b.frequencia || '').trim();
   if (freqRaw && !PERIODOS_COMPARECIMENTO.includes(freqRaw)) {
@@ -171,7 +148,7 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   }
   const frequencia = freqRaw || 'mensal';
 
-  if (b.dataFim && !/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataFim).trim())) {
+  if (b.dataFim && !isoDate(b.dataFim)) {
     return res.status(400).json({ error: 'Data de fim inválida (use AAAA-MM-DD)' });
   }
   if (b.dataFim && String(b.dataFim).trim() < String(b.dataInicio).trim()) {
@@ -179,7 +156,7 @@ router.post('/api/assistidos', auth(['admin']), ah(async (req, res) => {
   }
 
   const all = await store.assistidos.all();
-  if (all.some(x => String(x.vinculo) === String(b.vinculo).trim())) {
+  if (all.some(x => nomeKey(x.vinculo) === nomeKey(b.vinculo))) {
     return res.status(409).json({ error: 'Vínculo já cadastrado' });
   }
 
@@ -224,7 +201,7 @@ router.patch('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (
   // Técnico só edita assistidos de sua responsabilidade
   if (req.auth.role === 'tecnico') {
     const comps = await store.assistidosComparecimentos.all(req.params.id);
-    const meu = comps.some(c => String(c.policialPlantao || '').toLowerCase() === String(req.auth.name || req.auth.user).toLowerCase());
+    const meu = comps.some(c => nomeKey(c.policialPlantao) === nomeKey(req.auth.name || req.auth.user));
     if (!meu) return res.status(403).json({ error: 'Técnico só pode editar assistidos de sua responsabilidade.' });
   }
 
@@ -232,30 +209,44 @@ router.patch('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (
   const copiaveis = ['vinculo', 'nome', 'processo', 'vara', 'localAssinatura', 'dataInicio',
     'cpf', 'telefone', 'endereco', 'situacaoJuridica', 'tipoMedida', 'cargaHoraria', 'dataFim', 'etiqueta'];
   for (const k of copiaveis) {
-    if (b[k] !== undefined) fields[k] = b[k];
+    if (b[k] !== undefined) {
+      fields[k] = String(b[k] == null ? '' : b[k]).trim();
+      if (['vinculo', 'nome', 'processo', 'vara', 'localAssinatura', 'dataInicio'].includes(k) && !fields[k]) {
+        return res.status(400).json({ error: `${k} é obrigatório` });
+      }
+    }
   }
+  if (fields.etiqueta !== undefined && !ETIQUETAS_VALIDAS.includes(fields.etiqueta)) return res.status(400).json({ error: 'Etiqueta inválida' });
 
-  if (b.frequencia !== undefined && PERIODOS_COMPARECIMENTO.includes(String(b.frequencia).trim())) {
-    fields.frequencia = String(b.frequencia).trim();
+  if (b.frequencia !== undefined) {
+    const frequencia = String(b.frequencia).trim();
+    if (!PERIODOS_COMPARECIMENTO.includes(frequencia)) return res.status(400).json({ error: 'Frequência inválida' });
+    fields.frequencia = frequencia;
   }
 
   if (b.localAssinatura !== undefined && !LOCAIS_ASSINATURA.includes(String(b.localAssinatura).trim())) {
     return res.status(400).json({ error: 'Local de assinatura inválido' });
   }
-  if (b.cpf !== undefined && b.cpf && !/^\d{11}$/.test(String(b.cpf).replace(/[.\-/]/g, ''))) {
-    return res.status(400).json({ error: 'CPF inválido (deve ter 11 dígitos)' });
+  if (b.cpf !== undefined && b.cpf && !cpfValido(b.cpf)) {
+    return res.status(400).json({ error: 'CPF inválido' });
   }
   if (b.processo && !validarCNJ(b.processo)) {
     return res.status(400).json({ error: 'Processo inválido (deve ter 20 dígitos no formato CNJ)' });
   }
-  if (b.dataFim !== undefined && b.dataFim && !/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataFim).trim())) {
-    return res.status(400).json({ error: 'Data de fim inválida (use AAAA-MM-DD)' });
+  if (b.dataInicio !== undefined && !isoDate(b.dataInicio)) {
+    return res.status(400).json({ error: 'Data de início inválida' });
   }
-  if (b.dataFim !== undefined && b.dataFim && b.dataInicio && String(b.dataFim).trim() < String(b.dataInicio).trim()) {
+  if (b.dataFim !== undefined && b.dataFim && !isoDate(b.dataFim)) {
+    return res.status(400).json({ error: 'Data de fim inválida' });
+  }
+  const inicioFinal = fields.dataInicio || target.dataInicio;
+  if (b.dataFim !== undefined && b.dataFim && inicioFinal && String(b.dataFim).trim() < String(inicioFinal).trim()) {
     return res.status(400).json({ error: 'Data de fim não pode ser anterior à data de início' });
   }
-  if (b.status !== undefined && STATUS_VALIDOS.includes(String(b.status).trim())) {
-    fields.status = String(b.status).trim();
+  if (b.status !== undefined) {
+    const status = String(b.status).trim();
+    if (!STATUS_VALIDOS.includes(status)) return res.status(400).json({ error: 'Status inválido' });
+    fields.status = status;
   }
 
   // Vínculo não pode ser duplicado em outro assistido
@@ -263,7 +254,7 @@ router.patch('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (
     const todos = await store.assistidos.allIncludingDeleted();
     const dup = todos.find(
       x => String(x.id) !== String(req.params.id)
-        && String(x.vinculo).trim().toLowerCase() === String(fields.vinculo).trim().toLowerCase()
+        && nomeKey(x.vinculo) === nomeKey(fields.vinculo)
         && !x.deleted_at
     );
     if (dup) {
@@ -290,8 +281,7 @@ router.patch('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (
 // =====================================================================
 router.delete('/api/assistidos/:id(\\d+)', auth(['admin']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
-  const comps = await store.assistidosComparecimentos.all(req.params.id);
-  for (const c of comps) await store.assistidosComparecimentos.remove(c.id);
+  if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
   await store.assistidos.remove(req.params.id);
   try {
     await store.audit.insert({
@@ -310,6 +300,7 @@ router.delete('/api/assistidos/:id(\\d+)', auth(['admin']), ah(async (req, res) 
 
 // GET /api/assistidos/:id/comparecimentos — listar comparecimentos de um assistido
 router.get('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin', 'tecnico']), ah(async (req, res) => {
+  if (!await store.assistidos.byId(req.params.id)) return res.status(404).json({ error: 'Assistido não encontrado' });
   const list = await store.assistidosComparecimentos.all(req.params.id);
   res.json(list);
 }));
@@ -320,7 +311,7 @@ router.get('/api/assistidos/:id(\\d+)/detalhe', auth(['admin', 'tecnico']), ah(a
   if (!a) return res.status(404).json({ error: 'Não encontrado' });
   const comps = await store.assistidosComparecimentos.all(req.params.id);
   const sorted = comps.slice().sort((x, y) => String(y.dataComparecimento).localeCompare(String(x.dataComparecimento)));
-  const pendentes = comps.filter(c => !String(c.juntada || '').trim());
+  const pendentes = comps.filter(c => !comparecimentoProtocolado(c));
   res.json({ assistido: a, comparecimentos: sorted, pendentes: pendentes.length, total: comps.length });
 }));
 
@@ -328,8 +319,8 @@ router.get('/api/assistidos/:id(\\d+)/detalhe', auth(['admin', 'tecnico']), ah(a
 router.post('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.dataComparecimento) return res.status(400).json({ error: 'Data de comparecimento é obrigatória' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.dataComparecimento).trim())) {
-    return res.status(400).json({ error: 'Data de comparecimento inválida (use AAAA-MM-DD)' });
+  if (!isoDate(b.dataComparecimento)) {
+    return res.status(400).json({ error: 'Data de comparecimento inválida (informe uma data real em AAAA-MM-DD)' });
   }
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
@@ -343,7 +334,9 @@ router.post('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin', 'tecnico
   const row = await store.assistidosComparecimentos.insert({
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
-    policialPlantao: String(b.policialPlantao || '').trim() || '—',
+    policialPlantao: req.auth.role === 'tecnico'
+      ? String(req.auth.name || req.auth.user || '').trim()
+      : String(b.policialPlantao || '').trim() || '—',
     assinadoPor: String(b.assinadoPor || '').trim() || null,
   });
 
@@ -361,6 +354,7 @@ router.post('/api/assistidos/:id(\\d+)/comparecimentos', auth(['admin', 'tecnico
 // PATCH /api/assistidos/comparecimentos/:id/protocolar — marcar como protocolado
 router.patch('/api/assistidos/comparecimentos/:id(\\d+)/protocolar', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const b = req.body || {};
+  if (b.dataProtocolacao && !isoDate(b.dataProtocolacao)) return res.status(400).json({ error: 'Data de protocolação inválida' });
   const row = await store.assistidosComparecimentos.patch(req.params.id, {
     protocolado: true,
     dataProtocolacao: b.dataProtocolacao || new Date().toISOString().slice(0, 10),
@@ -417,10 +411,10 @@ router.patch('/api/assistidos/comparecimentos/:id(\\d+)/juntada', auth(['admin',
 // =====================================================================
 router.get('/api/assistidos/pendencias', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const all = await store.assistidosComparecimentos.all();
-  const list = all.filter(c => !String(c.juntada || '').trim());
   const assistidos = await store.assistidos.all();
   const byId = new Map(assistidos.map(a => [String(a.id), a]));
-  const out = list.map(c => ({ ...c, assistido: byId.get(String(c.assistidoId)) || null }));
+  const out = all.filter(c => !comparecimentoProtocolado(c) && byId.has(String(c.assistidoId)))
+    .map(c => ({ ...c, assistido: byId.get(String(c.assistidoId)) }));
   res.json(paginar(out, req.query.page, req.query.limit));
 }));
 
@@ -430,7 +424,7 @@ router.get('/api/assistidos/pendencias', auth(['admin', 'tecnico']), ah(async (r
 router.get('/api/assistidos/stats', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const assistidos = await store.assistidos.all();
   const comps = await store.assistidosComparecimentos.all();
-  const pend = comps.filter(c => !c.protocolado);
+  const pend = comps.filter(c => !comparecimentoProtocolado(c));
 
   const porVara = {};
   const porPolicial = {};
@@ -466,7 +460,7 @@ router.get('/api/assistidos/stats', auth(['admin', 'tecnico']), ah(async (req, r
 // GET /api/assistidos/filtrar — listagem filtrada com paginação
 // =====================================================================
 router.get('/api/assistidos/filtrar', auth(['admin', 'tecnico']), ah(async (req, res) => {
-  const { q, nome, vinculo, processo, vara, local, status, frequencia, etiqueta, dataProtocolo, usuarioProtocolo } = req.query || {};
+  const { q, nome, vinculo, processo, vara, local, status, frequencia, etiqueta, dataProtocolo, usuarioProtocolo, protoDe, protoAte } = req.query || {};
   let list = await store.assistidos.all();
 
   const applyText = (field, value) => {
@@ -491,7 +485,7 @@ router.get('/api/assistidos/filtrar', auth(['admin', 'tecnico']), ah(async (req,
   if (frequencia) applyText('frequencia', frequencia);
   if (etiqueta) applyText('etiqueta', etiqueta);
 
-  if (dataProtocolo || usuarioProtocolo) {
+  if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
     const comps = await store.assistidosComparecimentos.all();
     const compsMap = groupCompsByAssistido(comps);
     list = list.filter(a => {
@@ -499,6 +493,8 @@ router.get('/api/assistidos/filtrar', auth(['admin', 'tecnico']), ah(async (req,
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
+        if (protoDe && (!c.dataProtocolacao || String(c.dataProtocolacao) < protoDe)) return false;
+        if (protoAte && (!c.dataProtocolacao || String(c.dataProtocolacao) > protoAte)) return false;
         return true;
       });
     });
@@ -534,21 +530,34 @@ router.get('/api/assistidos/relatorio/pdf', auth(['admin', 'tecnico']), ah(async
   if (frequencia) list = list.filter(a => String(a.frequencia || '').toLowerCase().includes(String(frequencia).toLowerCase()));
   if (etiqueta) list = list.filter(a => String(a.etiqueta || '').toLowerCase().includes(String(etiqueta).toLowerCase()));
 
+  const comps = await store.assistidosComparecimentos.all();
+  const compsMap = groupCompsByAssistido(comps);
   if (dataProtocolo || usuarioProtocolo || protoDe || protoAte) {
-    const comps = await store.assistidosComparecimentos.all();
-    const compsMap = groupCompsByAssistido(comps);
     list = list.filter(a => {
       const cs = compsMap.get(String(a.id)) || [];
       return cs.some(c => {
         if (dataProtocolo && !String(c.dataProtocolacao || '').includes(dataProtocolo)) return false;
         if (usuarioProtocolo && !String(c.protocoladoPor || '').toLowerCase().includes(String(usuarioProtocolo).toLowerCase())) return false;
-        if (protoDe && c.dataProtocolacao && String(c.dataProtocolacao) < protoDe) return false;
-        if (protoAte && c.dataProtocolacao && String(c.dataProtocolacao) > protoAte) return false;
+        if (protoDe && (!c.dataProtocolacao || String(c.dataProtocolacao) < protoDe)) return false;
+        if (protoAte && (!c.dataProtocolacao || String(c.dataProtocolacao) > protoAte)) return false;
         return true;
       });
     });
   }
 
+  list = list.map(a => {
+    const cs = compsMap.get(String(a.id)) || [];
+    const last = cs[0] || {};
+    const protocolado = cs.find(comparecimentoProtocolado) || {};
+    return {
+      ...a,
+      ultimoComparecimento: last.dataComparecimento || null,
+      policialPlantao: last.policialPlantao || null,
+      juntada: last.juntada || null,
+      dataProtocolacao: protocolado.dataProtocolacao || null,
+      protocoladoPor: protocolado.protocoladoPor || null,
+    };
+  });
   list = list.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   const pdfTruncado = list.length > MAX_PDF_ROWS;
@@ -663,13 +672,14 @@ router.get('/api/assistidos/pendencias-comparecimento', auth(['admin', 'tecnico'
   const comps = await store.assistidosComparecimentos.all();
   const hoje = new Date().toISOString().slice(0, 10);
   const ultimo = ultimoCompPorAssistido(comps);
+  const compsMap = groupCompsByAssistido(comps);
 
   const out = [];
   for (const a of assistidos) {
     if (a.status && a.status !== 'ativo') continue;
     const prox = ultimo[String(a.id)]
       ? proximoEsperadoAssistidoFromBase(ultimo[String(a.id)].dataComparecimento, a.frequencia)
-      : proximoEsperadoAssistido(a, comps.filter(c => String(c.assistidoId) === String(a.id)));
+      : proximoEsperadoAssistido(a, compsMap.get(String(a.id)) || []);
     if (!prox) continue;
     if (prox <= hoje) {
       const last = ultimo[String(a.id)];
@@ -726,7 +736,7 @@ router.get('/api/assistidos/fluxo', auth(['admin', 'tecnico']), ah(async (req, r
       proximoEsperado: prox,
     };
 
-    if (String(last.juntada || '').trim()) {
+    if (comparecimentoProtocolado(last)) {
       etapas.protocolado.push({ ...base, vencido });
     } else if (vencido) {
       etapas.atrasado.push({ ...base, vencido: true });
@@ -830,6 +840,7 @@ router.get('/api/assistidos/alertas', auth(['admin', 'tecnico']), ah(async (req,
   const hoje = new Date().toISOString().slice(0, 10);
   const hojeDate = new Date(hoje);
   const ultimo = ultimoCompPorAssistido(comps);
+  const historicos = groupCompsByAssistido(comps);
 
   const alertas = [];
   for (const a of assistidos) {
@@ -838,9 +849,13 @@ router.get('/api/assistidos/alertas', auth(['admin', 'tecnico']), ah(async (req,
     // Base: último comparecimento, ou data de início se nunca compareceu
     const last = ultimo[String(a.id)];
     const base = last ? last.dataComparecimento : a.dataInicio;
-    if (!base || !/^\d{4}-\d{2}-\d{2}$/.test(String(base))) continue;
+    if (!isoDate(base)) continue;
+    const ultimoProtocolo = (historicos.get(String(a.id)) || []).find(comparecimentoProtocolado);
+    const diasProtocolacao = ultimoProtocolo && isoDate(ultimoProtocolo.dataProtocolacao)
+      ? Math.floor((hojeDate - new Date(ultimoProtocolo.dataProtocolacao)) / 86400000)
+      : null;
 
-    const ultimaData = new Date(base + 'T00:00:00');
+    const ultimaData = new Date(base);
     if (isNaN(ultimaData)) continue;
 
     const freqDias = FREQ_DAYS[a.frequencia] || 30;
@@ -858,10 +873,11 @@ router.get('/api/assistidos/alertas', auth(['admin', 'tecnico']), ah(async (req,
         nome: a.nome,
         vinculo: a.vinculo,
         tipo,
-        diasUltimaJuntada: diasDiff,
+        diasUltimaJuntada: diasProtocolacao,
+        diasUltimoComparecimento: last ? diasDiff : null,
         diasAteProximo: diasAteProximo > 0 ? diasAteProximo : 0,
         frequencia: a.frequencia,
-        ultimaJuntada: last ? last.dataComparecimento : null,
+        ultimaJuntada: ultimoProtocolo ? ultimoProtocolo.dataProtocolacao : null,
         ultimoComparecimento: last ? last.dataComparecimento : null,
         base,
         local: a.localAssinatura,
@@ -872,7 +888,7 @@ router.get('/api/assistidos/alertas', auth(['admin', 'tecnico']), ah(async (req,
 
   alertas.sort((a, b) => {
     const ordem = { CRITICO: 0, ATENCAO: 1, EM_DIA: 2 };
-    return (ordem[a.tipo] || 99) - (ordem[b.tipo] || 99);
+    return (ordem[a.tipo] ?? 99) - (ordem[b.tipo] ?? 99);
   });
 
   res.json(paginar(alertas, req.query.page, req.query.limit));
@@ -952,9 +968,12 @@ let lastImportStatus = { state: 'idle', total: 0, processed: 0, totalRows: 0, pr
 
 function excelSerialToISO(v) {
   if (v == null || v === '') return '';
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) {
+    const iso = v.toISOString().slice(0, 10);
+    return isoDate(iso) ? iso : '';
+  }
   const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return isoDate(s.slice(0, 10)) ? s.slice(0, 10) : '';
   if (/^\d{4,6}$/.test(s)) {
     const d = new Date((Number(s) - 25569) * 86400 * 1000);
     if (!isNaN(d)) return d.toISOString().slice(0, 10);
@@ -963,8 +982,9 @@ function excelSerialToISO(v) {
   if (m) {
     let [, dd, mm, yyyy] = m;
     if (yyyy.length === 2) yyyy = '20' + yyyy;
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-    if (!isNaN(d)) return d.toISOString().slice(0, 10);
+    const y = Number(yyyy), month = Number(mm), day = Number(dd);
+    const d = new Date(Date.UTC(y, month - 1, day));
+    if (!isNaN(d) && d.getUTCFullYear() === y && d.getUTCMonth() === month - 1 && d.getUTCDate() === day) return d.toISOString().slice(0, 10);
   }
   return s;
 }
@@ -984,6 +1004,7 @@ router.get('/api/assistidos/import/status', auth(['admin']), ah(async (req, res)
 
 router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'), ah(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Envie o arquivo .xlsx' });
+  if (lastImportStatus.state === 'running') return res.status(409).json({ error: 'Já existe uma importação em andamento.' });
   const buffer = req.file.buffer;
   lastImportStatus = {
     state: 'running', total: 0, processed: 0, totalRows: 0, progress: 0,
@@ -992,14 +1013,15 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
   res.json({ ok: true, assincrono: true, msg: 'Importação iniciada em background.' });
 
   setImmediate(async () => {
+    let total = 0;
+    let failedRows = 0;
     try {
       const ExcelJS = require('exceljs');
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      let total = 0;
       let totalRows = 0;
       const allExisting = await store.assistidos.all();
-      const seenVinculo = new Set(allExisting.map(a => String(a.vinculo)));
+      const seenVinculo = new Set(allExisting.map(a => nomeKey(a.vinculo)));
 
       const LOCAIS_VALIDOS = ['COAP CARIRI', 'COMEP CARIRI', 'ALBERGADO CARIRI'];
       const PPS_CONHECIDOS = ['ERMINIO', 'MARCOS', 'WANDERSON', 'JOANDERSON', 'JULIANA', 'REJANE', 'AILTON'];
@@ -1112,7 +1134,7 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
           if (!temDado) return;
           const campos = lerLinhaAssistido(row);
           if (!campos.vinculo || !campos.nome) return;
-          if (seenVinculo.has(campos.vinculo)) return;
+          if (seenVinculo.has(nomeKey(campos.vinculo))) return;
           totalRows++;
         });
       }
@@ -1129,14 +1151,14 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
           const campos = lerLinhaAssistido(row);
           const { vinculo, nome } = campos;
           if (!vinculo || !nome) return;
-          if (seenVinculo.has(vinculo)) return;
+          if (seenVinculo.has(nomeKey(vinculo))) return;
           linhasParaProcessar.push({ campos });
         });
       }
 
       for (const { campos } of linhasParaProcessar) {
         const { vinculo } = campos;
-        if (seenVinculo.has(vinculo)) continue;
+        if (seenVinculo.has(nomeKey(vinculo))) continue;
         try {
           let localFinal = campos.localAssinatura;
           if (!LOCAIS_ASSINATURA.includes(localFinal)) localFinal = '';
@@ -1158,8 +1180,14 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
             frequencia: campos.frequencia,
             status: statusFinal,
           });
+          seenVinculo.add(nomeKey(vinculo));
+          total++;
+          lastImportStatus.processed = total;
+          lastImportStatus.progress = lastImportStatus.totalRows > 0
+            ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
+          lastImportStatus.at = new Date().toISOString();
 
-          if (campos.dataComparecimento && /^\d{4}-\d{2}-\d{2}$/.test(campos.dataComparecimento)) {
+          if (isoDate(campos.dataComparecimento)) {
             const cmp = await store.assistidosComparecimentos.insert({
               assistidoId: a.id,
               dataComparecimento: campos.dataComparecimento,
@@ -1170,24 +1198,21 @@ router.post('/api/assistidos/import', auth(['admin']), upload.single('arquivo'),
             }
           }
 
-          seenVinculo.add(vinculo);
-          total++;
-          lastImportStatus.processed = total;
-          lastImportStatus.progress = lastImportStatus.totalRows > 0
-            ? Math.round((total / lastImportStatus.totalRows) * 100) : 0;
-          lastImportStatus.at = new Date().toISOString();
         } catch (e) {
+          failedRows++;
+          lastImportStatus.failures = failedRows;
+          lastImportStatus.lastError = String(e && e.message || e).slice(0, 250);
           console.error('import row error', e.message);
         }
       }
 
-      lastImportStatus = { state: 'done', total, error: null, at: new Date().toISOString() };
+      lastImportStatus = { state: failedRows ? 'done_with_errors' : 'done', total, failures: failedRows, error: null, at: new Date().toISOString() };
       shared.broadcast({ type: 'assistidos_import_done', total });
       console.log('[assistidos] importação concluída:', total);
     } catch (e) {
       console.error('[assistidos] importação falhou:', e && e.stack ? e.stack : e.message);
       lastImportStatus = {
-        state: 'error', total: 0,
+        state: 'error', total, failures: failedRows,
         error: String(e && e.message ? e.message : e), at: new Date().toISOString(),
       };
     }

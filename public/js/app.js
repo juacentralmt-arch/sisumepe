@@ -10646,10 +10646,10 @@ async function importarAssistidos(inp){
           if(count) count.textContent = (st.processed||0) + ' / ' + (st.totalRows||0);
           if(text){
             if(st.state === 'running') text.textContent = 'Importando dados (' + pct + '%)…';
-            else if(st.state === 'done') text.textContent = 'Finalizando…';
+            else if(st.state === 'done' || st.state === 'done_with_errors') text.textContent = 'Finalizando…';
           }
         }
-        if (st && st.state === 'done') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); toast('Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
+        if (st && (st.state === 'done' || st.state === 'done_with_errors')) { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); toast(st.state === 'done_with_errors' ? 'Importação concluída com ' + (st.failures || 0) + ' linha(s) com erro. Importados: ' + st.total : 'Importação concluída: ' + st.total); loadAssistidos(); loadStats(); }
         else if (st && st.state === 'error') { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); alert('Erro na importação: ' + (st.error || '')); }
       } catch(e) { clearInterval(poll); if(overlay) overlay.classList.add('hidden'); }
     }, 1000);
@@ -11149,8 +11149,17 @@ async function filtrarAssistidos(){
   if(status) params.set('status', status);
   const dataProtocolo = document.getElementById('asFiltroDataProtocolo') ? document.getElementById('asFiltroDataProtocolo').value : '';
   const usuarioProtocolo = document.getElementById('asFiltroUsuarioProtocolo') ? document.getElementById('asFiltroUsuarioProtocolo').value.trim() : '';
+  const protoDe = document.getElementById('asFiltroProtoDe')?.value || '';
+  const protoAte = document.getElementById('asFiltroProtoAte')?.value || '';
   if(dataProtocolo) params.set('dataProtocolo', dataProtocolo);
   if(usuarioProtocolo) params.set('usuarioProtocolo', usuarioProtocolo);
+  if(protoDe) params.set('protoDe', protoDe);
+  if(protoAte) params.set('protoAte', protoAte);
+  const filterKey = params.toString();
+  if (window._assistidosFilterKey !== filterKey) {
+    window._assistidosFilterKey = filterKey;
+    assistidosPage = 1;
+  }
   params.set('page', assistidosPage);
   params.set('limit', assistidosLimit);
   const url = '/api/assistidos/filtrar' + (params.toString() ? '?'+params.toString() : '');
