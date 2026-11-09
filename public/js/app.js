@@ -11266,26 +11266,19 @@ async function salvarAssistido(){
     vara: document.getElementById('asVara').value.trim(),
     localAssinatura: document.getElementById('asLocal').value.trim(),
     dataInicio: document.getElementById('asInicio').value,
-    cpf: document.getElementById('asCpf').value.trim(),
-    telefone: document.getElementById('asTelefone').value.trim(),
-    endereco: document.getElementById('asEndereco').value.trim(),
     situacaoJuridica: document.getElementById('asSituacaoJuridica').value.trim(),
     tipoMedida: document.getElementById('asTipoMedida').value.trim(),
-    cargaHoraria: document.getElementById('asCargaHoraria').value.trim(),
-    dataFim: document.getElementById('asDataFim').value,
     etiqueta: document.getElementById('asEtiqueta') ? document.getElementById('asEtiqueta').value : '',
     frequencia: document.getElementById('asFrequencia') ? document.getElementById('asFrequencia').value : 'mensal',
     status: document.getElementById('asStatus') ? document.getElementById('asStatus').value : 'ativo',
   };
   if(!body.nome || !body.vinculo || !body.processo || !body.vara || !body.localAssinatura || !body.dataInicio){ toast('Preencha todos os campos obrigatórios'); return; }
-  // Validação de CPF se preenchido
-  if (body.cpf && !/^\d{11}$/.test(body.cpf.replace(/[.\-/]/g, ''))) { toast('CPF inválido (deve ter 11 dígitos)'); return; }
   // Validação de CNJ no processo
   if (body.processo && !validarCNJ(body.processo)) { toast('Processo inválido (deve ter 20 dígitos no formato CNJ)'); return; }
   try{
     await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     toast('Salvo'); const f=document.getElementById('formAssistido'); if(f) f.classList.add('hidden'); loadAssistidos(); loadStats();
-    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asCpf','asTelefone','asEndereco','asSituacaoJuridica','asTipoMedida','asCargaHoraria','asDataFim','asEtiqueta'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+    ['asVinculo','asNome','asProcesso','asVara','asLocal','asInicio','asSituacaoJuridica','asTipoMedida','asEtiqueta'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   }catch(e){ toast('Erro: ' + e.message); }
 }
 
