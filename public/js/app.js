@@ -11001,23 +11001,21 @@ function exportarRelatorioAssistidosXLSX(){
   XLSX.writeFile(wb, 'relatorio-assistidos.xlsx');
 }
 async function loadFluxo(){
-  try{
-    const r = await api('/api/assistidos/fluxo');
-    fluxoData = {
-      aguardando: r.aguardando || [],
-      compareceu: r.compareceu || [],
-      protocolado: r.protocolado || [],
-      concluido: r.concluido || []
-    };
-    atualizarContagensFluxo();
-    renderFluxoTab();
-  }catch(e){ console.error(e); }
+  const r = await api('/api/assistidos/fluxo');
+  fluxoData = {
+    aguardando: r.aguardando || [],
+    compareceu: r.compareceu || [],
+    protocolado: r.protocolado || [],
+    concluido: r.concluido || []
+  };
+  atualizarContagensFluxo();
+  renderFluxoTab();
 }
 
 async function loadAssistidos(){
   await loadStats();
-  await filtrarAssistidos();
-  await loadFluxo();
+  await filtrarAssistidos().catch(e => console.error('filtrarAssistidos falhou:', e));
+  await loadFluxo().catch(e => { console.error('loadFluxo falhou:', e); toast('Falha ao carregar fluxo de assistidos'); });
   setFluxoTab('todos');
 }
 
@@ -11422,10 +11420,12 @@ async function registrarComparecimento(){
   if(!body.dataComparecimento || !body.policialPlantao){ alert('Preencha data e policial'); return; }
   try{
     await api('/api/assistidos/'+assistidoSelecionado+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    toast('Comparecimento registrado — pendência de juntada criada!'); 
+    toast('Comparecimento registrado — pendência de juntada criada!');
     const det = document.getElementById('assistidoDetalhe');
     if(det){ det.classList.add('ring-2','ring-amber-400'); setTimeout(()=>det.classList.remove('ring-2','ring-amber-400'),2000); }
     loadComparecimentos(); loadPendencias();
+    await loadAssistidos();
+    setFluxoTab('compareceu');
     document.getElementById('cmpData').value=''; document.getElementById('cmpPolicial').value='';
   }catch(e){ toast('Erro: ' + e.message); }
 }
