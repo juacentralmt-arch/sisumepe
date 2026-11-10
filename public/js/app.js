@@ -9464,6 +9464,97 @@ if(document.readyState === 'loading'){
 //  - "pendente de juntada" = não protocolado (mesma regra do backend)
 //  - abas: Todos | Juntada | Concluídos | Alertas | Auditoria
 // =====================================================================
+// =====================================================================
+//  Importacao da Planilha Geral (front)
+//  Fluxo: escolher arquivo -> simular -> conferir o relatorio ->
+//  (opcionalmente) gravar de verdade.
+// =====================================================================
+function abrirModalImportarPlanilha(){
+  const arq = document.getElementById('importPlanilhaArquivo');
+  if(arq) arq.value = '';
+  const dry = document.getElementById('importPlanilhaDry');
+  if(dry) dry.checked = true;
+  const res = document.getElementById('importPlanilhaResultado');
+  if(res){ res.classList.add('hidden'); res.innerHTML = ''; }
+  document.getElementById('modalImportarPlanilha').classList.remove('hidden');
+}
+function fecharModalImportarPlanilha(){
+  document.getElementById('modalImportarPlanilha').classList.add('hidden');
+}
+
+async function enviarImportacaoPlanilha(){
+  const inp = document.getElementById('importPlanilhaArquivo');
+  const dry = document.getElementById('importPlanilhaDry');
+  const res = document.getElementById('importPlanilhaResultado');
+  if(!inp || !inp.files || !inp.files[0]){ toast('Escolha o arquivo da planilha'); return; }
+  const arquivo = inp.files[0];
+  const simular = !!(dry && dry.checked);
+
+  const fd = new FormData();
+  fd.append('arquivo', arquivo);
+  res.classList.remove('hidden');
+  res.innerHTML = '<div class="text-[11px] text-slate-500 py-2">' + (simular ? 'Simulando…' : 'Importando…') + '</div>';
+
+  try{
+    const r = await api('/api/assistidos/import' + (simular ? '?dry=1' : ''), {
+      method: 'POST', body: fd,
+    });
+    renderResultadoImportacao(r, simular);
+    if(!simular){
+      toast('Importação concluída');
+      loadAssistidos();
+      atualizarBadgesAssistidos();
+    }
+  }catch(e){
+    res.innerHTML = '<div class="text-[11px] text-rose-600 p-2 bg-rose-50 rounded-lg">Erro: ' + esc(e.message || e) + '</div>';
+  }
+}
+
+function renderResultadoImportacao(r, simular){
+  const res = document.getElementById('importPlanilhaResultado');
+  if(!res) return;
+  if(!r || r.error){
+    res.innerHTML = '<div class="text-[11px] text-rose-600 p-2 bg-rose-50 rounded-lg">'
+      + esc((r && r.error) || 'Erro desconhecido')
+      + (r && r.cabecalhoRecebido
+        ? '<br><br><b>Cabeçalho recebido:</b> ' + esc(r.cabecalhoRecebido.join(' | ')) : '')
+      + '</div>';
+    return;
+  }
+  const a = r.assistidos || {}, c = r.comparecimentos || {};
+  let html = '<div class="rounded-xl border border-slate-200 overflow-hidden text-[11px]">';
+  html += '<div class="px-3 py-2 font-bold ' + (simular ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800') + '">';
+  html += simular ? 'SIMULAÇÃO — nada foi gravado' : 'Importação concluída';
+  html += '</div>';
+  html += '<table class="w-full">';
+  html += '<tr class="border-t border-slate-100"><td class="px-3 py-1.5 text-slate-600">Assistidos novos</td><td class="px-3 py-1.5 text-right font-bold">' + Number(a.novos || 0) + '</td></tr>';
+  html += '<tr class="border-t border-slate-100"><td class="px-3 py-1.5 text-slate-600">Assistidos atualizados</td><td class="px-3 py-1.5 text-right font-bold">' + Number(a.atualizados || 0) + '</td></tr>';
+  html += '<tr class="border-t border-slate-100"><td class="px-3 py-1.5 text-slate-600">Sem mudança</td><td class="px-3 py-1.5 text-right font-bold">' + Number(a.ignorados || 0) + '</td></tr>';
+  html += '<tr class="border-t border-slate-100"><td class="px-3 py-1.5 text-slate-600">Comparecimentos criados</td><td class="px-3 py-1.5 text-right font-bold">' + Number(c.novos || 0) + '</td></tr>';
+  html += '<tr class="border-t border-slate-100"><td class="px-3 py-1.5 text-slate-600">Comparecimentos já existentes</td><td class="px-3 py-1.5 text-right font-bold">' + Number(c.ignorados || 0) + '</td></tr>';
+  html += '</table>';
+
+  const falhas = r.falhas || [];
+  if(falhas.length){
+    html += '<div class="border-t border-slate-200 bg-rose-50 p-2">';
+    html += '<b class="text-rose-700">' + Number(r.totalFalhas || falhas.length) + ' linha(s) com problema:</b>';
+    html += '<ul class="mt-1 space-y-0.5">';
+    falhas.slice(0, 20).forEach(f => {
+      html += '<li class="text-[10px] text-rose-700">• linha ' + esc(f.linha) + ': ' + esc(f.erro) + '</li>';
+    });
+    html += '</ul>';
+    if(falhas.length > 20) html += '<div class="text-[10px] text-rose-600 mt-1">… e mais ' + (falhas.length - 20) + '</div>';
+    html += '</div>';
+  }
+
+  const colunas = r.colunasReconhecidas || [];
+  if(colunas.length){
+    html += '<div class="border-t border-slate-200 p-2 text-[10px] text-slate-500"><b>Colunas reconhecidas:</b> ' + esc(colunas.join(', ')) + '</div>';
+  }
+  html += '</div>';
+  res.innerHTML = html;
+}
+
 let assTab = 'todos';
 let assistidosPage = 1;
 let assistidosLimit = 20;

@@ -508,7 +508,7 @@ const ASS = {
   localAssinatura: 'local_assinatura', dataInicio: 'data_inicio', dataFim: 'data_fim',
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
   situacaoJuridica: 'situacao_juridica', etiqueta: 'etiqueta', etiquetaTexto: 'etiqueta_texto', etiquetaCor: 'etiqueta_cor',
-  responsavelTecnico: 'responsavel_tecnico',
+  responsavelTecnico: 'responsavel_tecnico', extras: 'extras',
   deletedAt: 'deleted_at', frequencia: 'frequencia', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ACC = {
@@ -2468,6 +2468,18 @@ store.assistidos = {
     } catch (e) { throw e; }
   },
 
+  // Localiza pelo vínculo (numero CNJ) — chave de upsert da importacao.
+  async byVinculo(vinculo) {
+    const alvo = String(vinculo || '').trim();
+    if (!alvo) return null;
+    if (MODE === 'file') {
+      const achado = (mem.assistidos || []).find(x => String(x.vinculo || '').trim() === alvo);
+      return achado && !estaExcluido(achado) ? achado : null;
+    }
+    const r = must(await supa.from('assistidos').select('*').eq('vinculo', alvo).is('deleted_at', null).limit(1), 'assistidos.byVinculo');
+    return r.length ? appASS(r[0]) : null;
+  },
+
   // Todos os assistidos ativos, sem paginação de resultado.
   // Usado pelos cálculos agregados (alertas), que precisam do conjunto
   // inteiro mas não de todos os campos.
@@ -2649,11 +2661,17 @@ store.assistidosComparecimentos = {
 
   async insert(r) {
     if (MODE === 'file') {
-      const row = {
-        id: mem.seqAssistidoComp++, ...r,
-        deletedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      // Os defaults vêm ANTES do spread: quem chama pode passar
+      // protocolado/protocoladoPor/dataProtocolacao (importação da
+      // planilha) e esses valores precisam prevalecer.
+      const row = Object.assign({
+        id: mem.seqAssistidoComp++,
         protocolado: false,
-      };
+      }, r, {
+        deletedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
       mem.assistidosComparecimentos.push(row); saveFile(); return row;
     }
     try {

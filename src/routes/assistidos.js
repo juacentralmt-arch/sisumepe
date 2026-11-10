@@ -1,7 +1,8 @@
 const express = require('express');
 const shared = require('../lib/shared');
-const { store, ah, auth, broadcast } = shared;
+const { store, ah, auth, broadcast, upload } = shared;
 const dom = require('../lib/assistidos');
+const importPlanilha = require('../lib/importPlanilha');
 const router = express.Router();
 
 // =====================================================================
@@ -277,10 +278,12 @@ router.get('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (re
 // ---------------------------------------------------------------------
 router.post('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const b = req.body || {};
+  const vinculo = String(b.vinculo || '').trim();
   const c = {
-    vinculo: String(b.vinculo || '').trim(),
+    vinculo,
     nome: String(b.nome || '').trim(),
-    processo: String(b.processo || '').trim(),
+    // O processo é o próprio vínculo em 99% dos casos: se não vier, deriva.
+    processo: String(b.processo || vinculo).trim(),
     vara: String(b.vara || '').trim(),
     localAssinatura: String(b.localAssinatura || '').trim(),
     dataInicio: normalizaData(b.dataInicio),
@@ -326,11 +329,16 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
   const enviados = dom.CAMPOS_EDITAVEIS.filter(k => b[k] !== undefined && b[k] !== null);
   if (!enviados.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
 
+  // Se o vínculo muda e o processo não vem, o processo acompanha o vínculo
+  // (o processo é o próprio vínculo em 99% dos casos).
+  if (enviados.includes('vinculo') && !enviados.includes('processo')) enviados.push('processo');
+
   const c = {};
   for (const k of enviados) {
     let v = b[k];
     if (k === 'dataInicio' || k === 'dataFim') v = normalizaData(v);
     else if (k === 'cpf') v = String(v).replace(/\D/g, '').trim();
+    else if (k === 'processo' && b[k] === undefined) v = c.vinculo;
     else v = String(v).trim();
     c[k] = v;
   }
@@ -552,6 +560,185 @@ router.delete('/api/assistidos/comparecimentos/:id', auth(['admin', 'tecnico']),
     [{ campo: 'deletedAt', rotulo: ROTULOS.deletedAt, de: '', para: new Date().toISOString() }]);
   broadcast();
   res.json({ ok: true });
+}));
+
+// ---------------------------------------------------------------------
+//  Importacao da Planilha Geral (CSV ou XLSX)
+//  Upsert por vinculo. ?dry=1 processa e relata sem gravar.
+// ---------------------------------------------------------------------
+router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single('arquivo'), ah(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Envie o arquivo da planilha (CSV ou XLSX)' });
+  const dry = String(req.query.dry || '') === '1';
+
+  let planilha;
+  try {
+    planilha = await importPlanilha.lerPlanilha(req.file.buffer, req.file.originalname);
+  } catch (e) {
+    return res.status(400).json({ error: 'Não consegui ler a planilha: ' + (e.message || 'formato inválido') });
+  }
+
+  const mapa = importPlanilha.mapearColunas(planilha.head);
+  if (mapa.vinculo == null && mapa.nome == null) {
+    return res.status(400).json({
+      error: 'Cabeçalho não reconhecido. Precisa de uma coluna de Vínculo (ou Processo) e, de preferência, Nome.',
+      cabecalhoRecebido: planilha.head,
+    });
+  }
+
+  const stats = { assistidos: { novos: 0, atualizados: 0, ignorados: 0 }, comparecimentos: { novos: 0, ignorados: 0 } };
+  const falhas = [];
+  const avisos = [];
+  let linhaBase = 2;
+
+  for (let li = 0; li < planilha.rows.length; li++) {
+    const r = planilha.rows[li];
+    const get = campo => (mapa[campo] != null && r[mapa[campo]] != null ? String(r[mapa[campo]]).trim() : '');
+    try {
+      const vinculo = get('vinculo');
+      const nome = get('nome');
+      if (!vinculo && !nome) { stats.assistidos.ignorados++; continue; }
+
+      // --- localiza o assistido ---
+      let alvo = vinculo ? await store.assistidos.byVinculo(vinculo) : null;
+      if (!alvo && !vinculo && nome) {
+        const achados = await store.assistidos.list({ limit: 100, offset: 0, q: nome });
+        const exatos = achados.itens.filter(x => importPlanilha.normalizaChave(x.nome) === importPlanilha.normalizaChave(nome));
+        if (exatos.length === 1) alvo = exatos[0];
+        else if (exatos.length > 1) { falhas.push({ linha: li + linhaBase, erro: 'nome ambíguo: ' + nome }); continue; }
+      }
+      if (!alvo && !vinculo) {
+        falhas.push({ linha: li + linhaBase, erro: 'sem vínculo e nome não localizado: ' + nome });
+        continue;
+      }
+
+      // --- campos do assistido ---
+      const dados = {};
+      if (nome) dados.nome = nome;
+      if (mapa.vara != null && get('vara')) dados.vara = get('vara');
+      if (mapa.local != null && get('local')) dados.localAssinatura = get('local');
+      if (mapa.dataInicio != null && get('dataInicio')) dados.dataInicio = importPlanilha.dataISO(get('dataInicio'));
+      if (mapa.frequencia != null && get('frequencia')) dados.frequencia = get('frequencia').toLowerCase();
+      if (mapa.etiqueta != null && get('etiqueta')) dados.etiqueta = get('etiqueta').toLowerCase();
+      if (mapa.status != null && get('status')) dados.status = get('status').toLowerCase();
+      if (mapa.responsavel != null) dados.responsavelTecnico = get('responsavel');
+      if (mapa.cpf != null) dados.cpf = get('cpf').replace(/\D/g, '');
+      if (mapa.telefone != null) dados.telefone = get('telefone');
+      if (mapa.endereco != null) dados.endereco = get('endereco');
+      if (mapa.situacaoJuridica != null) dados.situacaoJuridica = get('situacaoJuridica');
+      // 'processo' e o proprio vinculo em 99% dos casos: so grava se vier diferente
+      if (mapa.processo != null && get('processo') && get('processo') !== vinculo) dados.processo = get('processo');
+
+      // --- colunas nao reconhecidas vao para `extras` (jsonb) ---
+      // A Planilha Geral pode ter colunas que o modulo nao conhece. Em vez
+      // de descartar, o conteudo fica guardado: nao se perde dado e nao
+      // exige migration a cada campo novo.
+      const usados = new Set(Object.values(mapa));
+      const extras = {};
+      planilha.head.forEach((h, i) => {
+        if (usados.has(i)) return;
+        const rotulo = String(h || '').trim();
+        if (!rotulo) return;
+        const valor = r[i] == null ? '' : String(r[i]).trim();
+        if (valor) extras[rotulo] = valor;   // preserva o nome original da coluna
+      });
+      if (Object.keys(extras).length) dados.extras = extras;
+
+      // --- validacao antes de gravar ---
+      // `extras` é uma bolsa livre (jsonb) e nao tem regra de validacao.
+      const erro = dom.validarCampos(Object.keys(dados).filter(k => k !== 'extras'), dados, { limpaveis: CAMPOS_LIMPAVEIS });
+      if (erro) { falhas.push({ linha: li + linhaBase, erro }); continue; }
+
+      if (!alvo) {
+        // --- novo assistido ---
+        if (!vinculo) { falhas.push({ linha: li + linhaBase, erro: 'novo assistido sem vínculo' }); continue; }
+        if (!dados.nome) { falhas.push({ linha: li + linhaBase, erro: 'novo assistido sem nome' }); continue; }
+        const base = {
+          vinculo,
+          nome: dados.nome,
+          processo: dados.processo || vinculo,
+          vara: dados.vara || '—',
+          localAssinatura: dados.localAssinatura || LOCAIS_ASSINATURA[0],
+          dataInicio: dados.dataInicio || '',
+          frequencia: dados.frequencia || 'mensal',
+          etiqueta: dados.etiqueta || 'sem',
+          status: dados.status || 'ativo',
+          responsavelTecnico: dados.responsavelTecnico || '',
+          cpf: dados.cpf || '',
+          telefone: dados.telefone || '',
+          endereco: dados.endereco || '',
+          situacaoJuridica: dados.situacaoJuridica || '',
+        };
+        const erroBase = dom.validarCampos(dom.CAMPOS_EDITAVEIS, base, { limpaveis: CAMPOS_LIMPAVEIS });
+        if (erroBase) { falhas.push({ linha: li + linhaBase, erro: erroBase }); continue; }
+        if (dados.extras) base.extras = dados.extras;
+        if (!dry) {
+          const criado = await store.assistidos.insert(base);
+          alvo = criado;
+        }
+        stats.assistidos.novos++;
+      } else {
+        // --- assistido existente ---
+        const antes = importPlanilha.normalizaChave(alvo.nome) + '|' + importPlanilha.normalizaChave(alvo.vara || '');
+        if (!dry && Object.keys(dados).length) {
+          await store.assistidos.patch(alvo.id, dados);
+        }
+        const depois = importPlanilha.normalizaChave(dados.nome || alvo.nome) + '|' + importPlanilha.normalizaChave(dados.vara || alvo.vara || '');
+        if (antes !== depois) stats.assistidos.atualizados++;
+        else stats.assistidos.ignorados++;
+      }
+
+      // --- comparecimento (se a planilha trouxer a data) ---
+      const dataComp = mapa.dataComparecimento != null ? importPlanilha.dataISO(get('dataComparecimento')) : '';
+      if (dataComp && alvo && alvo.id) {
+        const existing = await store.assistidosComparecimentos.all(alvo.id);
+        const jaTem = existing.some(c => String(c.dataComparecimento) === dataComp);
+        if (jaTem) {
+          stats.comparecimentos.ignorados++;
+        } else if (!dry) {
+          const juntada = get('juntada');
+          const novo = await store.assistidosComparecimentos.insert({
+            assistidoId: Number(alvo.id),
+            dataComparecimento: dataComp,
+            ppPlantao: get('pp') || '—',
+            observacao: get('observacao') || null,
+            juntada: juntada || null,
+            protocolado: !!juntada,
+            protocoladoPor: juntada ? (get('protocoladoPor') || '') : '',
+            dataProtocolacao: juntada ? dataComp : '',
+          });
+          stats.comparecimentos.novos++;
+          await auditar(req, 'importacao', 'comparecimento#' + novo.id, alvo.nome,
+            'Comparecimento importado da planilha: ' + dataComp, alvo.id,
+            importPlanilha.diff({}, novo, ['dataComparecimento', 'ppPlantao', 'juntada']));
+        } else {
+          stats.comparecimentos.novos++;
+        }
+      }
+    } catch (e) {
+      falhas.push({ linha: li + linhaBase, erro: (e && e.message) || 'erro inesperado' });
+    }
+  }
+
+  if (!dry) {
+    await auditar(req, 'importacao', 'planilha#' + Date.now(), '',
+      'Importação da Planilha Geral: ' + stats.assistidos.novos + ' novo(s), ' + stats.assistidos.atualizados +
+      ' atualizado(s), ' + stats.comparecimentos.novos + ' comparecimento(s), ' + falhas.length + ' falha(s)' +
+      (req.file && req.file.originalname ? ' — arquivo: ' + req.file.originalname : ''), null,
+      [{ campo: 'arquivo', rotulo: 'Arquivo', de: '', para: (req.file && req.file.originalname) || '' },
+       { campo: 'resultado', rotulo: 'Resultado', de: '', para: JSON.stringify(stats) }]);
+    broadcast();
+  }
+
+  res.json({
+    ok: falhas.length === 0,
+    simulado: dry,
+    formato: planilha.formato,
+    cabecalho: planilha.head,
+    colunasReconhecidas: Object.keys(mapa),
+    ...stats,
+    falhas: falhas.slice(0, 100),
+    totalFalhas: falhas.length,
+  });
 }));
 
 module.exports = router;

@@ -1601,6 +1601,7 @@
           <div class="flex gap-2 flex-wrap">
             <button onclick="abrirModalNovoAssistido()" class="btn bg-white text-indigo-700 text-xs px-4 py-2 shadow-lg hover:scale-105 transition font-bold">+ Novo Assistido</button>
             <button onclick="abrirModalNovoComparecimento()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition">+ Comparecimento</button>
+            <button onclick="abrirModalImportarPlanilha()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition" title="Importar a Planilha Geral (CSV ou XLSX)">⇪ Importar planilha</button>
           </div>
         </div>
       </div>
@@ -2263,6 +2264,32 @@
         <div class="mt-4 flex gap-2 justify-end">
           <button onclick="fecharModalLoteJuntada()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>
           <button onclick="salvarLoteJuntada()" class="btn btn-primary text-xs px-5 py-2">Protocolar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Importar Planilha Geral -->
+    <div id="modalImportarPlanilha" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h3 class="font-bold text-base mb-1 text-indigo-700">Importar Planilha Geral</h3>
+        <p class="text-[11px] text-slate-500 mb-4">CSV ou XLSX. A importação é por <b>vínculo</b> (número CNJ): quem já existe é atualizado, quem não existe é criado. Se a planilha trouxer a data do comparecimento, o comparecimento é criado junto.</p>
+        <div class="flex flex-col gap-1 mb-3">
+          <label class="text-[10px] font-bold text-slate-500">Arquivo</label>
+          <input id="importPlanilhaArquivo" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="inp text-xs">
+        </div>
+        <label class="flex items-center gap-2 text-[11px] text-slate-600 mb-3">
+          <input id="importPlanilhaDry" type="checkbox" checked>
+          <span>Simular primeiro (não grava nada)</span>
+        </label>
+        <div class="text-[10px] text-slate-500 mb-3">
+          <b>Colunas reconhecidas</b> (por apelido, em qualquer ordem):<br>
+          Vínculo · Nome · Vara · Local · Data Início · Frequência · Etiqueta · Status · Responsável ·
+          CPF · Telefone · Endereço · Situação Jurídica · Última Data (comparecimento) · PP · Juntada
+        </div>
+        <div id="importPlanilhaResultado" class="hidden mb-3"></div>
+        <div class="mt-4 flex gap-2 justify-end">
+          <button onclick="fecharModalImportarPlanilha()" class="btn btn-ghost text-xs px-5 py-2">Fechar</button>
+          <button onclick="enviarImportacaoPlanilha()" class="btn btn-primary text-xs px-5 py-2">Processar</button>
         </div>
       </div>
     </div>
