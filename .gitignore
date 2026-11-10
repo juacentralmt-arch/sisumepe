@@ -16,3 +16,18 @@ tornozeleira-system/
 *.apk
 __pycache__/
 rea/
+# Rascunhos de OCR/extração de documentos (não versionar)
+pagina-*.jpg
+pagina-*_raw.bin
+p[0-9]_pagina-*.jpg
+proc*.png
+rot[0-9]*.png
+extracted.jpg
+ocr_*.js
+ocr_*.txt
+*_out.txt
+extract_*.js
+fix_motor.js
+fix_relatorio*.js
+_test*.js
+_find_ver.py
