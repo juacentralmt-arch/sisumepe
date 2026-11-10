@@ -1607,9 +1607,14 @@
 
       <!-- Abas: Todos | Juntada | Concluídos -->
       <div class="flex gap-1 mb-4 border-b border-slate-200">
-        <button onclick="setAssTab('todos')" id="assTabTodos" class="px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50">Todos</button>
-        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada</button>
-        <button onclick="setAssTab('concluidos')" id="assTabConcluidos" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos</button>
+        <button onclick="setAssTab('todos')" id="assTabTodos" class="px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50">Todos <span id="assBadgeTodos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">0</span></button>
+        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada <span id="assBadgeJuntada" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-white/10">0</span></button>
+        <button onclick="setAssTab('concluidos')" id="assBadgeConcluidosWrap" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos <span id="assBadgeConcluidos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
+      </div>
+
+      <!-- Busca (aba Todos) -->
+      <div class="mb-3">
+        <input id="assBusca" type="search" class="inp text-xs" placeholder="Buscar por nome, vínculo ou processo…" oninput="debounceAssBusca()" autocomplete="off">
       </div>
 
       <!-- Conteúdo das abas -->
@@ -2191,6 +2196,7 @@
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Local de Assinatura</label><select id="assLocal" class="inp text-xs"><option value="COMEP Cariri">COMEP Cariri</option><option value="Albergado Cariri">Albergado Cariri</option><option value="COAP Cariri">COAP Cariri</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Início</label><input id="assDataInicio" type="date" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Frequência</label><select id="assFrequencia" class="inp text-xs"><option value="mensal">Mensal</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Responsável Técnico</label><input id="assResponsavelTecnico" type="text" placeholder="Nome do técnico responsável" class="inp text-xs"></div>
         </div>
         <div class="mt-4 flex gap-2 justify-end">
           <button onclick="fecharModalNovoAssistido()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>
@@ -2228,8 +2234,9 @@
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Local</label><select id="editAssLocal" class="inp text-xs"><option value="COMEP Cariri">COMEP Cariri</option><option value="Albergado Cariri">Albergado Cariri</option><option value="COAP Cariri">COAP Cariri</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Início</label><input id="editAssDataInicio" type="date" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Frequência</label><select id="editAssFrequencia" class="inp text-xs"><option value="mensal">Mensal</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
-          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Status</label><select id="editAssStatus" class="inp text-xs"><option value="ativo">Ativo</option><option value="concluido">Concluído</option></select></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Status</label><select id="editAssStatus" class="inp text-xs"><option value="ativo">Ativo</option><option value="concluido">Concluído</option><option value="arquivado">Arquivado</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Etiqueta</label><select id="editAssEtiqueta" class="inp text-xs"><option value="sem">Sem</option><option value="verde">Verde</option><option value="laranja">Laranja</option><option value="vermelho">Vermelho</option></select></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Responsável Técnico</label><input id="editAssResponsavelTecnico" type="text" class="inp text-xs" placeholder="Nome do técnico responsável"></div>
         </div>
         <div class="mt-4 flex gap-2 justify-end">
           <button onclick="fecharModalEditarAssistido()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>

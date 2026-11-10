@@ -1,19 +1,28 @@
 -- =====================================================================
 -- SISUMEPE — Módulo Assistidos (monitorados com tornozeleira eletrônica)
 -- 3 abas: Todos | Juntada | Concluídos
--- Rode UMA VEZ no SQL Editor do Supabase (idempotente).
+-- Rode no SQL Editor do Supabase. Idempotente.
+--
+-- IMPORTANTE
+--   * `vinculo` NÃO tem unique de tabela: o índice parcial da linha final
+--     já garante unicidade só entre registros vivos (soft-delete). Uma
+--     constraint `unique` de tabela bloquearia recadastrar um vínculo
+--     arquivado — que a aplicação permite.
+--   * Colunas sem `not null`: a base herdada da Planilha Geral tem
+--     registros com processo/data vazios, e eles precisam continuar
+--     editáveis (o PATCH é parcial e só valida o que o usuário altera).
 -- =====================================================================
 
 create table if not exists assistidos (
   id serial primary key,
-  vinculo text not null unique,
-  nome text not null,
-  processo text not null,
-  vara text not null,
-  local_assinatura text not null,
-  data_inicio text not null,
+  vinculo text default '',
+  nome text default '',
+  processo text default '',
+  vara text default '',
+  local_assinatura text default '',
+  data_inicio text default '',
   data_fim text default '',
-  frequencia text not null default 'mensal',
+  frequencia text default 'mensal',
   cpf text default '',
   telefone text default '',
   endereco text default '',
@@ -22,7 +31,7 @@ create table if not exists assistidos (
   etiqueta_texto text default '',
   etiqueta_cor text default '',
   responsavel_tecnico text default '',
-  status text default 'ativo', -- 'ativo' | 'concluido'
+  status text default 'ativo', -- 'ativo' | 'concluido' | 'arquivado'
   deleted_at timestamptz default null,
   createdat timestamptz default now(),
   updatedat timestamptz default now()
@@ -49,21 +58,38 @@ alter table assistidos add column if not exists deleted_at timestamptz default n
 alter table assistidos add column if not exists createdat timestamptz default now();
 alter table assistidos add column if not exists updatedat timestamptz default now();
 
+-- Remove a constraint de unicidade de tabela, se existir (bases criadas
+-- pela versão antiga da migration). A unicidade passa a ser só do índice
+-- parcial abaixo — soft-delete libera o vínculo.
+do $$
+declare c record;
+begin
+  for c in
+    select conname from pg_constraint
+    where conrelid = 'assistidos'::regclass and contype = 'u'
+  loop
+    execute format('alter table assistidos drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+alter table assistidos alter column status set default 'ativo';
+
 create index if not exists idx_assistidos_vinculo on assistidos (vinculo);
 create index if not exists idx_assistidos_nome on assistidos (nome);
+create index if not exists idx_assistidos_processo on assistidos (processo);
 create index if not exists idx_assistidos_status on assistidos (status);
 create index if not exists idx_assistidos_etiqueta on assistidos (etiqueta);
 create index if not exists idx_assistidos_deleted on assistidos (deleted_at);
+-- unicidade apenas entre assistidos vivos (soft-delete libera o vínculo)
 create unique index if not exists idx_assistidos_vinculo_unique on assistidos (vinculo) where deleted_at is null;
 
 -- =====================================================================
 -- Tabela assistidos_comparecimentos
 -- =====================================================================
-
 create table if not exists assistidos_comparecimentos (
   id serial primary key,
   assistido_id integer references assistidos(id) on delete cascade,
-  data_comparecimento text not null default '',
+  data_comparecimento text default '',
   policial_plantao text default '',
   protocolado boolean default false,
   data_protocolacao text default '',
@@ -92,6 +118,33 @@ alter table assistidos_comparecimentos add column if not exists updatedat timest
 create index if not exists idx_assistidos_comp_assistido on assistidos_comparecimentos (assistido_id);
 create index if not exists idx_assistidos_comp_data on assistidos_comparecimentos (data_comparecimento);
 create index if not exists idx_assistidos_comp_deleted on assistidos_comparecimentos (deleted_at);
+create index if not exists idx_assistidos_comp_pend on assistidos_comparecimentos (protocolado);
+
+-- SEGURANÇA: RLS habilitado e sem policies = acesso negado para
+-- anon/authenticated. O app usa a chave secreta (sb_secret_...), que
+-- ignora RLS — como já acontece com persons, tickets, users, audit.
+-- Sem isto, estas tabelas ficam legíveis e graváveis pela chave pública
+-- do projeto, burlando a API (e a trilha de auditoria).
+alter table assistidos enable row level security;
+alter table assistidos_comparecimentos enable row level security;
+
+-- =====================================================================
+-- Correção de dados
+-- =====================================================================
+-- A Planilha Geral importada gravou o número da juntada sem ligar a flag
+-- `protocolado`. Sem isto, a aba "Juntada" tratava comparecimentos já
+-- protocolados como pendentes. Só mexe em quem TEM juntada registrada.
+update assistidos_comparecimentos
+   set protocolado = true
+ where deleted_at is null
+   and coalesce(juntada, '') <> ''
+   and coalesce(protocolado, false) = false;
+
+-- Status vazio (base antiga sem default) passa a ser 'ativo'.
+update assistidos
+   set status = 'ativo'
+ where coalesce(status, '') = ''
+   and deleted_at is null;
 
 -- =====================================================================
 -- Função de reajuste de sequencias

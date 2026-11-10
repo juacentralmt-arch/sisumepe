@@ -2210,23 +2210,133 @@ const store = {
 };
 
 
-// Assistidos (Planilha Geral)
+// =====================================================================
+//  Assistidos (Planilha Geral)
+//  - listagem paginada + busca (o app consome só a página atual)
+//  - soft-delete em assistido e comparecimentos
+//  - `deletedAt` é o nome canônico no app; `deleted_at` é aceito na
+//    leitura para compatibilidade com bases gravadas antes da correção.
+// =====================================================================
+const { estaExcluido, comparecimentoProtocolado, nomeKey } = require('./src/lib/assistidos');
+
+// Escapa metacaracteres do filtro .or() do PostgREST: % _ , ( ) "
+const escOr = s => String(s == null ? '' : s).replace(/[%_]/g, m => `\\${m}`).replace(/[,()"]/g, m => `\\${m}`);
+
 store.assistidos = {
-  async all() {
-    if (MODE === 'file') return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
-    try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const r = must(await supa.from('assistidos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1), 'assistidos.all');
-        out.push(...r.map(appASS));
-        if (r.length < pageSize) break;
-        from += pageSize;
+  // Listagem paginada. Devolve { itens, total }.
+  async list({ limit = 20, offset = 0, q = '', status = '', statusIn = null } = {}) {
+    const lim = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const off = Math.max(Number(offset) || 0, 0);
+    const busca = String(q || '').trim().slice(0, 60);
+    const statusF = String(status || '').trim();
+    const statusLista = Array.isArray(statusIn) && statusIn.length ? statusIn.map(String) : null;
+
+    if (MODE === 'file') {
+      let list = (mem.assistidos || []).filter(x => !estaExcluido(x));
+      if (busca) {
+        const k = nomeKey(busca);
+        const kr = busca.toLowerCase();
+        list = list.filter(x =>
+          nomeKey(x.nome).includes(k) ||
+          String(x.vinculo || '').toLowerCase().includes(kr) ||
+          String(x.processo || '').toLowerCase().includes(kr));
       }
-      return out;
-    } catch (e) { throw e; }
+      if (statusF) list = list.filter(x => String(x.status || '') === statusF);
+      if (statusLista) list = list.filter(x => statusLista.includes(String(x.status || '')));
+      list.sort((a, b) => Number(b.id) - Number(a.id));
+      return { itens: list.slice(off, off + lim), total: list.length };
+    }
+
+    let query = supa.from('assistidos').select('*', { count: 'exact' })
+      .is('deleted_at', null)
+      .order('id', { ascending: false });
+    if (busca) {
+      const e = escOr(busca);
+      query = query.or(`nome.ilike.%${e}%,vinculo.ilike.%${e}%,processo.ilike.%${e}%`);
+    }
+    if (statusF) query = query.eq('status', statusF);
+    if (statusLista) query = query.in('status', statusLista);
+    query = query.range(off, off + lim - 1);
+    const r = await query;
+    if (r.error) { const err = new Error('assistidos.list: ' + r.error.message); err.status = 500; throw err; }
+    return {
+      itens: (r.data || []).map(appASS),
+      total: (r.count != null ? r.count : (r.data || []).length),
+    };
   },
+
+  // Lista enxuta para montar seletores (id, nome, vínculo, status).
+  async listaSimples({ limit = 500, q = '' } = {}) {
+    const lim = Math.min(Math.max(Number(limit) || 500, 1), 2000);
+    const busca = String(q || '').trim().slice(0, 60);
+    if (MODE === 'file') {
+      let list = (mem.assistidos || []).filter(x => !estaExcluido(x));
+      if (busca) {
+        const k = nomeKey(busca), kr = busca.toLowerCase();
+        list = list.filter(x => nomeKey(x.nome).includes(k) || String(x.vinculo || '').toLowerCase().includes(kr));
+      }
+      list.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
+      return list.slice(0, lim).map(x => ({ id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status }));
+    }
+    let query = supa.from('assistidos').select('id,nome,vinculo,status')
+      .is('deleted_at', null).order('nome').limit(lim);
+    if (busca) {
+      const e = escOr(busca);
+      query = query.or(`nome.ilike.%${e}%,vinculo.ilike.%${e}%`);
+    }
+    const r = must(await query, 'assistidos.listaSimples');
+    return r || [];
+  },
+
+  // Contagem por status (badges das abas).
+  // Usa head+count: o PostgREST corta respostas em 1.000 linhas, então
+  // contar as linhas baixadas daria o total truncado.
+  async contagemPorStatus() {
+    const out = { ativo: 0, concluido: 0, arquivado: 0, total: 0, pendentesJuntada: 0, assistidosPendentes: 0 };
+    if (MODE === 'file') {
+      (mem.assistidos || []).filter(x => !estaExcluido(x)).forEach(x => {
+        const s = String(x.status || 'ativo');
+        out.total++;
+        if (out[s] != null) out[s]++;
+      });
+      const pend = (mem.assistidosComparecimentos || []).filter(x => !estaExcluido(x) && !comparecimentoProtocolado(x));
+      out.pendentesJuntada = pend.length;
+      out.assistidosPendentes = new Set(pend.map(x => String(x.assistidoId))).size;
+      return out;
+    }
+    const contar = async (status) => {
+      let q = supa.from('assistidos').select('id', { count: 'exact', head: true }).is('deleted_at', null);
+      if (status) q = q.eq('status', status);
+      const r = await q;
+      if (r.error) { const err = new Error('assistidos.contagem: ' + r.error.message); err.status = 500; throw err; }
+      return r.count || 0;
+    };
+    const [ativo, concluido, arquivado, total] = await Promise.all([
+      contar('ativo'), contar('concluido'), contar('arquivado'), contar(null),
+    ]);
+    out.ativo = ativo; out.concluido = concluido; out.arquivado = arquivado; out.total = total;
+    try {
+      const pend = await store.assistidosComparecimentos.pendentes();
+      out.pendentesJuntada = pend.length;
+      out.assistidosPendentes = new Set(pend.map(x => String(x.assistidoId))).size;
+    } catch (e) { /* segue sem os pendentes */ }
+    return out;
+  },
+
+  async all() {
+    if (MODE === 'file') return (mem.assistidos || []).filter(x => !estaExcluido(x));
+    const out = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const r = must(await supa.from('assistidos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1), 'assistidos.all');
+      out.push(...r.map(appASS));
+      if (r.length < pageSize) break;
+      from += pageSize;
+    }
+    return out;
+  },
+
   async allIncludingDeleted() {
     if (MODE === 'file') return [...(mem.assistidos || [])];
     try {
@@ -2242,21 +2352,27 @@ store.assistidos = {
       return out;
     } catch (e) { throw e; }
   },
+
   async byId(id) {
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
-      return r && r.deleted_at ? null : r || null;
+      return r && estaExcluido(r) ? null : r || null;
     }
     try {
       const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
       if (!r.length) return null;
       const row = appASS(r[0]);
-      return row.deleted_at || row.deletedAt ? null : row;
+      return estaExcluido(row) ? null : row;
     } catch (e) { throw e; }
   },
+
   async insert(r) {
     if (MODE === 'file') {
-      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), deleted_at: null, status: r.status || 'ativo', etiqueta: r.etiqueta || 'sem' };
+      const row = {
+        id: mem.seqAssistido++, ...r,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        deletedAt: null, status: r.status || 'ativo', etiqueta: r.etiqueta || 'sem',
+      };
       mem.assistidos.push(row); saveFile(); return row;
     }
     try {
@@ -2264,11 +2380,13 @@ store.assistidos = {
       return appASS(rr);
     } catch (e) { throw e; }
   },
+
+  // Patch parcial: grava apenas os campos enviados (sem apagar os demais).
   async patch(id, fields) {
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return null;
-      if (r.deleted_at) return null;
+      if (estaExcluido(r)) return null;
       Object.assign(r, fields, { updatedAt: new Date().toISOString() });
       saveFile(); return r;
     }
@@ -2277,14 +2395,15 @@ store.assistidos = {
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) { throw e; }
   },
+
   async remove(id) {
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return;
       const agora = new Date().toISOString();
-      r.deleted_at = agora;
+      r.deletedAt = agora;
       (mem.assistidosComparecimentos || []).forEach(c => {
-        if (eqi(c.assistidoId, id) && !c.deleted_at) { c.deleted_at = agora; c.updatedAt = agora; }
+        if (eqi(c.assistidoId, id) && !estaExcluido(c)) { c.deletedAt = agora; c.updatedAt = agora; }
       });
       saveFile(); return;
     }
@@ -2295,43 +2414,80 @@ store.assistidos = {
   }
 };
 
-// Assistidos - Comparecimentos
+// =====================================================================
+//  Assistidos - Comparecimentos
+// =====================================================================
 store.assistidosComparecimentos = {
+  // Todos os comparecimentos ativos. `assistidoId` pode ser um id ou uma
+  // lista de ids (evita baixar a tabela inteira só para enriquecer uma
+  // página de 20 assistidos).
   async all(assistidoId) {
+    const ids = assistidoId == null ? null
+      : (Array.isArray(assistidoId) ? assistidoId.map(Number).filter(n => Number.isFinite(n)) : [Number(assistidoId)]);
     if (MODE === 'file') {
-      const list = (mem.assistidosComparecimentos || []).filter(x => !x.deleted_at);
-      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
+      const list = (mem.assistidosComparecimentos || []).filter(x => !estaExcluido(x));
+      if (!ids) return [...list];
+      const set = new Set(ids);
+      return list.filter(x => set.has(Number(x.assistidoId)));
+    }
+    const out = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
+      if (ids) {
+        if (!ids.length) return [];
+        q = q.in('assistido_id', ids);
+      }
+      const r = must(await q, 'assistidosComparecimentos.all');
+      out.push(...r.map(appACC));
+      if (r.length < pageSize) break;
+      from += pageSize;
+    }
+    return out;
+  },
+
+  // Comparecimentos pendentes de juntada (não protocolados).
+  // `protocolado` desligado e `juntada` vazia — os dois precisam
+  // concordar: a base herdada tem o número da juntada sem a flag.
+  async pendentes() {
+    if (MODE === 'file') {
+      return (mem.assistidosComparecimentos || [])
+        .filter(x => !estaExcluido(x) && !comparecimentoProtocolado(x));
     }
     try {
-      const out = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
-        if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
-        const r = must(await q, 'assistidosComparecimentos.all');
-        out.push(...r.map(appACC));
-        if (r.length < pageSize) break;
-        from += pageSize;
-      }
-      return out;
-    } catch (e) { throw e; }
+      const r = must(await supa.from('assistidos_comparecimentos').select('*')
+        .is('deleted_at', 'null')
+        .eq('protocolado', false)
+        .eq('juntada', '')
+        .order('data_comparecimento'), 'assistidosComparecimentos.pendentes');
+      return r.map(appACC);
+    } catch (e) {
+      console.warn('assistidosComparecimentos.pendentes fallback', e.message);
+      return (mem.assistidosComparecimentos || []).filter(x => !estaExcluido(x) && !comparecimentoProtocolado(x));
+    }
   },
+
   async byId(id) {
     if (MODE === 'file') {
       const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
-      return r && r.deleted_at ? null : r || null;
+      return r && estaExcluido(r) ? null : r || null;
     }
     try {
       const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
       if (!r.length) return null;
       const row = appACC(r[0]);
-      return row.deleted_at || row.deletedAt ? null : row;
+      return estaExcluido(row) ? null : row;
     } catch (e) { throw e; }
   },
+
   async insert(r) {
     if (MODE === 'file') {
-      const row = { id: mem.seqAssistidoComp++, ...r, deleted_at: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), protocolado: false };
+      const row = {
+        id: mem.seqAssistidoComp++, ...r,
+        deletedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        protocolado: false,
+      };
       mem.assistidosComparecimentos.push(row); saveFile(); return row;
     }
     try {
@@ -2339,11 +2495,12 @@ store.assistidosComparecimentos = {
       return appACC(rr);
     } catch (e) { throw e; }
   },
+
   async patch(id, fields) {
     if (MODE === 'file') {
       const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
       if (!r) return null;
-      if (r.deleted_at) return null;
+      if (estaExcluido(r)) return null;
       Object.assign(r, fields, { updatedAt: new Date().toISOString() });
       saveFile(); return r;
     }
@@ -2352,12 +2509,13 @@ store.assistidosComparecimentos = {
       return rr.length ? appACC(rr[0]) : null;
     } catch (e) { throw e; }
   },
+
   async remove(id) {
     if (MODE === 'file') {
       const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
       if (!r) return;
       const agora = new Date().toISOString();
-      r.deleted_at = agora; r.updatedAt = agora;
+      r.deletedAt = agora; r.updatedAt = agora;
       saveFile(); return;
     }
     try {
@@ -2365,6 +2523,5 @@ store.assistidosComparecimentos = {
     } catch (e) { throw e; }
   }
 };
-
 module.exports = store;
 

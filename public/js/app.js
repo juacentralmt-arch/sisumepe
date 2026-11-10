@@ -9449,10 +9449,27 @@ if(document.readyState === 'loading'){
 //  MÓDULO ASSISTIDOS — 3 abas: Todos | Juntada | Concluídos
 // =====================================================================
 
+// =====================================================================
+//  Módulo Assistidos — frontend
+//  - listagem paginada no servidor (a aba "Todos" baixa só a página atual)
+//  - edição envia SOMENTE os campos alterados: registros legados
+//    (processo com 21 dígitos, data de início vazia) continuam editáveis
+//  - "pendente de juntada" = não protocolado (mesma regra do backend)
+// =====================================================================
 let assTab = 'todos';
-let assistidosData = [];
 let assistidosPage = 1;
 let assistidosLimit = 20;
+let assistidosTotal = 0;
+let assistidosBusca = '';
+let assistidosResumo = { ativo: 0, concluido: 0, arquivado: 0, total: 0 };
+let assEditOriginal = null;   // snapshot do registro em edição (para o diff)
+let assBuscaTimer = null;
+
+// Regra única: protocolado = flag ligada OU número da juntada preenchido.
+// (a base herdada tem o número mas a flag desligada)
+function assComparcimentoProtocolado(c){
+  return !!(c && (c.protocolado === true || String(c.juntada||'').trim()));
+}
 
 function setAssTab(tab){
   assTab = tab;
@@ -9471,15 +9488,47 @@ function setAssTab(tab){
   if(tab==='todos') loadAssistidos();
   else if(tab==='juntada') loadAssistidosJuntada();
   else if(tab==='concluidos') loadAssistidosConcluidos();
+  atualizarBadgesAssistidos();
+}
+
+// Badges: contagem por status + pendências de juntada.
+async function atualizarBadgesAssistidos(){
+  try{
+    const r = await api('/api/assistidos/resumo');
+    assistidosResumo = r || assistidosResumo;
+  }catch(e){}
+  var bTodos=document.getElementById('assBadgeTodos');
+  if(bTodos) bTodos.textContent = assistidosResumo.total || 0;
+  var bJunt=document.getElementById('assBadgeJuntada');
+  if(bJunt){
+    var pend = assistidosResumo.assistidosPendentes || 0;
+    bJunt.textContent = pend;
+    bJunt.className = 'ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md ' + (pend>0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600');
+  }
+  var bConcl=document.getElementById('assBadgeConcluidos');
+  if(bConcl) bConcl.textContent = (assistidosResumo.concluido||0) + (assistidosResumo.arquivado||0);
 }
 
 async function loadAssistidos(){
   try{
-    const r = await api('/api/assistidos');
-    const list = Array.isArray(r) ? r : [];
-    assistidosData = list;
-    renderAssistidosTodos(list);
+    var url = '/api/assistidos?page='+encodeURIComponent(assistidosPage)+'&limit='+encodeURIComponent(assistidosLimit);
+    if(assistidosBusca) url += '&q='+encodeURIComponent(assistidosBusca);
+    const r = await api(url);
+    const itens = (r && Array.isArray(r.itens)) ? r.itens : [];
+    assistidosTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
+    renderAssistidosTodos(itens);
+    renderAssPaginacao(assistidosTotal);
   }catch(e){ console.error('loadAssistidos', e); }
+}
+
+function debounceAssBusca(){
+  if(assBuscaTimer) clearTimeout(assBuscaTimer);
+  assBuscaTimer = setTimeout(function(){
+    var el=document.getElementById('assBusca');
+    assistidosBusca = el ? el.value.trim() : '';
+    assistidosPage = 1;
+    loadAssistidos();
+  }, 350);
 }
 
 async function loadAssistidosJuntada(){
@@ -9507,17 +9556,13 @@ function etiquetaBadge(e){
 function renderAssistidosTodos(list){
   const wrap = document.getElementById('assContentTodos');
   if(!wrap) return;
-  const inicio = (assistidosPage-1)*assistidosLimit;
-  const fim = inicio + assistidosLimit;
-  const pagina = list.slice(inicio, fim);
-  if(!pagina.length){
+  if(!list.length){
     wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum assistido cadastrado.</div>';
-    renderAssPaginacao(list.length);
     return;
   }
   var html = '';
-  for(var i=0;i<pagina.length;i++){
-    var a = pagina[i];
+  for(var i=0;i<list.length;i++){
+    var a = list[i];
     var cor = { verde:'border-emerald-500', laranja:'border-amber-500', vermelho:'border-rose-500', sem:'border-slate-200' }[a.etiqueta] || 'border-slate-200';
     html += '<div class="card p-4 rounded-2xl '+cor+' shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
     html += '<div class="flex items-start justify-between mb-2">';
@@ -9536,8 +9581,12 @@ function renderAssistidosTodos(list){
     html += '<div class="flex gap-2 text-[10px] mb-3">';
     html += '<span class="font-semibold">Freq:</span> '+esc(a.frequencia||'-');
     html += '<span class="font-semibold">Status:</span> '+esc(a.status||'-');
+    if(a.responsavelTecnico){ html += '<span class="font-semibold">Resp.:</span> '+esc(a.responsavelTecnico); }
     if(a.ultimoComparecimento){ html += '<span class="font-semibold">Últ. comp:</span> '+fmtDataBR(a.ultimoComparecimento); }
     html += '</div>';
+    if(Number(a.pendentesJuntada)>0){
+      html += '<div class="mb-3"><span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">'+Number(a.pendentesJuntada)+' pendente(s) de juntada</span></div>';
+    }
     html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
     html += '<button onclick="event.stopPropagation(); abrirEditarAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Editar</button>';
     html += '<button onclick="event.stopPropagation(); etiquetarAssistido('+a.id+')" class="text-[10px] font-bold text-slate-600 hover:underline px-2 py-1">Etiquetar</button>';
@@ -9547,20 +9596,25 @@ function renderAssistidosTodos(list){
     html += '</div>';
   }
   wrap.innerHTML = html;
-  renderAssPaginacao(list.length);
 }
 
+// Paginação de servidor: só mostra o necessário (58 páginas não cabem em botões).
 function renderAssPaginacao(total){
   const wrap = document.getElementById('assPaginacao');
   if(!wrap) return;
-  const totalPages = Math.ceil(total/assistidosLimit) || 1;
-  if(totalPages<=1){ wrap.innerHTML=''; return; }
-  var html='';
-  for(var i=1;i<=totalPages;i++){
-    var ativo = i===assistidosPage;
-    html += '<button onclick="assistidosPage='+i+'; loadAssistidos()" class="px-2 py-1 text-xs '+(ativo?'bg-indigo-100 text-indigo-700 font-bold rounded':'text-slate-500 hover:bg-slate-100 rounded')+'">'+i+'</button>';
-  }
+  const totalPaginas = Math.max(Math.ceil((total||0)/assistidosLimit), 1);
+  if(totalPaginas<=1){ wrap.innerHTML=''; return; }
+  var html = '<button onclick="assIrPagina(1)" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage===1?'disabled':'')+'>&laquo;</button>';
+  html += '<button onclick="assIrPagina('+(assistidosPage-1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage===1?'disabled':'')+ '&lsaquo;</button>';
+  html += '<span class="px-2 py-1 text-xs font-bold text-slate-600">Página '+assistidosPage+' de '+totalPaginas+' ('+total+')</span>';
+  html += '<button onclick="assIrPagina('+(assistidosPage+1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+ '&rsaquo;</button>';
+  html += '<button onclick="assIrPagina('+totalPaginas+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+ '&raquo;</button>';
   wrap.innerHTML = html;
+}
+function assIrPagina(p){
+  if(p < 1) return;
+  assistidosPage = p;
+  loadAssistidos();
 }
 
 function renderAssistidosJuntada(list){
@@ -9605,13 +9659,14 @@ function renderAssistidosConcluidos(list){
   var html = '';
   for(var i=0;i<list.length;i++){
     var a = list[i];
-    html += '<div class="card p-4 rounded-2xl border-emerald-500 shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
+    var arquivado = String(a.status||'')==='arquivado';
+    html += '<div class="card p-4 rounded-2xl '+(arquivado?'border-slate-400':'border-emerald-500')+' shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
     html += '<div class="flex items-start justify-between mb-2">';
     html += '<div>';
     html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
     html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
     html += '</div>';
-    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Concluído</span>';
+    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+(arquivado?'bg-slate-100 text-slate-600':'bg-emerald-100 text-emerald-700')+'">'+(arquivado?'Arquivado':'Concluído')+'</span>';
     html += '</div>';
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
     html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
@@ -9651,13 +9706,16 @@ async function salvarNovoAssistido(){
     localAssinatura: document.getElementById('assLocal').value,
     dataInicio: document.getElementById('assDataInicio').value,
     frequencia: document.getElementById('assFrequencia').value,
+    responsavelTecnico: (document.getElementById('assResponsavelTecnico')||{}).value || '',
   };
   try{
     var r = await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
     if(r.error){ toast(r.error||'Erro ao cadastrar'); return; }
     toast('Assistido cadastrado');
     fecharModalNovoAssistido();
+    assistidosPage = 1;
     loadAssistidos();
+    atualizarBadgesAssistidos();
   }catch(e){ toast('Erro ao cadastrar: '+(e.message||e)); }
 }
 
@@ -9672,13 +9730,17 @@ async function abrirModalNovoComparecimento(assistidoId){
     wrap.classList.add('hidden');
   } else {
     wrap.classList.remove('hidden');
-    if(!assistidosData.length){
-      try{ var r = await api('/api/assistidos'); assistidosData = Array.isArray(r) ? r : []; }catch(e){}
+    sel.innerHTML = '<option value="">Carregando…</option>';
+    try{
+      // Lista enxuta: baixa só id/nome/vínculo/status (não a ficha inteira).
+      var lista = await api('/api/assistidos/lista?limit=1500');
+      sel.innerHTML = '<option value="">Selecione o assistido...</option>' + (Array.isArray(lista)?lista:[])
+        .filter(function(a){ return a.status !== 'concluido' && a.status !== 'arquivado'; })
+        .map(function(a){ return '<option value="'+a.id+'">'+esc(a.nome||'-')+' — '+esc(a.vinculo||'-')+'</option>'; })
+        .join('');
+    }catch(e){
+      sel.innerHTML = '<option value="">Erro ao carregar assistidos</option>';
     }
-    sel.innerHTML = '<option value="">Selecione o assistido...</option>' + assistidosData
-      .filter(function(a){ return a.status !== 'concluido'; })
-      .map(function(a){ return '<option value="'+a.id+'">'+esc(a.nome||'-')+' — '+esc(a.vinculo||'-')+'</option>'; })
-      .join('');
   }
   document.getElementById('modalNovoComparecimento').classList.remove('hidden');
 }
@@ -9698,55 +9760,74 @@ async function salvarNovoComparecimento(){
     if(r.error){ toast(r.error||'Erro ao registrar'); return; }
     toast('Comparecimento registrado');
     fecharModalNovoComparecimento();
-    setAssTab('juntada');
-    loadAssistidosJuntada();
     loadAssistidos();
+    atualizarBadgesAssistidos();
+    setAssTab('juntada');
   }catch(e){ toast('Erro ao registrar: '+(e.message||e)); }
 }
 
-function abrirEditarAssistido(id){
-  var a = assistidosData.find(x=>String(x.id)===String(id));
-  if(!a) return;
-  document.getElementById('editAssId').value = a.id;
-  document.getElementById('editAssVinculo').value = a.vinculo||'';
-  document.getElementById('editAssNome').value = a.nome||'';
-  document.getElementById('editAssProcesso').value = a.processo||'';
-  document.getElementById('editAssVara').value = a.vara||'';
-  document.getElementById('editAssLocal').value = a.localAssinatura||'COMEP Cariri';
-  document.getElementById('editAssDataInicio').value = a.dataInicio||'';
-  document.getElementById('editAssFrequencia').value = a.frequencia||'mensal';
-  document.getElementById('editAssStatus').value = a.status||'ativo';
-  document.getElementById('editAssEtiqueta').value = a.etiqueta||'sem';
-  document.getElementById('modalEditarAssistido').classList.remove('hidden');
+// Editar: busca o registro atual (não depende da página em cache) e
+// guarda o snapshot para enviar só o que mudou.
+async function abrirEditarAssistido(id){
+  try{
+    var a = await api('/api/assistidos/'+id);
+    if(!a || a.error){ toast('Assistido não encontrado'); return; }
+    assEditOriginal = a;
+    document.getElementById('editAssId').value = a.id;
+    document.getElementById('editAssVinculo').value = a.vinculo||'';
+    document.getElementById('editAssNome').value = a.nome||'';
+    document.getElementById('editAssProcesso').value = a.processo||'';
+    document.getElementById('editAssVara').value = a.vara||'';
+    document.getElementById('editAssLocal').value = a.localAssinatura||'COMEP Cariri';
+    document.getElementById('editAssDataInicio').value = a.dataInicio||'';
+    document.getElementById('editAssFrequencia').value = a.frequencia||'mensal';
+    document.getElementById('editAssStatus').value = a.status||'ativo';
+    document.getElementById('editAssEtiqueta').value = a.etiqueta||'sem';
+    var rt = document.getElementById('editAssResponsavelTecnico'); if(rt) rt.value = a.responsavelTecnico||'';
+    document.getElementById('modalEditarAssistido').classList.remove('hidden');
+  }catch(e){ toast('Erro ao abrir edição: '+(e.message||e)); }
 }
 function fecharModalEditarAssistido(){
   document.getElementById('modalEditarAssistido').classList.add('hidden');
+  assEditOriginal = null;
 }
+// Envia apenas os campos alterados: o backend valida só o que chega.
+// Assim um registro legado (processo com 21 dígitos, data de início
+// vazia) continua editável — mexer no nome não revalida o processo.
 async function salvarEditarAssistido(){
   var id = document.getElementById('editAssId').value;
-  var b = {
-    vinculo: document.getElementById('editAssVinculo').value,
-    nome: document.getElementById('editAssNome').value,
-    processo: document.getElementById('editAssProcesso').value,
-    vara: document.getElementById('editAssVara').value,
-    localAssinatura: document.getElementById('editAssLocal').value,
-    dataInicio: document.getElementById('editAssDataInicio').value,
-    frequencia: document.getElementById('editAssFrequencia').value,
-    status: document.getElementById('editAssStatus').value,
-    etiqueta: document.getElementById('editAssEtiqueta').value,
-  };
+  if(!id){ toast('Registro inválido'); return; }
+  var orig = assEditOriginal || {};
+  var campos = [
+    ['vinculo','editAssVinculo'], ['nome','editAssNome'], ['processo','editAssProcesso'],
+    ['vara','editAssVara'], ['localAssinatura','editAssLocal'], ['dataInicio','editAssDataInicio'],
+    ['frequencia','editAssFrequencia'], ['status','editAssStatus'], ['etiqueta','editAssEtiqueta'],
+    ['responsavelTecnico','editAssResponsavelTecnico'],
+  ];
+  var b = {};
+  for(var i=0;i<campos.length;i++){
+    var k = campos[i][0], el = document.getElementById(campos[i][1]);
+    if(!el) continue;
+    var v = el.value;
+    var ov = (orig[k] == null) ? '' : String(orig[k]);
+    if(String(v) !== ov) b[k] = v;
+  }
+  if(!Object.keys(b).length){ toast('Nada alterado'); return; }
   try{
     var r = await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
     if(r.error){ toast(r.error||'Erro ao editar'); return; }
     toast('Assistido atualizado');
     fecharModalEditarAssistido();
     loadAssistidos();
+    atualizarBadgesAssistidos();
   }catch(e){ toast('Erro ao editar: '+(e.message||e)); }
 }
 
 async function etiquetarAssistido(id){
   var etiqueta = prompt('Escolha a etiqueta: sem, verde, laranja, vermelho');
-  if(!etiqueta || !['sem','verde','laranja','vermelho'].includes(etiqueta)) return;
+  if(!etiqueta) return;
+  etiqueta = String(etiqueta).trim().toLowerCase();
+  if(!['sem','verde','laranja','vermelho'].includes(etiqueta)) return;
   try{
     await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta }) });
     toast('Etiqueta atualizada');
@@ -9760,6 +9841,7 @@ async function excluirAssistido(id){
     await api('/api/assistidos/'+id, { method:'DELETE' });
     toast('Assistido excluído');
     loadAssistidos();
+    atualizarBadgesAssistidos();
   }catch(e){ toast('Erro ao excluir: '+(e.message||e)); }
 }
 
@@ -9779,6 +9861,9 @@ async function abrirDetalheAssistido(id){
     infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Freq.</p><p class="font-bold">'+esc(a.frequencia||'-')+'</p></div>';
     infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Status</p><p class="font-bold">'+esc(a.status||'-')+'</p></div>';
     infoHtml += '</div>';
+    if(a.responsavelTecnico){
+      infoHtml += '<div class="mt-2 bg-indigo-50 p-3 rounded-xl text-[10px]"><span class="font-bold text-indigo-700">Responsável técnico:</span> <span class="text-slate-700">'+esc(a.responsavelTecnico)+'</span></div>';
+    }
     infoHtml += '<div class="mt-3 flex gap-2">'+etiquetaBadge(a.etiqueta)+'</div>';
     document.getElementById('detAssInfo').innerHTML = infoHtml;
     var body = document.getElementById('detComparecimentos');
@@ -9787,15 +9872,21 @@ async function abrirDetalheAssistido(id){
       var compHtml = '';
       for(var j=0;j<comps.length;j++){
         var c = comps[j];
+        var prot = assComparcimentoProtocolado(c);
         compHtml += '<div class="flex items-start justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-white/50 mb-2">';
         compHtml += '<div class="flex-1">';
         compHtml += '<p class="font-bold text-sm text-slate-800">'+fmtDataBR(c.dataComparecimento||'')+'</p>';
         compHtml += '<p class="text-[10px] text-slate-500">PP: '+esc(c.ppPlantao||'-')+'</p>';
         if(c.observacao){ compHtml += '<p class="text-[10px] text-slate-600 mt-1">'+esc(c.observacao)+'</p>'; }
-        if(c.juntada){ compHtml += '<p class="text-[10px] text-emerald-700 font-bold mt-1">Juntada: '+esc(c.juntada)+'</p>'; }
+        if(prot){
+          compHtml += '<p class="text-[10px] text-emerald-700 font-bold mt-1">Juntada: '+esc(c.juntada||'protocolado');
+          if(c.dataProtocolacao) compHtml += ' em '+fmtDataBR(c.dataProtocolacao);
+          compHtml += '</p>';
+          if(c.protocoladoPor) compHtml += '<p class="text-[10px] text-slate-500">Protocolado por: '+esc(c.protocoladoPor)+'</p>';
+        }
         else { compHtml += '<p class="text-[10px] text-rose-500 font-bold mt-1">Pendente juntada</p>'; }
         compHtml += '</div>';
-        if(!c.juntada){ compHtml += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+id+')" class="text-[10px] font-bold text-indigo-600 hover:underline">Adicionar Juntada</button>'; }
+        if(!prot){ compHtml += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+id+')" class="text-[10px] font-bold text-indigo-600 hover:underline">Adicionar Juntada</button>'; }
         compHtml += '</div>';
       }
       body.innerHTML = compHtml;
@@ -9836,6 +9927,7 @@ async function salvarJuntada(){
     fecharJuntadaForm();
     fecharModalDetalheAssistido();
     loadAssistidos();
+    atualizarBadgesAssistidos();
     setAssTab('todos');
   }catch(e){ toast('Erro ao salvar juntada: '+(e.message||e)); }
 }
