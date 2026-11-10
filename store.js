@@ -811,7 +811,7 @@ const store = {
       };
       if (MODE === 'file') {
         for (const row of mem.audit) { const bad = check(row); if (bad) return { ...bad, total }; }
-        return { ok: true, total, hashed: started ? total : 0 };
+        return { ok: true, total, hashed };
       }
       let from = 0;
       const pageSize = 1000;
@@ -821,7 +821,7 @@ const store = {
         if (page.length < pageSize) break;
         from += pageSize;
       }
-      return { ok: true, total, hashed: started ? total : 0 };
+      return { ok: true, total, hashed };
     },
     async byPerson(pid) {
       if (MODE === 'file') return mem.audit.filter(a => eqi(a.personId, pid)).sort((a, b) => new Date(b.at) - new Date(a.at));
