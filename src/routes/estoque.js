@@ -5,6 +5,15 @@ const estoqueIA = require('../lib/estoqueIA');
 const { popularEstoque } = require('../lib/estoqueSeed');
 const { diaLocal, addDiasISO, hojeLocal } = require('../lib/datas');
 const router = express.Router();
+// Endpoints de carga massiva (seed demo/histórico) são ferramentas de
+// desenvolvimento: em produção ficam desligados por padrão, liberando apenas
+// com ENABLE_STOCK_SEED=1. Evita poluir a base real por engano.
+function seedGuard(req, res, next) {
+  const ligado = process.env.ENABLE_STOCK_SEED === '1' || process.env.NODE_ENV !== 'production';
+  if (!ligado)
+    return res.status(403).json({ error: 'Carga de estoque desativada em produção (defina ENABLE_STOCK_SEED=1 para habilitar).' });
+  next();
+}
 
 // Token do lote de KIT no motivo: '[KIT x2 #A1B2C3]'
 function kitTokenDe(motivo){
@@ -512,7 +521,7 @@ router.post('/api/estoque/ia/metrics/reset', shared.auth(['admin']), shared.ah(a
 
 // Seed antigo de demonstração (só modo arquivo, sem transferências entre
 // locais). Mantido para compatibilidade; prefira POST /api/estoque/seed.
-router.post('/api/estoque/seed-demo', shared.auth(['admin']), shared.ah(async (req,res)=>{
+router.post('/api/estoque/seed-demo', shared.auth(['admin']), seedGuard, shared.ah(async (req,res)=>{
   const { force, sistema } = req.query;
   const seedSistema = normalizeSistema(sistema) || 'spacecom';
   const movs = await shared.store.estoqueMov.all();
@@ -613,7 +622,7 @@ router.post('/api/estoque/seed-demo', shared.auth(['admin']), shared.ah(async (r
 //   ?lote=0      pula o lote inicial (só movimentações)
 //   ?assincrono=1 responde na hora e avisa quem está online (SSE) ao terminar
 let seedEstoqueRodando = false;
-router.post('/api/estoque/seed', shared.auth(['admin']), shared.ah(async (req,res)=>{
+router.post('/api/estoque/seed', shared.auth(['admin']), seedGuard, shared.ah(async (req,res)=>{
   const { force, dias, semente, lote, assincrono } = req.query;
   const janela = Math.min(Math.max(Math.round(Number(dias)||60),1),300);
   const existentes = await shared.store.estoqueMov.all({ limit: 6 });
