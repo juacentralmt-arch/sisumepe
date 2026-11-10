@@ -10257,8 +10257,8 @@ function renderAssAuditoriaHtml(itens, assistidoFiltro){
   if(!itens.length) return cab + '<div class="card p-6 text-center text-slate-400 text-xs">Nenhum registro de auditoria.</div>';
   var html = cab + '<div class="card p-0 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-[11px]">';
   html += '<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500">';
-  html += '<th class="px-3 py-2 text-left">Data / Hora</th><th class="px-3 py-2 text-left">Usuario</th>';
-  html += '<th class="px-3 py-2 text-left">Acao</th><th class="px-3 py-2 text-left">Assistido</th>';
+  html += '<th class="px-3 py-2 text-left">Data / Hora</th><th class="px-3 py-2 text-left">Usuário</th>';
+  html += '<th class="px-3 py-2 text-left">Ação</th><th class="px-3 py-2 text-left">Assistido</th>';
   html += '<th class="px-3 py-2 text-left">O que foi alterado</th></tr></thead><tbody>';
   for(var i=0;i<itens.length;i++){
     var it = itens[i];
@@ -10266,7 +10266,7 @@ function renderAssAuditoriaHtml(itens, assistidoFiltro){
     var d = new Date(it.at);
     html += '<tr class="border-t border-slate-100 align-top">';
     html += '<td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-700">'+esc(d.toLocaleDateString('pt-BR'))+'</span><br><span class="text-[10px] text-slate-400">'+esc(d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))+'</span></td>';
-    html += '<td class="px-3 py-2"><span class="font-semibold text-slate-700">'+esc(it.usuario||'-')+'</span><br><span class="text-[10px] text-slate-400">@'+esc(it.login||'')+' - '+esc(it.papel||'')+'</span></td>';
+    html += '<td class="px-3 py-2"><span class="font-semibold text-slate-700">'+esc(it.usuario||'—')+'</span><br><span class="text-[10px] text-slate-400">@'+esc(it.login||'')+' · '+esc(it.papel||'')+'</span></td>';
     html += '<td class="px-3 py-2"><span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+info.cor+'">'+esc(info.icone+' '+info.rotulo)+'</span></td>';
     html += '<td class="px-3 py-2">'+(it.assistido
       ? '<span class="text-indigo-700 font-semibold cursor-pointer" onclick="abrirDetalheAssistido('+it.assistidoId+')">'+esc(it.assistido)+'</span>'

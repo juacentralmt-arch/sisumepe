@@ -795,7 +795,7 @@ const store = {
       return (await selectAll('audit')).map(appA);
     },
     async verify() {
-      let prev = null, started = false, total = 0;
+      let prev = null, started = false, total = 0, hashed = 0;
       const check = (row) => {
         total++;
         if (!row.hash) {
