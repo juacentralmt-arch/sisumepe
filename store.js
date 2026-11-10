@@ -48,10 +48,19 @@ function auditCanonical(v) {
   try { return JSON.stringify(v); } catch { return String(v); }
 }
 function auditPayload(row) {
+  // O instante é normalizado: na gravação o `at` é um ISO com 'Z', mas o
+  // Postgres (timestamptz) devolve com offset ('+00:00'). São o mesmo
+  // instante, strings diferentes — sem normalizar, o hash gravado não
+  // bateria com o recalculado na verificação.
+  let at = row.at || '';
+  if (at) {
+    const d = new Date(at);
+    at = isNaN(d.getTime()) ? String(at) : d.toISOString();
+  }
   return [
     row.kind || '', row.action || '', row.personId ?? '', row.personName || '',
     row.ticketId ?? '', row.ref || '', row.byUser || '', row.byName || '',
-    row.byRole || '', row.changes || [], row.summary || '', row.at || ''
+    row.byRole || '', row.changes || [], row.summary || '', at
   ].map(auditCanonical).join('\u001f');
 }
 function auditHash(prevHash, row) {
