@@ -363,7 +363,7 @@ function go(tab){
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   
   if(tab==='assistidos'){ loadAssistidos(); setAssTab('todos'); }
-  if(tab==='assistidos'){ loadAssistidos(); setAssTab('todos'); }if(tab==='arquivos') loadArquivos();
+  if(tab==='arquivos') loadArquivos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }

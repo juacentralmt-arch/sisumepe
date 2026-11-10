@@ -90,6 +90,10 @@
       <span class="drag-handle w-4 h-4 flex items-center justify-center text-[10px] text-slate-400 hover:text-slate-200 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100">⋮⋮</span>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       Arquivos</button>
+    <button data-tab="assistidos" onclick="go('assistidos')" class="tabbtn snav w-full flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition text-left" draggable="true" data-menutab="assistidos">
+      <span class="drag-handle w-4 h-4 flex items-center justify-center text-[10px] text-slate-400 hover:text-slate-200 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100">⋮⋮</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Assistidos <span class="text-[9px] font-extrabold tracking-wider bg-white/10 px-1.5 py-0.5 rounded-md ml-auto">ADMIN</span></button>
 
   </nav>
   <div class="p-4">
@@ -139,6 +143,7 @@
       <button data-tab="estoque" onclick="go('estoque')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📦 Estoque</button>
       <button data-tab="pdf" onclick="go('pdf')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📄 PDF</button>
       <button data-tab="arquivos" onclick="go('arquivos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">📁 Arquivos</button>
+      <button data-tab="assistidos" onclick="go('assistidos')" class="tabbtn mnav px-4 py-2 rounded-xl text-xs font-bold">👥 Assistidos</button>
 
     </div>
   </header>
