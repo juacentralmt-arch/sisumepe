@@ -12,6 +12,7 @@ const path = require('path');
 
 const suites = [
   'test/assistidos.test.js',
+  'test/assistidos.auditoria.test.js',
   'test/psi.routes.test.js',
   'test/estoqueSeedGating.test.js',
   'test/estoqueIA.test.js',

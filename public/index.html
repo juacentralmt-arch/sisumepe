@@ -1605,25 +1605,56 @@
         </div>
       </div>
 
-      <!-- Abas: Todos | Juntada | Concluídos -->
-      <div class="flex gap-1 mb-4 border-b border-slate-200">
+      <!-- Abas: Todos | Juntada | Concluídos | Alertas | Auditoria -->
+      <div class="flex gap-1 mb-4 border-b border-slate-200 flex-wrap">
         <button onclick="setAssTab('todos')" id="assTabTodos" class="px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50">Todos <span id="assBadgeTodos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">0</span></button>
-        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada <span id="assBadgeJuntada" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-white/10">0</span></button>
-        <button onclick="setAssTab('concluidos')" id="assBadgeConcluidosWrap" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos <span id="assBadgeConcluidos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
+        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada <span id="assBadgeJuntada" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
+        <button onclick="setAssTab('concluidos')" id="assTabConcluidos" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos <span id="assBadgeConcluidos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
+        <button onclick="setAssTab('alertas')" id="assTabAlertas" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Alertas <span id="assBadgeAlertas" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
+        <button onclick="setAssTab('auditoria')" id="assTabAuditoria" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Auditoria</button>
       </div>
 
       <!-- Busca (aba Todos) -->
-      <div class="mb-3">
+      <div id="assBuscaWrap" class="mb-3">
         <input id="assBusca" type="search" class="inp text-xs" placeholder="Buscar por nome, vínculo ou processo…" oninput="debounceAssBusca()" autocomplete="off">
+      </div>
+
+      <!-- Filtros da aba Auditoria -->
+      <div id="assAuditoriaFiltros" class="hidden mb-3 grid grid-cols-2 md:grid-cols-5 gap-2">
+        <input id="assAudBusca" type="search" class="inp text-xs col-span-2" placeholder="Buscar por assistido ou resumo…" oninput="debounceAssAuditoria()" autocomplete="off">
+        <select id="assAudAcao" class="inp text-xs" onchange="assAudFiltrosMudou()"></select>
+        <input id="assAudUsuario" type="text" class="inp text-xs" placeholder="Usuário" oninput="debounceAssAuditoria()" autocomplete="off">
+        <div class="col-span-2 md:col-span-5 flex items-center gap-2 text-[10px] text-slate-500">
+          <label>De <input id="assAudDe" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
+          <label>até <input id="assAudAte" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
+          <button onclick="limparFiltrosAssAuditoria()" class="btn btn-ghost text-[10px] px-2 py-1">Limpar</button>
+        </div>
+      </div>
+
+      <!-- Filtros da aba Juntada -->
+      <div id="assJuntadaFiltros" class="hidden mb-3 flex flex-wrap items-center gap-2">
+        <select id="assJuntLocal" class="inp text-xs" onchange="filtrarAssJuntada()"></select>
+        <select id="assJuntPP" class="inp text-xs" onchange="filtrarAssJuntada()"></select>
+        <input id="assJuntDe" type="date" class="inp text-xs" onchange="filtrarAssJuntada()" title="Comparecimentos a partir de">
+        <input id="assJuntAte" type="date" class="inp text-xs" onchange="filtrarAssJuntada()" title="Comparecimentos até">
+        <button onclick="limparFiltrosAssJuntada()" class="btn btn-ghost text-[10px] px-2 py-1">Limpar</button>
+        <span id="assJuntLoteBar" class="hidden ml-auto flex items-center gap-2">
+          <span id="assJuntSelecionados" class="text-[10px] font-bold text-indigo-700">0 selecionado(s)</span>
+          <button onclick="abrirModalLoteJuntada()" class="btn btn-primary text-[10px] px-3 py-1">Protocolar selecionados</button>
+          <button onclick="selecionarTodosAssJuntada()" class="btn btn-ghost text-[10px] px-2 py-1">Selecionar todos</button>
+        </span>
       </div>
 
       <!-- Conteúdo das abas -->
       <div id="assContentTodos" class="space-y-3"></div>
       <div id="assContentJuntada" class="hidden space-y-3"></div>
       <div id="assContentConcluidos" class="hidden space-y-3"></div>
+      <div id="assContentAlertas" class="hidden space-y-3"></div>
+      <div id="assContentAuditoria" class="hidden space-y-3"></div>
 
       <!-- Paginação -->
       <div id="assPaginacao" class="mt-4 flex justify-center gap-2"></div>
+      <div id="assPaginacaoAuditoria" class="mt-4 flex justify-center gap-2"></div>
     </section>
 
   </main>
@@ -2211,12 +2242,27 @@
         <h3 class="font-bold text-base mb-4 text-indigo-700">Registrar Comparecimento</h3>
         <input type="hidden" id="cmpAssistidoId">
         <div id="cmpAssistidoWrap" class="flex flex-col gap-1 mb-2 hidden"><label class="text-[10px] font-bold text-slate-500">Assistido</label><select id="cmpAssistidoSelect" class="inp text-xs"></select></div>
+        <div id="cmpContexto" class="hidden mb-3 bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-[10px] text-slate-700"></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data</label><input id="cmpData" type="date" class="inp text-xs"></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">PP de Plantão</label><input id="cmpPP" type="text" placeholder="Nome do PP" class="inp text-xs"></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Observação</label><textarea id="cmpObs" rows="2" class="inp text-xs"></textarea></div>
         <div class="mt-4 flex gap-2 justify-end">
           <button onclick="fecharModalNovoComparecimento()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>
           <button onclick="salvarNovoComparecimento()" class="btn btn-primary text-xs px-5 py-2">Registrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Protocolar comparecimentos em lote -->
+    <div id="modalLoteJuntada" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <h3 class="font-bold text-base mb-1 text-indigo-700">Protocolar comparecimentos</h3>
+        <p id="loteJuntadaResumo" class="text-[11px] text-slate-500 mb-4"></p>
+        <div class="flex flex-col gap-1 mb-3"><label class="text-[10px] font-bold text-slate-500">Número/documento da juntada</label><input id="loteJuntadaTexto" type="text" class="inp text-xs" placeholder="Ex: 71377"></div>
+        <div class="flex flex-col gap-1 mb-4"><label class="text-[10px] font-bold text-slate-500">Observação (opcional)</label><textarea id="loteJuntadaObs" rows="2" class="inp text-xs"></textarea></div>
+        <div class="mt-4 flex gap-2 justify-end">
+          <button onclick="fecharModalLoteJuntada()" class="btn btn-ghost text-xs px-5 py-2">Cancelar</button>
+          <button onclick="salvarLoteJuntada()" class="btn btn-primary text-xs px-5 py-2">Protocolar</button>
         </div>
       </div>
     </div>

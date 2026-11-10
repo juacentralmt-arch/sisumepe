@@ -9456,6 +9456,14 @@ if(document.readyState === 'loading'){
 //    (processo com 21 dígitos, data de início vazia) continuam editáveis
 //  - "pendente de juntada" = não protocolado (mesma regra do backend)
 // =====================================================================
+// =====================================================================
+//  Módulo Assistidos — frontend
+//  - listagem paginada no servidor (a aba "Todos" baixa só a página atual)
+//  - edição envia SOMENTE os campos alterados: registros legados
+//    (processo com 21 dígitos, data de início vazia) continuam editáveis
+//  - "pendente de juntada" = não protocolado (mesma regra do backend)
+//  - abas: Todos | Juntada | Concluídos | Alertas | Auditoria
+// =====================================================================
 let assTab = 'todos';
 let assistidosPage = 1;
 let assistidosLimit = 20;
@@ -9465,29 +9473,74 @@ let assistidosResumo = { ativo: 0, concluido: 0, arquivado: 0, total: 0 };
 let assEditOriginal = null;   // snapshot do registro em edição (para o diff)
 let assBuscaTimer = null;
 
+// --- Aba Auditoria ---
+let assAudPage = 1;
+let assAudLimit = 50;
+let assAudTotal = 0;
+let assAudBusca = '';
+let assAudTimer = null;
+let assAudAcoes = [];
+let assAudAssistidoFiltro = null;   // filtra a trilha por um assistido específico
+
+// --- Aba Juntada ---
+let assJuntadaLista = [];
+let assJuntadaSel = new Set();
+let assJuntadaTimer = null;
+
 // Regra única: protocolado = flag ligada OU número da juntada preenchido.
 // (a base herdada tem o número mas a flag desligada)
 function assComparcimentoProtocolado(c){
   return !!(c && (c.protocolado === true || String(c.juntada||'').trim()));
 }
 
+// Rótulos e cores das ações na trilha de auditoria.
+const ASS_AÇÕES = {
+  criado: { rotulo: 'Cadastrado', cor: 'bg-emerald-100 text-emerald-700', icone: '＋' },
+  editado: { rotulo: 'Editado', cor: 'bg-indigo-100 text-indigo-700', icone: '✎' },
+  etiqueta: { rotulo: 'Etiqueta', cor: 'bg-amber-100 text-amber-700', icone: '🏷' },
+  excluido: { rotulo: 'Excluído', cor: 'bg-rose-100 text-rose-700', icone: '🗑' },
+  restaurado: { rotulo: 'Restaurado', cor: 'bg-sky-100 text-sky-700', icone: '↩' },
+  comparecimento: { rotulo: 'Comparecimento', cor: 'bg-violet-100 text-violet-700', icone: '📅' },
+  comparecimento_excluido: { rotulo: 'Comparecimento excluído', cor: 'bg-rose-100 text-rose-700', icone: '🗑' },
+  juntada: { rotulo: 'Juntada', cor: 'bg-teal-100 text-teal-700', icone: '⚖' },
+  juntada_lote: { rotulo: 'Juntada em lote', cor: 'bg-teal-100 text-teal-700', icone: '⚖' },
+};
+
 function setAssTab(tab){
   assTab = tab;
-  ['assTabTodos','assTabJuntada','assTabConcluidos'].forEach(id=>{
+  const mapa = { todos:'Todos', juntada:'Juntada', concluidos:'Concluidos', alertas:'Alertas', auditoria:'Auditoria' };
+  ['assTabTodos','assTabJuntada','assTabConcluidos','assTabAlertas','assTabAuditoria'].forEach(id=>{
     const b=document.getElementById(id);
     if(!b) return;
-    const ativo = (id==='assTab'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':'Concluidos'));
+    const chave = id.replace('assTab','').toLowerCase();
+    const ativo = chave === (mapa[tab]||'').toLowerCase();
     b.className = ativo ? 'px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50' : 'px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs';
   });
-  document.getElementById('assContentTodos').classList.add('hidden');
-  document.getElementById('assContentJuntada').classList.add('hidden');
-  document.getElementById('assContentConcluidos').classList.add('hidden');
-  document.getElementById('assContent'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':'Concluidos')).classList.remove('hidden');
+  ['assContentTodos','assContentJuntada','assContentConcluidos','assContentAlertas','assContentAuditoria'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.add('hidden');
+  });
+  const destino = document.getElementById('assContent'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':tab==='concluidos'?'Concluidos':tab==='alertas'?'Alertas':'Auditoria'));
+  if(destino) destino.classList.remove('hidden');
+
+  // Barra de busca só na aba Todos; filtros dependem da aba.
+  const wrapBusca=document.getElementById('assBuscaWrap');
+  if(wrapBusca) wrapBusca.classList.toggle('hidden', tab!=='todos');
+  const wrapAud=document.getElementById('assAuditoriaFiltros');
+  if(wrapAud) wrapAud.classList.toggle('hidden', tab!=='auditoria');
+  const wrapJunt=document.getElementById('assJuntadaFiltros');
+  if(wrapJunt) wrapJunt.classList.toggle('hidden', tab!=='juntada');
+
   var pag = document.getElementById('assPaginacao');
   if(pag) pag.classList.toggle('hidden', tab !== 'todos');
+  var pagAud = document.getElementById('assPaginacaoAuditoria');
+  if(pagAud) pagAud.classList.toggle('hidden', tab !== 'auditoria');
+
   if(tab==='todos') loadAssistidos();
   else if(tab==='juntada') loadAssistidosJuntada();
   else if(tab==='concluidos') loadAssistidosConcluidos();
+  else if(tab==='alertas') loadAssistidosAlertas();
+  else if(tab==='auditoria') loadAssistidosAuditoria();
   atualizarBadgesAssistidos();
 }
 
@@ -9534,8 +9587,9 @@ function debounceAssBusca(){
 async function loadAssistidosJuntada(){
   try{
     const r = await api('/api/assistidos/juntada');
-    const list = Array.isArray(r) ? r : [];
-    renderAssistidosJuntada(list);
+    assJuntadaLista = Array.isArray(r) ? r : [];
+    montarFiltrosAssJuntada();
+    renderAssistidosJuntada(filtrarAssJuntada());
   }catch(e){ console.error('loadAssistidosJuntada', e); }
 }
 
@@ -9545,6 +9599,148 @@ async function loadAssistidosConcluidos(){
     const list = Array.isArray(r) ? r : [];
     renderAssistidosConcluidos(list);
   }catch(e){ console.error('loadAssistidosConcluidos', e); }
+}
+
+// =====================================================================
+//  Aba Alertas — periodicidade não cumprida
+// =====================================================================
+async function loadAssistidosAlertas(){
+  const wrap = document.getElementById('assContentAlertas');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">Carregando alertas…</div>';
+  try{
+    const r = await api('/api/assistidos/alertas');
+    const lista = (r && Array.isArray(r.alertas)) ? r.alertas : [];
+    const badge = document.getElementById('assBadgeAlertas');
+    if(badge){
+      badge.textContent = (r && r.total) || 0;
+      badge.className = 'ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md ' + ((r && r.total) ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600');
+    }
+    if(!lista.length){
+      wrap.innerHTML = '<div class="card p-6 text-center text-emerald-600 text-xs">Nenhum alerta: todos os monitorados estão dentro da periodicidade.</div>';
+      return;
+    }
+    const rotulos = {
+      comparecimento_vencido: ['Comparecimento atrasado', 'bg-amber-100 text-amber-700'],
+      faltas_consecutivas: ['Faltas consecutivas', 'bg-rose-100 text-rose-700'],
+      sem_comparecimento: ['Nunca compareceu', 'bg-slate-100 text-slate-600'],
+    };
+    var html = '';
+    for(var i=0;i<lista.length;i++){
+      var al = lista[i];
+      var rot = rotulos[al.tipo] || ['Alerta', 'bg-slate-100 text-slate-600'];
+      html += '<div class="card p-3 rounded-2xl border border-slate-200 shadow-sm">';
+      html += '<div class="flex items-start justify-between gap-2">';
+      html += '<div class="min-w-0">';
+      html += '<p class="font-bold text-sm text-slate-800 truncate" onclick="abrirDetalheAssistido('+al.assistidoId+')" style="cursor:pointer">'+esc(al.nome||'-')+'</p>';
+      html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(al.vinculo||'-')+' · Frequência: '+esc(al.frequencia||'-')+'</p>';
+      html += '<p class="text-[10px] text-slate-600 mt-1">'+esc(al.texto||'')+'</p>';
+      html += '</div>';
+      html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+rot[1]+' flex-none">'+esc(rot[0])+'</span>';
+      html += '</div></div>';
+    }
+    wrap.innerHTML = html;
+  }catch(e){
+    wrap.innerHTML = '<div class="card p-6 text-center text-rose-500 text-xs">Erro ao carregar alertas.</div>';
+  }
+}
+
+// =====================================================================
+//  Aba Auditoria — trilha completa do módulo
+//  Mostra data, hora, usuário e o que foi alterado (campo a campo).
+// =====================================================================
+async function loadAssistidosAuditoria(){
+  const wrap = document.getElementById('assContentAuditoria');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">Carregando auditoria…</div>';
+  try{
+    var url = '/api/assistidos/auditoria?page='+encodeURIComponent(assAudPage)+'&limit='+encodeURIComponent(assAudLimit);
+    if(assAudBusca) url += '&q='+encodeURIComponent(assAudBusca);
+    if(assAudAssistidoFiltro) url += '&assistidoId='+encodeURIComponent(assAudAssistidoFiltro);
+    var acao = (document.getElementById('assAudAcao')||{}).value;
+    var usuario = (document.getElementById('assAudUsuario')||{}).value;
+    var de = (document.getElementById('assAudDe')||{}).value;
+    var ate = (document.getElementById('assAudAte')||{}).value;
+    if(acao) url += '&acao='+encodeURIComponent(acao);
+    if(usuario) url += '&usuario='+encodeURIComponent(usuario.trim());
+    if(de) url += '&de='+encodeURIComponent(de);
+    if(ate) url += '&ate='+encodeURIComponent(ate);
+
+    const r = await api(url);
+    const itens = (r && Array.isArray(r.itens)) ? r.itens : [];
+    assAudTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
+
+    // Select de ações (preenchido uma vez)
+    var selAcao = document.getElementById('assAudAcao');
+    if(selAcao && assAudAcoes.length === 0 && r && Array.isArray(r.acoes)) {
+      assAudAcoes = r.acoes;
+      selAcao.innerHTML = '<option value="">Todas as ações</option>' + r.acoes.map(a=>{
+        var info = ASS_AÇÕES[a] || { rotulo: a };
+        return '<option value="'+esc(a)+'">'+esc(info.rotulo)+'</option>';
+      }).join('');
+    }
+
+    wrap.innerHTML = renderAssAuditoriaHtml(itens, assAudAssistidoFiltro);
+    renderAssPaginacaoAuditoria();
+  }catch(e){
+    wrap.innerHTML = '<div class="card p-6 text-center text-rose-500 text-xs">Erro ao carregar auditoria.</div>';
+  }
+}
+
+// Renderiza o antes/depois campo a campo.
+function renderAssChanges(it){
+  var html = '';
+  var changes = Array.isArray(it.changes) ? it.changes : [];
+  if(changes.length){
+    for(var i=0;i<changes.length;i++){
+      var c = changes[i];
+      var rot = c.rotulo || c.campo || c.field || '';
+      var de = c.de != null ? String(c.de) : '';
+      var para = c.para != null ? String(c.para) : '';
+      html += '<div class="mb-1">';
+      html += '<span class="font-semibold text-slate-600">'+esc(rot)+':</span> ';
+      if(de) html += '<span class="text-slate-400 line-through">'+esc(de)+'</span> ';
+      if(de && para) html += '<span class="text-slate-300">→</span> ';
+      html += '<span class="text-slate-800 font-semibold">'+esc(para || '—')+'</span>';
+      html += '</div>';
+    }
+  }
+  if(it.resumo) html += '<div class="text-[10px] text-slate-500">'+esc(it.resumo)+'</div>';
+  if(!html) html = '<span class="text-slate-400">—</span>';
+  return html;
+}
+
+function debounceAssAuditoria(){
+  if(assAudTimer) clearTimeout(assAudTimer);
+  assAudTimer = setTimeout(function(){
+    var el=document.getElementById('assAudBusca');
+    assAudBusca = el ? el.value.trim() : '';
+    assAudPage = 1;
+    loadAssistidosAuditoria();
+  }, 350);
+}
+function assAudFiltrosMudou(){ assAudPage = 1; loadAssistidosAuditoria(); }
+function limparFiltrosAssAuditoria(){
+  ['assAudBusca','assAudUsuario','assAudDe','assAudAte'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const sel=document.getElementById('assAudAcao'); if(sel) sel.value='';
+  assAudBusca=''; assAudPage=1; loadAssistidosAuditoria();
+}
+function renderAssPaginacaoAuditoria(){
+  const wrap = document.getElementById('assPaginacaoAuditoria');
+  if(!wrap) return;
+  const totalPaginas = Math.max(Math.ceil((assAudTotal||0)/assAudLimit), 1);
+  if(totalPaginas<=1){ wrap.innerHTML=''; return; }
+  var html = '<button onclick="assIrPaginaAuditoria(1)" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assAudPage===1?'disabled':'')+'>&laquo;</button>';
+  html += '<button onclick="assIrPaginaAuditoria('+(assAudPage-1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assAudPage===1?'disabled':'')+'>&lsaquo;</button>';
+  html += '<span class="px-2 py-1 text-xs font-bold text-slate-600">Página '+assAudPage+' de '+totalPaginas+' ('+assAudTotal+' registros)</span>';
+  html += '<button onclick="assIrPaginaAuditoria('+(assAudPage+1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assAudPage>=totalPaginas?'disabled':'')+'>&rsaquo;</button>';
+  html += '<button onclick="assIrPaginaAuditoria('+totalPaginas+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assAudPage>=totalPaginas?'disabled':'')+'>&raquo;</button>';
+  wrap.innerHTML = html;
+}
+function assIrPaginaAuditoria(p){
+  if(p < 1) return;
+  assAudPage = p;
+  loadAssistidosAuditoria();
 }
 
 function etiquetaBadge(e){
@@ -9605,10 +9801,10 @@ function renderAssPaginacao(total){
   const totalPaginas = Math.max(Math.ceil((total||0)/assistidosLimit), 1);
   if(totalPaginas<=1){ wrap.innerHTML=''; return; }
   var html = '<button onclick="assIrPagina(1)" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage===1?'disabled':'')+'>&laquo;</button>';
-  html += '<button onclick="assIrPagina('+(assistidosPage-1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage===1?'disabled':'')+ '&lsaquo;</button>';
+  html += '<button onclick="assIrPagina('+(assistidosPage-1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage===1?'disabled':'')+'>&lsaquo;</button>';
   html += '<span class="px-2 py-1 text-xs font-bold text-slate-600">Página '+assistidosPage+' de '+totalPaginas+' ('+total+')</span>';
-  html += '<button onclick="assIrPagina('+(assistidosPage+1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+ '&rsaquo;</button>';
-  html += '<button onclick="assIrPagina('+totalPaginas+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+ '&raquo;</button>';
+  html += '<button onclick="assIrPagina('+(assistidosPage+1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+'>&rsaquo;</button>';
+  html += '<button onclick="assIrPagina('+totalPaginas+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(assistidosPage>=totalPaginas?'disabled':'')+'>&raquo;</button>';
   wrap.innerHTML = html;
 }
 function assIrPagina(p){
@@ -9617,21 +9813,69 @@ function assIrPagina(p){
   loadAssistidos();
 }
 
+// =====================================================================
+//  Aba Juntada — pendentes, com seleção para protocolar em lote
+// =====================================================================
+function montarFiltrosAssJuntada(){
+  const locais = [...new Set(assJuntadaLista.map(a => a.localAssinatura).filter(Boolean))].sort();
+  const pps = [...new Set(assJuntadaLista.map(a => (a.comparecimentoPendente||{}).ppPlantao).filter(Boolean))].sort();
+  const selLocal = document.getElementById('assJuntLocal');
+  const selPP = document.getElementById('assJuntPP');
+  if(selLocal){
+    const atual = selLocal.value;
+    selLocal.innerHTML = '<option value="">Todos os locais</option>' + locais.map(l=>'<option value="'+esc(l)+'">'+esc(l)+'</option>').join('');
+    selLocal.value = atual;
+  }
+  if(selPP){
+    const atual = selPP.value;
+    selPP.innerHTML = '<option value="">Todos os PP</option>' + pps.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
+    selPP.value = atual;
+  }
+}
+
+function filtrarAssJuntada(){
+  const local = (document.getElementById('assJuntLocal')||{}).value || '';
+  const pp = (document.getElementById('assJuntPP')||{}).value || '';
+  const de = (document.getElementById('assJuntDe')||{}).value || '';
+  const ate = (document.getElementById('assJuntAte')||{}).value || '';
+  return assJuntadaLista.filter(function(a){
+    const c = a.comparecimentoPendente || {};
+    if(local && String(a.localAssinatura||'') !== local) return false;
+    if(pp && String(c.ppPlantao||'') !== pp) return false;
+    if(de && String(c.dataComparecimento||'') < de) return false;
+    if(ate && String(c.dataComparecimento||'') > ate) return false;
+    return true;
+  });
+}
+
+function limparFiltrosAssJuntada(){
+  ['assJuntLocal','assJuntPP','assJuntDe','assJuntAte'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  renderAssistidosJuntada(filtrarAssJuntada());
+}
+
 function renderAssistidosJuntada(list){
   const wrap = document.getElementById('assContentJuntada');
   if(!wrap) return;
-  if(!list.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum comparecimento pendente de juntada.</div>'; return; }
+  if(!list.length){
+    wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum comparecimento pendente de juntada.</div>';
+    atualizarBarraLoteJuntada();
+    return;
+  }
   var html = '';
   for(var i=0;i<list.length;i++){
     var a = list[i];
     var c = a.comparecimentoPendente || {};
-    html += '<div class="card p-4 rounded-2xl border-amber-500 shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
+    var cid = c.id;
+    var marcado = assJuntadaSel.has(String(cid));
+    html += '<div class="card p-4 rounded-2xl border-amber-500 shadow-sm hover:shadow-md transition">';
     html += '<div class="flex items-start justify-between mb-2">';
-    html += '<div>';
+    html += '<div class="flex items-start gap-2 min-w-0">';
+    html += '<input type="checkbox" class="mt-0.5" '+(marcado?'checked':'')+' onchange="alternarSelAssJuntada('+cid+', this.checked)">';
+    html += '<div class="min-w-0 cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
     html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
     html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
-    html += '</div>';
-    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendente Juntada</span>';
+    html += '</div></div>';
+    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-none">Pendente Juntada</span>';
     html += '</div>';
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
     html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
@@ -9650,6 +9894,59 @@ function renderAssistidosJuntada(list){
     html += '</div>';
   }
   wrap.innerHTML = html;
+  atualizarBarraLoteJuntada();
+}
+
+function alternarSelAssJuntada(id, marcado){
+  if(marcado) assJuntadaSel.add(String(id)); else assJuntadaSel.delete(String(id));
+  atualizarBarraLoteJuntada();
+}
+function selecionarTodosAssJuntada(){
+  const lista = filtrarAssJuntada();
+  const todosMarcados = lista.length && lista.every(a => assJuntadaSel.has(String((a.comparecimentoPendente||{}).id)));
+  lista.forEach(a => {
+    const id = String((a.comparecimentoPendente||{}).id);
+    if(todosMarcados) assJuntadaSel.delete(id); else assJuntadaSel.add(id);
+  });
+  renderAssistidosJuntada(lista);
+}
+function atualizarBarraLoteJuntada(){
+  const bar = document.getElementById('assJuntLoteBar');
+  const label = document.getElementById('assJuntSelecionados');
+  const n = assJuntadaSel.size;
+  if(bar) bar.classList.toggle('hidden', n === 0);
+  if(label) label.textContent = n + ' selecionado(s)';
+}
+
+function abrirModalLoteJuntada(){
+  if(!assJuntadaSel.size){ toast('Selecione ao menos um comparecimento'); return; }
+  const resumo = document.getElementById('loteJuntadaResumo');
+  if(resumo) resumo.textContent = assJuntadaSel.size + ' comparecimento(s) serão protocolados com o mesmo número de juntada. O responsável fica registrado em cada um.';
+  const t = document.getElementById('loteJuntadaTexto'); if(t) t.value='';
+  const o = document.getElementById('loteJuntadaObs'); if(o) o.value='';
+  document.getElementById('modalLoteJuntada').classList.remove('hidden');
+}
+function fecharModalLoteJuntada(){
+  document.getElementById('modalLoteJuntada').classList.add('hidden');
+}
+async function salvarLoteJuntada(){
+  const ids = [...assJuntadaSel];
+  const juntada = (document.getElementById('loteJuntadaTexto')||{}).value || '';
+  const observacao = (document.getElementById('loteJuntadaObs')||{}).value || '';
+  if(!juntada.trim()){ toast('Informe o número/documento da juntada'); return; }
+  try{
+    const r = await api('/api/assistidos/comparecimentos/juntada-lote', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ids, juntada, observacao })
+    });
+    const n = (r && r.protocolados) || 0;
+    const erros = (r && r.erros && r.erros.length) ? r.erros.length : 0;
+    toast('Protocolados: ' + n + (erros ? ' · ignorados: ' + erros : ''));
+    fecharModalLoteJuntada();
+    assJuntadaSel.clear();
+    loadAssistidosJuntada();
+    atualizarBadgesAssistidos();
+  }catch(e){ toast('Erro ao protocolar lote: '+(e.message||e)); }
 }
 
 function renderAssistidosConcluidos(list){
@@ -9726,8 +10023,11 @@ async function abrirModalNovoComparecimento(assistidoId){
   document.getElementById('cmpObs').value = '';
   var wrap = document.getElementById('cmpAssistidoWrap');
   var sel = document.getElementById('cmpAssistidoSelect');
+  var ctxEl = document.getElementById('cmpContexto');
+  if(ctxEl){ ctxEl.classList.add('hidden'); ctxEl.innerHTML=''; }
   if(assistidoId){
     wrap.classList.add('hidden');
+    await carregarContextoComparecimento(assistidoId);
   } else {
     wrap.classList.remove('hidden');
     sel.innerHTML = '<option value="">Carregando…</option>';
@@ -9743,6 +10043,31 @@ async function abrirModalNovoComparecimento(assistidoId){
     }
   }
   document.getElementById('modalNovoComparecimento').classList.remove('hidden');
+}
+
+// Contexto do monitorado: último comparecimento, próximo esperado e faltas.
+async function carregarContextoComparecimento(assistidoId){
+  const ctxEl = document.getElementById('cmpContexto');
+  if(!ctxEl || !assistidoId) return;
+  try{
+    const c = await api('/api/assistidos/'+assistidoId+'/contexto');
+    if(!c || c.error) return;
+    const ult = c.ultimoComparecimento ? fmtDataBR(c.ultimoComparecimento.dataComparecimento) : 'nunca';
+    const prox = c.proximoEsperado ? fmtDataBR(c.proximoEsperado) : '—';
+    let html = '<div class="flex items-center justify-between mb-1"><span class="font-bold text-indigo-700">'+esc(c.assistido.nome||'')+'</span>'
+      + '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/70 text-indigo-700">'+esc(c.assistido.frequencia||'')+'</span></div>';
+    html += '<div class="grid grid-cols-2 gap-1">';
+    html += '<div>Último comparecimento: <b>'+esc(ult)+'</b></div>';
+    html += '<div>Próximo esperado: <b>'+esc(prox)+'</b></div>';
+    html += '<div>Total de comparecimentos: <b>'+Number(c.totalComparecimentos||0)+'</b></div>';
+    html += '<div>Pendentes de juntada: <b>'+Number(c.pendentesJuntada||0)+'</b></div>';
+    html += '</div>';
+    if(Number(c.faltasConsecutivas)>0){
+      html += '<div class="mt-1 text-rose-700 font-bold">⚠ '+Number(c.faltasConsecutivas)+' falta(s) consecutiva(s) registrada(s)</div>';
+    }
+    ctxEl.innerHTML = html;
+    ctxEl.classList.remove('hidden');
+  }catch(e){}
 }
 function fecharModalNovoComparecimento(){
   document.getElementById('modalNovoComparecimento').classList.add('hidden');
@@ -9823,13 +10148,19 @@ async function salvarEditarAssistido(){
   }catch(e){ toast('Erro ao editar: '+(e.message||e)); }
 }
 
+// Etiquetar: a etiqueta é a prioridade de monitoramento, então a
+// mudança exige motivo — ele vai para a trilha de auditoria.
 async function etiquetarAssistido(id){
-  var etiqueta = prompt('Escolha a etiqueta: sem, verde, laranja, vermelho');
-  if(!etiqueta) return;
+  var etiqueta = prompt('Nova etiqueta (sem, verde, laranja, vermelho):', 'sem');
+  if(etiqueta === null) return;
   etiqueta = String(etiqueta).trim().toLowerCase();
-  if(!['sem','verde','laranja','vermelho'].includes(etiqueta)) return;
+  if(!['sem','verde','laranja','vermelho'].includes(etiqueta)){ toast('Etiqueta inválida'); return; }
+  var motivo = prompt('Motivo da mudança de etiqueta (obrigatório, mín. 5 caracteres):', '');
+  if(motivo === null) return;
+  motivo = String(motivo).trim();
+  if(motivo.length < 5){ toast('Informe o motivo (mín. 5 caracteres)'); return; }
   try{
-    await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta }) });
+    await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta, motivo: motivo }) });
     toast('Etiqueta atualizada');
     loadAssistidos();
   }catch(e){ toast('Erro ao etiquetar: '+(e.message||e)); }
@@ -9837,8 +10168,10 @@ async function etiquetarAssistido(id){
 
 async function excluirAssistido(id){
   if(!confirm('Tem certeza que deseja excluir este assistido?')) return;
+  var motivo = prompt('Motivo da exclusão (opcional):', '');
+  if(motivo === null) motivo = '';
   try{
-    await api('/api/assistidos/'+id, { method:'DELETE' });
+    await api('/api/assistidos/'+id, { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ motivo: String(motivo||'').trim() }) });
     toast('Assistido excluído');
     loadAssistidos();
     atualizarBadgesAssistidos();
@@ -9864,7 +10197,9 @@ async function abrirDetalheAssistido(id){
     if(a.responsavelTecnico){
       infoHtml += '<div class="mt-2 bg-indigo-50 p-3 rounded-xl text-[10px]"><span class="font-bold text-indigo-700">Responsável técnico:</span> <span class="text-slate-700">'+esc(a.responsavelTecnico)+'</span></div>';
     }
-    infoHtml += '<div class="mt-3 flex gap-2">'+etiquetaBadge(a.etiqueta)+'</div>';
+    infoHtml += '<div class="mt-3 flex gap-2 items-center">'+etiquetaBadge(a.etiqueta);
+    infoHtml += '<button onclick="abrirAuditoriaDoAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Ver auditoria deste assistido</button>';
+    infoHtml += '</div>';
     document.getElementById('detAssInfo').innerHTML = infoHtml;
     var body = document.getElementById('detComparecimentos');
     if(!comps.length){ body.innerHTML = '<div class="text-center text-slate-400 py-4">Sem comparecimentos registrados.</div>'; }
@@ -9897,6 +10232,56 @@ async function abrirDetalheAssistido(id){
 }
 function fecharModalDetalheAssistido(){
   document.getElementById('modalDetalheAssistido').classList.add('hidden');
+}
+
+// Abre a aba Auditoria ja filtrada pelo assistido.
+function abrirAuditoriaDoAssistido(id){
+  fecharModalDetalheAssistido();
+  assAudAssistidoFiltro = id;
+  const sel = document.getElementById('assAudAcao');
+  if(sel) sel.value='';
+  assAudBusca = '';
+  const inp = document.getElementById('assAudBusca');
+  if(inp) inp.value='';
+  assAudPage = 1;
+  setAssTab('auditoria');
+}
+
+// HTML da tabela de auditoria (compartilhado entre a aba e o filtro por assistido).
+function renderAssAuditoriaHtml(itens, assistidoFiltro){
+  var cab = assistidoFiltro
+    ? '<div class="mb-2 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-[10px] text-indigo-700">'
+      + '<span class="font-bold">Auditoria do assistido #'+esc(assistidoFiltro)+'</span>'
+      + '<button onclick="limparFiltroAssistente()" class="btn btn-ghost text-[10px] px-2 py-1">Ver todos</button></div>'
+    : '';
+  if(!itens.length) return cab + '<div class="card p-6 text-center text-slate-400 text-xs">Nenhum registro de auditoria.</div>';
+  var html = cab + '<div class="card p-0 overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-[11px]">';
+  html += '<thead><tr class="bg-slate-50 text-[10px] font-bold tracking-wider text-slate-500">';
+  html += '<th class="px-3 py-2 text-left">Data / Hora</th><th class="px-3 py-2 text-left">Usuario</th>';
+  html += '<th class="px-3 py-2 text-left">Acao</th><th class="px-3 py-2 text-left">Assistido</th>';
+  html += '<th class="px-3 py-2 text-left">O que foi alterado</th></tr></thead><tbody>';
+  for(var i=0;i<itens.length;i++){
+    var it = itens[i];
+    var info = ASS_AÇÕES[it.acao] || { rotulo: it.acao, cor:'bg-slate-100 text-slate-600', icone:'-' };
+    var d = new Date(it.at);
+    html += '<tr class="border-t border-slate-100 align-top">';
+    html += '<td class="px-3 py-2 whitespace-nowrap"><span class="font-semibold text-slate-700">'+esc(d.toLocaleDateString('pt-BR'))+'</span><br><span class="text-[10px] text-slate-400">'+esc(d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}))+'</span></td>';
+    html += '<td class="px-3 py-2"><span class="font-semibold text-slate-700">'+esc(it.usuario||'-')+'</span><br><span class="text-[10px] text-slate-400">@'+esc(it.login||'')+' - '+esc(it.papel||'')+'</span></td>';
+    html += '<td class="px-3 py-2"><span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+info.cor+'">'+esc(info.icone+' '+info.rotulo)+'</span></td>';
+    html += '<td class="px-3 py-2">'+(it.assistido
+      ? '<span class="text-indigo-700 font-semibold cursor-pointer" onclick="abrirDetalheAssistido('+it.assistidoId+')">'+esc(it.assistido)+'</span>'
+      : '<span class="text-slate-400">-</span>')+'</td>';
+    html += '<td class="px-3 py-2">'+renderAssChanges(it)+'</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+function limparFiltroAssistente(){
+  assAudAssistidoFiltro = null;
+  assAudPage = 1;
+  loadAssistidosAuditoria();
 }
 
 function abrirRegistrarComparecimento(id){

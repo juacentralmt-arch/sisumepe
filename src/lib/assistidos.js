@@ -90,6 +90,40 @@ function nomeKey(value) {
 }
 
 // ---------------------------------------------------------------------
+//  Periodicidade e prazos
+// ---------------------------------------------------------------------
+// Dias do período de cada frequência (usado para calcular a data esperada
+// do próximo comparecimento).
+const FREQ_DIAS = Object.freeze({ semanal: 7, quinzenal: 15, mensal: 30, bimestral: 60, trimestral: 90 });
+
+// Dias de tolerância até o comparecimento ser considerado atrasado.
+// Regra: 1,5x o período + 7 dias (fim de semana, feriado, recesso).
+// Uma falta isolada não gera alerta; duas seguidas viram falta crítica.
+const PRAZO_FREQUENCIA = Object.freeze({
+  semanal: 18, quinzenal: 30, mensal: 52, bimestral: 97, trimestral: 142,
+});
+
+// Dias desde o último comparecimento até considerar "faltas consecutivas".
+const TOLERANCIA_FALTA = 7;
+
+// Data esperada do próximo comparecimento (a partir do último ou do início).
+function proximoEsperado(assistido, ultimoComparecimento) {
+  const base = ultimoComparecimento || assistido.dataInicio || null;
+  if (!ehDataValida(base)) return null;
+  const dias = FREQ_DIAS[assistido.frequencia] || 30;
+  const [y, m, d] = String(base).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);
+}
+
+// Diferença em dias entre duas datas (AAAA-MM-DD). Positivo = mais recente.
+function diasEntre(deISO, ateISO) {
+  if (!ehDataValida(deISO) || !ehDataValida(ateISO)) return null;
+  const [ay, am, ad] = String(deISO).split('-').map(Number);
+  const [by, bm, bd] = String(ateISO).split('-').map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+}
+
+// ---------------------------------------------------------------------
 //  Validação por campo — base do PATCH parcial.
 //  Cada regra devolve null (ok) ou a mensagem de erro.
 // ---------------------------------------------------------------------
@@ -201,6 +235,9 @@ module.exports = {
   STATUS_ASSISTIDO,
   STATUS_ENCERRADOS,
   CAMPOS_EDITAVEIS,
+  FREQ_DIAS,
+  PRAZO_FREQUENCIA,
+  TOLERANCIA_FALTA,
   ehDataValida,
   normalizaData,
   ehDataFutura,
@@ -210,4 +247,6 @@ module.exports = {
   agruparComparecimentos,
   nomeKey,
   validarCampos,
+  proximoEsperado,
+  diasEntre,
 };

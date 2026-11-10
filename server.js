@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const shared = require('./src/lib/shared');
@@ -101,6 +102,39 @@ if (compression) app.use((req, res, next) => {
   if (req.path === '/api/events') return next();
   compression({ filter: (rq, rs) => (rs.getHeader('Content-Type') || '').toString().startsWith('text/event-stream') ? false : require('compression').filter(rq, rs) })(req, res, next);
 });
+// Cache-busting automático do frontend.
+// O ?v= do app.js/app.css acompanha o mtime dos arquivos: sem isso, uma
+// mudança no frontend continua servindo o bundle antigo por até 1 hora
+// (maxAge do express.static) e o usuário não vê a versão nova.
+//   /js/app.js?v=51  ->  /js/app.js?v=<mtime>
+let ASSET_VERSION = '1';
+function refreshAssetVersion() {
+  try {
+    const js = fs.statSync(path.join(ROOT, 'public', 'js', 'app.js')).mtimeMs;
+    const css = fs.statSync(path.join(ROOT, 'public', 'css', 'app.css')).mtimeMs;
+    // mtime em ms (string): muda a cada edição e não estoura int32.
+    ASSET_VERSION = String(Math.max(js, css));
+  } catch (e) { /* mantém a versão anterior */ }
+}
+refreshAssetVersion();
+setInterval(refreshAssetVersion, 30e3).unref();
+
+// Envia o index.html com a versão dos assets injetada.
+function enviarIndex(req, res) {
+  const file = path.join(ROOT, 'public', 'index.html');
+  fs.readFile(file, 'utf8', (err, html) => {
+    if (err) return res.sendFile(file);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.type('html').send(
+      String(html).replace(/(\/(?:js|css)\/[A-Za-z0-9._-]+\.(?:js|css))\?v=\d+/g, '$1?v=' + ASSET_VERSION)
+    );
+  });
+}
+
+// Rota "/" precisa vir ANTES do express.static (que serviria o index.html
+// direto, sem a versão injetada).
+app.get('/', enviarIndex);
+
 app.use(express.static(path.join(ROOT, 'public'), {
   maxAge: '1h', etag: true,
   setHeaders: (res, filePath) => {
@@ -218,7 +252,7 @@ app.get('/tv', (req, res) => res.sendFile(path.join(ROOT, 'public', 'tv.html')))
 // Rotas de API desconhecidas: 404 JSON (não cair no catch-all da SPA)
 app.use('/api', (req, res) => res.status(404).json({ error: 'Rota de API não encontrada' }));
 
-app.get('*', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')));
+app.get('*', (req, res) => enviarIndex(req, res));
 
 // Erros de upload e JSON inválido viram 400 JSON (nunca HTML)
 app.use((err, req, res, next) => {
