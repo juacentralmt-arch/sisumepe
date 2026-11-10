@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check store.js && node --check src/lib/shared.js && node --check src/routes/auth.js && node --check src/routes/admin.js && node --check public/js/app.js && node --check scripts/alertas-proativos.js && echo OK",
+    "check": "node --check server.js && node --check store.js && node --check src/lib/shared.js && node --check src/routes/auth.js && node --check src/routes/admin.js && node --check src/routes/assistidos.js && node --check public/js/app.js && node --check scripts/alertas-proativos.js && echo OK",
     "test": "node test/run-all.js",
     "test:autorenomear": "node test/autoRenomear.test.js",
     "test:termos": "node test/termos.routes.test.js",

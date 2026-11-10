@@ -11,6 +11,7 @@ const os = require('os');
 const path = require('path');
 
 const suites = [
+  'test/assistidos.test.js',
   'test/estoqueIA.test.js',
   'test/estoqueIA.regressao.test.js',
   'test/estoqueIA.ativacoes.test.js',

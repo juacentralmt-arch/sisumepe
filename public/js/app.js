@@ -361,7 +361,9 @@ function go(tab){
   if(tab==='auditoria') loadAuditoria();
   if(tab==='estoque') loadEstoque();
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
-  if(tab==='arquivos') loadArquivos();
+  
+  if(tab==='assistidos'){ loadAssistidos(); setAssTab('todos'); }
+  if(tab==='assistidos'){ loadAssistidos(); setAssTab('todos'); }if(tab==='arquivos') loadArquivos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
@@ -10713,4 +10715,388 @@ if(document.readyState === 'loading'){
   initMenuDragDrop();
 }
 
+
+
+
+// =====================================================================
+//  MÓDULO ASSISTIDOS — 3 abas: Todos | Juntada | Concluídos
+// =====================================================================
+
+
+
+// =====================================================================
+//  MÓDULO ASSISTIDOS — 3 abas: Todos | Juntada | Concluídos
+// =====================================================================
+
+let assTab = 'todos';
+let assistidosData = [];
+let assistidosPage = 1;
+let assistidosLimit = 20;
+
+function setAssTab(tab){
+  assTab = tab;
+  ['assTabTodos','assTabJuntada','assTabConcluidos'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(!b) return;
+    const ativo = (id==='assTab'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':'Concluidos'));
+    b.className = ativo ? 'px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50' : 'px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs';
+  });
+  document.getElementById('assContentTodos').classList.add('hidden');
+  document.getElementById('assContentJuntada').classList.add('hidden');
+  document.getElementById('assContentConcluidos').classList.add('hidden');
+  document.getElementById('assContent'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':'Concluidos')).classList.remove('hidden');
+  if(tab==='todos') loadAssistidos();
+  else if(tab==='juntada') loadAssistidosJuntada();
+  else if(tab==='concluidos') loadAssistidosConcluidos();
+}
+
+async function loadAssistidos(){
+  try{
+    const r = await api('/api/assistidos');
+    const list = Array.isArray(r) ? r : [];
+    assistidosData = list;
+    renderAssistidosTodos(list);
+  }catch(e){ console.error('loadAssistidos', e); }
+}
+
+async function loadAssistidosJuntada(){
+  try{
+    const r = await api('/api/assistidos/juntada');
+    const list = Array.isArray(r) ? r : [];
+    renderAssistidosJuntada(list);
+  }catch(e){ console.error('loadAssistidosJuntada', e); }
+}
+
+async function loadAssistidosConcluidos(){
+  try{
+    const r = await api('/api/assistidos/concluidos');
+    const list = Array.isArray(r) ? r : [];
+    renderAssistidosConcluidos(list);
+  }catch(e){ console.error('loadAssistidosConcluidos', e); }
+}
+
+function etiquetaBadge(e){
+  const cores = { sem:'bg-slate-100 text-slate-500', verde:'bg-emerald-100 text-emerald-700', laranja:'bg-amber-100 text-amber-700', vermelho:'bg-rose-100 text-rose-700' };
+  const nomes = { sem:'Sem', verde:'Verde', laranja:'Laranja', vermelho:'Vermelho' };
+  return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+(cores[e]||cores.sem)+'">'+(nomes[e]||'Sem')+'</span>';
+}
+
+function renderAssistidosTodos(list){
+  const wrap = document.getElementById('assContentTodos');
+  if(!wrap) return;
+  const inicio = (assistidosPage-1)*assistidosLimit;
+  const fim = inicio + assistidosLimit;
+  const pagina = list.slice(inicio, fim);
+  if(!pagina.length){
+    wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum assistido cadastrado.</div>';
+    renderAssPaginacao(list.length);
+    return;
+  }
+  var html = '';
+  for(var i=0;i<pagina.length;i++){
+    var a = pagina[i];
+    var cor = { verde:'border-emerald-500', laranja:'border-amber-500', vermelho:'border-rose-500', sem:'border-slate-200' }[a.etiqueta] || 'border-slate-200';
+    html += '<div class="card p-4 rounded-2xl '+cor+' shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
+    html += '<div class="flex items-start justify-between mb-2">';
+    html += '<div>';
+    html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
+    html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
+    html += '</div>';
+    html += etiquetaBadge(a.etiqueta);
+    html += '</div>';
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
+    html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
+    html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
+    html += '<div><span class="font-semibold">Local:</span> '+esc(a.localAssinatura||'-')+'</div>';
+    html += '<div><span class="font-semibold">Início:</span> '+fmtDataBR(a.dataInicio||'')+'</div>';
+    html += '</div>';
+    html += '<div class="flex gap-2 text-[10px] mb-3">';
+    html += '<span class="font-semibold">Freq:</span> '+esc(a.frequencia||'-');
+    html += '<span class="font-semibold">Status:</span> '+esc(a.status||'-');
+    if(a.ultimoComparecimento){ html += '<span class="font-semibold">Últ. comp:</span> '+fmtDataBR(a.ultimoComparecimento); }
+    html += '</div>';
+    html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
+    html += '<button onclick="event.stopPropagation(); abrirEditarAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Editar</button>';
+    html += '<button onclick="event.stopPropagation(); etiquetarAssistido('+a.id+')" class="text-[10px] font-bold text-slate-600 hover:underline px-2 py-1">Etiquetar</button>';
+    html += '<button onclick="event.stopPropagation(); abrirRegistrarComparecimento('+a.id+')" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1">+ Comp.</button>';
+    html += '<button onclick="event.stopPropagation(); excluirAssistido('+a.id+')" class="text-[10px] font-bold text-rose-600 hover:underline px-2 py-1">Excluir</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+  renderAssPaginacao(list.length);
+}
+
+function renderAssPaginacao(total){
+  const wrap = document.getElementById('assPaginacao');
+  if(!wrap) return;
+  const totalPages = Math.ceil(total/assistidosLimit) || 1;
+  if(totalPages<=1){ wrap.innerHTML=''; return; }
+  var html='';
+  for(var i=1;i<=totalPages;i++){
+    var ativo = i===assistidosPage;
+    html += '<button onclick="assistidosPage='+i+'; loadAssistidos()" class="px-2 py-1 text-xs '+(ativo?'bg-indigo-100 text-indigo-700 font-bold rounded':'text-slate-500 hover:bg-slate-100 rounded')+'">'+i+'</button>';
+  }
+  wrap.innerHTML = html;
+}
+
+function renderAssistidosJuntada(list){
+  const wrap = document.getElementById('assContentJuntada');
+  if(!wrap) return;
+  if(!list.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum comparecimento pendente de juntada.</div>'; return; }
+  var html = '';
+  for(var i=0;i<list.length;i++){
+    var a = list[i];
+    var c = a.comparecimentoPendente || {};
+    html += '<div class="card p-4 rounded-2xl border-amber-500 shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
+    html += '<div class="flex items-start justify-between mb-2">';
+    html += '<div>';
+    html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
+    html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
+    html += '</div>';
+    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pendente Juntada</span>';
+    html += '</div>';
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
+    html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
+    html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
+    html += '<div><span class="font-semibold">Local:</span> '+esc(a.localAssinatura||'-')+'</div>';
+    html += '<div><span class="font-semibold">Data Comp.:</span> '+fmtDataBR(c.dataComparecimento||'')+'</div>';
+    html += '</div>';
+    html += '<div class="flex gap-2 text-[10px] mb-3">';
+    html += '<span class="font-semibold">PP:</span> '+esc(c.ppPlantao||'-');
+    if(c.observacao){ html += '<span class="font-semibold">Obs:</span> '+esc(c.observacao); }
+    html += '</div>';
+    html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
+    html += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+a.id+')" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1">Salvar Juntada</button>';
+    html += '<button onclick="event.stopPropagation(); abrirDetalheAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Detalhe</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+function renderAssistidosConcluidos(list){
+  const wrap = document.getElementById('assContentConcluidos');
+  if(!wrap) return;
+  if(!list.length){ wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum assistido concluído.</div>'; return; }
+  var html = '';
+  for(var i=0;i<list.length;i++){
+    var a = list[i];
+    html += '<div class="card p-4 rounded-2xl border-emerald-500 shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
+    html += '<div class="flex items-start justify-between mb-2">';
+    html += '<div>';
+    html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
+    html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
+    html += '</div>';
+    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Concluído</span>';
+    html += '</div>';
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
+    html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
+    html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
+    html += '<div><span class="font-semibold">Local:</span> '+esc(a.localAssinatura||'-')+'</div>';
+    html += '<div><span class="font-semibold">Início:</span> '+fmtDataBR(a.dataInicio||'')+'</div>';
+    html += '</div>';
+    html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
+    html += '<button onclick="event.stopPropagation(); abrirDetalheAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Detalhe</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+}
+
+// --- Modais ---
+
+function abrirModalNovoAssistido(){
+  document.getElementById('assVinculo').value='';
+  document.getElementById('assNome').value='';
+  document.getElementById('assProcesso').value='';
+  document.getElementById('assVara').value='';
+  document.getElementById('assLocal').value='COMEP Cariri';
+  document.getElementById('assDataInicio').value='';
+  document.getElementById('assFrequencia').value='mensal';
+  document.getElementById('modalNovoAssistido').classList.remove('hidden');
+}
+function fecharModalNovoAssistido(){
+  document.getElementById('modalNovoAssistido').classList.add('hidden');
+}
+async function salvarNovoAssistido(){
+  var b = {
+    vinculo: document.getElementById('assVinculo').value,
+    nome: document.getElementById('assNome').value,
+    processo: document.getElementById('assProcesso').value,
+    vara: document.getElementById('assVara').value,
+    localAssinatura: document.getElementById('assLocal').value,
+    dataInicio: document.getElementById('assDataInicio').value,
+    frequencia: document.getElementById('assFrequencia').value,
+  };
+  try{
+    var r = await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
+    if(r.error){ toast(r.error||'Erro ao cadastrar'); return; }
+    toast('Assistido cadastrado');
+    fecharModalNovoAssistido();
+    loadAssistidos();
+  }catch(e){ toast('Erro ao cadastrar: '+(e.message||e)); }
+}
+
+function abrirModalNovoComparecimento(assistidoId){
+  document.getElementById('cmpAssistidoId').value = assistidoId || '';
+  document.getElementById('cmpData').value = '';
+  document.getElementById('cmpPP').value = '';
+  document.getElementById('cmpObs').value = '';
+  document.getElementById('modalNovoComparecimento').classList.remove('hidden');
+}
+function fecharModalNovoComparecimento(){
+  document.getElementById('modalNovoComparecimento').classList.add('hidden');
+}
+async function salvarNovoComparecimento(){
+  var id = document.getElementById('cmpAssistidoId').value;
+  var b = {
+    dataComparecimento: document.getElementById('cmpData').value,
+    ppPlantao: document.getElementById('cmpPP').value,
+    observacao: document.getElementById('cmpObs').value,
+  };
+  try{
+    var r = await api('/api/assistidos/'+id+'/comparecimentos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
+    if(r.error){ toast(r.error||'Erro ao registrar'); return; }
+    toast('Comparecimento registrado');
+    fecharModalNovoComparecimento();
+    setAssTab('juntada');
+    loadAssistidosJuntada();
+    loadAssistidos();
+  }catch(e){ toast('Erro ao registrar: '+(e.message||e)); }
+}
+
+function abrirEditarAssistido(id){
+  var a = assistidosData.find(x=>String(x.id)===String(id));
+  if(!a) return;
+  document.getElementById('editAssId').value = a.id;
+  document.getElementById('editAssVinculo').value = a.vinculo||'';
+  document.getElementById('editAssNome').value = a.nome||'';
+  document.getElementById('editAssProcesso').value = a.processo||'';
+  document.getElementById('editAssVara').value = a.vara||'';
+  document.getElementById('editAssLocal').value = a.localAssinatura||'COMEP Cariri';
+  document.getElementById('editAssDataInicio').value = a.dataInicio||'';
+  document.getElementById('editAssFrequencia').value = a.frequencia||'mensal';
+  document.getElementById('editAssStatus').value = a.status||'ativo';
+  document.getElementById('editAssEtiqueta').value = a.etiqueta||'sem';
+  document.getElementById('modalEditarAssistido').classList.remove('hidden');
+}
+function fecharModalEditarAssistido(){
+  document.getElementById('modalEditarAssistido').classList.add('hidden');
+}
+async function salvarEditarAssistido(){
+  var id = document.getElementById('editAssId').value;
+  var b = {
+    vinculo: document.getElementById('editAssVinculo').value,
+    nome: document.getElementById('editAssNome').value,
+    processo: document.getElementById('editAssProcesso').value,
+    vara: document.getElementById('editAssVara').value,
+    localAssinatura: document.getElementById('editAssLocal').value,
+    dataInicio: document.getElementById('editAssDataInicio').value,
+    frequencia: document.getElementById('editAssFrequencia').value,
+    status: document.getElementById('editAssStatus').value,
+    etiqueta: document.getElementById('editAssEtiqueta').value,
+  };
+  try{
+    var r = await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
+    if(r.error){ toast(r.error||'Erro ao editar'); return; }
+    toast('Assistido atualizado');
+    fecharModalEditarAssistido();
+    loadAssistidos();
+  }catch(e){ toast('Erro ao editar: '+(e.message||e)); }
+}
+
+async function etiquetarAssistido(id){
+  var etiqueta = prompt('Escolha a etiqueta: sem, verde, laranja, vermelho');
+  if(!etiqueta || !['sem','verde','laranja','vermelho'].includes(etiqueta)) return;
+  try{
+    await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta }) });
+    toast('Etiqueta atualizada');
+    loadAssistidos();
+  }catch(e){ toast('Erro ao etiquetar: '+(e.message||e)); }
+}
+
+async function excluirAssistido(id){
+  if(!confirm('Tem certeza que deseja excluir este assistido?')) return;
+  try{
+    await api('/api/assistidos/'+id, { method:'DELETE' });
+    toast('Assistido excluído');
+    loadAssistidos();
+  }catch(e){ toast('Erro ao excluir: '+(e.message||e)); }
+}
+
+async function abrirDetalheAssistido(id){
+  try{
+    var r = await api('/api/assistidos/'+id);
+    var a = r.assistido || {};
+    var comps = Array.isArray(r.comparecimentos) ? r.comparecimentos : [];
+    document.getElementById('detTitulo').textContent = 'Detalhe — '+(a.nome||'-');
+    var infoHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Nome</p><p class="font-bold truncate">'+esc(a.nome||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Vínculo</p><p class="font-bold">'+esc(a.vinculo||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Processo</p><p class="font-bold">'+esc(a.processo||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Vara</p><p class="font-bold">'+esc(a.vara||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Local</p><p class="font-bold">'+esc(a.localAssinatura||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Início</p><p class="font-bold">'+fmtDataBR(a.dataInicio||'')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Freq.</p><p class="font-bold">'+esc(a.frequencia||'-')+'</p></div>';
+    infoHtml += '<div class="bg-slate-50 p-3 rounded-xl"><p class="text-slate-500 text-[9px] font-bold uppercase">Status</p><p class="font-bold">'+esc(a.status||'-')+'</p></div>';
+    infoHtml += '</div>';
+    infoHtml += '<div class="mt-3 flex gap-2">'+etiquetaBadge(a.etiqueta)+'</div>';
+    document.getElementById('detAssInfo').innerHTML = infoHtml;
+    var body = document.getElementById('detComparecimentos');
+    if(!comps.length){ body.innerHTML = '<div class="text-center text-slate-400 py-4">Sem comparecimentos registrados.</div>'; }
+    else {
+      var compHtml = '';
+      for(var j=0;j<comps.length;j++){
+        var c = comps[j];
+        compHtml += '<div class="flex items-start justify-between gap-2 p-3 rounded-xl border border-slate-100 bg-white/50 mb-2">';
+        compHtml += '<div class="flex-1">';
+        compHtml += '<p class="font-bold text-sm text-slate-800">'+fmtDataBR(c.dataComparecimento||'')+'</p>';
+        compHtml += '<p class="text-[10px] text-slate-500">PP: '+esc(c.ppPlantao||'-')+'</p>';
+        if(c.observacao){ compHtml += '<p class="text-[10px] text-slate-600 mt-1">'+esc(c.observacao)+'</p>'; }
+        if(c.juntada){ compHtml += '<p class="text-[10px] text-emerald-700 font-bold mt-1">Juntada: '+esc(c.juntada)+'</p>'; }
+        else { compHtml += '<p class="text-[10px] text-rose-500 font-bold mt-1">Pendente juntada</p>'; }
+        compHtml += '</div>';
+        if(!c.juntada){ compHtml += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+id+')" class="text-[10px] font-bold text-indigo-600 hover:underline">Adicionar Juntada</button>'; }
+        compHtml += '</div>';
+      }
+      body.innerHTML = compHtml;
+    }
+    document.getElementById('detJuntadaForm').classList.add('hidden');
+    document.getElementById('modalDetalheAssistido').classList.remove('hidden');
+  }catch(e){ toast('Erro ao carregar detalhe: '+(e.message||e)); }
+}
+function fecharModalDetalheAssistido(){
+  document.getElementById('modalDetalheAssistido').classList.add('hidden');
+}
+
+function abrirRegistrarComparecimento(id){
+  abrirModalNovoComparecimento(id);
+}
+
+function abrirJuntadaForm(compId, assistidoId){
+  document.getElementById('juntadaCompId').value = compId;
+  document.getElementById('juntadaTexto').value = '';
+  document.getElementById('juntadaObs').value = '';
+  document.getElementById('detJuntadaForm').classList.remove('hidden');
+}
+function fecharJuntadaForm(){
+  document.getElementById('detJuntadaForm').classList.add('hidden');
+}
+async function salvarJuntada(){
+  var compId = document.getElementById('juntadaCompId').value;
+  var b = {
+    juntada: document.getElementById('juntadaTexto').value,
+    observacao: document.getElementById('juntadaObs').value,
+  };
+  try{
+    var r = await api('/api/assistidos/comparecimentos/'+compId+'/juntada', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
+    if(r.error){ toast(r.error||'Erro ao salvar juntada'); return; }
+    toast('Juntada salva');
+    fecharJuntadaForm();
+    fecharModalDetalheAssistido();
+    loadAssistidos();
+    setAssTab('todos');
+  }catch(e){ toast('Erro ao salvar juntada: '+(e.message||e)); }
+}
 

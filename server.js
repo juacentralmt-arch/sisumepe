@@ -181,6 +181,7 @@ app.use(require('./src/routes/pdfTools'));
 app.use(require('./src/routes/estoque'));
 app.use(require('./src/routes/psico'));
 app.use(require('./src/routes/arquivos'));
+app.use(require('./src/routes/assistidos'));
 // Painel TV: dispositivo autorizado por token (TV_DEVICE_TOKEN) ou equipe
 // autenticada. Payload mínimo: sem motivo, modelo ou histórico; nome
 // abreviado por padrão (TV_NOME_COMPLETO=1 restaura o nome completo).

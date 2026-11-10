@@ -257,7 +257,11 @@ function loadFile() {
     if (!mem.googleTokens || typeof mem.googleTokens !== 'object') mem.googleTokens = {};
     if (!Array.isArray(mem.termos)) mem.termos = [];
     if (!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
-    if (!Array.isArray(mem.estoque)) mem.estoque = [];
+
+    if (!Array.isArray(mem.assistidos)) mem.assistidos = [];
+    if (!mem.seqAssistido) mem.seqAssistido = mem.assistidos.length ? Math.max(...mem.assistidos.map(x=>x.id))+1 : 1;
+    if (!Array.isArray(mem.assistidosComparecimentos)) mem.assistidosComparecimentos = [];
+    if (!mem.seqAssistidoComp) mem.seqAssistidoComp = mem.assistidosComparecimentos.length ? Math.max(...mem.assistidosComparecimentos.map(x=>x.id))+1 : 1;    if (!Array.isArray(mem.estoque)) mem.estoque = [];
     if (!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
     if (!Array.isArray(mem.estoqueMov)) mem.estoqueMov = [];
     if (!mem.seqEstoqueMov) mem.seqEstoqueMov = mem.estoqueMov.length ? Math.max(...mem.estoqueMov.map(x=>x.id))+1 : 1;
@@ -2205,21 +2209,162 @@ const store = {
   }
 };
 
-module.exports = store;
-module.exports.normalizeSistema = normalizeSistema;
-module.exports.normalizeContrato = normalizeContrato;
-module.exports.contratoLabel = contratoLabel;
-module.exports.contratosDoSistema = contratosDoSistema;
-module.exports.getUserSistema = getUserSistema;
-module.exports.normalizeUnidade = normalizeUnidade;
-module.exports.SISTEMAS = SISTEMAS;
-module.exports.CONTRATO_INFINITY = CONTRATO_INFINITY;
-module.exports.CONTRATOS_SPACECOM = CONTRATOS_SPACECOM;
-module.exports.MATERIAIS = MATERIAIS;
-module.exports.MATERIAIS_SPACECOM = MATERIAIS_SPACECOM;
-module.exports.MATERIAIS_INFINITY = MATERIAIS_INFINITY;
-module.exports.MATERIAIS_COM_SERIAL = MATERIAIS_COM_SERIAL;
-module.exports.materiaisDoSistema = materiaisDoSistema;
-module.exports.materialDoSerial = materialDoSerial;
 
+// Assistidos (Planilha Geral)
+store.assistidos = {
+  async all() {
+    if (MODE === 'file') return [...(mem.assistidos || [])].filter(x => !x.deleted_at);
+    try {
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const r = must(await supa.from('assistidos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1), 'assistidos.all');
+        out.push(...r.map(appASS));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
+    } catch (e) { throw e; }
+  },
+  async allIncludingDeleted() {
+    if (MODE === 'file') return [...(mem.assistidos || [])];
+    try {
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const r = must(await supa.from('assistidos').select('*').order('id').range(from, from + pageSize - 1), 'assistidos.allIncludingDeleted');
+        out.push(...r.map(appASS));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
+    } catch (e) { throw e; }
+  },
+  async byId(id) {
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      return r && r.deleted_at ? null : r || null;
+    }
+    try {
+      const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
+      if (!r.length) return null;
+      const row = appASS(r[0]);
+      return row.deleted_at ? null : row;
+    } catch (e) { throw e; }
+  },
+  async insert(r) {
+    if (MODE === 'file') {
+      const row = { id: mem.seqAssistido++, ...r, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), deleted_at: null, status: r.status || 'ativo', etiqueta: r.etiqueta || 'sem' };
+      mem.assistidos.push(row); saveFile(); return row;
+    }
+    try {
+      const rr = must(await supa.from('assistidos').insert(toRow(r, ASS)).select().single(), 'assistidos.insert');
+      return appASS(rr);
+    } catch (e) { throw e; }
+  },
+  async patch(id, fields) {
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      if (r.deleted_at) return null;
+      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
+      saveFile(); return r;
+    }
+    try {
+      const rr = must(await supa.from('assistidos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
+      return rr.length ? appASS(rr[0]) : null;
+    } catch (e) { throw e; }
+  },
+  async remove(id) {
+    if (MODE === 'file') {
+      const r = (mem.assistidos || []).find(x => eqi(x.id, id));
+      if (!r) return;
+      const agora = new Date().toISOString();
+      r.deleted_at = agora;
+      (mem.assistidosComparecimentos || []).forEach(c => {
+        if (eqi(c.assistidoId, id) && !c.deleted_at) { c.deleted_at = agora; c.updatedAt = agora; }
+      });
+      saveFile(); return;
+    }
+    try {
+      await must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
+      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('assistido_id', Number(id)).is('deleted_at', null), 'assistidos.remove_comp');
+    } catch (e) { throw e; }
+  }
+};
+
+// Assistidos - Comparecimentos
+store.assistidosComparecimentos = {
+  async all(assistidoId) {
+    if (MODE === 'file') {
+      const list = (mem.assistidosComparecimentos || []).filter(x => !x.deleted_at);
+      return assistidoId ? list.filter(x => eqi(x.assistidoId, assistidoId)) : [...list];
+    }
+    try {
+      const out = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
+        if (assistidoId) q = q.eq('assistido_id', Number(assistidoId));
+        const r = must(await q, 'assistidosComparecimentos.all');
+        out.push(...r.map(appACC));
+        if (r.length < pageSize) break;
+        from += pageSize;
+      }
+      return out;
+    } catch (e) { throw e; }
+  },
+  async byId(id) {
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      return r && r.deleted_at ? null : r || null;
+    }
+    try {
+      const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
+      if (!r.length) return null;
+      const row = appACC(r[0]);
+      return row.deleted_at ? null : row;
+    } catch (e) { throw e; }
+  },
+  async insert(r) {
+    if (MODE === 'file') {
+      const row = { id: mem.seqAssistidoComp++, ...r, deleted_at: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), protocolado: false };
+      mem.assistidosComparecimentos.push(row); saveFile(); return row;
+    }
+    try {
+      const rr = must(await supa.from('assistidos_comparecimentos').insert(toRow(r, ACC)).select().single(), 'assistidosComparecimentos.insert');
+      return appACC(rr);
+    } catch (e) { throw e; }
+  },
+  async patch(id, fields) {
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      if (!r) return null;
+      if (r.deleted_at) return null;
+      Object.assign(r, fields, { updatedAt: new Date().toISOString() });
+      saveFile(); return r;
+    }
+    try {
+      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ACC)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidosComparecimentos.patch');
+      return rr.length ? appACC(rr[0]) : null;
+    } catch (e) { throw e; }
+  },
+  async remove(id) {
+    if (MODE === 'file') {
+      const r = (mem.assistidosComparecimentos || []).find(x => eqi(x.id, id));
+      if (!r) return;
+      const agora = new Date().toISOString();
+      r.deleted_at = agora; r.updatedAt = agora;
+      saveFile(); return;
+    }
+    try {
+      must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidosComparecimentos.remove');
+    } catch (e) { throw e; }
+  }
+};
+
+module.exports = store;
 
