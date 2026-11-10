@@ -75,6 +75,9 @@ const recarregar = () => {
   // 2) A cadeia verifica OK
   let v = await store.audit.verify();
   assert(v.ok === true, 'Cadeia: verificacao passa sem adulteracao');
+  // o contador precisa dizer quantas linhas estão realmente encadeadas
+  const totalComHash = ler().audit.filter(a => a.hash).length;
+  assert(v.hashed === totalComHash, 'Cadeia: "hashed" conta as linhas encadeadas (' + v.hashed + ' de ' + totalComHash + ')');
 
   // guarda o estado integro para os testes de adulteracao
   const integro = fs.readFileSync(dbFile, 'utf8');

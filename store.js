@@ -803,6 +803,7 @@ const store = {
           return null;
         }
         started = true;
+        hashed++;
         const expected = auditHash(row.prevHash || null, row);
         if (String(row.hash) !== expected) return { ok: false, reason: 'hash inválido', id: row.id };
         if ((row.prevHash || null) !== (prev && prev.hash)) return { ok: false, reason: 'elo quebrado', id: row.id };
