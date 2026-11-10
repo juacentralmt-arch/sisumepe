@@ -31,10 +31,20 @@ function isAudioAttachment(value) {
 // Cada registro carrega o hash do anterior (prevHash) e o próprio hash
 // (hash), formando uma cadeia tamper-evident. Registros antigos sem hash
 // são aceitos como legado; a verificação começa no primeiro com hash.
+//
+// Canonicalização DETERMINÍSTICA: as chaves de um objeto são ordenadas
+// antes de serializar. O Postgres guarda `changes` em jsonb, que não
+// preserva a ordem das chaves — sem ordenar, o hash calculado na
+// gravação não bateria com o recalculado na verificação e a cadeia
+// acusaria adulteração onde não houve.
 function auditCanonical(v) {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return '[' + v.map(auditCanonical).join(',') + ']';
+  if (typeof v === 'object') {
+    return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + auditCanonical(v[k])).join(',') + '}';
+  }
   try { return JSON.stringify(v); } catch { return String(v); }
 }
 function auditPayload(row) {
@@ -47,6 +57,10 @@ function auditPayload(row) {
 function auditHash(prevHash, row) {
   return crypto.createHash('sha256').update(String(prevHash || '') + '\u001f' + auditPayload(row)).digest('hex');
 }
+
+// A cadeia fica disponível quando as colunas hash/prevhash existem.
+// Enquanto não existirem, os registros são gravados sem hash (legado).
+let chainDisponivel = false;
 
 // Serializa mutações de estoque dentro do processo. Evita o clássico
 // read-modify-write perdido quando duas baixas chegam juntas.
@@ -731,15 +745,23 @@ const store = {
       const body = { kind: 'cadastro', changes: [], ...e };
       const at = new Date().toISOString();
       let prevHash = null;
+      // Cadeia tamper-evident: as colunas hash/prevhash podem não existir
+      // ainda (deploy/migration-audit-chain.sql não aplicada). Nesse caso o
+      // registro é gravado sem hash e a checagem é refeita no próximo
+      // registro — aplicar a migration não exige reiniciar o servidor.
       try {
         const last = must(await supa.from('audit').select('id,hash').order('id', { ascending: false }).limit(1), 'audit.last');
         prevHash = (last[0] && last[0].hash) || null;
+        chainDisponivel = true;
       } catch (err) {
-        // Colunas prevhash/hash ainda não migradas: segue sem cadeia até a migração.
-        if (!this._warnedChain) { this._warnedChain = true; console.warn('audit: colunas hash/prevhash ausentes — rode deploy/migration-audit-chain.sql', err.message); }
+        if (chainDisponivel) {
+          console.warn('audit: colunas hash/prevhash ausentes — rode deploy/migration-audit-chain.sql');
+        }
+        chainDisponivel = false;
+        prevHash = null;
       }
       const rowForHash = { ...body, at };
-      const hash = prevHash || !this._warnedChain ? auditHash(prevHash, rowForHash) : null;
+      const hash = chainDisponivel ? auditHash(prevHash, rowForHash) : null;
       const payload = {
         kind: body.kind, action: body.action || '', personid: body.personId ?? null,
         personname: body.personName || '', ticketid: body.ticketId ?? null, ref: body.ref || '',
