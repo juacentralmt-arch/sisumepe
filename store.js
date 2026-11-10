@@ -490,9 +490,9 @@ const ASS = {
 };
 const ACC = {
   id: 'id', assistidoId: 'assistido_id', dataComparecimento: 'data_comparecimento',
-  policialPlantao: 'policial_plantao', protocolado: 'protocolado',
+  ppPlantao: 'policial_plantao', protocolado: 'protocolado',
   dataProtocolacao: 'data_protocolacao', protocoladoPor: 'protocolado_por',
-  observacoes: 'observacoes', juntada: 'juntada', assinadoPor: 'assinado_por',
+  observacao: 'observacoes', juntada: 'juntada', assinadoPor: 'assinado_por',
   deletedAt: 'deleted_at', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const EST = {
@@ -2251,7 +2251,7 @@ store.assistidos = {
       const r = must(await supa.from('assistidos').select('*').eq('id', Number(id)).limit(1), 'assistidos.byId');
       if (!r.length) return null;
       const row = appASS(r[0]);
-      return row.deleted_at ? null : row;
+      return row.deleted_at || row.deletedAt ? null : row;
     } catch (e) { throw e; }
   },
   async insert(r) {
@@ -2273,7 +2273,7 @@ store.assistidos = {
       saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
+      const rr = must(await supa.from('assistidos').update(toRow({ ...fields, updatedAt: new Date().toISOString() }, ASS)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidos.patch');
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) { throw e; }
   },
@@ -2326,7 +2326,7 @@ store.assistidosComparecimentos = {
       const r = must(await supa.from('assistidos_comparecimentos').select('*').eq('id', Number(id)).limit(1), 'assistidosComparecimentos.byId');
       if (!r.length) return null;
       const row = appACC(r[0]);
-      return row.deleted_at ? null : row;
+      return row.deleted_at || row.deletedAt ? null : row;
     } catch (e) { throw e; }
   },
   async insert(r) {
@@ -2348,7 +2348,7 @@ store.assistidosComparecimentos = {
       saveFile(); return r;
     }
     try {
-      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow({ ...fields, updatedat: new Date().toISOString() }, ACC)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidosComparecimentos.patch');
+      const rr = must(await supa.from('assistidos_comparecimentos').update(toRow({ ...fields, updatedAt: new Date().toISOString() }, ACC)).eq('id', Number(id)).is('deleted_at', null).select(), 'assistidosComparecimentos.patch');
       return rr.length ? appACC(rr[0]) : null;
     } catch (e) { throw e; }
   },

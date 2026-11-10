@@ -1590,6 +1590,37 @@
     
 
 
+    <!-- ABA ASSISTIDOS -->
+    <section id="tab-assistidos" class="hidden fade">
+      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-6 mb-6 shadow-xl">
+        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 class="font-display font-extrabold text-3xl text-white drop-shadow">Assistidos</h2>
+            <p class="text-sm text-white/80 mt-1">Controle de comparecimento e juntadas</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button onclick="abrirModalNovoAssistido()" class="btn bg-white text-indigo-700 text-xs px-4 py-2 shadow-lg hover:scale-105 transition font-bold">+ Novo Assistido</button>
+            <button onclick="abrirModalNovoComparecimento()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition">+ Comparecimento</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Abas: Todos | Juntada | Concluídos -->
+      <div class="flex gap-1 mb-4 border-b border-slate-200">
+        <button onclick="setAssTab('todos')" id="assTabTodos" class="px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50">Todos</button>
+        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada</button>
+        <button onclick="setAssTab('concluidos')" id="assTabConcluidos" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos</button>
+      </div>
+
+      <!-- Conteúdo das abas -->
+      <div id="assContentTodos" class="space-y-3"></div>
+      <div id="assContentJuntada" class="hidden space-y-3"></div>
+      <div id="assContentConcluidos" class="hidden space-y-3"></div>
+
+      <!-- Paginação -->
+      <div id="assPaginacao" class="mt-4 flex justify-center gap-2"></div>
+    </section>
+
   </main>
 
   <footer class="max-w-6xl mx-auto px-6 pb-6 w-full">
@@ -2147,36 +2178,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="/js/app.js?v=51"></script>
-    <!-- ABA ASSISTIDOS -->
-    <section id="tab-assistidos" class="hidden fade">
-      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-6 mb-6 shadow-xl">
-        <div class="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h2 class="font-display font-extrabold text-3xl text-white drop-shadow">Assistidos</h2>
-            <p class="text-sm text-white/80 mt-1">Controle de comparecimento e juntadas</p>
-          </div>
-          <div class="flex gap-2 flex-wrap">
-            <button onclick="abrirModalNovoAssistido()" class="btn bg-white text-indigo-700 text-xs px-4 py-2 shadow-lg hover:scale-105 transition font-bold">+ Novo Assistido</button>
-            <button onclick="abrirModalNovoComparecimento()" class="btn bg-white/20 text-white border border-white/30 text-xs px-4 py-2 hover:bg-white/30 transition">+ Comparecimento</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Abas: Todos | Juntada | Concluídos -->
-      <div class="flex gap-1 mb-4 border-b border-slate-200">
-        <button onclick="setAssTab('todos')" id="assTabTodos" class="px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50">Todos</button>
-        <button onclick="setAssTab('juntada')" id="assTabJuntada" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Juntada</button>
-        <button onclick="setAssTab('concluidos')" id="assTabConcluidos" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos</button>
-      </div>
-
-      <!-- Conteúdo das abas -->
-      <div id="assContentTodos" class="space-y-3"></div>
-      <div id="assContentJuntada" class="hidden space-y-3"></div>
-      <div id="assContentConcluidos" class="hidden space-y-3"></div>
-
-      <!-- Paginação -->
-      <div id="assPaginacao" class="mt-4 flex justify-center gap-2"></div>
-    </section>
 
     <!-- Modal: Novo Assistido -->
     <div id="modalNovoAssistido" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -2203,6 +2204,7 @@
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
         <h3 class="font-bold text-base mb-4 text-indigo-700">Registrar Comparecimento</h3>
         <input type="hidden" id="cmpAssistidoId">
+        <div id="cmpAssistidoWrap" class="flex flex-col gap-1 mb-2 hidden"><label class="text-[10px] font-bold text-slate-500">Assistido</label><select id="cmpAssistidoSelect" class="inp text-xs"></select></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data</label><input id="cmpData" type="date" class="inp text-xs"></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">PP de Plantão</label><input id="cmpPP" type="text" placeholder="Nome do PP" class="inp text-xs"></div>
         <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Observação</label><textarea id="cmpObs" rows="2" class="inp text-xs"></textarea></div>

@@ -188,7 +188,7 @@ function paintUser(){
     let show = true;
     if(r === 'recepcao') show = ['fila', 'checkin'].includes(t) || (t === 'agenda' && agendaUser());
     else if(r === 'psico') show = ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'].includes(t);
-    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'fila', 'auditoria', 'usuarios'].includes(t);
+    else if(r === 'admin' || (session && String(session.user||'').toLowerCase() === 'secretaria')) show = ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'].includes(t);
     else if(r === 'tecnico') show = t !== 'usuarios' && t !== 'psico' && t !== 'auditoria';
     b.classList.toggle('hidden', !show);
   });
@@ -198,9 +198,9 @@ function paintUser(){
 }
 // Ordem do menu por perfil (admin/secretária: sequência da gestão)
 const NAV_ORDER = {
-  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'fila', 'auditoria', 'usuarios'],
+  admin: ['dash', 'checkin', 'agenda', 'visao', 'estoque', 'pdf', 'arquivos', 'assistidos', 'fila', 'auditoria', 'usuarios'],
   psico: ['fila', 'checkin', 'psico', 'arquivos', 'pdf', 'agenda'],
-  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'pdf', 'arquivos', 'visao', 'dash'],
+  tecnico: ['fila', 'checkin', 'tecnico', 'agenda', 'termos', 'estoque', 'pdf', 'arquivos', 'assistidos', 'visao', 'dash'],
   recepcao: ['fila', 'checkin', 'arquivos', 'agenda', 'tecnico', 'termos', 'visao', 'dash', 'usuarios']
 };
 function isGestaoUser(){ return session && (session.role === 'admin' || String(session.user || '').toLowerCase() === 'secretaria'); }
@@ -348,7 +348,8 @@ function canSee(t){
 }
 function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
-  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','pdf','arquivos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','pdf','arquivos','assistidos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
+  const gsb = document.getElementById('globalStatsBar'); if(gsb) gsb.classList.toggle('hidden', tab === 'assistidos');
   document.getElementById('tab-'+tab).classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
@@ -368,6 +369,7 @@ function go(tab){
 }
 function tempo(iso){ const m=Math.floor((Date.now()-new Date(iso))/60000); if(m<1)return'agora'; if(m<60)return m+' min'; const h=Math.floor(m/60); if(h<24)return h+'h '+(m%60)+'min'; return Math.floor(h/24)+'d '+ (h%24)+'h'; }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDataBR(v){ if(!v) return ''; const s=String(v).trim(); if(/^\d{4}-\d{2}-\d{2}/.test(s)){ const p=s.slice(0,10).split('-'); return p[2]+'/'+p[1]+'/'+p[0]; } return s; }
 // Valida CNJ: 20 dígitos numéricos, pontuação opcional
 function validarCNJ(valor){
   const cnj = String(valor || '').replace(/[.\-\/]/g, '');
@@ -10593,6 +10595,10 @@ window.addEventListener('online', () => {
 // PWA
 if('serviceWorker' in navigator){ window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
 
+const MENU_ORDER_KEY = 'sisumepe_menu_order';
+function getDefaultMenuOrder(){
+  return ['fila','checkin','psico','tecnico','agenda','termos','visao','dash','usuarios','auditoria','estoque','pdf','arquivos','assistidos'];
+}
 function getMenuOrder(){
   try{
     const raw = localStorage.getItem(MENU_ORDER_KEY);
@@ -10745,6 +10751,8 @@ function setAssTab(tab){
   document.getElementById('assContentJuntada').classList.add('hidden');
   document.getElementById('assContentConcluidos').classList.add('hidden');
   document.getElementById('assContent'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':'Concluidos')).classList.remove('hidden');
+  var pag = document.getElementById('assPaginacao');
+  if(pag) pag.classList.toggle('hidden', tab !== 'todos');
   if(tab==='todos') loadAssistidos();
   else if(tab==='juntada') loadAssistidosJuntada();
   else if(tab==='concluidos') loadAssistidosConcluidos();
@@ -10938,18 +10946,33 @@ async function salvarNovoAssistido(){
   }catch(e){ toast('Erro ao cadastrar: '+(e.message||e)); }
 }
 
-function abrirModalNovoComparecimento(assistidoId){
+async function abrirModalNovoComparecimento(assistidoId){
   document.getElementById('cmpAssistidoId').value = assistidoId || '';
   document.getElementById('cmpData').value = '';
   document.getElementById('cmpPP').value = '';
   document.getElementById('cmpObs').value = '';
+  var wrap = document.getElementById('cmpAssistidoWrap');
+  var sel = document.getElementById('cmpAssistidoSelect');
+  if(assistidoId){
+    wrap.classList.add('hidden');
+  } else {
+    wrap.classList.remove('hidden');
+    if(!assistidosData.length){
+      try{ var r = await api('/api/assistidos'); assistidosData = Array.isArray(r) ? r : []; }catch(e){}
+    }
+    sel.innerHTML = '<option value="">Selecione o assistido...</option>' + assistidosData
+      .filter(function(a){ return a.status !== 'concluido'; })
+      .map(function(a){ return '<option value="'+a.id+'">'+esc(a.nome||'-')+' — '+esc(a.vinculo||'-')+'</option>'; })
+      .join('');
+  }
   document.getElementById('modalNovoComparecimento').classList.remove('hidden');
 }
 function fecharModalNovoComparecimento(){
   document.getElementById('modalNovoComparecimento').classList.add('hidden');
 }
 async function salvarNovoComparecimento(){
-  var id = document.getElementById('cmpAssistidoId').value;
+  var id = document.getElementById('cmpAssistidoId').value || document.getElementById('cmpAssistidoSelect').value;
+  if(!id){ toast('Selecione o assistido'); return; }
   var b = {
     dataComparecimento: document.getElementById('cmpData').value,
     ppPlantao: document.getElementById('cmpPP').value,
@@ -11027,7 +11050,7 @@ async function excluirAssistido(id){
 
 async function abrirDetalheAssistido(id){
   try{
-    var r = await api('/api/assistidos/'+id);
+    var r = await api('/api/assistidos/'+id+'/detalhe');
     var a = r.assistido || {};
     var comps = Array.isArray(r.comparecimentos) ? r.comparecimentos : [];
     document.getElementById('detTitulo').textContent = 'Detalhe — '+(a.nome||'-');
@@ -11074,11 +11097,13 @@ function abrirRegistrarComparecimento(id){
   abrirModalNovoComparecimento(id);
 }
 
-function abrirJuntadaForm(compId, assistidoId){
+async function abrirJuntadaForm(compId, assistidoId){
+  if(assistidoId){ await abrirDetalheAssistido(assistidoId); }
   document.getElementById('juntadaCompId').value = compId;
   document.getElementById('juntadaTexto').value = '';
   document.getElementById('juntadaObs').value = '';
   document.getElementById('detJuntadaForm').classList.remove('hidden');
+  document.getElementById('modalDetalheAssistido').classList.remove('hidden');
 }
 function fecharJuntadaForm(){
   document.getElementById('detJuntadaForm').classList.add('hidden');

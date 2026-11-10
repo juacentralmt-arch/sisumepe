@@ -139,7 +139,7 @@ router.post('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =
   if (erro) return res.status(400).json({ error: erro });
 
   const existe = await store.assistidos.allIncludingDeleted();
-  if (existe.some((x) => !x.deleted_at && String(x.vinculo).trim().toLowerCase() === c.vinculo.toLowerCase())) {
+  if (existe.some((x) => !x.deleted_at && !x.deletedAt && String(x.vinculo).trim().toLowerCase() === c.vinculo.toLowerCase())) {
     return res.status(409).json({ error: 'Vínculo já cadastrado' });
   }
 
@@ -174,7 +174,7 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
 
   if (c.vinculo) {
     const todos = await store.assistidos.allIncludingDeleted();
-    const dup = todos.find((x) => String(x.id) !== String(req.params.id) && !x.deleted_at && String(x.vinculo || '').trim().toLowerCase() === c.vinculo.toLowerCase());
+    const dup = todos.find((x) => String(x.id) !== String(req.params.id) && !x.deleted_at && !x.deletedAt && String(x.vinculo || '').trim().toLowerCase() === c.vinculo.toLowerCase());
     if (dup) return res.status(409).json({ error: 'Vínculo já cadastrado em outro assistido: ' + dup.nome });
   }
 
@@ -259,7 +259,7 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
     juntada: val,
     observacao: observacao != null ? String(observacao).trim() : row.observacao,
     protocolado: true,
-    dataProtocolo: new Date().toISOString().slice(0, 10),
+    dataProtocolacao: new Date().toISOString().slice(0, 10),
   });
   if (!upd) return res.status(404).json({ error: 'Comparecimento não encontrado' });
 
@@ -276,7 +276,7 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
     await store.audit.insert({ kind: 'assistido', action: 'juntada', personName: '', ref: 'comparecimento#' + req.params.id, byUser: req.auth.user, byName: req.auth.name, byRole: req.auth.role, summary: 'Juntada registrada' });
   } catch (e) { /* */ }
   broadcast();
-  res.json(row);
+  res.json(upd);
 }));
 
 // Exclusão lógica de comparecimento
