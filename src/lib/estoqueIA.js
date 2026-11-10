@@ -149,7 +149,8 @@ async function answer(query, store, opts = {}) {
       } catch (e) {
         console.error(`Handler ${handler.constructor.name} error:`, e);
         recordQuery('erro', 0, true);
-        return { intent: 'erro', text: 'Erro interno: ' + e.message };
+        // Mensagem genérica: a causa real fica no log do servidor.
+        return { intent: 'erro', text: 'Não consegui processar essa consulta agora. Tente reformular ou fale com o suporte.' };
       }
     }
   }

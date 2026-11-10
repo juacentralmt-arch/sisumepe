@@ -10,3 +10,8 @@ create table if not exists estoque_notas (
   unique(modulo, sistema, contrato, unidade)
 );
 create index if not exists idx_estoque_notas_lookup on estoque_notas (modulo, sistema, contrato, unidade);
+
+-- SEGURANÇA: RLS habilitado e sem policies = acesso negado para
+-- anon/authenticated. O app usa a chave secreta (sb_secret_...), que
+-- ignora RLS. Sem isto, a tabela fica gravável pela chave pública.
+alter table estoque_notas enable row level security;

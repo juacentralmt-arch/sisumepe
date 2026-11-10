@@ -570,7 +570,7 @@ router.post('/api/termos/autorenomear-ocr', auth(['tecnico', 'psico', 'admin']),
     }
   }catch(e){
     if(/timeout/i.test(e.message || '')) { try { await ocr.resetOcrServidor(); } catch (_) {} }
-    return res.status(502).json({ error: 'OCR no servidor falhou: ' + (e.message || 'erro desconhecido') });
+    return res.status(502).json({ error: 'OCR no servidor falhou: ' + shared.erroPublico(e, 'erro desconhecido') });
   }
   const texto = textos.join('\n');
   if(texto.replace(/\s/g, '').length < 20) return res.status(502).json({ error: 'OCR no servidor não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });
@@ -931,7 +931,8 @@ let visionResult = null; const visaoService = require('../services/visaoComputac
         out.push({ arquivo: original, erro: 'Falha na análise de visão' });
       }
     } catch (e) {
-      out.push({ arquivo: original, erro: 'Erro na visão computacional: ' + e.message });
+      console.error('[termos] visao computacional:', e);
+      out.push({ arquivo: original, erro: 'Erro na análise de visão computacional. Tente novamente ou preencha manualmente.' });
     }
   }
   res.json({ total: out.length, itens: out });

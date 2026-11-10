@@ -29,7 +29,10 @@ class HistoricoHandler extends BaseHandler {
         suggestions: ['saldo atual ' + c, 'movimentações ' + c, 'evolução 7 dias ' + c]
       };
     } catch (e) {
-      return { intent: 'erro', text: 'Erro ao buscar histórico: ' + e.message };
+      // O detalhe fica no log do servidor: a mensagem crua pode carregar
+      // fragmento de SQL ou caminho de arquivo.
+      console.error('[estoqueIA] HistoricoHandler:', e);
+      return { intent: 'erro', text: 'Não consegui buscar o histórico agora. Tente novamente em instantes.' };
     }
   }
 }

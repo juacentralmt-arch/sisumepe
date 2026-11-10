@@ -92,7 +92,7 @@ router.post('/api/ativacoes/ocr', shared.auth(['tecnico','psico','admin']), shar
     }
   }catch(e){
     if(/timeout/i.test(e.message || '')) { try { await ocr.resetOcrServidor(); } catch (_) {} }
-    return res.status(502).json({ error: 'OCR falhou: ' + (e.message || 'erro desconhecido') });
+    return res.status(502).json({ error: 'OCR falhou: ' + shared.erroPublico(e, 'erro desconhecido') });
   }
   const texto = textos.join('\n');
   if(texto.replace(/\s/g, '').length < 20) return res.status(502).json({ error: 'OCR não encontrou texto — confira a qualidade da imagem ou preencha manualmente' });

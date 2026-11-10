@@ -226,6 +226,35 @@ const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(e
   res.status(code).json({ error: code === 500 ? 'Erro interno. Tente de novo.' : (e.message || 'Erro') });
 });
 
+// Detalhe de erro que pode voltar para o cliente sem vazar informação
+// interna: remove caminhos do servidor, URLs internas e fragmentos de
+// SQL. O erro completo fica no log do servidor.
+//   erroPublico(new Error("EACCES: permission denied, open '/home/x/uploads/a.pdf'"))
+//   -> "EACCES: permission denied, open '[arquivo]'"
+function erroPublico(e, fallback) {
+  const msg = (e && typeof e.message === 'string') ? e.message : (typeof e === 'string' ? e : '');
+  const raw = String(msg).trim();
+  if (!raw) return fallback || 'Erro interno. Tente de novo.';
+  let m = raw
+    // caminho absoluto entre aspas (Windows com espaços, Linux/macOS)
+    .replace(/(['"])[A-Za-z]:\\[^'"]+\1/g, "'[arquivo]'")
+    .replace(/(['"])\/(?:home|Users|usr|var|opt|srv|tmp|etc|root|mnt|media|app|workspace)\/[^'"]+\1/g, "'[arquivo]'")
+    // caminho absoluto sem aspas
+    .replace(/[A-Za-z]:\\[^\s'"|<>]+/g, '[arquivo]')
+    .replace(/\/(?:home|Users|usr|var|opt|srv|tmp|etc|root|mnt|media|app|workspace)\/[^\s'"|<>]*/g, '[arquivo]')
+    // host/porta internos
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[host]')
+    .replace(/\blocalhost(?::\d+)?\b/gi, '[host]')
+    // URLs
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s'"|<>]+/gi, '[endereço]')
+    // fragmentos de SQL do Postgres
+    .replace(/\b(relation|column|table|constraint|schema)\s+"[^"]*"/gi, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (m.length > 180) m = m.slice(0, 180) + '…';
+  return m || fallback || 'Erro interno. Tente de novo.';
+}
+
 // SSE clients: cada conexão guarda quem está logado nela,
 // permitindo entregar eventos direcionados (chat privado, chamadas) só ao destinatário.
 // Teto anti-vazamento: 500 conexões; a mais antiga cai para proteger RAM.
@@ -574,7 +603,7 @@ const pendingGoogleStates = new Map();
 
 module.exports = {
   ROOT, PORT, store,
-  ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients,
+  ah, broadcast, broadcastTo, addSseClient, removeSseClient, sseClients, erroPublico,
   loginRateLimit, apiRateLimit, iaRateLimit, requestId, issueToken, auth, authAgenda, isAgendaUser, AGENDA_USERS, isHash,
   safeEqual, tvTokenOk, tvAuth, tvDisplayName, sessionCookie, clearSessionCookie,
   horarioComercialInfo, recepcaoBloqueada, RECP_TZ, RECP_MSG,
