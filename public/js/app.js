@@ -9047,7 +9047,7 @@ let refreshTimer = null;
 function scheduleRefresh(){
   if(!session) return;
   if(refreshTimer) return;
-  refreshTimer = setTimeout(() => { refreshTimer = null; if(session){ loadAll(); loadChat(); } }, 400);
+  refreshTimer = setTimeout(() => { refreshTimer = null; if(session){ loadAll(); loadChat(); refreshAssistidosSeVisivel(); } }, 400);
 }
 // --- CHAMADA DE VOZ (WebRTC 1:1, sinalização via SSE) ---
 let callPc = null, callStream = null, callPeer = null, callPeerName = '',
@@ -9344,6 +9344,10 @@ function connectSSE(){
           handleReadEvent(data);
         } else if (data.type === 'call_signal') {
           handleCallSignal(data);
+        } else if (data.type === 'update') {
+          // Atualização geral (fila, estoque, assistidos...): recarrega a
+          // fila E o módulo Assistidos quando ele está na tela.
+          if(session){ scheduleRefresh(); refreshAssistidosSeVisivel(); }
         } else {
           if(session){ scheduleRefresh(); }
         }
@@ -9633,6 +9637,18 @@ let assJuntadaLista = [];
 let assJuntadaSel = new Set();
 let assJuntadaTimer = null;
 
+// --- Abas Concluídos e Arquivados (paginação no servidor) ---
+let assConclPage = 1;
+let assConclLimit = 20;
+let assConclTotal = 0;
+let assArqPage = 1;
+let assArqLimit = 20;
+let assArqTotal = 0;
+
+// Último refresh automático (tempo real). Evita enxurrada de requisições
+// quando o SSE dispara vários eventos em sequência.
+let assUltimoRefresh = 0;
+
 // Regra única: protocolado = flag ligada OU número da juntada preenchido.
 // (a base herdada tem o número mas a flag desligada)
 function assComparcimentoProtocolado(c){
@@ -9650,7 +9666,47 @@ const ASS_AÇÕES = {
   comparecimento_excluido: { rotulo: 'Comparecimento excluído', cor: 'bg-rose-100 text-rose-700', icone: '🗑' },
   juntada: { rotulo: 'Juntada', cor: 'bg-teal-100 text-teal-700', icone: '⚖' },
   juntada_lote: { rotulo: 'Juntada em lote', cor: 'bg-teal-100 text-teal-700', icone: '⚖' },
+  importacao: { rotulo: 'Importação', cor: 'bg-cyan-100 text-cyan-700', icone: '⇪' },
 };
+
+// Etiqueta do editor: o select só conhece 'pendente' e 'conferido'.
+// A base herdada (e a Planilha Geral importada) traz etiqueta '', 'sem',
+// 'verde', 'laranja' ou 'vermelho'. Sem normalizar, o select fica sem
+// seleção (value '') e o front manda etiqueta:'' — o back responde 400 e
+// descarta TODOS os campos editados da ficha.
+function assNormalizaEtiqueta(valor){
+  const v = String(valor == null ? '' : valor).trim().toLowerCase();
+  return v === 'conferido' ? 'conferido' : 'pendente';
+}
+
+// Todos os comparecimentos pendentes de juntada de um assistido.
+// O backend manda `comparecimentosPendentes` (TODOS); quando o campo não
+// vem (back antigo), cai no `comparecimentoPendente` (o primeiro).
+function assPendentesDoAssistido(a){
+  if(!a) return [];
+  const lista = Array.isArray(a.comparecimentosPendentes) ? a.comparecimentosPendentes : null;
+  if(lista && lista.length) return lista.filter(c => c && c.id != null);
+  const um = a.comparecimentoPendente;
+  return (um && um.id != null) ? [um] : [];
+}
+
+// PP de plantão: o backend pode mandar `ppPlantao` ou `policialPlantao`.
+function assPPDoComparecimento(c){
+  if(!c) return '';
+  return String(c.ppPlantao || c.policialPlantao || '');
+}
+
+// Erro VISÍVEL na área da lista (nunca falhar em silêncio): sem isso a
+// tela mostra "Nenhum ..." e o usuário não distingue erro de lista vazia.
+function renderAssErro(containerId, mensagem, retryFn){
+  const wrap = document.getElementById(containerId);
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-6 text-center">'
+    + '<p class="text-rose-600 text-xs font-bold">'+esc(mensagem)+'</p>'
+    + '<p class="text-slate-500 text-[11px] mt-1">Não foi possível carregar os dados. Verifique a conexão e tente novamente.</p>'
+    + '<button onclick="'+esc(retryFn)+'" class="btn btn-ghost text-[10px] px-3 py-1 mt-3">↻ Tentar de novo</button>'
+    + '</div>';
+}
 
 function setAssTab(tab){
   assTab = tab;
@@ -9681,6 +9737,10 @@ function setAssTab(tab){
   if(pag) pag.classList.toggle('hidden', tab !== 'todos');
   var pagAud = document.getElementById('assPaginacaoAuditoria');
   if(pagAud) pagAud.classList.toggle('hidden', tab !== 'auditoria');
+  var pagConcl = document.getElementById('assPaginacaoConcluidos');
+  if(pagConcl) pagConcl.classList.toggle('hidden', tab !== 'concluidos');
+  var pagArq = document.getElementById('assPaginacaoArquivados');
+  if(pagArq) pagArq.classList.toggle('hidden', tab !== 'arquivados');
 
   if(tab==='todos'){ montarFiltrosAssistidos(); loadAssistidos(); }
   else if(tab==='juntada') loadAssistidosJuntada();
@@ -9709,6 +9769,32 @@ async function atualizarBadgesAssistidos(){
   if(bConcl) bConcl.textContent = (assistidosResumo.concluido||0) + (assistidosResumo.arquivado||0);
 }
 
+// O módulo Assistidos não é da fila: um evento SSE 'update' precisa
+// recarregar a lista de assistidos (e os badges) quando o usuário está
+// na aba — senão a tela fica desatualizada até o próximo reload.
+function assAbaVisivel(){
+  try{
+    const sec = document.getElementById('tab-assistidos');
+    if(sec && sec.classList && sec.classList.contains('hidden')) return false;
+  }catch(e){}
+  return true;
+}
+function refreshAssistidosSeVisivel(forcar){
+  if(!assAbaVisivel()) return;
+  if(typeof document !== 'undefined' && document.hidden) return;
+  // Não enxurra requisições: no máximo um refresh por segundo.
+  const agora = Date.now();
+  if(!forcar && (agora - assUltimoRefresh) < 1000) return;
+  assUltimoRefresh = agora;
+  try{
+    if(assTab === 'juntada') loadAssistidosJuntada();
+    else if(assTab === 'concluidos') loadAssistidosConcluidos();
+    else if(assTab === 'arquivados') loadAssistidosArquivados();
+    else loadAssistidos();
+    atualizarBadgesAssistidos();
+  }catch(e){ console.error('refreshAssistidos', e); }
+}
+
 async function loadAssistidos(){
   try{
     var url = '/api/assistidos?page='+encodeURIComponent(assistidosPage)+'&limit='+encodeURIComponent(assistidosLimit);
@@ -9729,7 +9815,12 @@ async function loadAssistidos(){
     assistidosTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
     renderAssistidosTodos(itens);
     renderAssPaginacao(assistidosTotal);
-  }catch(e){ console.error('loadAssistidos', e); }
+  }catch(e){
+    console.error('loadAssistidos', e);
+    renderAssErro('assContentTodos', 'Não foi possível carregar os assistidos.', 'loadAssistidos()');
+    renderAssPaginacao(0);
+    toast('Falha ao carregar os assistidos: ' + ((e && e.message) ? e.message : e));
+  }
 }
 
 function assFiltrosMudou(){
@@ -9775,18 +9866,33 @@ function debounceAssBusca(){
 async function loadAssistidosJuntada(){
   try{
     const r = await api('/api/assistidos/juntada');
-    assJuntadaLista = Array.isArray(r) ? r : [];
+    assJuntadaLista = Array.isArray(r) ? r : ((r && Array.isArray(r.itens)) ? r.itens : []);
     montarFiltrosAssJuntada();
     renderAssistidosJuntada(filtrarAssJuntada());
-  }catch(e){ console.error('loadAssistidosJuntada', e); }
+  }catch(e){
+    console.error('loadAssistidosJuntada', e);
+    renderAssErro('assContentJuntada', 'Não foi possível carregar os comparecimentos pendentes de juntada.', 'loadAssistidosJuntada()');
+    toast('Falha ao carregar a juntada: ' + ((e && e.message) ? e.message : e));
+  }
 }
 
 async function loadAssistidosConcluidos(){
   try{
-    const r = await api('/api/assistidos/concluidos');
-    const list = Array.isArray(r) ? r : [];
-    renderAssistidosConcluidos(list);
-  }catch(e){ console.error('loadAssistidosConcluidos', e); }
+    var url = '/api/assistidos/concluidos?page='+encodeURIComponent(assConclPage)+'&limit='+encodeURIComponent(assConclLimit);
+    var r = await api(url);
+    // Contrato: { itens, total, pagina, limite } (antes vinha array cru).
+    var itens = (r && Array.isArray(r.itens)) ? r.itens : (Array.isArray(r) ? r : []);
+    assConclTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
+    if(r && typeof r.pagina === 'number' && r.pagina > 0) assConclPage = r.pagina;
+    if(!itens.length && assConclPage > 1){ assConclPage--; return loadAssistidosConcluidos(); }
+    renderAssistidosConcluidos(itens);
+    renderAssPaginacaoConcluidos();
+  }catch(e){
+    console.error('loadAssistidosConcluidos', e);
+    renderAssErro('assContentConcluidos', 'Não foi possível carregar os assistidos concluídos.', 'loadAssistidosConcluidos()');
+    renderAssPaginacaoConcluidos();
+    toast('Falha ao carregar os concluídos: ' + ((e && e.message) ? e.message : e));
+  }
 }
 
 // =====================================================================
@@ -9797,12 +9903,18 @@ async function loadAssistidosArquivados(){
   if(!wrap) return;
   wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">Carregando arquivados…</div>';
   try{
-    var r = await api('/api/assistidos/arquivados?limit=100');
-    var lista = (r && Array.isArray(r.itens)) ? r.itens : [];
+    var url = '/api/assistidos/arquivados?page='+encodeURIComponent(assArqPage)+'&limit='+encodeURIComponent(assArqLimit);
+    var r = await api(url);
+    // Contrato: { itens, total, pagina, limite } (antes vinha array cru).
+    var lista = (r && Array.isArray(r.itens)) ? r.itens : (Array.isArray(r) ? r : []);
+    assArqTotal = (r && typeof r.total === 'number') ? r.total : lista.length;
+    if(r && typeof r.pagina === 'number' && r.pagina > 0) assArqPage = r.pagina;
     var badge = document.getElementById('assBadgeArquivados');
-    if(badge) badge.textContent = (r && r.total) || 0;
+    if(badge) badge.textContent = assArqTotal;
     if(!lista.length){
+      if(assArqPage > 1){ assArqPage--; return loadAssistidosArquivados(); }
       wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 text-xs">Nenhum assistido arquivado.</div>';
+      renderAssPaginacaoArquivados();
       return;
     }
     var html = '';
@@ -9819,8 +9931,12 @@ async function loadAssistidosArquivados(){
       html += '</div></div>';
     }
     wrap.innerHTML = html;
+    renderAssPaginacaoArquivados();
   }catch(e){
-    wrap.innerHTML = '<div class="card p-6 text-center text-rose-500 text-xs">Erro ao carregar arquivados.</div>';
+    console.error('loadAssistidosArquivados', e);
+    renderAssErro('assContentArquivados', 'Não foi possível carregar os assistidos arquivados.', 'loadAssistidosArquivados()');
+    renderAssPaginacaoArquivados();
+    toast('Falha ao carregar os arquivados: ' + ((e && e.message) ? e.message : e));
   }
 }
 
@@ -10070,12 +10186,44 @@ function assIrPagina(p){
   loadAssistidos();
 }
 
+// Paginação das abas Concluídos/Arquivados: mesmo padrão da aba Todos,
+// com botões Anterior/Próxima e o indicador "X–Y de Z" (total real).
+function renderAssPaginacaoLista(wrapId, page, limit, total, irFn){
+  const wrap = document.getElementById(wrapId);
+  if(!wrap) return;
+  const totalPaginas = Math.max(Math.ceil((total||0)/limit), 1);
+  if(totalPaginas<=1){ wrap.innerHTML=''; return; }
+  const ini = total ? ((page-1)*limit)+1 : 0;
+  const fim = Math.min(page*limit, total);
+  var html = '<button onclick="'+irFn+'('+(page-1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(page===1?'disabled':'')+'>&lsaquo; Anterior</button>';
+  html += '<span class="px-2 py-1 text-xs font-bold text-slate-600">'+ini+'–'+fim+' de '+total+'</span>';
+  html += '<button onclick="'+irFn+'('+(page+1)+')" class="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded" '+(page>=totalPaginas?'disabled':'')+'>Próxima &rsaquo;</button>';
+  wrap.innerHTML = html;
+}
+function renderAssPaginacaoConcluidos(){
+  renderAssPaginacaoLista('assPaginacaoConcluidos', assConclPage, assConclLimit, assConclTotal, 'assIrPaginaConcluidos');
+}
+function assIrPaginaConcluidos(p){
+  if(p < 1) return;
+  assConclPage = p;
+  loadAssistidosConcluidos();
+}
+function renderAssPaginacaoArquivados(){
+  renderAssPaginacaoLista('assPaginacaoArquivados', assArqPage, assArqLimit, assArqTotal, 'assIrPaginaArquivados');
+}
+function assIrPaginaArquivados(p){
+  if(p < 1) return;
+  assArqPage = p;
+  loadAssistidosArquivados();
+}
+
 // =====================================================================
 //  Aba Juntada — pendentes, com seleção para protocolar em lote
 // =====================================================================
 function montarFiltrosAssJuntada(){
   const locais = [...new Set(assJuntadaLista.map(a => a.localAssinatura).filter(Boolean))].sort();
-  const pps = [...new Set(assJuntadaLista.map(a => (a.comparecimentoPendente||{}).ppPlantao).filter(Boolean))].sort();
+  // PP de TODOS os comparecimentos pendentes (não só do primeiro).
+  const pps = [...new Set(assJuntadaLista.flatMap(a => assPendentesDoAssistido(a).map(c => assPPDoComparecimento(c))).filter(Boolean))].sort();
   const selLocal = document.getElementById('assJuntLocal');
   const selPP = document.getElementById('assJuntPP');
   if(selLocal){
@@ -10096,12 +10244,18 @@ function filtrarAssJuntada(){
   const de = (document.getElementById('assJuntDe')||{}).value || '';
   const ate = (document.getElementById('assJuntAte')||{}).value || '';
   return assJuntadaLista.filter(function(a){
-    const c = a.comparecimentoPendente || {};
     if(local && String(a.localAssinatura||'') !== local) return false;
-    if(pp && String(c.ppPlantao||'') !== pp) return false;
-    if(de && String(c.dataComparecimento||'') < de) return false;
-    if(ate && String(c.dataComparecimento||'') > ate) return false;
-    return true;
+    const pendentes = assPendentesDoAssistido(a);
+    if(!pendentes.length) return false;
+    if(!pp && !de && !ate) return true;
+    // Filtra por comparecimento: o assistido entra se ALGUM dos seus
+    // pendentes casa com o filtro (PP / janela de datas).
+    return pendentes.some(function(c){
+      if(pp && assPPDoComparecimento(c) !== pp) return false;
+      if(de && String(c.dataComparecimento||'') < de) return false;
+      if(ate && String(c.dataComparecimento||'') > ate) return false;
+      return true;
+    });
   });
 }
 
@@ -10121,31 +10275,41 @@ function renderAssistidosJuntada(list){
   var html = '';
   for(var i=0;i<list.length;i++){
     var a = list[i];
-    var c = a.comparecimentoPendente || {};
-    var cid = c.id;
-    var marcado = assJuntadaSel.has(String(cid));
+    // TODOS os comparecimentos pendentes do assistido (um item cada).
+    var pendentes = assPendentesDoAssistido(a);
+    if(!pendentes.length) continue;
+    var totalPend = Number(a.totalPendentes || pendentes.length);
     html += '<div class="card p-4 rounded-2xl border-amber-500 shadow-sm hover:shadow-md transition">';
-    html += '<div class="flex items-start justify-between mb-2">';
-    html += '<div class="flex items-start gap-2 min-w-0">';
-    html += '<input type="checkbox" class="mt-0.5" '+(marcado?'checked':'')+' onchange="alternarSelAssJuntada('+cid+', this.checked)">';
+    html += '<div class="flex items-start justify-between mb-2 gap-2">';
     html += '<div class="min-w-0 cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
     html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
     html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
-    html += '</div></div>';
-    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-none">Pendente Juntada</span>';
     html += '</div>';
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
-    html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
-    html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
-    html += '<div><span class="font-semibold">Local:</span> '+esc(a.localAssinatura||'-')+'</div>';
-    html += '<div><span class="font-semibold">Data Comp.:</span> '+fmtDataBR(c.dataComparecimento||'')+'</div>';
+    html += '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-none">'
+      + pendentes.length + (totalPend>pendentes.length ? ' de '+totalPend : '') + ' pendente(s)</span>';
     html += '</div>';
-    html += '<div class="flex gap-2 text-[10px] mb-3">';
-    html += '<span class="font-semibold">PP:</span> '+esc(c.ppPlantao||'-');
-    if(c.observacao){ html += '<span class="font-semibold">Obs:</span> '+esc(c.observacao); }
-    html += '</div>';
+    for(var j=0;j<pendentes.length;j++){
+      var c = pendentes[j] || {};
+      var cid = c.id;
+      var marcado = assJuntadaSel.has(String(cid));
+      html += '<div class="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5 mb-2">';
+      html += '<div class="flex items-start gap-2">';
+      html += '<input type="checkbox" class="mt-0.5" '+(marcado?'checked':'')+' onchange="alternarSelAssJuntada('+cid+', this.checked)">';
+      html += '<div class="min-w-0 flex-1">';
+      html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600">';
+      html += '<div><span class="font-semibold">Data Comp.:</span> '+fmtDataBR(c.dataComparecimento||'')+'</div>';
+      html += '<div><span class="font-semibold">PP:</span> '+esc(assPPDoComparecimento(c)||'-')+'</div>';
+      html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
+      html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
+      html += '</div>';
+      if(c.observacao){ html += '<p class="text-[10px] text-slate-500 mt-1">Obs: '+esc(c.observacao)+'</p>'; }
+      html += '</div></div>';
+      html += '<div class="flex gap-2 mt-2">';
+      html += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+a.id+')" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1">Salvar Juntada</button>';
+      html += '</div>';
+      html += '</div>';
+    }
     html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
-    html += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+a.id+')" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1">Salvar Juntada</button>';
     html += '<button onclick="event.stopPropagation(); abrirDetalheAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Detalhe</button>';
     html += '</div>';
     html += '</div>';
@@ -10158,11 +10322,13 @@ function alternarSelAssJuntada(id, marcado){
   if(marcado) assJuntadaSel.add(String(id)); else assJuntadaSel.delete(String(id));
   atualizarBarraLoteJuntada();
 }
+// "Selecionar todos" marca TODOS os comparecimentos pendentes visíveis
+// (um por item) — sem limite de quantidade: o back processa em blocos.
 function selecionarTodosAssJuntada(){
   const lista = filtrarAssJuntada();
-  const todosMarcados = lista.length && lista.every(a => assJuntadaSel.has(String((a.comparecimentoPendente||{}).id)));
-  lista.forEach(a => {
-    const id = String((a.comparecimentoPendente||{}).id);
+  const ids = lista.flatMap(a => assPendentesDoAssistido(a).map(c => String(c.id)));
+  const todosMarcados = ids.length > 0 && ids.every(id => assJuntadaSel.has(id));
+  ids.forEach(id => {
     if(todosMarcados) assJuntadaSel.delete(id); else assJuntadaSel.add(id);
   });
   renderAssistidosJuntada(lista);
@@ -10181,26 +10347,66 @@ function abrirModalLoteJuntada(){
   if(resumo) resumo.textContent = assJuntadaSel.size + ' comparecimento(s) serão protocolados com o mesmo número de juntada. O responsável fica registrado em cada um.';
   const t = document.getElementById('loteJuntadaTexto'); if(t) t.value='';
   const o = document.getElementById('loteJuntadaObs'); if(o) o.value='';
+  const res = document.getElementById('loteJuntadaResultado');
+  if(res){ res.classList.add('hidden'); res.innerHTML = ''; }
   document.getElementById('modalLoteJuntada').classList.remove('hidden');
 }
 function fecharModalLoteJuntada(){
   document.getElementById('modalLoteJuntada').classList.add('hidden');
 }
+// Resultado do lote: quantos foram protocolados e quantos falharam.
+function renderAssLoteResultado(ok, erros, total, detalhes){
+  const box = document.getElementById('loteJuntadaResultado');
+  if(!box) return;
+  box.classList.remove('hidden');
+  const cls = erros ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-emerald-50 border border-emerald-200 text-emerald-800';
+  var html = '<div class="rounded-xl p-3 text-[11px] '+cls+'">';
+  html += '<b>'+ok+' comparecimento(s) protocolado(s)</b>';
+  if(erros) html += ' · <b>'+erros+' falha(s)</b>';
+  html += ' · total enviado: '+total;
+  html += '</div>';
+  if(erros && detalhes.length){
+    html += '<ul class="mt-2 space-y-0.5">';
+    for(var i=0;i<Math.min(detalhes.length,10);i++){
+      const d = detalhes[i] || {};
+      html += '<li class="text-[10px] text-rose-700">• #'+esc(d.id)+': '+esc(d.erro||'erro')+'</li>';
+    }
+    html += '</ul>';
+    if(detalhes.length > 10) html += '<div class="text-[10px] text-slate-500 mt-1">… e mais '+(detalhes.length-10)+'</div>';
+  }
+  box.innerHTML = html;
+}
 async function salvarLoteJuntada(){
-  const ids = [...assJuntadaSel];
+  const ids = [...assJuntadaSel].map(function(x){ return Number(x); }).filter(function(n){ return Number.isFinite(n) && n > 0; });
   const juntada = (document.getElementById('loteJuntadaTexto')||{}).value || '';
   const observacao = (document.getElementById('loteJuntadaObs')||{}).value || '';
+  if(!ids.length){ toast('Selecione ao menos um comparecimento'); return; }
   if(!juntada.trim()){ toast('Informe o número/documento da juntada'); return; }
   try{
     const r = await api('/api/assistidos/comparecimentos/juntada-lote', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ ids, juntada, observacao })
+      body: JSON.stringify({ ids: ids, juntada: juntada, observacao: observacao })
     });
-    const n = (r && r.protocolados) || 0;
-    const erros = (r && r.erros && r.erros.length) ? r.erros.length : 0;
-    toast('Protocolados: ' + n + (erros ? ' · ignorados: ' + erros : ''));
-    fecharModalLoteJuntada();
-    assJuntadaSel.clear();
+    // Contrato novo: { atualizados, erros, total, detalhes }.
+    // Contrato antigo: { protocolados, erros }.
+    const ok = (r && typeof r.atualizados === 'number') ? r.atualizados
+             : ((r && typeof r.protocolados === 'number') ? r.protocolados : 0);
+    const erros = (r && Array.isArray(r.erros)) ? r.erros : [];
+    const nErros = erros.length;
+    const total = (r && typeof r.total === 'number') ? r.total : (ok + nErros);
+    const detalhes = (r && Array.isArray(r.detalhes)) ? r.detalhes : erros;
+    let msg = 'Juntada em lote: ' + ok + ' protocolado(s)';
+    if(nErros) msg += ' · ' + nErros + ' falha(s)';
+    toast(msg);
+    renderAssLoteResultado(ok, nErros, total, detalhes);
+    if(nErros){
+      // Só os que falharam continuam selecionados (para tentar de novo).
+      const comErro = new Set(erros.map(function(x){ return String(x && x.id); }));
+      [...assJuntadaSel].forEach(function(id){ if(!comErro.has(String(id))) assJuntadaSel.delete(id); });
+    } else {
+      assJuntadaSel.clear();
+      fecharModalLoteJuntada();
+    }
     loadAssistidosJuntada();
     atualizarBadgesAssistidos();
   }catch(e){ toast('Erro ao protocolar lote: '+(e.message||e)); }
@@ -10364,7 +10570,12 @@ async function abrirEditarAssistido(id){
     document.getElementById('editAssDataInicio').value = a.dataInicio||'';
     document.getElementById('editAssFrequencia').value = a.frequencia||'mensal';
     document.getElementById('editAssStatus').value = a.status||'ativo';
-    document.getElementById('editAssEtiqueta').value = a.etiqueta||'sem';
+    // Etiqueta NORMALIZADA: o select só tem 'pendente'|'conferido' e a
+    // base herdada traz ''/'sem'/'verde'/'laranja'/'vermelho'. Sem
+    // normalizar o select fica sem seleção (value '') e o PATCH vai com
+    // etiqueta:'' — o back responde 400 e descarta todos os campos
+    // editados da ficha.
+    document.getElementById('editAssEtiqueta').value = assNormalizaEtiqueta(a.etiqueta);
     var rt = document.getElementById('editAssResponsavelTecnico'); if(rt) rt.value = a.responsavelTecnico||'';
     document.getElementById('modalEditarAssistido').classList.remove('hidden');
   }catch(e){ toast('Erro ao abrir edição: '+(e.message||e)); }
@@ -10387,14 +10598,25 @@ async function salvarEditarAssistido(){
     ['responsavelTecnico','editAssResponsavelTecnico'],
   ];
   var b = {};
+  var mudou = false;
+  var etiquetaAtual = assNormalizaEtiqueta((document.getElementById('editAssEtiqueta')||{}).value);
+  var etiquetaOriginal = assNormalizaEtiqueta(orig.etiqueta);
   for(var i=0;i<campos.length;i++){
     var k = campos[i][0], el = document.getElementById(campos[i][1]);
     if(!el) continue;
     var v = el.value;
     var ov = (orig[k] == null) ? '' : String(orig[k]);
-    if(String(v) !== ov) b[k] = v;
+    if(k === 'etiqueta'){
+      // A etiqueta SEMPRE vai válida ('pendente'|'conferido'): nunca ''.
+      // A comparação usa o valor normalizado dos dois lados — assim uma
+      // etiqueta legada não vira alteração fantasma.
+      b[k] = etiquetaAtual;
+      if(etiquetaAtual !== etiquetaOriginal) mudou = true;
+      continue;
+    }
+    if(String(v) !== ov){ b[k] = v; mudou = true; }
   }
-  if(!Object.keys(b).length){ toast('Nada alterado'); return; }
+  if(!mudou){ toast('Nada alterado'); return; }
   try{
     var r = await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
     if(r.error){ toast(r.error||'Erro ao editar'); return; }
