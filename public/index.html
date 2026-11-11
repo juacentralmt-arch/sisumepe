@@ -1620,20 +1620,18 @@
         <input id="assBusca" type="search" class="inp text-xs" placeholder="Buscar por nome, vínculo ou processo…" oninput="debounceAssBusca()" autocomplete="off">
       </div>
 
-      <!-- Filtros da aba Auditoria -->
-      <div id="assAuditoriaFiltros" class="hidden mb-3 grid grid-cols-2 md:grid-cols-5 gap-2">
-        <input id="assAudBusca" type="search" class="inp text-xs col-span-2" placeholder="Buscar por assistido ou resumo…" oninput="debounceAssAuditoria()" autocomplete="off">
+      <!-- Filtros da aba Auditoria (lado a lado; o layout fica em app.css) -->
+      <div id="assAuditoriaFiltros" class="hidden mb-3 ass-filters">
+        <input id="assAudBusca" type="search" class="inp text-xs ass-f-busca" placeholder="Buscar por assistido ou resumo…" oninput="debounceAssAuditoria()" autocomplete="off">
         <select id="assAudAcao" class="inp text-xs" onchange="assAudFiltrosMudou()"></select>
         <input id="assAudUsuario" type="text" class="inp text-xs" placeholder="Usuário" oninput="debounceAssAuditoria()" autocomplete="off">
-        <div class="col-span-2 md:col-span-5 flex items-center gap-2 text-[10px] text-slate-500">
-          <label>De <input id="assAudDe" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
-          <label>até <input id="assAudAte" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
-          <button onclick="limparFiltrosAssAuditoria()" class="btn btn-ghost text-[10px] px-2 py-1">Limpar</button>
-        </div>
+        <label class="ass-f-label">De <input id="assAudDe" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
+        <label class="ass-f-label">até <input id="assAudAte" type="date" class="inp text-xs" onchange="assAudFiltrosMudou()"></label>
+        <button onclick="limparFiltrosAssAuditoria()" class="btn btn-ghost text-[10px] px-2 py-1">Limpar</button>
       </div>
 
-      <!-- Filtros da aba Juntada -->
-      <div id="assJuntadaFiltros" class="hidden mb-3 flex flex-wrap items-center gap-2">
+      <!-- Filtros da aba Juntada (lado a lado; o layout fica em app.css) -->
+      <div id="assJuntadaFiltros" class="hidden mb-3 ass-filters">
         <select id="assJuntLocal" class="inp text-xs" onchange="filtrarAssJuntada()"></select>
         <select id="assJuntPP" class="inp text-xs" onchange="filtrarAssJuntada()"></select>
         <input id="assJuntDe" type="date" class="inp text-xs" onchange="filtrarAssJuntada()" title="Comparecimentos a partir de">

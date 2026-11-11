@@ -110,3 +110,19 @@
   .snav.drag-over{border:2px dashed #6366f1;background:rgba(99,102,241,.05);border-radius:.75rem;margin:-4px 0;padding:4px 0}
   .snav.drag-above{border-top:2px solid #6366f1;padding-top:4px}
   .snav.drag-below{border-bottom:2px solid #6366f1;padding-bottom:4px}
+
+  /* ===== Filtros lado a lado (abas Juntada e Auditoria) =====
+     .inp tem width:100%, o que fazia cada filtro ocupar uma linha
+     inteira dentro do flex. Aqui os campos ficam na mesma linha e
+     quebram so quando a tela nao cabe. */
+  .ass-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+  .ass-filters .inp{width:auto;flex:0 1 auto;min-width:0}
+  .ass-filters select{min-width:7.5rem}
+  .ass-filters input[type=date]{min-width:7rem}
+  .ass-filters .ass-f-busca{flex:0 1 12rem;min-width:8rem}
+  .ass-filters .ass-f-label{display:inline-flex;align-items:center;gap:.35rem;font-size:10px;color:#64748b;white-space:nowrap}
+  .ass-filters .btn{flex:none}
+  @media (max-width:640px){
+    .ass-filters select,.ass-filters input[type=date]{flex:1 1 calc(50% - .25rem);min-width:calc(50% - .25rem)}
+    .ass-filters .ass-f-busca{flex:1 1 100%}
+  }
