@@ -1613,11 +1613,33 @@
         <button onclick="setAssTab('concluidos')" id="assTabConcluidos" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Concluídos <span id="assBadgeConcluidos" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
         <button onclick="setAssTab('alertas')" id="assTabAlertas" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Alertas <span id="assBadgeAlertas" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
         <button onclick="setAssTab('auditoria')" id="assTabAuditoria" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Auditoria</button>
+        <button onclick="setAssTab('arquivados')" id="assTabArquivados" class="px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs">Arquivados <span id="assBadgeArquivados" class="ml-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">0</span></button>
       </div>
 
-      <!-- Busca (aba Todos) -->
+      <!-- Busca + filtros (aba Todos) -->
       <div id="assBuscaWrap" class="mb-3">
-        <input id="assBusca" type="search" class="inp text-xs" placeholder="Buscar por nome, vínculo ou processo…" oninput="debounceAssBusca()" autocomplete="off">
+        <input id="assBusca" type="search" class="inp text-xs mb-2" placeholder="Buscar por nome, vínculo ou processo…" oninput="debounceAssBusca()" autocomplete="off">
+        <div class="ass-filters">
+          <select id="assFiltroConferencia" class="inp text-xs" onchange="assFiltrosMudou()">
+            <option value="">Todas as conferências</option>
+            <option value="pendente">⚠️ Não conferidos</option>
+            <option value="conferido">✅ Conferidos</option>
+          </select>
+          <select id="assFiltroSituacao" class="inp text-xs" onchange="assFiltrosMudou()">
+            <option value="">Todas as situações</option>
+            <option value="atrasado">🔴 Atrasados</option>
+            <option value="sem_comparecimento">🟠 Nunca compareceu</option>
+            <option value="em_dia">🟢 Em dia</option>
+          </select>
+          <select id="assFiltroFrequencia" class="inp text-xs" onchange="assFiltrosMudou()"></select>
+          <select id="assFiltroStatus" class="inp text-xs" onchange="assFiltrosMudou()"></select>
+          <select id="assFiltroOrdem" class="inp text-xs" onchange="assFiltrosMudou()">
+            <option value="reconte">Mais recentes</option>
+            <option value="atraso">Mais atrasados</option>
+            <option value="nome">Nome (A–Z)</option>
+          </select>
+          <button onclick="limparFiltrosAssistidos()" class="btn btn-ghost text-[10px] px-2 py-1">Limpar</button>
+        </div>
       </div>
 
       <!-- Filtros da aba Auditoria (lado a lado; o layout fica em app.css) -->
@@ -1650,6 +1672,7 @@
       <div id="assContentConcluidos" class="hidden space-y-3"></div>
       <div id="assContentAlertas" class="hidden space-y-3"></div>
       <div id="assContentAuditoria" class="hidden space-y-3"></div>
+      <div id="assContentArquivados" class="hidden space-y-3"></div>
 
       <!-- Paginação -->
       <div id="assPaginacao" class="mt-4 flex justify-center gap-2"></div>
@@ -2306,7 +2329,7 @@
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Início</label><input id="editAssDataInicio" type="date" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Frequência</label><select id="editAssFrequencia" class="inp text-xs"><option value="mensal">Mensal</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Status</label><select id="editAssStatus" class="inp text-xs"><option value="ativo">Ativo</option><option value="concluido">Concluído</option><option value="arquivado">Arquivado</option></select></div>
-          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Etiqueta</label><select id="editAssEtiqueta" class="inp text-xs"><option value="sem">Sem</option><option value="verde">Verde</option><option value="laranja">Laranja</option><option value="vermelho">Vermelho</option></select></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Etiqueta</label><select id="editAssEtiqueta" class="inp text-xs"><option value="pendente">Pendente (não conferido)</option><option value="conferido">✅ Conferido</option></select></div>
           <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Responsável Técnico</label><input id="editAssResponsavelTecnico" type="text" class="inp text-xs" placeholder="Nome do técnico responsável"></div>
         </div>
         <div class="mt-4 flex gap-2 justify-end">

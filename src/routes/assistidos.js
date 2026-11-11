@@ -53,18 +53,25 @@ const ROTULOS = {
 // Enriquece a lista com o resumo de comparecimentos (último comparecimento,
 // pendências de juntada). Os comparecimentos vêm só dos assistidos da
 // página — nunca da tabela inteira.
-function enriquecer(lista, comps) {
+function enriquecer(lista, comps, sitMap) {
   const porAssistido = dom.agruparComparecimentos(comps);
   return lista.map(a => {
     const cs = porAssistido.get(String(a.id)) || [];
     const last = cs[0] || null;
+    const sit = (sitMap && sitMap.get(String(a.id))) || dom.situacao(a, last);
     return {
       ...a,
+      etiqueta: dom.normalizaEtiqueta(a.etiqueta),
       ultimoComparecimento: last ? last.dataComparecimento : null,
       ppPlantao: last ? last.ppPlantao : null,
       observacao: last ? last.observacao : null,
       totalComparecimentos: cs.length,
       pendentesJuntada: cs.filter(c => !dom.comparecimentoProtocolado(c)).length,
+      situacao: sit.codigo,
+      situacaoDias: sit.dias,
+      situacaoTexto: sit.texto,
+      situacaoFaltas: sit.faltas || 0,
+      prazo: sit.prazo,
     };
   });
 }
@@ -114,12 +121,66 @@ router.get('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =>
   const limite = Math.min(Math.max(Number(req.query.limit) || 20, 1), LIMITE_MAX);
   const busca = String(req.query.q || '').trim().slice(0, 60);
   const status = String(req.query.status || '').trim();
+  const frequencia = String(req.query.frequencia || '').trim();
+  const conferencia = String(req.query.conferencia || '').trim();
+  const responsavel = String(req.query.responsavel || '').trim();
+  const sitFiltro = String(req.query.situacao || '').trim();
+  const ordem = String(req.query.ordem || 'reconte').trim();
 
-  const { itens, total } = await store.assistidos.list({
-    limit: limite, offset: (page - 1) * limite, q: busca, status,
-  });
+  // Situacao e ordem por atraso dependem do ultimo comparecimento de cada
+  // monitorado: nesse caso a lista inteira e calculada e paginada depois.
+  const precisaDoConjunto = !!sitFiltro || ordem === 'atraso';
+  let itens = [], total = 0, sitMap = null;
+
+  if (precisaDoConjunto) {
+    const todos = await store.assistidos.todosAtivos({
+      campos: 'id,nome,vinculo,processo,vara,local_assinatura,data_inicio,frequencia,etiqueta,status,responsavel_tecnico,deleted_at,createdat,updatedat',
+    });
+    sitMap = await store.assistidos.situacoes(todos);
+    let filtrados = todos.filter(a => {
+      if (status && String(a.status || '') !== status) return false;
+      if (frequencia && String(a.frequencia || '') !== frequencia) return false;
+      if (conferencia && dom.normalizaEtiqueta(a.etiqueta) !== conferencia) return false;
+      if (responsavel && String(a.responsavelTecnico || '').toLowerCase() !== responsavel.toLowerCase()) return false;
+      if (sitFiltro) {
+        const st = sitMap.get(String(a.id));
+        if (!st || st.codigo !== sitFiltro) return false;
+      }
+      if (busca) {
+        const k = dom.nomeKey(busca);
+        const kr = busca.toLowerCase();
+        if (!dom.nomeKey(a.nome).includes(k) && !String(a.vinculo || '').toLowerCase().includes(kr)
+          && !String(a.processo || '').toLowerCase().includes(kr)) return false;
+      }
+      return true;
+    });
+    if (ordem === 'atraso') {
+      // mais atrasado primeiro; nunca comparecido vem antes de em dia
+      const peso = { atrasado: 0, sem_comparecimento: 1, sem_historico: 2, em_dia: 3 };
+      filtrados.sort((a, b) => {
+        const sa = sitMap.get(String(a.id)) || {}, sb = sitMap.get(String(b.id)) || {};
+        const pa = peso[sa.codigo] != null ? peso[sa.codigo] : 9;
+        const pb = peso[sb.codigo] != null ? peso[sb.codigo] : 9;
+        if (pa !== pb) return pa - pb;
+        return (sb.dias || 0) - (sa.dias || 0);
+      });
+    } else if (ordem === 'nome') {
+      filtrados.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+    } else {
+      filtrados.sort((a, b) => Number(b.id) - Number(a.id));
+    }
+    total = filtrados.length;
+    itens = filtrados.slice((page - 1) * limite, page * limite);
+  } else {
+    const r = await store.assistidos.list({
+      limit: limite, offset: (page - 1) * limite, q: busca, status, frequencia, conferencia, responsavel,
+    });
+    itens = r.itens; total = r.total;
+    sitMap = await store.assistidos.situacoes(itens);
+  }
+
   const comps = await store.assistidosComparecimentos.all(itens.map(a => a.id));
-  res.json({ itens: enriquecer(itens, comps), total, pagina: page, limite });
+  res.json({ itens: enriquecer(itens, comps, sitMap), total, pagina: page, limite });
 }));
 
 // Lista enxuta para montar seletores (nome/vínculo/status).
@@ -291,7 +352,7 @@ router.post('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =
     localAssinatura: String(b.localAssinatura || '').trim(),
     dataInicio: normalizaData(b.dataInicio),
     frequencia: String(b.frequencia || 'mensal').trim(),
-    etiqueta: String(b.etiqueta || 'sem').trim(),
+    etiqueta: dom.normalizaEtiqueta(b.etiqueta || 'pendente'),
     status: String(b.status || 'ativo').trim(),
     responsavelTecnico: String(b.responsavelTecnico || '').trim(),
     dataFim: normalizaData(b.dataFim),
@@ -375,25 +436,41 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
 // Etiquetar assistido.
 // A etiqueta é a prioridade de monitoramento (a cor do card): toda
 // mudança precisa de motivo, e o motivo vai para a trilha de auditoria.
+// Conferir a ficha do assistido (etiqueta).
+// A etiqueta marca o card como CONFERIDO - nao e prioridade. Por isso e
+// um clique unico, sem motivo: uma conferencia nao tem justificativa a
+// digitar. Quem conferiu e quando ficam gravados; a trilha de auditoria
+// guarda o historico das mudancas.
 router.patch('/api/assistidos/:id/etiqueta', auth(['admin', 'tecnico']), ah(async (req, res) => {
-  const { etiqueta, motivo } = req.body || {};
-  const alvo = String(etiqueta || '').trim().toLowerCase();
-  const razao = String(motivo || '').trim();
+  const { etiqueta } = req.body || {};
+  const bruto = String(etiqueta == null ? '' : etiqueta).trim().toLowerCase();
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
-  if (!ETIQUETAS.includes(alvo)) {
-    return res.status(400).json({ error: 'Etiqueta inválida. Use: sem, verde, laranja ou vermelho.' });
+  // Estrito: valor desconhecido e erro, nao vira 'pendente' em silencio.
+  const conhecido = ETIQUETAS.includes(bruto) || Object.prototype.hasOwnProperty.call(dom.ETIQUETAS_LEGADAS, bruto);
+  if (!conhecido) {
+    return res.status(400).json({ error: 'Etiqueta inválida. Use: pendente ou conferido.' });
   }
-  if (razao.length < 5) {
-    return res.status(400).json({ error: 'Informe o motivo da mudança de etiqueta (mín. 5 caracteres).' });
-  }
+  const alvo = dom.normalizaEtiqueta(bruto);
   const antesEtiqueta = snapshot(target, ['etiqueta']);
-  const row = await store.assistidos.patch(req.params.id, { etiqueta: alvo });
+  const quem = String((req.auth && req.auth.name) || req.auth.user || '').trim();
+  const dados = { etiqueta: alvo };
+  if (alvo === 'conferido') {
+    dados.conferidoPor = quem;
+    dados.conferidoEm = new Date().toISOString();
+  } else {
+    dados.conferidoPor = '';
+    dados.conferidoEm = '';
+  }
+  const row = await store.assistidos.patch(req.params.id, dados);
   const changes = diff(antesEtiqueta, row, ['etiqueta']);
   await auditar(req, 'etiqueta', 'assistido#' + row.id, row.nome,
-    'Etiqueta: ' + (target.etiqueta || 'sem') + ' → ' + alvo + ' — ' + razao, row.id, changes);
+    'Ficha conferida: ' + alvo + (quem ? ' (por ' + quem + ')' : ''), row.id, changes);
   broadcast();
-  res.json({ id: row.id, etiqueta: row.etiqueta });
+  res.json({
+    id: row.id, etiqueta: row.etiqueta,
+    conferidoPor: row.conferidoPor || '', conferidoEm: row.conferidoEm || '',
+  });
 }));
 
 // Exclusão lógica (soft-delete)

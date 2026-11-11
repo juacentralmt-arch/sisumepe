@@ -85,18 +85,22 @@ const post = async (url, body, headers) => {
   assert(!!chFreq && chFreq.de === 'mensal' && chFreq.para === 'quinzenal', 'Auditoria: diff da frequência');
   assert(!!chNome.rotulo, 'Auditoria: campo tem rótulo legível');
 
-  // 3. Etiqueta exige motivo e registra a troca
-  const semMotivo = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'verde' });
-  assert(semMotivo.status === 400, 'Etiqueta sem motivo: 400');
-  const motivoCurto = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'verde', motivo: 'x' });
-  assert(motivoCurto.status === 400, 'Etiqueta com motivo curto: 400');
-  const comMotivo = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'verde', motivo: 'risco elevado de descumprimento' });
-  assert(comMotivo.status === 200, 'Etiqueta com motivo: 200');
+  // 3. Conferir a ficha: binario, sem motivo, com autoria
+  const semMotivo = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'conferido' });
+  assert(semMotivo.status === 200, 'Etiqueta: conferir sem pedir motivo');
+  assert(semMotivo.json.etiqueta === 'conferido', 'Etiqueta: gravada como conferido');
+  assert(!!semMotivo.json.conferidoPor, 'Etiqueta: grava quem conferiu');
+  assert(!!semMotivo.json.conferidoEm, 'Etiqueta: grava quando conferiu');
+  const voltar = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'pendente' });
+  assert(voltar.status === 200, 'Etiqueta: volta para pendente');
+  assert(!voltar.json.conferidoPor, 'Etiqueta: limpa a autoria ao voltar');
+  const comMotivo = await patch('/api/assistidos/' + aid + '/etiqueta', { etiqueta: 'conferido' });
+  assert(comMotivo.status === 200, 'Etiqueta: conferir de novo');
   aud = await get('/api/assistidos/auditoria?assistidoId=' + aid + '&limit=50');
   const et = aud.itens.find(x => x.acao === 'etiqueta');
   assert(!!et, 'Auditoria: etiqueta registrada');
-  assert(/risco elevado/.test(et.resumo || ''), 'Auditoria: o motivo vai para o resumo');
-  assert((et.changes || []).some(c => c.campo === 'etiqueta' && c.para === 'verde'), 'Auditoria: diff da etiqueta');
+  assert(/conferid/i.test(et.resumo || ''), 'Auditoria: registra a conferencia');
+  assert((et.changes || []).some(c => c.campo === 'etiqueta' && c.para === 'conferido'), 'Auditoria: diff da etiqueta');
 
   // 4. Comparecimento e juntada também entram na trilha
   const comp = await post('/api/assistidos/' + aid + '/comparecimentos', {

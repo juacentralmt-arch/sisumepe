@@ -9599,39 +9599,40 @@ const ASS_AÇÕES = {
 
 function setAssTab(tab){
   assTab = tab;
-  const mapa = { todos:'Todos', juntada:'Juntada', concluidos:'Concluidos', alertas:'Alertas', auditoria:'Auditoria' };
-  ['assTabTodos','assTabJuntada','assTabConcluidos','assTabAlertas','assTabAuditoria'].forEach(id=>{
+  const mapa = { todos:'Todos', juntada:'Juntada', concluidos:'Concluidos', alertas:'Alertas', auditoria:'Auditoria', arquivados:'Arquivados' };
+  ['assTabTodos','assTabJuntada','assTabConcluidos','assTabAlertas','assTabAuditoria','assTabArquivados'].forEach(id=>{
     const b=document.getElementById(id);
     if(!b) return;
     const chave = id.replace('assTab','').toLowerCase();
     const ativo = chave === (mapa[tab]||'').toLowerCase();
     b.className = ativo ? 'px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-bold text-xs bg-indigo-50' : 'px-4 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-xs';
   });
-  ['assContentTodos','assContentJuntada','assContentConcluidos','assContentAlertas','assContentAuditoria'].forEach(id=>{
+  ['assContentTodos','assContentJuntada','assContentConcluidos','assContentAlertas','assContentAuditoria','assContentArquivados'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.classList.add('hidden');
   });
-  const destino = document.getElementById('assContent'+(tab==='todos'?'Todos':tab==='juntada'?'Juntada':tab==='concluidos'?'Concluidos':tab==='alertas'?'Alertas':'Auditoria'));
+  const destino = document.getElementById('assContent'+(mapa[tab]||''));
   if(destino) destino.classList.remove('hidden');
 
-  // Barra de busca só na aba Todos; filtros dependem da aba.
+  // Barra de busca + filtros só na aba Todos; filtros dependem da aba.
   const wrapBusca=document.getElementById('assBuscaWrap');
-  if(wrapBusca) wrapBusca.classList.toggle('hidden', tab!=='todos');
+  if(wrapBusca) wrapBusca.classList.toggle('hidden', tab !== 'todos');
   const wrapAud=document.getElementById('assAuditoriaFiltros');
-  if(wrapAud) wrapAud.classList.toggle('hidden', tab!=='auditoria');
+  if(wrapAud) wrapAud.classList.toggle('hidden', tab !== 'auditoria');
   const wrapJunt=document.getElementById('assJuntadaFiltros');
-  if(wrapJunt) wrapJunt.classList.toggle('hidden', tab!=='juntada');
+  if(wrapJunt) wrapJunt.classList.toggle('hidden', tab !== 'juntada');
 
   var pag = document.getElementById('assPaginacao');
   if(pag) pag.classList.toggle('hidden', tab !== 'todos');
   var pagAud = document.getElementById('assPaginacaoAuditoria');
   if(pagAud) pagAud.classList.toggle('hidden', tab !== 'auditoria');
 
-  if(tab==='todos') loadAssistidos();
+  if(tab==='todos'){ montarFiltrosAssistidos(); loadAssistidos(); }
   else if(tab==='juntada') loadAssistidosJuntada();
   else if(tab==='concluidos') loadAssistidosConcluidos();
   else if(tab==='alertas') loadAssistidosAlertas();
   else if(tab==='auditoria') loadAssistidosAuditoria();
+  else if(tab==='arquivados') loadAssistidosArquivados();
   atualizarBadgesAssistidos();
 }
 
@@ -9657,14 +9658,55 @@ async function loadAssistidos(){
   try{
     var url = '/api/assistidos?page='+encodeURIComponent(assistidosPage)+'&limit='+encodeURIComponent(assistidosLimit);
     if(assistidosBusca) url += '&q='+encodeURIComponent(assistidosBusca);
-    const r = await api(url);
-    const itens = (r && Array.isArray(r.itens)) ? r.itens : [];
+    var conf = (document.getElementById('assFiltroConferencia')||{}).value;
+    var sit  = (document.getElementById('assFiltroSituacao')||{}).value;
+    var freq = (document.getElementById('assFiltroFrequencia')||{}).value;
+    var st   = (document.getElementById('assFiltroStatus')||{}).value;
+    var ord  = (document.getElementById('assFiltroOrdem')||{}).value;
+    if(conf) url += '&conferencia='+encodeURIComponent(conf);
+    if(sit)  url += '&situacao='+encodeURIComponent(sit);
+    if(freq) url += '&frequencia='+encodeURIComponent(freq);
+    if(st)   url += '&status='+encodeURIComponent(st);
+    if(ord)  url += '&ordem='+encodeURIComponent(ord);
+    var r = await api(url);
+    var itens = (r && Array.isArray(r.itens)) ? r.itens : [];
+    assistidosData = itens;
     assistidosTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
     renderAssistidosTodos(itens);
     renderAssPaginacao(assistidosTotal);
   }catch(e){ console.error('loadAssistidos', e); }
 }
 
+function assFiltrosMudou(){
+  assistidosPage = 1;
+  loadAssistidos();
+}
+function limparFiltrosAssistidos(){
+  ['assFiltroConferencia','assFiltroSituacao','assFiltroFrequencia','assFiltroStatus'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  var ord = document.getElementById('assFiltroOrdem'); if(ord) ord.value = 'reconte';
+  var busca = document.getElementById('assBusca'); if(busca) busca.value = '';
+  assistidosBusca = '';
+  assistidosPage = 1;
+  loadAssistidos();
+}
+
+// Popula os selects de filtro da aba Todos (uma vez).
+function montarFiltrosAssistidos(){
+  var f = document.getElementById('assFiltroFrequencia');
+  if(f && !f.dataset.pronto){
+    f.dataset.pronto = '1';
+    var freqs = [['mensal','Mensal'],['quinzenal','Quinzenal'],['semanal','Semanal'],['bimestral','Bimestral'],['trimestral','Trimestral']];
+    f.innerHTML = '<option value="">Todas as frequências</option>' + freqs.map(function(x){ return '<option value="'+x[0]+'">'+x[1]+'</option>'; }).join('');
+  }
+  var st = document.getElementById('assFiltroStatus');
+  if(st && !st.dataset.pronto){
+    st.dataset.pronto = '1';
+    var sts = [['ativo','Ativos'],['concluido','Concluídos'],['arquivado','Arquivados (status)']];
+    st.innerHTML = '<option value="">Todos os status</option>' + sts.map(function(x){ return '<option value="'+x[0]+'">'+x[1]+'</option>'; }).join('');
+  }
+}
 function debounceAssBusca(){
   if(assBuscaTimer) clearTimeout(assBuscaTimer);
   assBuscaTimer = setTimeout(function(){
@@ -9695,6 +9737,49 @@ async function loadAssistidosConcluidos(){
 // =====================================================================
 //  Aba Alertas — periodicidade não cumprida
 // =====================================================================
+async function loadAssistidosArquivados(){
+  var wrap = document.getElementById('assContentArquivados');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">Carregando arquivados…</div>';
+  try{
+    var r = await api('/api/assistidos/arquivados?limit=100');
+    var lista = (r && Array.isArray(r.itens)) ? r.itens : [];
+    var badge = document.getElementById('assBadgeArquivados');
+    if(badge) badge.textContent = (r && r.total) || 0;
+    if(!lista.length){
+      wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 text-xs">Nenhum assistido arquivado.</div>';
+      return;
+    }
+    var html = '';
+    for(var i=0;i<lista.length;i++){
+      var a = lista[i];
+      html += '<div class="card p-4 rounded-2xl border-slate-300 bg-slate-50 shadow-sm">';
+      html += '<div class="flex items-start justify-between mb-2">';
+      html += '<div class="min-w-0">';
+      html += '<p class="font-bold text-sm text-slate-700 truncate">'+esc(a.nome||'-')+'</p>';
+      html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
+      html += '<p class="text-[10px] text-slate-400 mt-1">Arquivado em '+(a.deletedAt?fmtDataBR(String(a.deletedAt).slice(0,10)):'—')+'</p>';
+      html += '</div>';
+      html += '<button onclick="restaurarAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1 flex-none">↩ Restaurar</button>';
+      html += '</div></div>';
+    }
+    wrap.innerHTML = html;
+  }catch(e){
+    wrap.innerHTML = '<div class="card p-6 text-center text-rose-500 text-xs">Erro ao carregar arquivados.</div>';
+  }
+}
+
+async function restaurarAssistido(id){
+  if(!confirm('Restaurar este assistido? Ele volta a aparecer na aba Todos.')) return;
+  try{
+    await api('/api/assistidos/'+id+'/restaurar', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    toast('Assistido restaurado');
+    loadAssistidosArquivados();
+    loadAssistidos();
+    atualizarBadgesAssistidos();
+  }catch(e){ toast('Erro ao restaurar: '+(e.message||e)); }
+}
+
 async function loadAssistidosAlertas(){
   const wrap = document.getElementById('assContentAlertas');
   if(!wrap) return;
@@ -9834,38 +9919,64 @@ function assIrPaginaAuditoria(p){
   loadAssistidosAuditoria();
 }
 
+// Etiqueta = ficha conferida (nao e prioridade).
 function etiquetaBadge(e){
-  const cores = { sem:'bg-slate-100 text-slate-500', verde:'bg-emerald-100 text-emerald-700', laranja:'bg-amber-100 text-amber-700', vermelho:'bg-rose-100 text-rose-700' };
-  const nomes = { sem:'Sem', verde:'Verde', laranja:'Laranja', vermelho:'Vermelho' };
-  return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full '+(cores[e]||cores.sem)+'">'+(nomes[e]||'Sem')+'</span>';
+  const v = (e === 'conferido') ? 'conferido' : 'pendente';
+  if (v === 'conferido') return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">\u2705 Conferido</span>';
+  return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">\u26a0\ufe0e N\u00e3o conferido</span>';
+}
+
+// Selo da situacao (atraso / sem comparecimento / em dia).
+// Mesma regra do backend (dom.situacao) — o backend ja devolve os campos.
+function situacaoBadge(a){
+  const s = a.situacao || 'em_dia';
+  if (s === 'atrasado') {
+    const nf = Number(a.situacaoFaltas||0);
+    return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200" title="'+esc(a.situacaoTexto||'')+'">\ud83d\udd34 Atrasado '+(a.situacaoDias!=null?a.situacaoDias+'d':'')+(nf>0?' ('+nf+' faltas)':'')+'</span>';
+  }
+  if (s === 'sem_comparecimento') {
+    return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title="'+esc(a.situacaoTexto||'')+'">\ud83d\udfe0 Nunca compareceu</span>';
+  }
+  if (s === 'sem_historico') {
+    return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">\u26a0\ufe0e Sem hist\u00f3rico</span>';
+  }
+  return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">\u2713 Em dia</span>';
 }
 
 function renderAssistidosTodos(list){
   const wrap = document.getElementById('assContentTodos');
   if(!wrap) return;
   if(!list.length){
-    wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum assistido cadastrado.</div>';
+    wrap.innerHTML = '<div class="card p-6 text-center text-slate-400">Nenhum assistido encontrado com esses filtros.</div>';
     return;
   }
   var html = '';
   for(var i=0;i<list.length;i++){
     var a = list[i];
-    var cor = { verde:'border-emerald-500', laranja:'border-amber-500', vermelho:'border-rose-500', sem:'border-slate-200' }[a.etiqueta] || 'border-slate-200';
+    // A borda mostra a SITUACAO (atrasado / sem comparecimento / em dia).
+    // A etiqueta (conferido) e um selo a parte: sao coisas diferentes.
+    var cor = { atrasado:'border-rose-400', sem_comparecimento:'border-amber-400', sem_historico:'border-slate-300', em_dia:'border-slate-200' }[a.situacao] || 'border-slate-200';
     html += '<div class="card p-4 rounded-2xl '+cor+' shadow-sm hover:shadow-md transition cursor-pointer" onclick="abrirDetalheAssistido('+a.id+')">';
-    html += '<div class="flex items-start justify-between mb-2">';
-    html += '<div>';
+    html += '<div class="flex items-start justify-between mb-2 gap-2">';
+    html += '<div class="min-w-0">';
     html += '<p class="font-bold text-sm text-slate-800 truncate">'+esc(a.nome||'-')+'</p>';
     html += '<p class="text-[10px] text-slate-500">Vínculo: '+esc(a.vinculo||'-')+'</p>';
     html += '</div>';
+    html += '<div class="flex flex-wrap gap-1 justify-end flex-none">';
+    html += situacaoBadge(a);
     html += etiquetaBadge(a.etiqueta);
     html += '</div>';
+    html += '</div>';
+    if(a.etiqueta === 'conferido' && a.conferidoPor){
+      html += '<p class="text-[10px] text-emerald-700 mb-2">✅ Conferido por '+esc(a.conferidoPor)+(a.conferidoEm?' em '+fmtDataBR(String(a.conferidoEm).slice(0,10)):'')+'</p>';
+    }
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
     html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
     html += '<div><span class="font-semibold">Vara:</span> '+esc(a.vara||'-')+'</div>';
     html += '<div><span class="font-semibold">Local:</span> '+esc(a.localAssinatura||'-')+'</div>';
     html += '<div><span class="font-semibold">Início:</span> '+fmtDataBR(a.dataInicio||'')+'</div>';
     html += '</div>';
-    html += '<div class="flex gap-2 text-[10px] mb-3">';
+    html += '<div class="flex gap-2 text-[10px] mb-3 flex-wrap">';
     html += '<span class="font-semibold">Freq:</span> '+esc(a.frequencia||'-');
     html += '<span class="font-semibold">Status:</span> '+esc(a.status||'-');
     if(a.responsavelTecnico){ html += '<span class="font-semibold">Resp.:</span> '+esc(a.responsavelTecnico); }
@@ -9874,9 +9985,9 @@ function renderAssistidosTodos(list){
     if(Number(a.pendentesJuntada)>0){
       html += '<div class="mb-3"><span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">'+Number(a.pendentesJuntada)+' pendente(s) de juntada</span></div>';
     }
-    html += '<div class="flex gap-2 pt-2 border-t border-slate-100">';
+    html += '<div class="flex gap-2 pt-2 border-t border-slate-100 flex-wrap">';
     html += '<button onclick="event.stopPropagation(); abrirEditarAssistido('+a.id+')" class="text-[10px] font-bold text-indigo-600 hover:underline px-2 py-1">Editar</button>';
-    html += '<button onclick="event.stopPropagation(); etiquetarAssistido('+a.id+')" class="text-[10px] font-bold text-slate-600 hover:underline px-2 py-1">Etiquetar</button>';
+    html += '<button onclick="event.stopPropagation(); etiquetarAssistido('+a.id+')" class="text-[10px] font-bold '+(a.etiqueta==='conferido'?'text-emerald-600':'text-slate-600')+' hover:underline px-2 py-1">'+(a.etiqueta==='conferido'?'✓ Conferido':'○ Conferir')+'</button>';
     html += '<button onclick="event.stopPropagation(); abrirRegistrarComparecimento('+a.id+')" class="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1">+ Comp.</button>';
     html += '<button onclick="event.stopPropagation(); excluirAssistido('+a.id+')" class="text-[10px] font-bold text-rose-600 hover:underline px-2 py-1">Excluir</button>';
     html += '</div>';
@@ -10241,20 +10352,18 @@ async function salvarEditarAssistido(){
 
 // Etiquetar: a etiqueta é a prioridade de monitoramento, então a
 // mudança exige motivo — ele vai para a trilha de auditoria.
-async function etiquetarAssistido(id){
-  var etiqueta = prompt('Nova etiqueta (sem, verde, laranja, vermelho):', 'sem');
-  if(etiqueta === null) return;
-  etiqueta = String(etiqueta).trim().toLowerCase();
-  if(!['sem','verde','laranja','vermelho'].includes(etiqueta)){ toast('Etiqueta inválida'); return; }
-  var motivo = prompt('Motivo da mudança de etiqueta (obrigatório, mín. 5 caracteres):', '');
-  if(motivo === null) return;
-  motivo = String(motivo).trim();
-  if(motivo.length < 5){ toast('Informe o motivo (mín. 5 caracteres)'); return; }
+// Conferir a ficha: um clique alterna entre conferido e pendente.
+// Nao pede motivo - uma conferencia nao tem justificativa a digitar.
+// Quem conferiu e quando ficam gravados pelo backend.
+async function etiquetarAssistido(id, novoValor){
   try{
-    await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: etiqueta, motivo: motivo }) });
-    toast('Etiqueta atualizada');
+    var atual = (assistidosData||[]).find(function(x){ return String(x.id)===String(id); });
+    var alvo = novoValor || ((atual && atual.etiqueta === 'conferido') ? 'pendente' : 'conferido');
+    var r = await api('/api/assistidos/'+id+'/etiqueta', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etiqueta: alvo }) });
+    if(r.error){ toast(r.error||'Erro ao conferir'); return; }
+    toast(alvo === 'conferido' ? '\u2705 Ficha conferida' : 'Confer\u00e7\u00e3o removida');
     loadAssistidos();
-  }catch(e){ toast('Erro ao etiquetar: '+(e.message||e)); }
+  }catch(e){ toast('Erro ao conferir: '+(e.message||e)); }
 }
 
 async function excluirAssistido(id){

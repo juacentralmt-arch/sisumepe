@@ -56,7 +56,7 @@ const PROC_21 = '02008014-72.2026.8.06.0293';
   const created = await createRes.json();
   assert(created && created.id, 'POST: retorna id');
   const id = created.id;
-  assert(created.etiqueta === 'sem', 'POST: etiqueta default sem');
+  assert(created.etiqueta === 'pendente', 'POST: etiqueta default pendente');
   assert(created.status === 'ativo', 'POST: status default ativo');
 
   // 2. Processo inválido
@@ -117,12 +117,12 @@ const PROC_21 = '02008014-72.2026.8.06.0293';
   // 8. Edição
   const editRes = await fetch(BASE + '/api/assistidos/' + id, {
     method: 'PATCH', headers: await auth('admin', 'admin', 'Admin'),
-    body: JSON.stringify({ nome: 'Fulano Atualizado', etiqueta: 'verde' })
+    body: JSON.stringify({ nome: 'Fulano Atualizado', etiqueta: 'conferido' })
   });
   assert(editRes.status === 200, 'PATCH admin: 200');
   const edited = await editRes.json();
   assert(edited.nome === 'Fulano Atualizado', 'PATCH: nome atualizado');
-  assert(edited.etiqueta === 'verde', 'PATCH: etiqueta verde');
+  assert(edited.etiqueta === 'conferido', 'PATCH: etiqueta conferido');
 
   // 9. Etiqueta inválida
   const badEtiqueta = await fetch(BASE + '/api/assistidos/' + id, {
@@ -219,17 +219,17 @@ const PROC_21 = '02008014-72.2026.8.06.0293';
   const legado = await store.assistidos.insert({
     vinculo: PROC_21, nome: 'LEGADO PROCESSO 21 DIGITOS', processo: PROC_21,
     vara: 'Vara Legada', localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-01',
-    frequencia: 'mensal', etiqueta: 'sem', status: 'ativo',
+    frequencia: 'mensal', etiqueta: 'pendente', status: 'ativo',
   });
   const semData = await store.assistidos.insert({
     vinculo: '3000647-17.2026.8.06.6071', nome: 'LEGADO SEM DATA INICIO',
     processo: '3000647-17.2026.8.06.6071', vara: 'Vara Legada', localAssinatura: 'COMEP Cariri',
-    dataInicio: '', frequencia: 'mensal', etiqueta: 'sem', status: 'ativo',
+    dataInicio: '', frequencia: 'mensal', etiqueta: 'pendente', status: 'ativo',
   });
   const arquivado = await store.assistidos.insert({
     vinculo: 'ARQUIVADO', nome: 'LEGADO ARQUIVADO', processo: '80000201-86.2023.8.06.0071',
     vara: 'Vara Legada', localAssinatura: 'COMEP Cariri', dataInicio: '2025-06-17',
-    frequencia: 'mensal', etiqueta: 'sem', status: 'arquivado',
+    frequencia: 'mensal', etiqueta: 'pendente', status: 'arquivado',
   });
 
   // 18. Leitura funciona (a listagem não valida)

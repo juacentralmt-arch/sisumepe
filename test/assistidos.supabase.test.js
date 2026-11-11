@@ -77,7 +77,7 @@ const H = { 'Content-Type': 'application/json', 'X-Test-Auth': 'admin|teste|Test
 
   const lido = await json('/api/assistidos/' + criado.id);
   check(lido.nome === NOME, 'leu de volta do Supabase');
-  check(lido.etiqueta === 'verde', 'etiqueta persistida');
+  check(lido.etiqueta === 'conferido', 'etiqueta persistida e normalizada (verde -> conferido)');
   check(lido.responsavelTecnico === 'Teste', 'responsavel persistido');
   check(lido.deletedAt === null || lido.deletedAt === undefined, 'deletedAt nulo (nao soft-deleted)');
 

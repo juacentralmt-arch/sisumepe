@@ -385,7 +385,7 @@ if(!mem.agenda) mem.agenda = [];
 if(!mem.seqAgenda) mem.seqAgenda = mem.agenda.length ? Math.max(...mem.agenda.map(x=>x.id))+1 : 1;
 if(!mem.googleTokens) mem.googleTokens = {};
 if(!mem.termos) mem.termos = [];
-if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
+if(!mem.seqTermo) mem.seqTermo = mem.termos.length ? Math.max(...mem.termos.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoque)) mem.estoque=[];
 if(!mem.seqEstoque) mem.seqEstoque = mem.estoque.length ? Math.max(...mem.estoque.map(x=>x.id))+1 : 1;
 if(!Array.isArray(mem.estoqueMov)) mem.estoqueMov=[];
@@ -509,6 +509,7 @@ const ASS = {
   cpf: 'cpf', telefone: 'telefone', endereco: 'endereco',
   situacaoJuridica: 'situacao_juridica', etiqueta: 'etiqueta', etiquetaTexto: 'etiqueta_texto', etiquetaCor: 'etiqueta_cor',
   responsavelTecnico: 'responsavel_tecnico', extras: 'extras',
+  conferidoPor: 'conferido_por', conferidoEm: 'conferido_em',
   deletedAt: 'deleted_at', frequencia: 'frequencia', status: 'status', createdAt: 'createdat', updatedAt: 'updatedat'
 };
 const ACC = {
@@ -2253,18 +2254,21 @@ const store = {
 //  - `deletedAt` é o nome canônico no app; `deleted_at` é aceito na
 //    leitura para compatibilidade com bases gravadas antes da correção.
 // =====================================================================
-const { estaExcluido, comparecimentoProtocolado, nomeKey, proximoEsperado, diasEntre, PRAZO_FREQUENCIA, FREQ_DIAS } = require('./src/lib/assistidos');
+const { estaExcluido, comparecimentoProtocolado, nomeKey, proximoEsperado, diasEntre, PRAZO_FREQUENCIA, FREQ_DIAS, situacao, normalizaEtiqueta, ETIQUETAS_LEGADAS } = require('./src/lib/assistidos');
 
 // Escapa metacaracteres do filtro .or() do PostgREST: % _ , ( ) "
 const escOr = s => String(s == null ? '' : s).replace(/[%_]/g, m => `\\${m}`).replace(/[,()"]/g, m => `\\${m}`);
 
 store.assistidos = {
   // Listagem paginada. Devolve { itens, total }.
-  async list({ limit = 20, offset = 0, q = '', status = '', statusIn = null } = {}) {
+  async list({ limit = 20, offset = 0, q = '', status = '', statusIn = null, frequencia = '', conferencia = '', responsavel = '' } = {}) {
     const lim = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const off = Math.max(Number(offset) || 0, 0);
     const busca = String(q || '').trim().slice(0, 60);
     const statusF = String(status || '').trim();
+    const freqF = String(frequencia || '').trim();
+    const confF = String(conferencia || '').trim();
+    const respF = String(responsavel || '').trim();
     const statusLista = Array.isArray(statusIn) && statusIn.length ? statusIn.map(String) : null;
 
     if (MODE === 'file') {
@@ -2279,6 +2283,9 @@ store.assistidos = {
       }
       if (statusF) list = list.filter(x => String(x.status || '') === statusF);
       if (statusLista) list = list.filter(x => statusLista.includes(String(x.status || '')));
+      if (freqF) list = list.filter(x => String(x.frequencia || '') === freqF);
+      if (confF) list = list.filter(x => normalizaEtiqueta(x.etiqueta) === confF);
+      if (respF) list = list.filter(x => String(x.responsavelTecnico || '').toLowerCase() === respF.toLowerCase());
       list.sort((a, b) => Number(b.id) - Number(a.id));
       return { itens: list.slice(off, off + lim), total: list.length };
     }
@@ -2292,6 +2299,15 @@ store.assistidos = {
     }
     if (statusF) query = query.eq('status', statusF);
     if (statusLista) query = query.in('status', statusLista);
+    if (freqF) query = query.eq('frequencia', freqF);
+    if (respF) query = query.ilike('responsavel_tecnico', respF);
+    if (confF) {
+      // a coluna pode ter valores antigos ('sem', 'verde'...): busca o
+      // legado e o novo juntos
+      const legado = Object.keys(ETIQUETAS_LEGADAS).filter(k => ETIQUETAS_LEGADAS[k] === confF);
+      const vals = [confF].concat(legado);
+      query = query.in('etiqueta', vals);
+    }
     query = query.range(off, off + lim - 1);
     const r = await query;
     if (r.error) { const err = new Error('assistidos.list: ' + r.error.message); err.status = 500; throw err; }
@@ -2504,6 +2520,32 @@ store.assistidos = {
   // Todos os assistidos ativos, sem paginação de resultado.
   // Usado pelos cálculos agregados (alertas), que precisam do conjunto
   // inteiro mas não de todos os campos.
+  // Ultimo comparecimento de cada assistido, em uma varredura.
+  // Base para a situacao (atraso/falta) e para os filtros.
+  async ultimosComparecimentos() {
+    const comps = await store.assistidosComparecimentos.all();
+    const ultimoPor = new Map();
+    for (const c of comps) {
+      const k = String(c.assistidoId);
+      const atual = ultimoPor.get(k);
+      if (!atual || String(c.dataComparecimento || '') > String(atual.dataComparecimento || '')) ultimoPor.set(k, c);
+    }
+    return ultimoPor;
+  },
+
+  // Situacao (atraso/sem comparecimento/em dia) de cada assistido informado.
+  // REGRA UNICA: a aba de alertas, o selo do card e os filtros usam
+  // dom.situacao. Quando cada tela calculava por conta, discordavam.
+  async situacoes(lista, hoje) {
+    const dia = hoje || new Date().toISOString().slice(0, 10);
+    const ultimoPor = await store.assistidos.ultimosComparecimentos();
+    const out = new Map();
+    for (const a of lista) {
+      const ultimo = ultimoPor.get(String(a.id)) || null;
+      out.set(String(a.id), situacao(a, ultimo, dia));
+    }
+    return out;
+  },
   async todosAtivos({ campos = '*' } = {}) {
     if (MODE === 'file') {
       return (mem.assistidos || []).filter(x => !estaExcluido(x));
@@ -2568,45 +2610,33 @@ store.assistidos = {
   async alertas({ hoje = null } = {}) {
     const dia = hoje || new Date().toISOString().slice(0, 10);
     const todos = [];
-    // Uma única varredura da base (2 round-trips) em vez de paginar 12x.
-    const assistidos = await store.assistidos.todosAtivos();
-    const comps = await store.assistidosComparecimentos.all();
-    const ultimoPor = new Map();
-    for (const c of comps) {
-      const k = String(c.assistidoId);
-      const atual = ultimoPor.get(k);
-      if (!atual || String(c.dataComparecimento || '') > String(atual.dataComparecimento || '')) ultimoPor.set(k, c);
-    }
+    // Uma varredura da base (so os campos que o calculo usa).
+    const assistidos = await store.assistidos.todosAtivos({
+      campos: 'id,nome,vinculo,frequencia,data_inicio,status,local_assinatura,responsavel_tecnico',
+    });
+    const ultimoPor = await store.assistidos.ultimosComparecimentos();
     for (const a of assistidos) {
       const ultimo = ultimoPor.get(String(a.id)) || null;
-      const prazo = PRAZO_FREQUENCIA[a.frequencia] || 52;
-      const periodo = FREQ_DIAS[a.frequencia] || 30;
-      const dias = ultimo ? diasEntre(ultimo.dataComparecimento, dia) : null;
-      if (dias == null) {
-        const desdeInicio = a.dataInicio ? diasEntre(a.dataInicio, dia) : null;
-        if (desdeInicio != null && desdeInicio > 30) {
-          todos.push({
-            tipo: 'sem_comparecimento', assistidoId: a.id, nome: a.nome, vinculo: a.vinculo,
-            frequencia: a.frequencia, dias: desdeInicio,
-            texto: `Nunca compareceu em ${desdeInicio} dias (frequência ${a.frequencia})`,
-          });
-        }
-        continue;
-      }
-      const faltas = Math.max(0, Math.floor(dias / periodo) - 1);
-      if (dias > prazo) {
+      const sit = situacao(a, ultimo, dia);
+      if (sit.codigo === 'atrasado') {
         todos.push({
-          tipo: faltas >= 1 ? 'faltas_consecutivas' : 'comparecimento_vencido',
+          tipo: sit.faltas >= 1 ? 'faltas_consecutivas' : 'comparecimento_vencido',
           assistidoId: a.id, nome: a.nome, vinculo: a.vinculo, frequencia: a.frequencia,
-          dias, ultimoComparecimento: ultimo ? ultimo.dataComparecimento : null,
-          faltas,
-          texto: faltas >= 1
-            ? `${faltas} faltas consecutivas — último comparecimento em ${ultimo.dataComparecimento}`
-            : `Comparecimento atrasado (${dias} dias) — último em ${ultimo.dataComparecimento}`,
+          dias: sit.dias, ultimoComparecimento: ultimo ? ultimo.dataComparecimento : null,
+          faltas: sit.faltas,
+          texto: sit.faltas >= 1
+            ? sit.faltas + ' faltas consecutivas — ' + sit.texto
+            : sit.texto,
+        });
+      } else if (sit.codigo === 'sem_comparecimento') {
+        todos.push({
+          tipo: 'sem_comparecimento', assistidoId: a.id, nome: a.nome, vinculo: a.vinculo,
+          frequencia: a.frequencia, dias: sit.dias,
+          texto: sit.texto,
         });
       }
     }
-    // Mais crítico primeiro: faltas consecutivas > atrasado > nunca compareceu.
+    // Mais critico primeiro: faltas consecutivas > atrasado > nunca compareceu.
     const peso = { faltas_consecutivas: 0, comparecimento_vencido: 1, sem_comparecimento: 2 };
     todos.sort((a, b) => (peso[a.tipo] - peso[b.tipo]) || (b.dias - a.dias));
     return todos;

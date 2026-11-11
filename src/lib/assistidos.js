@@ -8,7 +8,13 @@
 
 const LOCAIS_ASSINATURA = Object.freeze(['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri']);
 const PERIODOS_COMPARECIMENTO = Object.freeze(['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral']);
-const ETIQUETAS = Object.freeze(['sem', 'verde', 'laranja', 'vermelho']);
+// A etiqueta marca o card como CONFERIDO (a conferência da ficha pela
+// equipe), não uma escala de cores de prioridade. Foi assim desde o
+// começo (commit 286349c: verificado | pendente) e se perdeu nas
+// reescritas, quando virou sem|verde|laranja|vermelho.
+const ETIQUETAS = Object.freeze(['pendente', 'conferido']);
+// Valores antigos que ainda podem existir em base importada.
+const ETIQUETAS_LEGADAS = Object.freeze({ sem: 'pendente', verde: 'conferido', laranja: 'pendente', vermelho: 'pendente' });
 // 'arquivado' existe na base herdada da Planilha Geral e precisa continuar
 // editável — registros com esse status não podem ficar invisíveis na UI.
 const STATUS_ASSISTIDO = Object.freeze(['ativo', 'concluido', 'arquivado']);
@@ -123,6 +129,55 @@ function diasEntre(deISO, ateISO) {
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
 }
 
+// Normaliza uma etiqueta vinda do banco (pode ser de base antiga).
+function normalizaEtiqueta(valor) {
+  const s = String(valor || '').trim().toLowerCase();
+  if (ETIQUETAS.includes(s)) return s;
+  return ETIQUETAS_LEGADAS[s] || 'pendente';
+}
+
+// ---------------------------------------------------------------------
+//  Situação do monitorado em relação à periodicidade.
+//
+//  REGRA ÚNICA: a aba de alertas, o selo do card e os filtros usam
+//  esta mesma função. Quando cada tela calculava por conta, elas
+//  discordavam — foi o que gerou os bugs da aba Juntada.
+//
+//    em_dia            dentro do prazo
+//    atrasado          passou do prazo (1+ faltas)
+//    sem_comparecimento  nunca comparou e ja passou 30 dias do inicio
+//    sem_historico     sem data de inicio e sem comparecimento
+// ---------------------------------------------------------------------
+function situacao(assistido, ultimoComparecimento, hojeISO) {
+  const dia = hojeISO || new Date().toISOString().slice(0, 10);
+  const prazo = PRAZO_FREQUENCIA[assistido.frequencia] || 52;
+  const periodo = FREQ_DIAS[assistido.frequencia] || 30;
+
+  if (!ultimoComparecimento) {
+    const desdeInicio = assistido.dataInicio ? diasEntre(assistido.dataInicio, dia) : null;
+    if (desdeInicio != null && desdeInicio > 30) {
+      return {
+        codigo: 'sem_comparecimento', dias: desdeInicio, prazo, faltas: 0,
+        texto: 'Nunca compareceu (' + desdeInicio + ' dias)',
+      };
+    }
+    return {
+      codigo: 'sem_historico', dias: desdeInicio, prazo, faltas: 0,
+      texto: 'Sem histórico de comparecimento',
+    };
+  }
+
+  const dias = diasEntre(ultimoComparecimento.dataComparecimento, dia);
+  if (dias != null && dias > prazo) {
+    const faltas = Math.max(0, Math.floor(dias / periodo) - 1);
+    return {
+      codigo: 'atrasado', dias, prazo, faltas,
+      texto: 'Atrasado há ' + dias + ' dias',
+    };
+  }
+  return { codigo: 'em_dia', dias, prazo, faltas: 0, texto: 'Em dia' };
+}
+
 // ---------------------------------------------------------------------
 //  Validação por campo — base do PATCH parcial.
 //  Cada regra devolve null (ok) ou a mensagem de erro.
@@ -169,9 +224,11 @@ const REGRAS = {
     return null;
   },
   etiqueta(v) {
-    const s = String(v || '').trim();
-    if (!ETIQUETAS.includes(s)) return 'Etiqueta inválida. Use: sem, verde, laranja ou vermelho.';
-    return null;
+    // Estrito: valor desconhecido e erro (digitar 'conferido' errado
+    // nao pode virar 'pendente' em silencio).
+    const s = String(v == null ? '' : v).trim().toLowerCase();
+    if (ETIQUETAS.includes(s) || Object.prototype.hasOwnProperty.call(ETIQUETAS_LEGADAS, s)) return null;
+    return 'Etiqueta inválida. Use: pendente ou conferido.';
   },
   status(v) {
     const s = String(v || '').trim();
@@ -232,6 +289,7 @@ module.exports = {
   LOCAIS_ASSINATURA,
   PERIODOS_COMPARECIMENTO,
   ETIQUETAS,
+  ETIQUETAS_LEGADAS,
   STATUS_ASSISTIDO,
   STATUS_ENCERRADOS,
   CAMPOS_EDITAVEIS,
@@ -243,6 +301,8 @@ module.exports = {
   ehDataFutura,
   validarCNJ,
   comparecimentoProtocolado,
+  normalizaEtiqueta,
+  situacao,
   estaExcluido,
   agruparComparecimentos,
   nomeKey,

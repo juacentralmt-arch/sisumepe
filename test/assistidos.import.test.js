@@ -81,7 +81,7 @@ async function importar(nomeArquivo, conteudo, tipo, query) {
   assert(!!maria, 'CSV: assistido gravado');
   assert(maria && maria.nome === 'MARIA DE TESTE', 'CSV: nome gravado');
   assert(maria && maria.frequencia === 'semanal', 'CSV: frequencia gravada');
-  assert(maria && maria.etiqueta === 'verde', 'CSV: etiqueta gravada');
+  assert(maria && maria.etiqueta === 'conferido', 'CSV: etiqueta legada "verde" normalizada para conferido');
   assert(maria && maria.dataInicio === '2026-01-10', 'CSV: data de inicio gravada');
   assert(maria && maria.ultimoComparecimento === '2026-11-03', 'CSV: ultimo comparecimento gravado');
 
