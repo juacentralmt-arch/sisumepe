@@ -2518,6 +2518,8 @@ store.assistidos = {
   },
 
   // Lista enxuta para montar seletores (id, nome, vínculo, status).
+  // A etiqueta vem NORMALIZADA ('pendente'|'conferido'): a base herdada
+  // gravou 'sem'|'verde'... e o valor cru quebraria o <select> do front.
   async listaSimples({ limit = 500, q = '' } = {}) {
     const lim = Math.min(Math.max(Number(limit) || 500, 1), 2000);
     const busca = String(q || '').trim().slice(0, 60);
@@ -2525,7 +2527,10 @@ store.assistidos = {
       let list = (mem.assistidos || []).filter(x => !estaExcluido(x));
       if (busca) list = list.filter(x => matchBusca(x, busca, false));
       list.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
-      return list.slice(0, lim).map(x => ({ id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status }));
+      return list.slice(0, lim).map(x => ({
+        id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status,
+        etiqueta: normalizaEtiqueta(x.etiqueta),
+      }));
     }
     if (busca) {
       // Mesma regra do modo arquivo: candidatos no banco + filtro final
@@ -2535,7 +2540,7 @@ store.assistidos = {
       let from = 0;
       const pageSize = 1000;
       for (;;) {
-        let q = supa.from('assistidos').select('id,nome,vinculo,status')
+        let q = supa.from('assistidos').select('id,nome,vinculo,status,etiqueta')
           .is('deleted_at', null).order('id').range(from, from + pageSize - 1)
           .or(clauses.join(','));
         const r = must(await q, 'assistidos.listaSimples.busca');
@@ -2547,12 +2552,18 @@ store.assistidos = {
       }
       const filtrados = candidatos.filter(x => matchBusca(x, busca, false));
       filtrados.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
-      return filtrados.slice(0, lim).map(x => ({ id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status }));
+      return filtrados.slice(0, lim).map(x => ({
+        id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status,
+        etiqueta: normalizaEtiqueta(x.etiqueta),
+      }));
     }
-    let query = supa.from('assistidos').select('id,nome,vinculo,status')
+    let query = supa.from('assistidos').select('id,nome,vinculo,status,etiqueta')
       .is('deleted_at', null).order('nome').limit(lim);
     const r = must(await query, 'assistidos.listaSimples');
-    return r || [];
+    return (r || []).map(x => ({
+      id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status,
+      etiqueta: normalizaEtiqueta(x.etiqueta),
+    }));
   },
 
   // Contagem por status (badges das abas).
@@ -2673,6 +2684,12 @@ store.assistidos = {
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return;
+      // Ja excluido: nao remarca. O carimbo de exclusao e o que
+      // distingue comparecimento excluido EM CASCATA (mesmo carimbo do
+      // assistido) de comparecimento excluido ISOLADAMENTE (carimbo
+      // proprio) na hora de restaurar — remarcar destruiria essa
+      // informacao e faria o comparecimento isolado voltar sem querer.
+      if (estaExcluido(r)) return;
       const agora = new Date().toISOString();
       r.deletedAt = agora;
       (mem.assistidosComparecimentos || []).forEach(c => {
@@ -2681,28 +2698,94 @@ store.assistidos = {
       saveFile(); return;
     }
     try {
-      await must(await supa.from('assistidos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
-      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: new Date().toISOString(), updatedat: new Date().toISOString() }).eq('assistido_id', Number(id)).is('deleted_at', null), 'assistidos.remove_comp');
+      // O MESMO carimbo de data nos dois updates: é ele que distingue, na
+      // hora de restaurar, o comparecimento excluído EM CASCATA (carimbo
+      // igual ao do assistido) do excluído ISOLADAMENTE (carimbo
+      // próprio, que continua excluído).
+      const agora = new Date().toISOString();
+      await must(await supa.from('assistidos').update({ deleted_at: agora, updatedat: agora }).eq('id', Number(id)).is('deleted_at', null), 'assistidos.remove');
+      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: agora, updatedat: agora }).eq('assistido_id', Number(id)).is('deleted_at', null), 'assistidos.remove_comp');
     } catch (e) { throw e; }
   },
 
   // Reverte o soft-delete: o registro volta a aparecer na listagem.
+  //
+  // ATENÇÃO: nem todo comparecimento volta. O comparecimento excluído
+  // ISOLADAMENTE (pelo técnico, na tela de histórico) tem carimbo de
+  // exclusão PRÓPRIO e continua excluído — restaurá-lo traria de volta
+  // um registro que a equipe apagou de propósito. Só volta o que foi
+  // excluído EM CASCATA junto com o assistido (mesmo carimbo de data).
   async restaurar(id) {
     const agora = new Date().toISOString();
     if (MODE === 'file') {
       const r = (mem.assistidos || []).find(x => eqi(x.id, id));
       if (!r) return null;
+      // Carimbo da exclusao (do assistido): os comparecimentos com o
+      // MESMO carimbo foram excluidos em cascata; os demais foram
+      // excluidos isoladamente e ficam como estão.
+      const carimbo = String(r.deletedAt || r.deleted_at || '');
       r.deletedAt = null; r.updatedAt = agora;
+      // Base herdada gravava `deleted_at` (snake_case): limpa os dois
+      // nomes, senão o registro continuava "excluído" para quem lê.
+      if ('deleted_at' in r) r.deleted_at = null;
       (mem.assistidosComparecimentos || []).forEach(c => {
-        if (eqi(c.assistidoId, id)) { c.deletedAt = null; c.updatedAt = agora; }
+        if (!eqi(c.assistidoId, id)) return;
+        if (!carimbo) return;
+        if (String(c.deletedAt || c.deleted_at || '') !== carimbo) return;
+        c.deletedAt = null; c.updatedAt = agora;
+        if ('deleted_at' in c) c.deleted_at = null;
       });
       saveFile(); return r;
     }
     try {
+      // Carimbo da exclusao em cascata (mesma ideia do modo arquivo):
+      // busca ANTES de limpar, para saber o que foi excluido junto.
+      const alvo = must(await supa.from('assistidos').select('id,deleted_at')
+        .eq('id', Number(id)).not('deleted_at', 'is', null).limit(1), 'assistidos.restaurar.busca');
+      const carimbo = alvo.length ? String(alvo[0].deleted_at || '') : '';
       const rr = must(await supa.from('assistidos').update({ deleted_at: null, updatedat: agora }).eq('id', Number(id)).not('deleted_at', 'is', null).select(), 'assistidos.restaurar');
-      await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: null, updatedat: agora }).eq('assistido_id', Number(id)).not('deleted_at', 'is', null), 'assistidos.restaurar_comp');
+      // Só volta o comparecimento com o MESMO carimbo: o que o técnico
+      // excluiu isoladamente (carimbo próprio) continua excluído.
+      if (carimbo) {
+        await must(await supa.from('assistidos_comparecimentos').update({ deleted_at: null, updatedat: agora })
+          .eq('assistido_id', Number(id)).eq('deleted_at', carimbo), 'assistidos.restaurar_comp');
+      }
       return rr.length ? appASS(rr[0]) : null;
     } catch (e) { throw e; }
+  },
+
+  // Lista distinta dos responsáveis técnicos preenchidos — alimenta o
+  // filtro por responsável da tela (e o resumo). Sem vazios e em ordem
+  // alfabética; a comparação ignora acentos ('Ávila' antes de 'Bezerra').
+  // O valor gravado é devolvido como está: é ele que o filtro usa.
+  async responsaveis() {
+    const nomes = new Set();
+    const add = (valor) => {
+      const n = String(valor == null ? '' : valor).trim();
+      if (n) nomes.add(n);
+    };
+    if (MODE === 'file') {
+      (mem.assistidos || []).filter(x => !estaExcluido(x)).forEach(x => add(x.responsavelTecnico));
+    } else {
+      let from = 0;
+      const pageSize = 1000; // limite do PostgREST por requisicao
+      for (;;) {
+        const r = must(await supa.from('assistidos').select('responsavel_tecnico')
+          .is('deleted_at', null)
+          .not('responsavel_tecnico', 'is', null)
+          .neq('responsavel_tecnico', '')
+          .range(from, from + pageSize - 1), 'assistidos.responsaveis');
+        (r || []).forEach(x => add(x && x.responsavel_tecnico));
+        if (!r || r.length < pageSize) break;
+        from += pageSize;
+        if (from > 200000) break; // trava de seguranca
+      }
+    }
+    return [...nomes].sort((a, b) => {
+      const ka = String(a).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const kb = String(b).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return ka.localeCompare(kb, 'pt-BR');
+    });
   },
 
   // Localiza pelo vínculo (numero CNJ) — chave de upsert da importacao.

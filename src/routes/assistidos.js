@@ -60,6 +60,7 @@ const ROTULOS = {
   dataComparecimento: 'Data do comparecimento', ppPlantao: 'PP de plantão',
   juntada: 'Juntada', observacao: 'Observação', protocolado: 'Protocolado',
   protocoladoPor: 'Protocolado por', dataProtocolacao: 'Data de protocolação',
+  conferidoPor: 'Conferido por', conferidoEm: 'Conferido em',
   deletedAt: 'Excluído em',
 };
 
@@ -115,6 +116,47 @@ function normalizaEtiquetaEntrada(valor) {
 function comEtiquetaNormalizada(assistido) {
   if (!assistido) return assistido;
   return { ...assistido, etiqueta: dom.normalizaEtiqueta(assistido.etiqueta) };
+}
+
+// Cópia do assistido com a etiqueta normalizada E a autoria da
+// conferência sempre presente (null quando a ficha não está conferida).
+// A resposta da edição precisa devolver as duas chaves: o front mostra
+// "Conferido por ..." e um campo ausente aparecia como "undefined".
+function comConferencia(assistido) {
+  const out = comEtiquetaNormalizada(assistido);
+  if (!out) return out;
+  return {
+    ...out,
+    conferidoPor: out.conferidoPor == null ? null : String(out.conferidoPor),
+    conferidoEm: out.conferidoEm == null ? null : String(out.conferidoEm),
+  };
+}
+
+// ---------------------------------------------------------------------
+//  Autoria da conferência
+//
+//  Uma ficha conferida precisa dizer QUEM conferiu e QUANDO. Antes só a
+//  rota /:id/etiqueta gravava isso: o PATCH /:id (usado pelo editor da
+//  ficha) trocava a etiqueta e deixava a autoria de uma conferência
+//  antiga — ou apagava a que acabava de ser feita.
+//
+//  'conferido' -> grava quem e quando;
+//  'pendente'  -> limpa os dois (a ficha NÃO está mais conferida).
+// ---------------------------------------------------------------------
+function quemConferiu(req) {
+  return String((req.auth && req.auth.name) || (req.auth && req.auth.user) || '').trim();
+}
+
+// Campos gravados junto com a etiqueta (autoria da conferência).
+function dadosEtiqueta(alvo, req) {
+  if (alvo === 'conferido') {
+    return {
+      etiqueta: alvo,
+      conferidoPor: quemConferiu(req),
+      conferidoEm: new Date().toISOString(),
+    };
+  }
+  return { etiqueta: alvo, conferidoPor: null, conferidoEm: null };
 }
 
 // ---------------------------------------------------------------------
@@ -272,9 +314,14 @@ router.get('/api/assistidos/lista', auth(['admin', 'tecnico']), ah(async (req, r
   res.json(lista.map(a => ('etiqueta' in a) ? { ...a, etiqueta: dom.normalizaEtiqueta(a.etiqueta) } : a));
 }));
 
-// Contagem por status (badges das abas).
+// Contagem por status (badges das abas) + lista de responsáveis.
+// A chave `responsaveis` é ADITIVA: o resto da resposta do resumo
+// (total, ativo, concluido, arquivado, pendentesJuntada,
+// assistidosPendentes) continua igual — o front só lê os badges.
 router.get('/api/assistidos/resumo', auth(['admin', 'tecnico']), ah(async (req, res) => {
-  res.json(await store.assistidos.contagemPorStatus());
+  const resumo = await store.assistidos.contagemPorStatus();
+  const responsaveis = await store.assistidos.responsaveis();
+  res.json(Object.assign({}, resumo, { responsaveis }));
 }));
 
 // ---------------------------------------------------------------------
@@ -518,7 +565,9 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
       // nunca pode impedir o salvamento dos demais campos.
       const alvo = normalizaEtiquetaEntrada(v);
       if (alvo == null) { etiquetaInvalida = true; continue; }
-      c.etiqueta = alvo;
+      // A etiqueta vem SEMPRE acompanhada da autoria da conferência
+      // (mesma regra da rota /:id/etiqueta): quem conferiu e quando.
+      Object.assign(c, dadosEtiqueta(alvo, req));
       continue;
     }
     if (k === 'dataInicio' || k === 'dataFim') v = normalizaData(v);
@@ -545,17 +594,23 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
   }
 
   // Snapshot ANTES do patch: em modo arquivo o patch muta o mesmo objeto.
-  const antes = snapshot(target, enviados);
+  // Quando a etiqueta muda, a trilha registra também a autoria da
+  // conferência (quem conferiu / quando) — sem isso a auditoria mostrava
+  // só a virada da etiqueta.
+  const camposAuditoria = enviados.includes('etiqueta')
+    ? enviados.concat(['conferidoPor', 'conferidoEm'])
+    : enviados;
+  const antes = snapshot(target, camposAuditoria);
 
   const row = await store.assistidos.patch(req.params.id, c);
   if (!row) return res.status(404).json({ error: 'Não encontrado' });
-  const changes = diff(antes, row, enviados);
+  const changes = diff(antes, row, camposAuditoria);
   const resumo = changes.length
     ? 'Assistido editado (' + changes.map(x => x.rotulo).join(', ') + '): ' + row.nome
     : 'Assistido editado: ' + row.nome;
   await auditar(req, 'editado', 'assistido#' + row.id, row.nome, resumo, row.id, changes);
   broadcast();
-  res.json(comEtiquetaNormalizada(row));
+  res.json(comConferencia(row));
 }));
 
 // Etiquetar assistido.
@@ -579,24 +634,20 @@ router.patch('/api/assistidos/:id/etiqueta', auth(['admin', 'tecnico']), ah(asyn
   if (!alvo) {
     return res.status(400).json({ error: 'Etiqueta inválida. Use: pendente ou conferido.' });
   }
-  const antesEtiqueta = snapshot(target, ['etiqueta']);
-  const quem = String((req.auth && req.auth.name) || req.auth.user || '').trim();
-  const dados = { etiqueta: alvo };
-  if (alvo === 'conferido') {
-    dados.conferidoPor = quem;
-    dados.conferidoEm = new Date().toISOString();
-  } else {
-    dados.conferidoPor = '';
-    dados.conferidoEm = '';
-  }
+  const antesEtiqueta = snapshot(target, ['etiqueta', 'conferidoPor', 'conferidoEm']);
+  const quem = quemConferiu(req);
+  // Mesma regra do PATCH /:id: 'conferido' grava quem e quando,
+  // 'pendente' limpa os dois campos.
+  const dados = dadosEtiqueta(alvo, req);
   const row = await store.assistidos.patch(req.params.id, dados);
-  const changes = diff(antesEtiqueta, row, ['etiqueta']);
+  const changes = diff(antesEtiqueta, row, ['etiqueta', 'conferidoPor', 'conferidoEm']);
   await auditar(req, 'etiqueta', 'assistido#' + row.id, row.nome,
     'Ficha conferida: ' + alvo + (quem ? ' (por ' + quem + ')' : ''), row.id, changes);
   broadcast();
   res.json({
     id: row.id, etiqueta: dom.normalizaEtiqueta(row.etiqueta),
-    conferidoPor: row.conferidoPor || '', conferidoEm: row.conferidoEm || '',
+    // null (não string vazia) quando a ficha não está conferida.
+    conferidoPor: row.conferidoPor || null, conferidoEm: row.conferidoEm || null,
   });
 }));
 
@@ -872,6 +923,9 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
   const falhas = [];
   const avisos = [];
   let linhaBase = 2;
+  // Lista com os assistidos arquivados — carregada sob demanda, só quando
+  // um vínculo não bate com nenhum assistido ativo.
+  let todosComExcluidos = null;
 
   for (let li = 0; li < planilha.rows.length; li++) {
     const r = planilha.rows[li];
@@ -883,6 +937,23 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
 
       // --- localiza o assistido ---
       let alvo = vinculo ? await store.assistidos.byVinculo(vinculo) : null;
+      // Vínculo de assistido ARQUIVADO (soft-delete): `byVinculo` só enxerga
+      // os ativos, então a importação criaria um DUPLICADO do mesmo
+      // assistido. A linha é recusada com aviso — para reativar, restaure o
+      // assistido antes de importar. A varredura é feita uma única vez.
+      if (!alvo && vinculo) {
+        if (!todosComExcluidos) todosComExcluidos = await store.assistidos.allIncludingDeleted();
+        const arquivado = todosComExcluidos.find(
+          a => String(a.vinculo || '').trim() === vinculo && (a.deletedAt || a.deleted_at)
+        );
+        if (arquivado) {
+          falhas.push({
+            linha: li + linhaBase,
+            erro: 'vínculo ' + vinculo + ' pertence a assistido arquivado (id ' + arquivado.id + ') — restaure-o antes de importar',
+          });
+          continue;
+        }
+      }
       // Assistido que SERIA criado na simulação (ainda sem id).
       let simulado = null;
       if (!alvo && !vinculo && nome) {
@@ -923,7 +994,15 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
       if (mapa.etiqueta != null && get('etiqueta')) {
         dados.etiqueta = normalizaEtiquetaEntrada(get('etiqueta')) || get('etiqueta').toLowerCase();
       }
-      if (mapa.status != null && get('status')) dados.status = get('status').toLowerCase();
+      // Status da planilha: a Planilha Geral escreve "Concluído"/"Concluída"
+      // (com acento) e o enum do módulo é 'concluido' — a comparação é
+      // feita sem acento para casar. Texto desconhecido fica CRU: a
+      // validação reprova a linha e o erro vai para `falhas` (nada é
+      // gravado por baixo dos panos).
+      if (mapa.status != null && get('status')) {
+        const bruto = get('status');
+        dados.status = dom.normalizaStatusEntrada(bruto) || bruto.toLowerCase();
+      }
       if (mapa.responsavel != null) dados.responsavelTecnico = get('responsavel');
       if (mapa.cpf != null) dados.cpf = get('cpf').replace(/\D/g, '');
       if (mapa.telefone != null) dados.telefone = get('telefone');
@@ -931,6 +1010,16 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
       if (mapa.situacaoJuridica != null) dados.situacaoJuridica = get('situacaoJuridica');
       // 'processo' e o proprio vinculo em 99% dos casos: so grava se vier diferente
       if (mapa.processo != null && get('processo') && get('processo') !== vinculo) dados.processo = get('processo');
+
+      // --- importacao NAO reabre assistido encerrado ---
+      // A Planilha Geral nao reflete o andamento real: um assistido que a
+      // equipe ja concluiu/arquivou costuma aparecer la como 'ativo'.
+      // Sobrescrever o status devolveria o caso para a aba "Todos" e
+      // desmentiria o encerramento. Quem JÁ esta encerrado continua
+      // encerrado; o status atual é preservado.
+      if (alvo && dados.status && STATUS_ENCERRADOS.includes(String(alvo.status || ''))) {
+        delete dados.status;
+      }
 
       // --- colunas nao reconhecidas vao para `extras` (jsonb) ---
       // A Planilha Geral pode ter colunas que o modulo nao conhece. Em vez

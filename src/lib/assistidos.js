@@ -105,6 +105,25 @@ function nomeKey(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
 }
 
+// Normaliza o status lido da PLANILHA para o enum do sistema.
+//
+// A Planilha Geral escreve "Concluído"/"Concluída" (com acento) e o enum
+// do módulo é 'concluido': a comparação é feita SEM acento para casar.
+// Sem isso a linha da planilha era reprovada pela validação (status
+// inválido) e o assistido nunca era atualizado.
+//
+// Devolve null quando o texto não é reconhecido — quem chama decide:
+// a importação mantém o valor cru (a validação reprova a linha e o
+// erro vai para `falhas`), em vez de gravar um status inventado.
+function normalizaStatusEntrada(value) {
+  const k = nomeKey(value);
+  if (!k) return null;
+  if (STATUS_ASSISTIDO.includes(k)) return k;
+  // Variações com acento/gênero que a planilha usa para o mesmo estado.
+  if (k === 'concluida' || k === 'concluidas' || k === 'concluidos' || k === 'encerrado' || k === 'encerrada') return 'concluido';
+  return null;
+}
+
 // ---------------------------------------------------------------------
 //  Periodicidade e prazos
 // ---------------------------------------------------------------------
@@ -316,6 +335,7 @@ module.exports = {
   validarCNJ,
   comparecimentoProtocolado,
   normalizaEtiqueta,
+  normalizaStatusEntrada,
   situacao,
   estaExcluido,
   agruparComparecimentos,

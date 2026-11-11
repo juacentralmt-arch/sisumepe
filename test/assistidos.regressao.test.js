@@ -372,6 +372,202 @@ async function criar(nome, extra, headers) {
   assert(audImp.json.acoesRotulos && audImp.json.acoesRotulos.importacao === 'Importação',
     'Auditoria: rotulo "Importacao" disponivel para o front');
 
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - PATCH grava a autoria da conferencia ===');
+  // Só a rota /:id/etiqueta gravava quem conferiu: o PATCH /:id (usado
+  // pelo editor da ficha) trocava a etiqueta e deixava a autoria de uma
+  // conferencia antiga — ou apagava a que acabava de ser feita.
+  const cf = await criar('CONFERENCIA VIA PATCH');
+  const cf1 = await patch('/api/assistidos/' + cf.json.id, { etiqueta: 'conferido' });
+  assert(cf1.status === 200, 'PATCH: etiqueta conferido -> 200');
+  assert(cf1.json.etiqueta === 'conferido', 'PATCH: etiqueta gravada como conferido');
+  assert(cf1.json.conferidoPor === 'Admin', 'PATCH: grava quem conferiu (' + cf1.json.conferidoPor + ')');
+  assert(!!cf1.json.conferidoEm, 'PATCH: grava quando conferiu');
+  const cfGravado = await get('/api/assistidos/' + cf.json.id);
+  assert(cfGravado.json.conferidoPor === 'Admin' && !!cfGravado.json.conferidoEm,
+    'PATCH: a autoria fica gravada no registro');
+
+  const cf2 = await patch('/api/assistidos/' + cf.json.id, { etiqueta: 'pendente' });
+  assert(cf2.status === 200, 'PATCH: etiqueta pendente -> 200');
+  assert(!cf2.json.conferidoPor, 'PATCH: voltar para pendente limpa quem conferiu');
+  assert(!cf2.json.conferidoEm, 'PATCH: voltar para pendente limpa quando conferiu');
+
+  const cf3 = await patch('/api/assistidos/' + cf.json.id, { etiqueta: 'conferido' }, TEC_JOAO);
+  assert(cf3.json.conferidoPor === 'Joao', 'PATCH: a autoria e o nome do tecnico logado (' + cf3.json.conferidoPor + ')');
+
+  // A rota de etiqueta usa a MESMA regra (limpa a autoria ao voltar).
+  const cf4 = await patch('/api/assistidos/' + cf.json.id + '/etiqueta', { etiqueta: 'pendente' });
+  assert(cf4.status === 200 && !cf4.json.conferidoPor && !cf4.json.conferidoEm,
+    'Etiqueta: pendente limpa a autoria da conferencia');
+  const cf5 = await patch('/api/assistidos/' + cf.json.id + '/etiqueta', { etiqueta: 'conferido' });
+  assert(cf5.json.conferidoPor === 'Admin' && !!cf5.json.conferidoEm,
+    'Etiqueta: conferido grava quem e quando');
+
+  // A trilha da edição registra a autoria da conferencia junto da etiqueta.
+  const audPatch = await get('/api/assistidos/auditoria?acao=editado&limit=50');
+  const edicoes = (audPatch.json.itens || []).filter(x => String(x.assistidoId) === String(cf.json.id));
+  assert(edicoes.length >= 1, 'Auditoria: o PATCH da etiqueta ficou registrado');
+  assert(edicoes.some(x => (x.changes || []).some(c => c.campo === 'conferidoPor' && c.para === 'Admin')),
+    'Auditoria: a trilha mostra quem conferiu');
+
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - importacao nao reabre assistido encerrado ===');
+  const enc = await criar('ASSISTIDO ENCERRADO PARA IMPORT');
+  await patch('/api/assistidos/' + enc.json.id, { status: 'concluido' });
+  const csvReabre = [
+    'vinculo;nome;vara;status',
+    enc.json.vinculo + ';ASSISTIDO ENCERRADO PARA IMPORT;Vara de Teste;Ativo',
+  ].join('\n');
+  const impReabre = await importar(csvReabre);
+  assert(impReabre.status === 200, 'Import: planilha com status Ativo processada');
+  assert(impReabre.json.falhas.length === 0,
+    'Import: a linha nao virou falha (' + JSON.stringify(impReabre.json.falhas || []) + ')');
+  const depoisReabre = await get('/api/assistidos/' + enc.json.id);
+  assert(depoisReabre.json.status === 'concluido',
+    'Import: assistido concluido NAO foi reaberto (ficou ' + depoisReabre.json.status + ')');
+
+  const encArq = await criar('ASSISTIDO ARQUIVADO PARA IMPORT');
+  await patch('/api/assistidos/' + encArq.json.id, { status: 'arquivado' });
+  const csvReabreArq = [
+    'vinculo;nome;vara;status',
+    encArq.json.vinculo + ';ASSISTIDO ARQUIVADO PARA IMPORT;Vara de Teste;Ativo',
+  ].join('\n');
+  await importar(csvReabreArq);
+  const depoisReabreArq = await get('/api/assistidos/' + encArq.json.id);
+  assert(depoisReabreArq.json.status === 'arquivado',
+    'Import: assistido arquivado NAO foi reaberto (ficou ' + depoisReabreArq.json.status + ')');
+
+  // Status lido da planilha com ACENTO: "Concluído" tem que casar com o
+  // enum 'concluido' (antes a linha era reprovada como status inválido).
+  const csvConcluido = [
+    'vinculo;nome;vara;status',
+    '9600010-00.2026.8.06.0010;IMPORTADO COM STATUS COM ACENTO;Vara de Teste;Concluído',
+  ].join('\n');
+  const impConcluido = await importar(csvConcluido);
+  assert(impConcluido.json.falhas.length === 0,
+    'Import: status "Concluído" (com acento) aceito (' + JSON.stringify(impConcluido.json.falhas || []) + ')');
+  const comAcento = await get('/api/assistidos?limit=100&status=concluido');
+  const regAcento = (comAcento.json.itens || []).find(x => x.vinculo === '9600010-00.2026.8.06.0010');
+  assert(!!regAcento, 'Import: assistido com status "Concluído" gravado');
+  assert(regAcento && regAcento.status === 'concluido',
+    'Import: "Concluído" (com acento) virou o enum "concluido" (' + (regAcento && regAcento.status) + ')');
+
+  const csvConcluida = [
+    'vinculo;nome;vara;status',
+    '9600011-00.2026.8.06.0011;IMPORTADO STATUS CONCLUIDA;Vara de Teste;Concluída',
+  ].join('\n');
+  const impConcluida = await importar(csvConcluida);
+  assert(impConcluida.json.falhas.length === 0, 'Import: status "Concluída" (com acento) aceito');
+  const comAcento2 = await get('/api/assistidos?limit=100&status=concluido');
+  const regAcento2 = (comAcento2.json.itens || []).find(x => x.vinculo === '9600011-00.2026.8.06.0011');
+  assert(regAcento2 && regAcento2.status === 'concluido',
+    'Import: "Concluída" (com acento) virou o enum "concluido"');
+
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - import nao duplica assistido excluido ===');
+  // O vinculo de um assistido EXCLUIDO (soft-delete) nao aparece em
+  // `byVinculo` (que so ve os ativos): a importacao criava um DUPLICADO
+  // do mesmo assistido. Agora a linha e recusada com aviso.
+  const excluido = await criar('ASSISTIDO EXCLUIDO PARA IMPORT');
+  await del('/api/assistidos/' + excluido.json.id, ADM);
+  const csvDuplicado = [
+    'vinculo;nome;vara;status',
+    excluido.json.vinculo + ';ASSISTIDO EXCLUIDO PARA IMPORT;Vara de Teste;Ativo',
+  ].join('\n');
+  const impDuplicado = await importar(csvDuplicado);
+  assert((impDuplicado.json.falhas || []).length === 1,
+    'Import: linha com vinculo de assistido excluido vira falha (' + JSON.stringify(impDuplicado.json.falhas || []) + ')');
+  assert(String((impDuplicado.json.falhas || [])[0] && (impDuplicado.json.falhas || [])[0].erro || '').includes('arquivado'),
+    'Import: o aviso diz que o assistido esta arquivado');
+  const ativosDup = await get('/api/assistidos?limit=200');
+  const dups = (ativosDup.json.itens || []).filter(x => x.vinculo === excluido.json.vinculo);
+  assert(dups.length === 0, 'Import: NENHUM duplicado foi criado para o vinculo excluido');
+
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - restaurar nao ressuscita comparecimento excluido ===');
+  // A restauracao trazia de volta TUDO: inclusive o comparecimento que o
+  // tecnico tinha excluido isoladamente (apagado de proposito).
+  const rest = await criar('RESTAURAR SEM RESSUSCITAR');
+  const cMantem = await post('/api/assistidos/' + rest.json.id + '/comparecimentos',
+    { dataComparecimento: diasAtras(40), ppPlantao: 'PP Mantido' });
+  const cSome = await post('/api/assistidos/' + rest.json.id + '/comparecimentos',
+    { dataComparecimento: diasAtras(20), ppPlantao: 'PP Excluido' });
+  assert(cMantem.status === 201 && cSome.status === 201, 'Restaurar: 2 comparecimentos registrados');
+  const delComp = await del('/api/assistidos/comparecimentos/' + cSome.json.id);
+  assert(delComp.status === 200, 'Restaurar: comparecimento excluido isoladamente');
+  const arqRest = await del('/api/assistidos/' + rest.json.id);
+  assert(arqRest.status === 200, 'Restaurar: assistido arquivado');
+  const rest2 = await patch('/api/assistidos/' + rest.json.id + '/restaurar', {});
+  assert(rest2.status === 200, 'Restaurar: assistido restaurado');
+  const detRest = await get('/api/assistidos/' + rest.json.id + '/detalhe');
+  const idsRest = (detRest.json.comparecimentos || []).map(c => String(c.id));
+  assert(idsRest.includes(String(cMantem.json.id)),
+    'Restaurar: o comparecimento excluido EM CASCATA voltou');
+  assert(!idsRest.includes(String(cSome.json.id)),
+    'Restaurar: o comparecimento excluido ISOLADAMENTE continua excluído');
+
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - etiqueta normalizada em TODAS as leituras ===');
+  const legado = '9600098-00.2026.8.06.0098';
+  const cruConcluido = await store.assistidos.insert({
+    vinculo: legado, nome: 'ETIQUETA CRUA EM TODAS AS ROTAS',
+    processo: legado, vara: 'Vara de Teste', localAssinatura: 'COMEP Cariri',
+    dataInicio: diasAtras(200), frequencia: 'mensal',
+    etiqueta: 'vermelho', status: 'concluido',
+  });
+  const cruAtivo = await store.assistidos.insert({
+    vinculo: '9600097-00.2026.8.06.0097', nome: 'ETIQUETA CRUA ATIVO',
+    processo: '9600097-00.2026.8.06.0097', vara: 'Vara de Teste', localAssinatura: 'COMEP Cariri',
+    dataInicio: diasAtras(200), frequencia: 'mensal',
+    etiqueta: 'laranja', status: 'ativo',
+  });
+  await store.assistidosComparecimentos.insert({
+    assistidoId: cruAtivo.id, dataComparecimento: diasAtras(5), ppPlantao: 'PP Cru',
+    observacao: '', juntada: '', protocolado: false,
+  });
+  await del('/api/assistidos/' + cruAtivo.id);   // arquivado com etiqueta crua
+
+  const OK_ETIQUETAS = ['pendente', 'conferido'];
+  const leTodos = await get('/api/assistidos?limit=100');
+  assert((leTodos.json.itens || []).every(x => OK_ETIQUETAS.includes(x.etiqueta)),
+    'Leitura: /api/assistidos nunca devolve etiqueta crua');
+  const leLista = await get('/api/assistidos/lista?limit=200');
+  assert((leLista.json || []).every(x => OK_ETIQUETAS.includes(x.etiqueta)),
+    'Leitura: /api/assistidos/lista nunca devolve etiqueta crua');
+  const leId = await get('/api/assistidos/' + cruConcluido.id);
+  assert(leId.json.etiqueta === 'pendente', 'Leitura: GET /:id normaliza etiqueta crua');
+  const leDetalhe = await get('/api/assistidos/' + cruConcluido.id + '/detalhe');
+  assert(leDetalhe.json.assistido.etiqueta === 'pendente', 'Leitura: GET /:id/detalhe normaliza etiqueta crua');
+  const leConcluidos = await get('/api/assistidos/concluidos?limit=100');
+  assert((leConcluidos.json.itens || []).every(x => OK_ETIQUETAS.includes(x.etiqueta)),
+    'Leitura: /api/assistidos/concluidos nunca devolve etiqueta crua');
+  const leArquivados = await get('/api/assistidos/arquivados?limit=100');
+  assert((leArquivados.json.itens || []).every(x => OK_ETIQUETAS.includes(x.etiqueta)),
+    'Leitura: /api/assistidos/arquivados nunca devolve etiqueta crua');
+  const leJuntada = await get('/api/assistidos/juntada');
+  assert((leJuntada.json || []).every(x => OK_ETIQUETAS.includes(x.etiqueta)),
+    'Leitura: /api/assistidos/juntada nunca devolve etiqueta crua');
+
+  // =================================================================
+  console.log('\n=== ASSISTIDOS - resumo traz a lista de responsaveis ===');
+  const resumo = await get('/api/assistidos/resumo');
+  assert(resumo.status === 200, 'Resumo: 200');
+  assert(Array.isArray(resumo.json.responsaveis), 'Resumo: a chave "responsaveis" existe');
+  assert(typeof resumo.json.total === 'number' && typeof resumo.json.ativo === 'number'
+    && typeof resumo.json.pendentesJuntada === 'number',
+    'Resumo: as chaves antigas continuam na resposta');
+  assert(resumo.json.responsaveis.includes('Maria Souza'),
+    'Resumo: o responsavel preenchido aparece na lista');
+  assert(!resumo.json.responsaveis.some(x => !String(x || '').trim()),
+    'Resumo: sem responsavel vazio na lista');
+  assert(new Set(resumo.json.responsaveis).size === resumo.json.responsaveis.length,
+    'Resumo: a lista de responsaveis nao tem repetidos');
+  const resumoOrdenado = resumo.json.responsaveis.slice().sort((a, b) =>
+    String(a).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .localeCompare(String(b).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), 'pt-BR'));
+  assert(JSON.stringify(resumo.json.responsaveis) === JSON.stringify(resumoOrdenado),
+    'Resumo: a lista de responsaveis vem ordenada alfabeticamente (sem acentos)');
+
   console.log('\n==================== RESUMO ====================');
   console.log(`Testes: OK=${passed} | Falha=${failed}`);
   process.exit(failed ? 1 : 0);
