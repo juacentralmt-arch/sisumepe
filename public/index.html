@@ -1629,10 +1629,14 @@
             <option value="">Todas as situações</option>
             <option value="atrasado">🔴 Atrasados</option>
             <option value="sem_comparecimento">🟠 Nunca compareceu</option>
+            <option value="sem_historico">⚪ Sem histórico</option>
             <option value="em_dia">🟢 Em dia</option>
           </select>
           <select id="assFiltroFrequencia" class="inp text-xs" onchange="assFiltrosMudou()"></select>
           <select id="assFiltroStatus" class="inp text-xs" onchange="assFiltrosMudou()"></select>
+          <select id="assFiltroResponsavel" class="inp text-xs" onchange="assFiltrosMudou()">
+            <option value="">Todos os responsáveis</option>
+          </select>
           <select id="assFiltroOrdem" class="inp text-xs" onchange="assFiltrosMudou()">
             <option value="reconte">Mais recentes</option>
             <option value="atraso">Mais atrasados</option>
@@ -2279,7 +2283,7 @@
 <div id="toast" class="hidden fixed bottom-24 right-5 bg-slate-900 text-white text-sm font-medium pl-4 pr-5 py-3 rounded-2xl shadow-2xl z-50 border border-white/10"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="/js/app.js?v=53"></script>
+<script src="/js/app.js?v=54"></script>
 
     <!-- Modal: Novo Assistido -->
     <div id="modalNovoAssistido" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -2288,11 +2292,16 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Vínculo</label><input id="assVinculo" type="text" placeholder="Ex: V001" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Nome</label><input id="assNome" type="text" placeholder="Nome completo" class="inp text-xs"></div>
-          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Processo (CNJ)</label><input id="assProcesso" type="text" placeholder="0000000-00.0000.0.00.0000" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Processo (CNJ)</label><input id="assProcesso" type="text" placeholder="0000000-00.0000.0.00.0000" class="inp text-xs" title="Número CNJ com 20 dígitos (ex.: 0000000-00.0000.0.00.0000)"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Vara</label><input id="assVara" type="text" placeholder="Vara judicial" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Local de Assinatura</label><select id="assLocal" class="inp text-xs"><option value="COMEP Cariri">COMEP Cariri</option><option value="Albergado Cariri">Albergado Cariri</option><option value="COAP Cariri">COAP Cariri</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Início</label><input id="assDataInicio" type="date" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Fim</label><input id="assDataFim" type="date" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Frequência</label><select id="assFrequencia" class="inp text-xs"><option value="mensal">Mensal</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">CPF</label><input id="assCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Telefone</label><input id="assTelefone" type="text" placeholder="(00) 00000-0000" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Endereço</label><input id="assEndereco" type="text" placeholder="Rua, número, bairro, cidade" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Situação Jurídica</label><input id="assSituacaoJuridica" type="text" placeholder="Ex: Comparecimento mensal" class="inp text-xs"></div>
           <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Responsável Técnico</label><input id="assResponsavelTecnico" type="text" placeholder="Nome do técnico responsável" class="inp text-xs"></div>
         </div>
         <div class="mt-4 flex gap-2 justify-end">
@@ -2368,13 +2377,18 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Vínculo</label><input id="editAssVinculo" type="text" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Nome</label><input id="editAssNome" type="text" class="inp text-xs"></div>
-          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Processo</label><input id="editAssProcesso" type="text" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Processo (CNJ)</label><input id="editAssProcesso" type="text" placeholder="0000000-00.0000.0.00.0000" class="inp text-xs" title="Número CNJ com 20 dígitos (ex.: 0000000-00.0000.0.00.0000)"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Vara</label><input id="editAssVara" type="text" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Local</label><select id="editAssLocal" class="inp text-xs"><option value="COMEP Cariri">COMEP Cariri</option><option value="Albergado Cariri">Albergado Cariri</option><option value="COAP Cariri">COAP Cariri</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Início</label><input id="editAssDataInicio" type="date" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Data Fim</label><input id="editAssDataFim" type="date" class="inp text-xs"></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Frequência</label><select id="editAssFrequencia" class="inp text-xs"><option value="mensal">Mensal</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="bimestral">Bimestral</option><option value="trimestral">Trimestral</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Status</label><select id="editAssStatus" class="inp text-xs"><option value="ativo">Ativo</option><option value="concluido">Concluído</option><option value="arquivado">Arquivado</option></select></div>
           <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Etiqueta</label><select id="editAssEtiqueta" class="inp text-xs"><option value="pendente">Pendente (não conferido)</option><option value="conferido">✅ Conferido</option></select></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">CPF</label><input id="editAssCpf" type="text" inputmode="numeric" placeholder="000.000.000-00" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-slate-500">Telefone</label><input id="editAssTelefone" type="text" placeholder="(00) 00000-0000" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Endereço</label><input id="editAssEndereco" type="text" placeholder="Rua, número, bairro, cidade" class="inp text-xs"></div>
+          <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Situação Jurídica</label><input id="editAssSituacaoJuridica" type="text" placeholder="Ex: Comparecimento mensal" class="inp text-xs"></div>
           <div class="flex flex-col gap-1 md:col-span-2"><label class="text-[10px] font-bold text-slate-500">Responsável Técnico</label><input id="editAssResponsavelTecnico" type="text" class="inp text-xs" placeholder="Nome do técnico responsável"></div>
         </div>
         <div class="mt-4 flex gap-2 justify-end">

@@ -381,7 +381,10 @@ function go(tab){
   if(tab==='estoque') loadEstoque();
   if(tab==='pdf') { const _pf=document.getElementById('termoFormPdf'); if(_pf){ _pf.classList.remove('hidden'); _pf.style.display=''; } }
   
-  if(tab==='assistidos'){ loadAssistidos(); setAssTab('todos'); }
+  // Uma requisição só ao abrir a aba: setAssTab('todos') já monta os
+  // filtros e carrega a lista. Chamar loadAssistidos() aqui duplicava
+  // a chamada (o back respondia duas vezes com a mesma página).
+  if(tab==='assistidos'){ setAssTab('todos'); }
   if(tab==='arquivos') loadArquivos();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -9674,9 +9677,16 @@ const ASS_AÇÕES = {
 // 'verde', 'laranja' ou 'vermelho'. Sem normalizar, o select fica sem
 // seleção (value '') e o front manda etiqueta:'' — o back responde 400 e
 // descarta TODOS os campos editados da ficha.
+//
+// O mapeamento é o MESMO do back-end (src/lib/assistidos.js,
+// ETIQUETAS_LEGADAS): ''/null -> pendente, 'sem' -> pendente,
+// 'verde' -> conferido, 'laranja'/'vermelho' -> pendente.
+// Antes o front mandava 'verde' como 'pendente' e o back como 'conferido':
+// a mesma ficha ficava com etiquetas diferentes em cada lado.
 function assNormalizaEtiqueta(valor){
   const v = String(valor == null ? '' : valor).trim().toLowerCase();
-  return v === 'conferido' ? 'conferido' : 'pendente';
+  if(v === 'conferido' || v === 'verde') return 'conferido';
+  return 'pendente';
 }
 
 // Todos os comparecimentos pendentes de juntada de um assistido.
@@ -9706,6 +9716,30 @@ function renderAssErro(containerId, mensagem, retryFn){
     + '<p class="text-slate-500 text-[11px] mt-1">Não foi possível carregar os dados. Verifique a conexão e tente novamente.</p>'
     + '<button onclick="'+esc(retryFn)+'" class="btn btn-ghost text-[10px] px-3 py-1 mt-3">↻ Tentar de novo</button>'
     + '</div>';
+}
+
+// Indicador DISCRETO de carregamento: enquanto a requisição está em
+// andamento a lista é substituída por ele; quando a resposta chega (ou
+// falha) o container é reescrito e o indicador some sozinho.
+function renderAssCarregando(containerId, mensagem){
+  const wrap = document.getElementById(containerId);
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">'
+    + '<span class="inline-flex items-center gap-2">'
+    + '<span class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin"></span>'
+    + esc(mensagem || 'Carregando…')
+    + '</span></div>';
+}
+
+// Avisa ANTES de enviar quando o processo não parece um CNJ: o back
+// responde 400 e a ficha inteira é perdida. A mensagem é amigável e
+// NÃO bloqueia o envio — quem preferir pode confirmar e seguir.
+function assConfirmarProcessoInvalido(valor){
+  const v = String(valor == null ? '' : valor).trim();
+  if(!v || validarCNJ(v)) return true;
+  toast('Atenção: o processo deve ter 20 dígitos no padrão CNJ (ex.: 0000000-00.0000.0.00.0000).');
+  if(typeof confirm !== 'function') return true;
+  return confirm('O processo informado não parece um CNJ válido (20 dígitos).\nDeseja salvar mesmo assim?');
 }
 
 function setAssTab(tab){
@@ -9752,11 +9786,19 @@ function setAssTab(tab){
 }
 
 // Badges: contagem por status + pendências de juntada.
+// Também alimenta o select de responsável técnico: o resumo traz a
+// lista `responsaveis` (campo novo do back-end). Se a resposta for de
+// uma versão antiga (sem o campo), o select fica vazio — sem erro.
 async function atualizarBadgesAssistidos(){
-  try{
-    const r = await api('/api/assistidos/resumo');
-    assistidosResumo = r || assistidosResumo;
-  }catch(e){}
+  // O badge de ARQUIVADOS conta os REGISTROS EXCLUÍDOS (soft-delete),
+  // que é um conjunto diferente do `arquivado` do resumo (status).
+  // Busca só o total (limit=1) em paralelo com o resumo — mesma
+  // latência, sem pesar a listagem.
+  var [resumo, arq] = await Promise.all([
+    api('/api/assistidos/resumo').catch(function(){ return null; }),
+    api('/api/assistidos/arquivados?page=1&limit=1').catch(function(){ return null; })
+  ]);
+  if(resumo) assistidosResumo = resumo;
   var bTodos=document.getElementById('assBadgeTodos');
   if(bTodos) bTodos.textContent = assistidosResumo.total || 0;
   var bJunt=document.getElementById('assBadgeJuntada');
@@ -9767,6 +9809,31 @@ async function atualizarBadgesAssistidos(){
   }
   var bConcl=document.getElementById('assBadgeConcluidos');
   if(bConcl) bConcl.textContent = (assistidosResumo.concluido||0) + (assistidosResumo.arquivado||0);
+  // Badge de ARQUIVADOS: antes só era atualizado quando a aba de
+  // arquivados era aberta — ficava desatualizado no resto do tempo.
+  var bArq=document.getElementById('assBadgeArquivados');
+  if(bArq && arq && typeof arq.total === 'number') bArq.textContent = arq.total;
+  montarFiltroResponsavel(assistidosResumo);
+}
+
+// Select de responsável técnico: usa `resumo.responsaveis` (array de
+// strings). Back-end antigo não devolve o campo → degrada com elegância
+// (select fica só com a opção "Todos"), sem quebrar a tela.
+function montarFiltroResponsavel(resumo){
+  const sel = document.getElementById('assFiltroResponsavel');
+  if(!sel) return;
+  const lista = (resumo && Array.isArray(resumo.responsaveis)) ? resumo.responsaveis.filter(Boolean) : null;
+  if(!lista) return;   // resposta antiga: mantém o que já está na tela
+  // Só redesenha quando a lista mudou: o refresh por SSE acontece a
+  // cada segundo e não pode fechar o dropdown que o usuário abriu.
+  const chave = lista.join('|');
+  if(sel.dataset.lista === chave) return;
+  sel.dataset.lista = chave;
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Todos os responsáveis</option>'
+    + lista.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+  // Preserva a escolha atual se ainda existir na nova lista.
+  sel.value = lista.indexOf(atual) >= 0 ? atual : '';
 }
 
 // O módulo Assistidos não é da fila: um evento SSE 'update' precisa
@@ -9787,15 +9854,23 @@ function refreshAssistidosSeVisivel(forcar){
   if(!forcar && (agora - assUltimoRefresh) < 1000) return;
   assUltimoRefresh = agora;
   try{
-    if(assTab === 'juntada') loadAssistidosJuntada();
-    else if(assTab === 'concluidos') loadAssistidosConcluidos();
-    else if(assTab === 'arquivados') loadAssistidosArquivados();
-    else loadAssistidos();
+    // O refresh automático (SSE) não pode trocar a lista por um spinner a
+    // cada segundo: a lista antiga fica até a nova chegar.
+    if(assTab === 'juntada') loadAssistidosJuntada(true);
+    else if(assTab === 'concluidos') loadAssistidosConcluidos(true);
+    else if(assTab === 'arquivados') loadAssistidosArquivados(true);
+    else loadAssistidos(true);
     atualizarBadgesAssistidos();
   }catch(e){ console.error('refreshAssistidos', e); }
 }
 
-async function loadAssistidos(){
+async function loadAssistidos(silencioso){
+  // Indicador discreto enquanto a requisição está em andamento: some
+  // sozinho quando a lista (ou o erro) é desenhada no mesmo lugar.
+  //
+  // No refresh AUTOMÁTICO (SSE) a lista antiga continua na tela: trocá-la
+  // por um spinner a cada segundo faria a lista piscar sem parar.
+  if(!silencioso) renderAssCarregando('assContentTodos', 'Carregando assistidos…');
   try{
     var url = '/api/assistidos?page='+encodeURIComponent(assistidosPage)+'&limit='+encodeURIComponent(assistidosLimit);
     if(assistidosBusca) url += '&q='+encodeURIComponent(assistidosBusca);
@@ -9804,11 +9879,15 @@ async function loadAssistidos(){
     var freq = (document.getElementById('assFiltroFrequencia')||{}).value;
     var st   = (document.getElementById('assFiltroStatus')||{}).value;
     var ord  = (document.getElementById('assFiltroOrdem')||{}).value;
+    var resp = (document.getElementById('assFiltroResponsavel')||{}).value;
     if(conf) url += '&conferencia='+encodeURIComponent(conf);
     if(sit)  url += '&situacao='+encodeURIComponent(sit);
     if(freq) url += '&frequencia='+encodeURIComponent(freq);
     if(st)   url += '&status='+encodeURIComponent(st);
     if(ord)  url += '&ordem='+encodeURIComponent(ord);
+    // Filtro por responsável técnico (?responsavel=) — o back já filtra
+    // por esse campo; os nomes vêm do resumo (resumo.responsaveis).
+    if(resp) url += '&responsavel='+encodeURIComponent(resp);
     var r = await api(url);
     var itens = (r && Array.isArray(r.itens)) ? r.itens : [];
     assistidosData = itens;
@@ -9828,7 +9907,7 @@ function assFiltrosMudou(){
   loadAssistidos();
 }
 function limparFiltrosAssistidos(){
-  ['assFiltroConferencia','assFiltroSituacao','assFiltroFrequencia','assFiltroStatus'].forEach(function(id){
+  ['assFiltroConferencia','assFiltroSituacao','assFiltroFrequencia','assFiltroStatus','assFiltroResponsavel'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
   var ord = document.getElementById('assFiltroOrdem'); if(ord) ord.value = 'reconte';
@@ -9863,7 +9942,8 @@ function debounceAssBusca(){
   }, 350);
 }
 
-async function loadAssistidosJuntada(){
+async function loadAssistidosJuntada(silencioso){
+  if(!silencioso) renderAssCarregando('assContentJuntada', 'Carregando pendentes de juntada…');
   try{
     const r = await api('/api/assistidos/juntada');
     assJuntadaLista = Array.isArray(r) ? r : ((r && Array.isArray(r.itens)) ? r.itens : []);
@@ -9876,7 +9956,8 @@ async function loadAssistidosJuntada(){
   }
 }
 
-async function loadAssistidosConcluidos(){
+async function loadAssistidosConcluidos(silencioso){
+  if(!silencioso) renderAssCarregando('assContentConcluidos', 'Carregando concluídos…');
   try{
     var url = '/api/assistidos/concluidos?page='+encodeURIComponent(assConclPage)+'&limit='+encodeURIComponent(assConclLimit);
     var r = await api(url);
@@ -9884,7 +9965,7 @@ async function loadAssistidosConcluidos(){
     var itens = (r && Array.isArray(r.itens)) ? r.itens : (Array.isArray(r) ? r : []);
     assConclTotal = (r && typeof r.total === 'number') ? r.total : itens.length;
     if(r && typeof r.pagina === 'number' && r.pagina > 0) assConclPage = r.pagina;
-    if(!itens.length && assConclPage > 1){ assConclPage--; return loadAssistidosConcluidos(); }
+    if(!itens.length && assConclPage > 1){ assConclPage--; return loadAssistidosConcluidos(silencioso); }
     renderAssistidosConcluidos(itens);
     renderAssPaginacaoConcluidos();
   }catch(e){
@@ -9898,10 +9979,10 @@ async function loadAssistidosConcluidos(){
 // =====================================================================
 //  Aba Alertas — periodicidade não cumprida
 // =====================================================================
-async function loadAssistidosArquivados(){
+async function loadAssistidosArquivados(silencioso){
   var wrap = document.getElementById('assContentArquivados');
   if(!wrap) return;
-  wrap.innerHTML = '<div class="card p-4 text-center text-slate-400 text-xs">Carregando arquivados…</div>';
+  if(!silencioso) renderAssCarregando('assContentArquivados', 'Carregando arquivados…');
   try{
     var url = '/api/assistidos/arquivados?page='+encodeURIComponent(assArqPage)+'&limit='+encodeURIComponent(assArqLimit);
     var r = await api(url);
@@ -9912,7 +9993,7 @@ async function loadAssistidosArquivados(){
     var badge = document.getElementById('assBadgeArquivados');
     if(badge) badge.textContent = assArqTotal;
     if(!lista.length){
-      if(assArqPage > 1){ assArqPage--; return loadAssistidosArquivados(); }
+      if(assArqPage > 1){ assArqPage--; return loadAssistidosArquivados(silencioso); }
       wrap.innerHTML = '<div class="card p-6 text-center text-slate-400 text-xs">Nenhum assistido arquivado.</div>';
       renderAssPaginacaoArquivados();
       return;
@@ -10092,7 +10173,7 @@ function assIrPaginaAuditoria(p){
 
 // Etiqueta = ficha conferida (nao e prioridade).
 function etiquetaBadge(e){
-  const v = (e === 'conferido') ? 'conferido' : 'pendente';
+  const v = assNormalizaEtiqueta(e);
   if (v === 'conferido') return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">\u2705 Conferido</span>';
   return '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">\u26a0\ufe0e N\u00e3o conferido</span>';
 }
@@ -10138,8 +10219,14 @@ function renderAssistidosTodos(list){
     html += etiquetaBadge(a.etiqueta);
     html += '</div>';
     html += '</div>';
-    if(a.etiqueta === 'conferido' && a.conferidoPor){
-      html += '<p class="text-[10px] text-emerald-700 mb-2">✅ Conferido por '+esc(a.conferidoPor)+(a.conferidoEm?' em '+fmtDataBR(String(a.conferidoEm).slice(0,10)):'')+'</p>';
+    // Quem conferiu e quando (o back grava conferidoPor/conferidoEm).
+    // Aparece sempre que o registro tiver esses dados — não depende da
+    // etiqueta, que o back normaliza para 'pendente'|'conferido'.
+    if(a.conferidoPor || a.conferidoEm){
+      html += '<p class="text-[10px] text-emerald-700 mb-2">✅ Conferido'
+        + (a.conferidoPor ? ' por '+esc(a.conferidoPor) : '')
+        + (a.conferidoEm ? ' em '+fmtDataBR(String(a.conferidoEm).slice(0,10)) : '')
+        + '</p>';
     }
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-[10px] text-slate-600 mb-3">';
     html += '<div><span class="font-semibold">Processo:</span> '+esc(a.processo||'-')+'</div>';
@@ -10238,25 +10325,42 @@ function montarFiltrosAssJuntada(){
   }
 }
 
+// Filtros da aba Juntada: PP e janela de datas agem sobre os ITENS
+// (cada comparecimento pendente), não sobre a ficha inteira.
+//
+// Antes o filtro era aplicado ao ASSISTIDO ("se algum pendente casa,
+// o assistido entra") e a lista desenhava TODOS os pendentes dele —
+// o usuário filtrava por PP e via pendentes de outros PPs.
+//
+// Agora cada pendente é julgado pelo filtro e só os que casam são
+// desenhados; um assistido sem nenhum pendente que case não aparece.
 function filtrarAssJuntada(){
   const local = (document.getElementById('assJuntLocal')||{}).value || '';
   const pp = (document.getElementById('assJuntPP')||{}).value || '';
   const de = (document.getElementById('assJuntDe')||{}).value || '';
   const ate = (document.getElementById('assJuntAte')||{}).value || '';
-  return assJuntadaLista.filter(function(a){
-    if(local && String(a.localAssinatura||'') !== local) return false;
+  const out = [];
+  assJuntadaLista.forEach(function(a){
+    if(local && String(a.localAssinatura||'') !== local) return;
     const pendentes = assPendentesDoAssistido(a);
-    if(!pendentes.length) return false;
-    if(!pp && !de && !ate) return true;
-    // Filtra por comparecimento: o assistido entra se ALGUM dos seus
-    // pendentes casa com o filtro (PP / janela de datas).
-    return pendentes.some(function(c){
+    if(!pendentes.length) return;
+    if(!pp && !de && !ate){ out.push(a); return; }
+    const casam = pendentes.filter(function(c){
       if(pp && assPPDoComparecimento(c) !== pp) return false;
       if(de && String(c.dataComparecimento||'') < de) return false;
       if(ate && String(c.dataComparecimento||'') > ate) return false;
       return true;
     });
+    if(!casam.length) return;   // assistido sem pendente que case: não aparece
+    // Cópia com a lista de pendentes já filtrada: o render (e o
+    // "selecionar todos") usam exatamente o que o usuário pediu.
+    const copia = Object.assign({}, a, {
+      comparecimentosPendentes: casam,
+      comparecimentoPendente: casam[0],
+    });
+    out.push(copia);
   });
+  return out;
 }
 
 function limparFiltrosAssJuntada(){
@@ -10452,6 +10556,11 @@ function abrirModalNovoAssistido(){
   document.getElementById('assLocal').value='COMEP Cariri';
   document.getElementById('assDataInicio').value='';
   document.getElementById('assFrequencia').value='mensal';
+  // Campos que antes só existiam na Planilha Geral (sem tela): agora
+  // podem ser digitados no cadastro.
+  ['assDataFim','assCpf','assTelefone','assEndereco','assSituacaoJuridica'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
   document.getElementById('modalNovoAssistido').classList.remove('hidden');
 }
 function fecharModalNovoAssistido(){
@@ -10467,7 +10576,17 @@ async function salvarNovoAssistido(){
     dataInicio: document.getElementById('assDataInicio').value,
     frequencia: document.getElementById('assFrequencia').value,
     responsavelTecnico: (document.getElementById('assResponsavelTecnico')||{}).value || '',
+    // Campos que existiam só na Planilha Geral (sem tela): enviados
+    // para o back validar junto com os demais.
+    dataFim: (document.getElementById('assDataFim')||{}).value || '',
+    cpf: (document.getElementById('assCpf')||{}).value || '',
+    telefone: (document.getElementById('assTelefone')||{}).value || '',
+    endereco: (document.getElementById('assEndereco')||{}).value || '',
+    situacaoJuridica: (document.getElementById('assSituacaoJuridica')||{}).value || '',
   };
+  // Avisa ANTES de enviar se o processo não parece um CNJ (o back
+  // responde 400 e nada é gravado). Não bloqueia: o usuário decide.
+  if(!assConfirmarProcessoInvalido(b.processo)) return;
   try{
     var r = await api('/api/assistidos', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
     if(r.error){ toast(r.error||'Erro ao cadastrar'); return; }
@@ -10548,8 +10667,9 @@ async function salvarNovoComparecimento(){
     if(r.error){ toast(r.error||'Erro ao registrar'); return; }
     toast('Comparecimento registrado');
     fecharModalNovoComparecimento();
+    // setAssTab('juntada') já recarrega a lista de juntada e os badges:
+    // pedir os badges aqui fazia a mesma requisição duas vezes.
     loadAssistidos();
-    atualizarBadgesAssistidos();
     setAssTab('juntada');
   }catch(e){ toast('Erro ao registrar: '+(e.message||e)); }
 }
@@ -10570,6 +10690,15 @@ async function abrirEditarAssistido(id){
     document.getElementById('editAssDataInicio').value = a.dataInicio||'';
     document.getElementById('editAssFrequencia').value = a.frequencia||'mensal';
     document.getElementById('editAssStatus').value = a.status||'ativo';
+    // Campos que antes só existiam na Planilha Geral (sem tela).
+    // Busca defensiva: se o campo não existir na tela, o editor segue.
+    // A data vem como 'AAAA-MM-DD' (o <input type=date> só aceita isso).
+    var setVal = function(id, v){ var el = document.getElementById(id); if(el) el.value = v || ''; };
+    setVal('editAssDataFim', a.dataFim ? String(a.dataFim).slice(0,10) : '');
+    setVal('editAssCpf', a.cpf);
+    setVal('editAssTelefone', a.telefone);
+    setVal('editAssEndereco', a.endereco);
+    setVal('editAssSituacaoJuridica', a.situacaoJuridica);
     // Etiqueta NORMALIZADA: o select só tem 'pendente'|'conferido' e a
     // base herdada traz ''/'sem'/'verde'/'laranja'/'vermelho'. Sem
     // normalizar o select fica sem seleção (value '') e o PATCH vai com
@@ -10594,8 +10723,11 @@ async function salvarEditarAssistido(){
   var campos = [
     ['vinculo','editAssVinculo'], ['nome','editAssNome'], ['processo','editAssProcesso'],
     ['vara','editAssVara'], ['localAssinatura','editAssLocal'], ['dataInicio','editAssDataInicio'],
-    ['frequencia','editAssFrequencia'], ['status','editAssStatus'], ['etiqueta','editAssEtiqueta'],
-    ['responsavelTecnico','editAssResponsavelTecnico'],
+    ['dataFim','editAssDataFim'], ['frequencia','editAssFrequencia'], ['status','editAssStatus'],
+    ['etiqueta','editAssEtiqueta'], ['responsavelTecnico','editAssResponsavelTecnico'],
+    // Campos que antes só existiam na Planilha Geral (sem tela).
+    ['cpf','editAssCpf'], ['telefone','editAssTelefone'], ['endereco','editAssEndereco'],
+    ['situacaoJuridica','editAssSituacaoJuridica'],
   ];
   var b = {};
   var mudou = false;
@@ -10614,9 +10746,26 @@ async function salvarEditarAssistido(){
       if(etiquetaAtual !== etiquetaOriginal) mudou = true;
       continue;
     }
+    // O CPF é gravado só com dígitos no back: comparar com os dígitos
+    // evita "mudou" fantasma quando o usuário digita com pontuação.
+    if(k === 'cpf'){
+      var vd = String(v||'').replace(/\D/g,''), od = ov.replace(/\D/g,'');
+      if(vd !== od){ b[k] = v; mudou = true; }
+      continue;
+    }
+    // Data: compara só a parte 'AAAA-MM-DD' (o input de data não
+    // aceita timestamp) — evita "mudou" fantasma.
+    if(k === 'dataFim' || k === 'dataInicio'){
+      var fd = String(v||'').slice(0,10), fo = ov.slice(0,10);
+      if(fd !== fo){ b[k] = fd; mudou = true; }
+      continue;
+    }
     if(String(v) !== ov){ b[k] = v; mudou = true; }
   }
   if(!mudou){ toast('Nada alterado'); return; }
+  // Só avisa sobre o processo quando ele MUDOU: um registro legado com
+  // processo de 21 dígitos continua editável mexendo em outros campos.
+  if(b.processo !== undefined && !assConfirmarProcessoInvalido(b.processo)) return;
   try{
     var r = await api('/api/assistidos/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(b) });
     if(r.error){ toast(r.error||'Erro ao editar'); return; }
@@ -10698,7 +10847,14 @@ async function abrirDetalheAssistido(id){
         }
         else { compHtml += '<p class="text-[10px] text-rose-500 font-bold mt-1">Pendente juntada</p>'; }
         compHtml += '</div>';
+        // Exclusão de comparecimento: a rota DELETE /api/assistidos/
+        // comparecimentos/:id devolve {ok:true} (403 quando o técnico não
+        // é o responsável). Os dois botões ficam num bloco à direita
+        // para não quebrar o layout do modal.
+        compHtml += '<div class="flex flex-col items-end gap-1 flex-none">';
         if(!prot){ compHtml += '<button onclick="event.stopPropagation(); abrirJuntadaForm('+c.id+', '+id+')" class="text-[10px] font-bold text-indigo-600 hover:underline">Adicionar Juntada</button>'; }
+        compHtml += '<button onclick="event.stopPropagation(); excluirComparecimentoAssistido('+c.id+', '+id+')" class="text-[10px] font-bold text-rose-600 hover:underline">🗑 Excluir comparecimento</button>';
+        compHtml += '</div>';
         compHtml += '</div>';
       }
       body.innerHTML = compHtml;
@@ -10709,6 +10865,26 @@ async function abrirDetalheAssistido(id){
 }
 function fecharModalDetalheAssistido(){
   document.getElementById('modalDetalheAssistido').classList.add('hidden');
+}
+
+// Exclui um comparecimento (soft-delete no back-end).
+// DELETE /api/assistidos/comparecimentos/:id -> {ok:true}; 403 quando o
+// técnico não é o responsável (a mensagem do back chega no toast).
+async function excluirComparecimentoAssistido(compId, assistidoId){
+  if(!confirm('Excluir este comparecimento? O registro sai da lista de pendentes e o histórico perde a data.')) return;
+  try{
+    var r = await api('/api/assistidos/comparecimentos/'+compId, { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    if(r && r.error){ toast(r.error || 'Erro ao excluir comparecimento'); return; }
+    toast('Comparecimento excluído');
+    // Recarrega o detalhe (com a lista de comparecimentos já limpa) e a
+    // aba de juntada, que é a que mostra os pendentes.
+    if(assistidoId) await abrirDetalheAssistido(assistidoId);
+    loadAssistidosJuntada();
+    loadAssistidos();
+    atualizarBadgesAssistidos();
+  }catch(e){
+    toast('Erro ao excluir comparecimento: ' + ((e && e.message) ? e.message : e));
+  }
 }
 
 // Abre a aba Auditoria ja filtrada pelo assistido.
@@ -10788,8 +10964,8 @@ async function salvarJuntada(){
     toast('Juntada salva');
     fecharJuntadaForm();
     fecharModalDetalheAssistido();
-    loadAssistidos();
-    atualizarBadgesAssistidos();
+    // setAssTab('todos') já recarrega a lista e os badges: chamar
+    // loadAssistidos() aqui fazia a mesma requisição duas vezes.
     setAssTab('todos');
   }catch(e){ toast('Erro ao salvar juntada: '+(e.message||e)); }
 }
