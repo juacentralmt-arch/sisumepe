@@ -6,6 +6,12 @@
 //  nada aqui duplica regra de negócio.
 // =====================================================================
 
+// Datas do módulo: o fuso operacional (America/Fortaleza) é o mesmo do
+// resto do sistema (estoque). `hojeLocal()` é a fonte de "hoje" — nunca
+// `new Date().toISOString()`, que devolve o dia UTC e atrasa o calendário
+// em três horas.
+const { hojeLocal, TZ_PADRAO } = require('./datas');
+
 const LOCAIS_ASSINATURA = Object.freeze(['COMEP Cariri', 'Albergado Cariri', 'COAP Cariri']);
 const PERIODOS_COMPARECIMENTO = Object.freeze(['semanal', 'quinzenal', 'mensal', 'bimestral', 'trimestral']);
 // A etiqueta marca o card como CONFERIDO (a conferência da ficha pela
@@ -39,13 +45,17 @@ function normalizaData(value) {
   return ehDataValida(s) ? s : '';
 }
 
+// Uma data no FUTURO (estritamente depois de hoje, no fuso local).
+//
+// `new Date('AAAA-MM-DD')` é interpretado como UTC pelo JavaScript: em
+// Fortaleza (UTC-3) o dia virava o ANTERIOR depois das 21h e a comparação
+// com "hoje" aceitava a data de amanhã (defeito de 1 dia). Aqui a data é
+// comparada como string ISO ('AAAA-MM-DD' ordena lexicograficamente) e
+// "hoje" vem do fuso operacional.
 function ehDataFutura(value) {
   if (!ehDataValida(value)) return false;
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const dt = new Date(value);
-  dt.setHours(0, 0, 0, 0);
-  return dt > hoje;
+  const s = String(value).trim();
+  return s > hojeLocal();
 }
 
 // ---------------------------------------------------------------------
@@ -130,8 +140,9 @@ function diasEntre(deISO, ateISO) {
 }
 
 // Normaliza uma etiqueta vinda do banco (pode ser de base antiga).
+// '' / null / undefined são equivalentes a "não conferido" → 'pendente'.
 function normalizaEtiqueta(valor) {
-  const s = String(valor || '').trim().toLowerCase();
+  const s = String(valor == null ? '' : valor).trim().toLowerCase();
   if (ETIQUETAS.includes(s)) return s;
   return ETIQUETAS_LEGADAS[s] || 'pendente';
 }
@@ -149,7 +160,7 @@ function normalizaEtiqueta(valor) {
 //    sem_historico     sem data de inicio e sem comparecimento
 // ---------------------------------------------------------------------
 function situacao(assistido, ultimoComparecimento, hojeISO) {
-  const dia = hojeISO || new Date().toISOString().slice(0, 10);
+  const dia = hojeISO || hojeLocal();
   const prazo = PRAZO_FREQUENCIA[assistido.frequencia] || 52;
   const periodo = FREQ_DIAS[assistido.frequencia] || 30;
 
@@ -296,6 +307,9 @@ module.exports = {
   FREQ_DIAS,
   PRAZO_FREQUENCIA,
   TOLERANCIA_FALTA,
+  // reexportados: quem usa o módulo não precisa carregar ./datas separado
+  hojeLocal,
+  TZ_PADRAO,
   ehDataValida,
   normalizaData,
   ehDataFutura,

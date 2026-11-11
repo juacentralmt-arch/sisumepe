@@ -3,6 +3,9 @@ const shared = require('../lib/shared');
 const { store, ah, auth, broadcast, upload } = shared;
 const dom = require('../lib/assistidos');
 const importPlanilha = require('../lib/importPlanilha');
+// Data local (America/Fortaleza) — "hoje" no fuso operacional, não em UTC:
+// depois das 21h o dia UTC já é o dia seguinte e o prazo/situação erram.
+const { hojeLocal } = require('../lib/datas');
 const router = express.Router();
 
 // =====================================================================
@@ -28,7 +31,20 @@ const CAMPOS_LIMPAVEIS = ['dataInicio', 'dataFim'];
 // Limite de assistidos devolvidos por página.
 const LIMITE_MAX = 100;
 // Ações registradas na trilha de auditoria do módulo.
-const ACOES_ASSISTIDO = ['criado', 'editado', 'etiqueta', 'excluido', 'restaurado', 'comparecimento', 'comparecimento_excluido', 'juntada', 'juntada_lote'];
+// 'importacao' entra na lista: a importação grava na trilha e, sem esta
+// chave, o registro não aparecia no filtro de ações e renderizava com o
+// rótulo cru ("importacao") em vez de "Importação".
+const ACOES_ASSISTIDO = ['criado', 'editado', 'etiqueta', 'excluido', 'restaurado', 'comparecimento', 'comparecimento_excluido', 'juntada', 'juntada_lote', 'importacao'];
+// Rótulos amigáveis das ações (o front usa este mapa para desenhar a
+// trilha; a API devolve junto para quem consumir só o back-end).
+const ROTULOS_ACOES = {
+  criado: 'Cadastrado', editado: 'Editado', etiqueta: 'Etiqueta', excluido: 'Excluído',
+  restaurado: 'Restaurado', comparecimento: 'Comparecimento',
+  comparecimento_excluido: 'Comparecimento excluído', juntada: 'Juntada',
+  juntada_lote: 'Juntada em lote', importacao: 'Importação',
+};
+// Mensagem devolvida quando um técnico mexe em registro de outro.
+const ERRO_RESPONSABILIDADE = 'Você só pode alterar assistidos sob sua responsabilidade.';
 
 const normalizaData = dom.normalizaData;
 const ehDataValida = dom.ehDataValida;
@@ -55,10 +71,11 @@ const ROTULOS = {
 // página — nunca da tabela inteira.
 function enriquecer(lista, comps, sitMap) {
   const porAssistido = dom.agruparComparecimentos(comps);
+  const hoje = hojeLocal();
   return lista.map(a => {
     const cs = porAssistido.get(String(a.id)) || [];
     const last = cs[0] || null;
-    const sit = (sitMap && sitMap.get(String(a.id))) || dom.situacao(a, last);
+    const sit = (sitMap && sitMap.get(String(a.id))) || dom.situacao(a, last, hoje);
     return {
       ...a,
       etiqueta: dom.normalizaEtiqueta(a.etiqueta),
@@ -74,6 +91,62 @@ function enriquecer(lista, comps, sitMap) {
       prazo: sit.prazo,
     };
   });
+}
+
+// ---------------------------------------------------------------------
+//  Etiqueta — normalização na entrada e na saída
+//
+//  A base herdada gravou 'sem' | 'verde' | 'laranja' | 'vermelho'. A
+//  etiqueta nova é 'pendente' | 'conferido'. A API nunca devolve valor
+//  legado (o <select> do front só conhece os dois novos) e nunca barra
+//  o salvamento por causa da etiqueta.
+// ---------------------------------------------------------------------
+// Aceita: 'pendente' | 'conferido', os legados e ''/null (-> 'pendente').
+// Devolve null quando o valor é desconhecido (ex.: 'azul').
+function normalizaEtiquetaEntrada(valor) {
+  const s = String(valor == null ? '' : valor).trim().toLowerCase();
+  if (!s) return 'pendente';
+  if (dom.ETIQUETAS.includes(s)) return s;
+  if (Object.prototype.hasOwnProperty.call(dom.ETIQUETAS_LEGADAS, s)) return dom.ETIQUETAS_LEGADAS[s];
+  return null;
+}
+
+// Cópia do assistido com a etiqueta já normalizada (nunca valor legado).
+function comEtiquetaNormalizada(assistido) {
+  if (!assistido) return assistido;
+  return { ...assistido, etiqueta: dom.normalizaEtiqueta(assistido.etiqueta) };
+}
+
+// ---------------------------------------------------------------------
+//  Responsabilidade do técnico
+//
+//  O módulo tem o campo `responsavelTecnico`: cada assistido pode ter
+//  um técnico responsável. Antes, NENHUMA rota comparava esse campo com
+//  o usuário logado — qualquer técnico editava/apagava o registro de
+//  outro. Regras:
+//    - admin (e qualquer papel não-técnico): sem restrição;
+//    - assistido SEM responsável preenchido: liberado (a base herdada
+//      não tinha o campo);
+//    - responsável bate com o nome (ou o login) do técnico: liberado;
+//    - caso contrário: 403.
+//  A comparação ignora maiúsculas, acentos e espaços extras.
+// ---------------------------------------------------------------------
+function chavePessoa(valor) {
+  return String(valor == null ? '' : valor)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function podeOperar(req, assistido) {
+  const role = String((req.auth && req.auth.role) || '').trim().toLowerCase();
+  if (role !== 'tecnico') return true;
+  const responsavel = String((assistido && assistido.responsavelTecnico) || '').trim();
+  if (!responsavel) return true;
+  const alvo = chavePessoa(responsavel);
+  const meus = [req.auth && req.auth.name, req.auth && req.auth.user]
+    .filter(v => String(v || '').trim())
+    .map(chavePessoa);
+  return meus.includes(alvo);
 }
 
 // Diferença campo a campo entre dois estados — alimenta a aba Auditoria.
@@ -129,14 +202,20 @@ router.get('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =>
 
   // Situacao e ordem por atraso dependem do ultimo comparecimento de cada
   // monitorado: nesse caso a lista inteira e calculada e paginada depois.
-  const precisaDoConjunto = !!sitFiltro || ordem === 'atraso';
+  // A ordem por NOME tambem precisa do conjunto inteiro: ordenando so a
+  // pagina, o resultado nao seria o alfabeto global (cada pagina saiaria
+  // em ordem diferente).
+  const precisaDoConjunto = !!sitFiltro || ordem === 'atraso' || ordem === 'nome';
   let itens = [], total = 0, sitMap = null;
 
   if (precisaDoConjunto) {
     const todos = await store.assistidos.todosAtivos({
-      campos: 'id,nome,vinculo,processo,vara,local_assinatura,data_inicio,frequencia,etiqueta,status,responsavel_tecnico,deleted_at,createdat,updatedat',
+      // Lista COMPLETA de colunas: no Supabase a lista parcial perdia
+      // campos usados pelo card ("Conferido por", CPF, telefone,
+      // endereco, situacao juridica, extras, data de fim).
+      campos: 'id,nome,vinculo,processo,vara,local_assinatura,data_inicio,data_fim,frequencia,etiqueta,status,responsavel_tecnico,cpf,telefone,endereco,situacao_juridica,extras,conferido_por,conferido_em,deleted_at,createdat,updatedat',
     });
-    sitMap = await store.assistidos.situacoes(todos);
+    sitMap = await store.assistidos.situacoes(todos, hojeLocal());
     let filtrados = todos.filter(a => {
       if (status && String(a.status || '') !== status) return false;
       if (frequencia && String(a.frequencia || '') !== frequencia) return false;
@@ -176,7 +255,7 @@ router.get('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =>
       limit: limite, offset: (page - 1) * limite, q: busca, status, frequencia, conferencia, responsavel,
     });
     itens = r.itens; total = r.total;
-    sitMap = await store.assistidos.situacoes(itens);
+    sitMap = await store.assistidos.situacoes(itens, hojeLocal());
   }
 
   const comps = await store.assistidosComparecimentos.all(itens.map(a => a.id));
@@ -187,7 +266,10 @@ router.get('/api/assistidos', auth(['admin', 'tecnico']), ah(async (req, res) =>
 router.get('/api/assistidos/lista', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const busca = String(req.query.q || '').trim().slice(0, 60);
   const limite = Math.min(Math.max(Number(req.query.limit) || 500, 1), 2000);
-  res.json(await store.assistidos.listaSimples({ limit: limite, q: busca }));
+  const lista = await store.assistidos.listaSimples({ limit: limite, q: busca });
+  // A etiqueta nunca sai crua: valor legado ('sem', 'verde'...) quebraria o
+  // <select> do front (value='' -> gravava etiqueta vazia).
+  res.json(lista.map(a => ('etiqueta' in a) ? { ...a, etiqueta: dom.normalizaEtiqueta(a.etiqueta) } : a));
 }));
 
 // Contagem por status (badges das abas).
@@ -243,6 +325,9 @@ router.get('/api/assistidos/auditoria', auth(['admin', 'tecnico']), ah(async (re
       id: it.id,
       at: it.at,
       acao: it.action,
+      // Rótulo pronto: 'importacao' (e as demais) não podem aparecer
+      // com o nome cru na trilha.
+      acaoRotulo: ROTULOS_ACOES[it.action] || it.action,
       usuario: it.byName || it.byUser || '',
       login: it.byUser || '',
       papel: it.byRole || '',
@@ -253,17 +338,21 @@ router.get('/api/assistidos/auditoria', auth(['admin', 'tecnico']), ah(async (re
       changes: Array.isArray(it.changes) ? it.changes : [],
     })),
     total, pagina: page, limite, acoes,
+    // Rótulo de cada ação (o front também tem esse mapa; aqui fica
+    // disponível para quem consumir só a API).
+    acoesRotulos: ROTULOS_ACOES,
   });
 }));
 
 // ---------------------------------------------------------------------
 //  Assistidos arquivados (soft-delete) — precisam de restauração.
+//  Mesma estrutura da aba "Todos": { itens, total, pagina, limite }.
 // ---------------------------------------------------------------------
 router.get('/api/assistidos/arquivados', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
-  const limite = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const limite = Math.min(Math.max(Number(req.query.limit) || 20, 1), LIMITE_MAX);
   const { itens, total } = await store.assistidos.arquivados({ limit: limite, offset: (page - 1) * limite });
-  res.json({ itens, total, pagina: page, limite });
+  res.json({ itens: itens.map(comEtiquetaNormalizada), total, pagina: page, limite });
 }));
 
 // ---------------------------------------------------------------------
@@ -304,7 +393,17 @@ router.get('/api/assistidos/juntada', auth(['admin', 'tecnico']), ah(async (req,
     const cs = porAssistido.get(String(id)).sort(
       (x, y) => String(x.dataComparecimento || '').localeCompare(String(y.dataComparecimento || ''))
     );
-    out.push({ ...a, comparecimentoPendente: cs[0], totalPendentes: cs.length });
+    // TODOS os pendentes do assistido: com 2+ pendências, expor só o
+    // primeiro escondia os demais e impossibilitava protocolá-los em
+    // lote. `comparecimentoPendente` continua sendo o primeiro (o front
+    // antigo usa ele) e `totalPendentes` conta todos.
+    const comparecimentosPendentes = cs.map(c => ({ ...c, policialPlantao: c.ppPlantao || '' }));
+    out.push({
+      ...comEtiquetaNormalizada(a),
+      comparecimentoPendente: comparecimentosPendentes[0],
+      comparecimentosPendentes,
+      totalPendentes: comparecimentosPendentes.length,
+    });
   }
   res.json(out);
 }));
@@ -313,10 +412,18 @@ router.get('/api/assistidos/juntada', auth(['admin', 'tecnico']), ah(async (req,
 //  Aba "Concluídos" — encerrados: concluído ou arquivado.
 //  'arquivado' vem da base herdada da Planilha Geral; sem incluí-lo,
 //  esses registros somem da UI sem existir em nenhuma aba.
+//
+//  Mesma estrutura da aba "Todos": { itens, total, pagina, limite }.
+//  Antes devolvia um array cru (sem paginação e sem o total real): o
+//  badge mostrava 150 e a lista trinta, sem aviso.
 // ---------------------------------------------------------------------
 router.get('/api/assistidos/concluidos', auth(['admin', 'tecnico']), ah(async (req, res) => {
-  const { itens } = await store.assistidos.list({ limit: LIMITE_MAX, offset: 0, statusIn: STATUS_ENCERRADOS });
-  res.json(itens);
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limite = Math.min(Math.max(Number(req.query.limit) || 20, 1), LIMITE_MAX);
+  const { itens, total } = await store.assistidos.list({
+    limit: limite, offset: (page - 1) * limite, statusIn: STATUS_ENCERRADOS,
+  });
+  res.json({ itens: itens.map(comEtiquetaNormalizada), total, pagina: page, limite });
 }));
 
 // Detalhe de um assistido (dados + comparecimentos)
@@ -327,14 +434,14 @@ router.get('/api/assistidos/:id(\\d+)/detalhe', auth(['admin', 'tecnico']), ah(a
   const sorted = comps.slice().sort(
     (x, y) => String(y.dataComparecimento || '').localeCompare(String(x.dataComparecimento || ''))
   );
-  res.json({ assistido: row, comparecimentos: sorted });
+  res.json({ assistido: comEtiquetaNormalizada(row), comparecimentos: sorted });
 }));
 
 // Busca um assistido por ID
 router.get('/api/assistidos/:id(\\d+)', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const row = await store.assistidos.byId(req.params.id);
   if (!row) return res.status(404).json({ error: 'Assistido não encontrado' });
-  res.json(row);
+  res.json(comEtiquetaNormalizada(row));
 }));
 
 // ---------------------------------------------------------------------
@@ -389,8 +496,12 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
   const b = req.body || {};
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Não encontrado' });
+  // Técnico só mexe no que está sob sua responsabilidade.
+  if (!podeOperar(req, target)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
 
-  const enviados = dom.CAMPOS_EDITAVEIS.filter(k => b[k] !== undefined && b[k] !== null);
+  // A etiqueta entra mesmo quando vem vazia/null: '' e null significam
+  // "pendente" (é o que o <select> vazio do front enviava).
+  const enviados = dom.CAMPOS_EDITAVEIS.filter(k => b[k] !== undefined && (b[k] !== null || k === 'etiqueta'));
   if (!enviados.length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
 
   // Se o vínculo muda e o processo não vem, o processo acompanha o vínculo
@@ -398,15 +509,29 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
   if (enviados.includes('vinculo') && !enviados.includes('processo')) enviados.push('processo');
 
   const c = {};
+  let etiquetaInvalida = false;
   for (const k of enviados) {
     let v = b[k];
+    if (k === 'etiqueta') {
+      // Aceita os legados (sem|verde|laranja|vermelho), '' e null e
+      // normaliza. Valor desconhecido é ignorado: a falha da etiqueta
+      // nunca pode impedir o salvamento dos demais campos.
+      const alvo = normalizaEtiquetaEntrada(v);
+      if (alvo == null) { etiquetaInvalida = true; continue; }
+      c.etiqueta = alvo;
+      continue;
+    }
     if (k === 'dataInicio' || k === 'dataFim') v = normalizaData(v);
     else if (k === 'cpf') v = String(v).replace(/\D/g, '').trim();
     else if (k === 'processo' && b[k] === undefined) v = c.vinculo;
     else v = String(v).trim();
     c[k] = v;
   }
-  const erro = dom.validarCampos(enviados, c, { limpaveis: CAMPOS_LIMPAVEIS });
+  // Só a etiqueta, e ela inválida: não há nada para salvar.
+  if (etiquetaInvalida && !Object.keys(c).length) {
+    return res.status(400).json({ error: 'Etiqueta inválida. Use: pendente ou conferido.' });
+  }
+  const erro = dom.validarCampos(enviados.filter(k => c[k] !== undefined), c, { limpaveis: CAMPOS_LIMPAVEIS });
   if (erro) return res.status(400).json({ error: erro });
 
   // Unicidade do vínculo só é conferida quando ele muda.
@@ -430,7 +555,7 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
     : 'Assistido editado: ' + row.nome;
   await auditar(req, 'editado', 'assistido#' + row.id, row.nome, resumo, row.id, changes);
   broadcast();
-  res.json(row);
+  res.json(comEtiquetaNormalizada(row));
 }));
 
 // Etiquetar assistido.
@@ -443,15 +568,17 @@ router.patch('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, r
 // guarda o historico das mudancas.
 router.patch('/api/assistidos/:id/etiqueta', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const { etiqueta } = req.body || {};
-  const bruto = String(etiqueta == null ? '' : etiqueta).trim().toLowerCase();
   const target = await store.assistidos.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Assistido não encontrado' });
-  // Estrito: valor desconhecido e erro, nao vira 'pendente' em silencio.
-  const conhecido = ETIQUETAS.includes(bruto) || Object.prototype.hasOwnProperty.call(dom.ETIQUETAS_LEGADAS, bruto);
-  if (!conhecido) {
+  // Técnico só mexe no que está sob sua responsabilidade.
+  if (!podeOperar(req, target)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
+  // Aceita 'pendente'|'conferido', os legados (sem|verde|laranja|vermelho)
+  // e ''/null (-> 'pendente'). Só valor desconhecido é erro — e aqui não
+  // há "outros campos" para salvar, então a resposta é 400 mesmo assim.
+  const alvo = normalizaEtiquetaEntrada(etiqueta);
+  if (!alvo) {
     return res.status(400).json({ error: 'Etiqueta inválida. Use: pendente ou conferido.' });
   }
-  const alvo = dom.normalizaEtiqueta(bruto);
   const antesEtiqueta = snapshot(target, ['etiqueta']);
   const quem = String((req.auth && req.auth.name) || req.auth.user || '').trim();
   const dados = { etiqueta: alvo };
@@ -468,7 +595,7 @@ router.patch('/api/assistidos/:id/etiqueta', auth(['admin', 'tecnico']), ah(asyn
     'Ficha conferida: ' + alvo + (quem ? ' (por ' + quem + ')' : ''), row.id, changes);
   broadcast();
   res.json({
-    id: row.id, etiqueta: row.etiqueta,
+    id: row.id, etiqueta: dom.normalizaEtiqueta(row.etiqueta),
     conferidoPor: row.conferidoPor || '', conferidoEm: row.conferidoEm || '',
   });
 }));
@@ -477,6 +604,8 @@ router.patch('/api/assistidos/:id/etiqueta', auth(['admin', 'tecnico']), ah(asyn
 router.delete('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
+  // Técnico só apaga o que está sob sua responsabilidade.
+  if (!podeOperar(req, a)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
   const motivo = String((req.body && req.body.motivo) || '').trim();
   await store.assistidos.remove(req.params.id);
   await auditar(req, 'excluido', 'assistido#' + req.params.id, a.nome,
@@ -488,13 +617,19 @@ router.delete('/api/assistidos/:id', auth(['admin', 'tecnico']), ah(async (req, 
 
 // Restaura um assistido arquivado (soft-delete).
 router.patch('/api/assistidos/:id/restaurar', auth(['admin', 'tecnico']), ah(async (req, res) => {
+  // O registro arquivado não vem em byId (soft-delete): busca na base
+  // completa para conferir a responsabilidade ANTES de restaurar.
+  const arquivado = (await store.assistidos.allIncludingDeleted())
+    .find(x => String(x.id) === String(req.params.id) && dom.estaExcluido(x));
+  if (!arquivado) return res.status(404).json({ error: 'Assistido arquivado não encontrado' });
+  if (!podeOperar(req, arquivado)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
   const row = await store.assistidos.restaurar(req.params.id);
   if (!row) return res.status(404).json({ error: 'Assistido arquivado não encontrado' });
   await auditar(req, 'restaurado', 'assistido#' + row.id, row.nome,
     'Assistido restaurado do arquivo: ' + row.nome, row.id,
     [{ campo: 'deletedAt', rotulo: ROTULOS.deletedAt, de: 'arquivado', para: '' }]);
   broadcast();
-  res.json(row);
+  res.json(comEtiquetaNormalizada(row));
 }));
 
 // ---------------------------------------------------------------------
@@ -508,6 +643,8 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin', 'tecnico']), a
 
   const a = await store.assistidos.byId(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assistido não encontrado' });
+  // Técnico só registra comparecimento no que está sob sua responsabilidade.
+  if (!podeOperar(req, a)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
 
   const comps = await store.assistidosComparecimentos.all(req.params.id);
   if (comps.some((c) => String(c.dataComparecimento).trim() === String(b.dataComparecimento).trim())) {
@@ -543,6 +680,9 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
   const row = await store.assistidosComparecimentos.byId(req.params.id);
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   if (dom.estaExcluido(row)) return res.status(400).json({ error: 'Comparecimento excluído' });
+  // Técnico só protocola o que está sob sua responsabilidade.
+  const assistidoDoComp = await store.assistidos.byId(row.assistidoId);
+  if (!podeOperar(req, assistidoDoComp)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
 
   const quem = String((req.auth && req.auth.name) || req.auth.user || '').trim();
   const antesJuntada = snapshot(row, ['juntada', 'observacao', 'protocolado', 'protocoladoPor', 'dataProtocolacao']);
@@ -551,7 +691,8 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
     observacao: observacao != null ? String(observacao).trim() : row.observacao,
     protocolado: true,
     protocoladoPor: quem,
-    dataProtocolacao: new Date().toISOString().slice(0, 10),
+    // Data local: depois das 21h o dia UTC já é o dia seguinte.
+    dataProtocolacao: hojeLocal(),
   });
   if (!upd) return res.status(404).json({ error: 'Comparecimento não encontrado' });
 
@@ -576,46 +717,89 @@ router.patch('/api/assistidos/comparecimentos/:id/juntada', auth(['admin', 'tecn
 //  Protocolar vários comparecimentos de uma vez (lote).
 //  Cada comparecimento guarda quem protocolou e quando; a trilha
 //  registra o lote com a lista do que entrou.
+//
+//  O front permite "selecionar todos": antes, um lote com mais de 200
+//  comparecimentos era REJEITADO (400) e nada era gravado. Agora aceita
+//  qualquer quantidade — o processamento é feito em blocos internos de
+//  200 e cada id tem seu resultado em `resultados` (as falhas também
+//  vêm em `erros`/`detalhes`, que é o que o front desenha).
 // ---------------------------------------------------------------------
 router.post('/api/assistidos/comparecimentos/juntada-lote', auth(['admin', 'tecnico']), ah(async (req, res) => {
   const { ids, juntada, observacao } = req.body || {};
   const lista = Array.isArray(ids) ? ids.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
   const val = String(juntada || '').trim();
   if (!lista.length) return res.status(400).json({ error: 'Selecione ao menos um comparecimento.' });
-  if (lista.length > 200) return res.status(400).json({ error: 'Máximo de 200 comparecimentos por lote.' });
   if (!val) return res.status(400).json({ error: 'Informe o número/documento da juntada.' });
 
   const quem = String((req.auth && req.auth.name) || req.auth.user || '').trim();
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const feitos = [];
   const erros = [];
+  const detalhes = [];
+  const resultados = [];
+  const BLOCO = 200;
 
-  for (const id of lista) {
-    try {
-      const row = await store.assistidosComparecimentos.byId(id);
-      if (!row) { erros.push({ id, erro: 'não encontrado' }); continue; }
-      if (dom.estaExcluido(row)) { erros.push({ id, erro: 'excluído' }); continue; }
-      if (dom.comparecimentoProtocolado(row)) { erros.push({ id, erro: 'já protocolado' }); continue; }
-      const upd = await store.assistidosComparecimentos.patch(id, {
-        juntada: val,
-        observacao: observacao != null ? String(observacao).trim() : row.observacao,
-        protocolado: true,
-        protocoladoPor: quem,
-        dataProtocolacao: hoje,
-      });
-      if (!upd) { erros.push({ id, erro: 'não encontrado' }); continue; }
-      // Assistido concluído quando o primeiro comparecimento é protocolado.
-      const comp = await store.assistidosComparecimentos.byId(id);
-      let assistido = null;
-      if (comp) {
-        assistido = await store.assistidos.byId(comp.assistidoId);
-        if (assistido && assistido.status === 'ativo') {
-          await store.assistidos.patch(comp.assistidoId, { status: 'concluido' });
+  for (let ini = 0; ini < lista.length; ini += BLOCO) {
+    const bloco = lista.slice(ini, ini + BLOCO);
+    for (const id of bloco) {
+      try {
+        const row = await store.assistidosComparecimentos.byId(id);
+        if (!row) {
+          erros.push({ id, erro: 'não encontrado' });
+          detalhes.push({ id, ok: false, erro: 'não encontrado' });
+          resultados.push({ id, ok: false, erro: 'não encontrado' });
+          continue;
         }
+        if (dom.estaExcluido(row)) {
+          erros.push({ id, erro: 'excluído' });
+          detalhes.push({ id, ok: false, erro: 'excluído' });
+          resultados.push({ id, ok: false, erro: 'excluído' });
+          continue;
+        }
+        if (dom.comparecimentoProtocolado(row)) {
+          erros.push({ id, erro: 'já protocolado' });
+          detalhes.push({ id, ok: false, erro: 'já protocolado' });
+          resultados.push({ id, ok: false, erro: 'já protocolado' });
+          continue;
+        }
+        // Técnico só protocola o que está sob sua responsabilidade: os
+        // ids de outro técnico entram em `erros` (não travam o lote).
+        const dono = await store.assistidos.byId(row.assistidoId);
+        if (!podeOperar(req, dono)) {
+          erros.push({ id, erro: 'sem permissão' });
+          detalhes.push({ id, ok: false, erro: 'sem permissão' });
+          resultados.push({ id, ok: false, erro: 'sem permissão' });
+          continue;
+        }
+        const upd = await store.assistidosComparecimentos.patch(id, {
+          juntada: val,
+          observacao: observacao != null ? String(observacao).trim() : row.observacao,
+          protocolado: true,
+          protocoladoPor: quem,
+          dataProtocolacao: hoje,
+        });
+        if (!upd) {
+          erros.push({ id, erro: 'não encontrado' });
+          detalhes.push({ id, ok: false, erro: 'não encontrado' });
+          resultados.push({ id, ok: false, erro: 'não encontrado' });
+          continue;
+        }
+        // Assistido concluído quando o primeiro comparecimento é protocolado.
+        const comp = await store.assistidosComparecimentos.byId(id);
+        let assistido = null;
+        if (comp) {
+          assistido = await store.assistidos.byId(comp.assistidoId);
+          if (assistido && assistido.status === 'ativo') {
+            await store.assistidos.patch(comp.assistidoId, { status: 'concluido' });
+          }
+        }
+        feitos.push({ id, assistidoId: comp ? comp.assistidoId : null, nome: assistido ? assistido.nome : '' });
+        resultados.push({ id, ok: true, assistidoId: comp ? comp.assistidoId : null, nome: assistido ? assistido.nome : '', juntada: val });
+      } catch (e) {
+        erros.push({ id, erro: 'falha ao salvar' });
+        detalhes.push({ id, ok: false, erro: 'falha ao salvar' });
+        resultados.push({ id, ok: false, erro: 'falha ao salvar' });
       }
-      feitos.push({ id, assistidoId: comp ? comp.assistidoId : null, nome: assistido ? assistido.nome : '' });
-    } catch (e) {
-      erros.push({ id, erro: 'falha ao salvar' });
     }
   }
 
@@ -628,7 +812,22 @@ router.post('/api/assistidos/comparecimentos/juntada-lote', auth(['admin', 'tecn
        { campo: 'comparecimentos', rotulo: 'Comparecimentos protocolados', de: '', para: feitos.map(f => '#' + f.id).join(', ') }]);
     broadcast();
   }
-  res.json({ protocolados: feitos.length, erros, ids: feitos.map(f => f.id) });
+  res.json({
+    // Contrato novo: total recebido, quantos entraram, quantos falharam
+    // e o resultado de cada id.
+    ok: erros.length === 0,
+    total: lista.length,
+    atualizados: feitos.length,
+    // `erros` e `detalhes` listam as FALHAS (o front desenha essa
+    // lista); `resultados` traz o resultado de TODOS os ids enviados.
+    erros,
+    errosTotal: erros.length,
+    detalhes,
+    resultados,
+    // Compatibilidade com o front anterior.
+    protocolados: feitos.length,
+    ids: feitos.map(f => f.id),
+  });
 }));
 
 // Exclusão lógica de comparecimento
@@ -636,6 +835,8 @@ router.delete('/api/assistidos/comparecimentos/:id', auth(['admin', 'tecnico']),
   const row = await store.assistidosComparecimentos.byId(req.params.id);
   if (!row) return res.status(404).json({ error: 'Comparecimento não encontrado' });
   const assistido = await store.assistidos.byId(row.assistidoId);
+  // Técnico só apaga o que está sob sua responsabilidade.
+  if (!podeOperar(req, assistido)) return res.status(403).json({ error: ERRO_RESPONSABILIDADE });
   await store.assistidosComparecimentos.remove(req.params.id);
   await auditar(req, 'comparecimento_excluido', 'comparecimento#' + req.params.id,
     assistido ? assistido.nome : '', 'Comparecimento excluído (soft-delete)', row.assistidoId,
@@ -682,6 +883,8 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
 
       // --- localiza o assistido ---
       let alvo = vinculo ? await store.assistidos.byVinculo(vinculo) : null;
+      // Assistido que SERIA criado na simulação (ainda sem id).
+      let simulado = null;
       if (!alvo && !vinculo && nome) {
         const achados = await store.assistidos.list({ limit: 100, offset: 0, q: nome });
         const exatos = achados.itens.filter(x => importPlanilha.normalizaChave(x.nome) === importPlanilha.normalizaChave(nome));
@@ -693,6 +896,19 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
         continue;
       }
 
+      // --- responsabilidade do técnico (EXCEÇÃO documentada) ---
+      // A importação CRIA assistidos novos: um técnico precisa poder
+      // importar a própria planilha mesmo sem responsável definido
+      // (assisted novo ainda não tem dono). Por isso o requisito de
+      // responsável NÃO se aplica aos assistidos novos.
+      // Para assistidos JÁ EXISTENTES, porém, a regra vale: a planilha
+      // de um técnico não pode sobrescrever o registro de outro — a
+      // linha éignorada e relatada em `falhas`.
+      if (alvo && !podeOperar(req, alvo)) {
+        falhas.push({ linha: li + linhaBase, erro: 'assistido sob responsabilidade de outro técnico' });
+        continue;
+      }
+
       // --- campos do assistido ---
       const dados = {};
       if (nome) dados.nome = nome;
@@ -700,7 +916,13 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
       if (mapa.local != null && get('local')) dados.localAssinatura = get('local');
       if (mapa.dataInicio != null && get('dataInicio')) dados.dataInicio = importPlanilha.dataISO(get('dataInicio'));
       if (mapa.frequencia != null && get('frequencia')) dados.frequencia = get('frequencia').toLowerCase();
-      if (mapa.etiqueta != null && get('etiqueta')) dados.etiqueta = get('etiqueta').toLowerCase();
+      // A etiqueta entra NORMALIZADA: a base antiga usava 'sem'|'verde'...
+      // e valor legado na base quebrava o <select> do front. Valor
+      // desconhecido NÃO vira 'pendente' em silêncio: ele fica cru e a
+      // validação reprova a linha (o erro vai para `falhas`).
+      if (mapa.etiqueta != null && get('etiqueta')) {
+        dados.etiqueta = normalizaEtiquetaEntrada(get('etiqueta')) || get('etiqueta').toLowerCase();
+      }
       if (mapa.status != null && get('status')) dados.status = get('status').toLowerCase();
       if (mapa.responsavel != null) dados.responsavelTecnico = get('responsavel');
       if (mapa.cpf != null) dados.cpf = get('cpf').replace(/\D/g, '');
@@ -742,7 +964,9 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
           localAssinatura: dados.localAssinatura || LOCAIS_ASSINATURA[0],
           dataInicio: dados.dataInicio || '',
           frequencia: dados.frequencia || 'mensal',
-          etiqueta: dados.etiqueta || 'sem',
+          // Etiqueta NORMALIZADA: 'sem' (valor legado) deixava o card
+          // com etiqueta vazia no <select> e travava a edição.
+          etiqueta: dom.normalizaEtiqueta(dados.etiqueta || 'pendente'),
           status: dados.status || 'ativo',
           responsavelTecnico: dados.responsavelTecnico || '',
           cpf: dados.cpf || '',
@@ -756,6 +980,10 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
         if (!dry) {
           const criado = await store.assistidos.insert(base);
           alvo = criado;
+        } else {
+          // Simulação: o assistido não existe (e não é gravado), mas os
+          // comparecimentos que SERIAM criados precisam ser contados.
+          simulado = { id: null, nome: base.nome };
         }
         stats.assistidos.novos++;
       } else {
@@ -771,15 +999,21 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
 
       // --- comparecimento (se a planilha trouxer a data) ---
       const dataComp = mapa.dataComparecimento != null ? importPlanilha.dataISO(get('dataComparecimento')) : '';
-      if (dataComp && alvo && alvo.id) {
-        const existing = await store.assistidosComparecimentos.all(alvo.id);
-        const jaTem = existing.some(c => String(c.dataComparecimento) === dataComp);
+      // `alvoComp` cobre a simulação: o assistido novo ainda não tem id,
+      // mas o comparecimento que a planilha traz SERIA criado.
+      const alvoComp = alvo || simulado;
+      if (dataComp && alvoComp) {
+        let jaTem = false;
+        if (alvo && alvo.id) {
+          const existing = await store.assistidosComparecimentos.all(alvo.id);
+          jaTem = existing.some(c => String(c.dataComparecimento) === dataComp);
+        }
         if (jaTem) {
           stats.comparecimentos.ignorados++;
         } else if (!dry) {
           const juntada = get('juntada');
           const novo = await store.assistidosComparecimentos.insert({
-            assistidoId: Number(alvo.id),
+            assistidoId: Number(alvoComp.id),
             dataComparecimento: dataComp,
             ppPlantao: get('pp') || '—',
             observacao: get('observacao') || '',
@@ -789,10 +1023,12 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
             dataProtocolacao: juntada ? dataComp : '',
           });
           stats.comparecimentos.novos++;
-          await auditar(req, 'importacao', 'comparecimento#' + novo.id, alvo.nome,
-            'Comparecimento importado da planilha: ' + dataComp, alvo.id,
+          await auditar(req, 'importacao', 'comparecimento#' + novo.id, alvoComp.nome,
+            'Comparecimento importado da planilha: ' + dataComp, alvoComp.id,
             importPlanilha.diff({}, novo, ['dataComparecimento', 'ppPlantao', 'juntada']));
         } else {
+          // Simulação: conta o comparecimento que SERIA criado, sem
+          // gravar nada (antes contava 0 para assistido novo).
           stats.comparecimentos.novos++;
         }
       }

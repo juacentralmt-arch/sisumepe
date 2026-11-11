@@ -191,7 +191,7 @@ const PROC_21 = '02008014-72.2026.8.06.0293';
   const concluidosList = await fetch(BASE + '/api/assistidos/concluidos', { headers: await auth('admin', 'admin', 'Admin') });
   assert(concluidosList.status === 200, 'GET concluidos: 200');
   const concluidosData = await concluidosList.json();
-  assert(concluidosData.some((x) => String(x.id) === String(id)), 'GET concluidos: contém assistido concluído');
+  assert(concluidosData.itens.some((x) => String(x.id) === String(id)), 'GET concluidos: contém assistido concluído');
 
   // 16. Detalhe com histórico
   const detalheRes = await fetch(BASE + '/api/assistidos/' + id + '/detalhe', { headers: await auth('admin', 'admin', 'Admin') });
@@ -276,7 +276,7 @@ const PROC_21 = '02008014-72.2026.8.06.0293';
   });
   assert(patchArquivado.status === 200, 'Arquivado: editar → 200');
   const concluidosComArq = await (await fetch(BASE + '/api/assistidos/concluidos', { headers: await auth('admin', 'admin', 'Admin') })).json();
-  assert(concluidosComArq.some((x) => String(x.id) === String(arquivado.id)), 'Arquivado: aparece na aba Concluídos');
+  assert(concluidosComArq.itens.some((x) => String(x.id) === String(arquivado.id)), 'Arquivado: aparece na aba Concluídos');
 
   // 24. Resumo por status
   const resumo = await (await fetch(BASE + '/api/assistidos/resumo', { headers: await auth('admin', 'admin', 'Admin') })).json();

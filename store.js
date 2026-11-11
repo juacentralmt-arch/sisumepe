@@ -7,7 +7,7 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { diaLocal } = require('./src/lib/datas');
+const { diaLocal, hojeLocal } = require('./src/lib/datas');
 
 const MODE = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) ? 'supabase' : 'file';
 const ROOT = path.join(__dirname);
@@ -242,6 +242,10 @@ function loadFile() {
       return mem;
     }
     mem = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    // Coleções obrigatórias: um db.json parcial (ou gravado por outra
+    // versão) deixava `persons`/`tickets` sem lista e o backup quebrava.
+    if (!Array.isArray(mem.persons)) mem.persons = [];
+    if (!Array.isArray(mem.tickets)) mem.tickets = [];
     if (!Array.isArray(mem.chat)) mem.chat = [];
     if (!mem.seqChat) mem.seqChat = mem.chat.length + 1;
     if (!Array.isArray(mem.audit)) mem.audit = [];
@@ -1907,6 +1911,14 @@ const store = {
     // restauração/verificação saiba quais arquivos deveriam existir.
     const fullAudit = MODE === 'file' ? [...mem.audit] : (await selectAll('audit')).map(appA);
     const fullChat = MODE === 'file' ? [...mem.chat] : (await selectAll('chat')).map(appC);
+    // Assistidos e comparecimentos entram INTEIROS (inclusive os
+    // arquivados por soft-delete): o backup é a cópia da base.
+    const assistidos = MODE === 'file'
+      ? [...(mem.assistidos || [])]
+      : (await selectAll('assistidos')).map(appASS);
+    const assistidosComps = MODE === 'file'
+      ? [...(mem.assistidosComparecimentos || [])]
+      : (await selectAll('assistidos_comparecimentos')).map(appACC);
     const [persons, tickets, users, agenda, termos, psi, estoque, estoqueMov, estoqueSerial] = await Promise.all([
       store.persons.all(), store.tickets.all(), store.users.all(),
       store.agenda.all().catch(() => []), store.termos.all().catch(() => []), store.psi.all().catch(() => []),
@@ -1925,11 +1937,14 @@ const store = {
       storeMode: MODE,
       persons, tickets, chat: fullChat, audit: fullAudit, users, agenda, termos, psi,
       estoque, estoqueMov, estoqueSerial,
+      assistidos, assistidosComparecimentos: assistidosComps,
       estoqueNotas: (mem.estoqueNotas || []),
       filesManifest,
       seqPerson: mx(persons) + 1, seqTicket: mx(tickets) + 1,
       seqChat: mx(fullChat) + 1, seqAudit: mx(fullAudit) + 1, seqAgenda: mx(agenda) + 1, seqTermo: mx(termos) + 1, seqPsi: mx(psi) + 1,
-      seqEstoque: mx(estoque) + 1, seqEstoqueMov: mx(estoqueMov) + 1, seqEstoqueSerial: mx(estoqueSerial) + 1
+      seqEstoque: mx(estoque) + 1, seqEstoqueMov: mx(estoqueMov) + 1, seqEstoqueSerial: mx(estoqueSerial) + 1,
+      seqAssistido: Math.max(mx(assistidos) + 1, Number(mem && mem.seqAssistido) || 1),
+      seqAssistidoComp: Math.max(mx(assistidosComps) + 1, Number(mem && mem.seqAssistidoComp) || 1)
     };
   },
 
@@ -1945,12 +1960,18 @@ const store = {
       const keepTokens = (mem && mem.googleTokens) || {};
       const keepTermos = (mem && mem.termos) || [];
       const keepPsi = (mem && mem.psi) || [];
+      // Assistidos: backup antigo (sem o módulo) NÃO pode apagar os dados
+      // que já estão no servidor — o dump só substitui o que ele traz.
+      const keepAssistidos = (mem && mem.assistidos) || [];
+      const keepComps = (mem && mem.assistidosComparecimentos) || [];
       const keepSeqAgenda = (mem && mem.seqAgenda) || 1;
       const keepSeqTermo = (mem && mem.seqTermo) || 1;
       const keepSeqPsi = (mem && mem.seqPsi) || 1;
       const keepSeqEstoque = (mem && mem.seqEstoque) || 1;
       const keepSeqEstoqueMov = (mem && mem.seqEstoqueMov) || 1;
       const keepSeqEstoqueSerial = (mem && mem.seqEstoqueSerial) || 1;
+      const keepSeqAssistido = (mem && mem.seqAssistido) || 1;
+      const keepSeqAssistidoComp = (mem && mem.seqAssistidoComp) || 1;
       mem = {
         persons: dump.persons, tickets: dump.tickets,
         chat: Array.isArray(dump.chat) ? dump.chat : [],
@@ -1964,12 +1985,19 @@ const store = {
         estoqueMov: Array.isArray(dump.estoqueMov) ? dump.estoqueMov : [],
         estoqueSerial: Array.isArray(dump.estoqueSerial) ? dump.estoqueSerial : [],
         estoqueNotas: Array.isArray(dump.estoqueNotas) ? dump.estoqueNotas : (mem.estoqueNotas || []),
+        assistidos: Array.isArray(dump.assistidos) ? dump.assistidos : keepAssistidos,
+        assistidosComparecimentos: Array.isArray(dump.assistidosComparecimentos) ? dump.assistidosComparecimentos : keepComps,
         seqPerson: dump.seqPerson || 1, seqTicket: dump.seqTicket || 1,
         seqChat: dump.seqChat || 1, seqAudit: dump.seqAudit || 1, seqAgenda: dump.seqAgenda || keepSeqAgenda, seqTermo: dump.seqTermo || keepSeqTermo, seqPsi: dump.seqPsi || keepSeqPsi,
-        seqEstoque: dump.seqEstoque || keepSeqEstoque, seqEstoqueMov: dump.seqEstoqueMov || keepSeqEstoqueMov, seqEstoqueSerial: dump.seqEstoqueSerial || keepSeqEstoqueSerial
+        seqEstoque: dump.seqEstoque || keepSeqEstoque, seqEstoqueMov: dump.seqEstoqueMov || keepSeqEstoqueMov, seqEstoqueSerial: dump.seqEstoqueSerial || keepSeqEstoqueSerial,
+        seqAssistido: dump.seqAssistido || keepSeqAssistido, seqAssistidoComp: dump.seqAssistidoComp || keepSeqAssistidoComp
       };
       saveFile();
-      return { persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length, estoque: mem.estoque.length, estoqueMov: mem.estoqueMov.length, estoqueSerial: mem.estoqueSerial.length };
+      return {
+        persons: mem.persons.length, tickets: mem.tickets.length, users: mem.users.length,
+        estoque: mem.estoque.length, estoqueMov: mem.estoqueMov.length, estoqueSerial: mem.estoqueSerial.length,
+        assistidos: mem.assistidos.length, assistidosComparecimentos: mem.assistidosComparecimentos.length
+      };
     }
     for (const t of ['audit', 'chat', 'tickets', 'persons']) {
       const all = must(await supa.from(t).select('id').limit(10000), 'restore.list');
@@ -2033,8 +2061,30 @@ const store = {
     if (Array.isArray(dump.estoqueSerial) && dump.estoqueSerial.length) {
       try{ await chunk('estoque_serial', dump.estoqueSerial, { id: 'id', sistema: 'sistema', contrato: 'contrato', serial: 'serial', unidade: 'unidade', status: 'status', createdat: 'createdAt', updatedat: 'updatedAt' }); }catch(e){}
     }
+    // assistidos (opcional): backup antigo (sem o módulo) preserva o que
+    // já está no servidor; backup novo substitui o conteúdo do módulo.
+    if (Array.isArray(dump.assistidos)) {
+      try {
+        const allC = must(await supa.from('assistidos_comparecimentos').select('id').limit(50000), 'restore.comps.list');
+        for (let i = 0; i < allC.length; i += 200) {
+          must(await supa.from('assistidos_comparecimentos').delete().in('id', allC.slice(i, i + 200).map(x => x.id)), 'restore.comps.del');
+        }
+        const allA = must(await supa.from('assistidos').select('id').limit(50000), 'restore.assistidos.list');
+        for (let i = 0; i < allA.length; i += 200) {
+          must(await supa.from('assistidos').delete().in('id', allA.slice(i, i + 200).map(x => x.id)), 'restore.assistidos.del');
+        }
+        await chunk('assistidos', dump.assistidos, ASS);
+        if (Array.isArray(dump.assistidosComparecimentos)) {
+          await chunk('assistidos_comparecimentos', dump.assistidosComparecimentos, ACC);
+        }
+      } catch (e) { /* tabela ausente no banco: a restauração segue sem o módulo */ }
+    }
     try{ must(await supa.rpc('reset_sequences'), 'restore.seq'); }catch(e){}
-    return { persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length, estoque: dump.estoque?.length || 0, estoqueMov: dump.estoqueMov?.length || 0, estoqueSerial: dump.estoqueSerial?.length || 0 };
+    return {
+      persons: dump.persons.length, tickets: dump.tickets.length, users: dump.users.length,
+      estoque: dump.estoque?.length || 0, estoqueMov: dump.estoqueMov?.length || 0, estoqueSerial: dump.estoqueSerial?.length || 0,
+      assistidos: dump.assistidos?.length || 0, assistidosComparecimentos: dump.assistidosComparecimentos?.length || 0
+    };
   },
 
   // Arquivos: disco local (file) ou Supabase Storage (supabase)
@@ -2259,6 +2309,135 @@ const { estaExcluido, comparecimentoProtocolado, nomeKey, proximoEsperado, diasE
 // Escapa metacaracteres do filtro .or() do PostgREST: % _ , ( ) "
 const escOr = s => String(s == null ? '' : s).replace(/[%_]/g, m => `\\${m}`).replace(/[,()"]/g, m => `\\${m}`);
 
+// ---------------------------------------------------------------------
+//  Busca acento-insensível (mesma semântica nos dois modos de banco)
+// ---------------------------------------------------------------------
+// O modo arquivo filtra por `nomeKey` (sem acento): "Joao" acha "João".
+// O `ilike` do PostgREST é sensível ao acento, então no modo Supabase a
+// busca era diferente (mesma palavra, resultado diferente). Para unificar:
+//   1) o banco devolve um conjunto de CANDIDATOS — o termo inteiro com as
+//      variantes acentuadas e o prefixo (3 letras) —;
+//   2) o filtro definitivo é aplicado em JS com `nomeKey`, exatamente
+//      como o modo arquivo faz.
+// O conjunto de candidatos é limitado (MAX_CANDIDATOS) e a ordenação
+// (id decrescente / nome) e o limit/offset são preservados.
+const VARIANTES_ACENTO = Object.freeze({
+  a: 'áàâãä', e: 'éêèë', i: 'íîìï', o: 'óôõòö', u: 'úûùü', c: 'ç', n: 'ñ',
+});
+const MAX_CANDIDATOS = 10000;
+
+// Termo de busca com as variantes acentuadas (ex.: 'joao' → 'joao','joão').
+// Só as primeiras MAX_POSICOES_VARIANTES posições com acento variam:
+// o produto cartesiano é limitado para não estourar o filtro .or().
+function variantesBusca(termo, maxPosicoes = 5, maxPadroes = 64) {
+  const chars = String(termo || '').split('');
+  const opcoes = chars.map(c => {
+    const mapa = VARIANTES_ACENTO[String(c).toLowerCase()];
+    if (!mapa) return [c];
+    return [c].concat(mapa.split('').map(alt => (c === c.toUpperCase() ? alt.toUpperCase() : alt)));
+  });
+  let variacoes = 0;
+  for (let i = 0; i < opcoes.length; i++) {
+    if (opcoes[i].length > 1) {
+      if (variacoes >= maxPosicoes) opcoes[i] = [opcoes[i][0]];
+      else variacoes++;
+    }
+  }
+  let padroes = [''];
+  for (const lista of opcoes) {
+    const proximos = [];
+    for (const p of padroes) for (const o of lista) proximos.push(p + o);
+    padroes = proximos.slice(0, maxPadroes);
+  }
+  return padroes;
+}
+
+// Cláusulas do filtro .or() do PostgREST para a busca acento-insensível.
+function clausesBusca(termo) {
+  const t = String(termo || '');
+  const clauses = [];
+  const vistos = new Set();
+  const add = (col, valor) => {
+    const chave = col + '|' + valor;
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    clauses.push(`${col}.ilike.%${escOr(valor)}%`);
+  };
+  for (const v of variantesBusca(t)) add('nome', v);
+  // Prefixo: cobre o acento que vem depois da 3a letra
+  // ('Conceição' ~ 'Conceicao'/'conceição').
+  const prefixo = t.slice(0, 3);
+  if (prefixo && prefixo.length < t.length) {
+    for (const v of variantesBusca(prefixo)) add('nome', v);
+  }
+  add('vinculo', t);
+  add('processo', t);
+  return clauses;
+}
+
+// Filtro definitivo da busca (idêntico nos dois modos de banco).
+function matchBusca(registro, busca, comProcesso = true) {
+  if (!registro) return false;
+  const k = nomeKey(busca);
+  const kr = String(busca || '').toLowerCase();
+  if (nomeKey(registro.nome).includes(k)) return true;
+  if (String(registro.vinculo || '').toLowerCase().includes(kr)) return true;
+  if (comProcesso && String(registro.processo || '').toLowerCase().includes(kr)) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------
+//  Colunas de `assistidos`
+// ---------------------------------------------------------------------
+// Lista de colunas conhecidas da tabela (do mapa app -> banco). Uma coluna
+// pedida que não existe no mapa é descartada (não quebra a consulta).
+const COLUNAS_ASS = new Set(Object.values(ASS).concat(['id']));
+
+// Normaliza a lista de campos pedida pelo chamador para o `select`.
+// Aceita os nomes do banco (snake_case) e os do app (camelCase).
+function colunasAssistidos(campos) {
+  const lista = String(campos == null ? '*' : campos).split(',')
+    .map(s => s.trim()).filter(Boolean);
+  if (!lista.length || lista.includes('*')) return '*';
+  const out = [];
+  for (const c of lista) {
+    const col = Object.prototype.hasOwnProperty.call(ASS, c) ? ASS[c] : c;
+    if (COLUNAS_ASS.has(col) && !out.includes(col)) out.push(col);
+  }
+  return out.length ? out.join(',') : '*';
+}
+
+// Garante que todos os campos conhecidos do assistido existam no objeto
+// devolvido (null quando a base é antiga e o campo nunca foi gravado).
+// O modo Supabase já devolve todas as colunas; no modo arquivo o
+// registro pode não ter o campo — o chamador (que pede a lista completa)
+// receberia `undefined` e a tela mostraria "undefined".
+function completaCamposAssistido(registro) {
+  const out = Object.assign({}, registro);
+  for (const k of Object.keys(ASS)) {
+    if (!(k in out)) out[k] = null;
+  }
+  return out;
+}
+
+// Select tolerante: se o banco recusar uma coluna (que não existe na
+// tabela), ela é removida e a consulta é refeita. Sem isso, um chamador
+// pedindo um campo novo derrubaria a listagem inteira.
+async function selectAssistidosSeguro(colunas, from, to) {
+  let lista = colunas === '*' ? ['*'] : String(colunas).split(',').map(s => s.trim()).filter(Boolean);
+  for (let tentativa = 0; tentativa < 12; tentativa++) {
+    const r = await supa.from('assistidos').select(lista.join(',')).is('deleted_at', null)
+      .order('id').range(from, to);
+    if (!r.error) return r.data || [];
+    const m = /column\s+(?:[a-z_][a-z_0-9]*\.)?([a-z_][a-z_0-9]*)\s+does not exist/i.exec(r.error.message || '');
+    if (!m) { const e = new Error('assistidos.todosAtivos: ' + r.error.message); e.status = 500; throw e; }
+    const fora = m[1];
+    lista = lista.filter(c => c !== '*' && c !== fora);
+    if (!lista.length) lista = ['*'];
+  }
+  return [];
+}
+
 store.assistidos = {
   // Listagem paginada. Devolve { itens, total }.
   async list({ limit = 20, offset = 0, q = '', status = '', statusIn = null, frequencia = '', conferencia = '', responsavel = '' } = {}) {
@@ -2273,14 +2452,7 @@ store.assistidos = {
 
     if (MODE === 'file') {
       let list = (mem.assistidos || []).filter(x => !estaExcluido(x));
-      if (busca) {
-        const k = nomeKey(busca);
-        const kr = busca.toLowerCase();
-        list = list.filter(x =>
-          nomeKey(x.nome).includes(k) ||
-          String(x.vinculo || '').toLowerCase().includes(kr) ||
-          String(x.processo || '').toLowerCase().includes(kr));
-      }
+      if (busca) list = list.filter(x => matchBusca(x, busca));
       if (statusF) list = list.filter(x => String(x.status || '') === statusF);
       if (statusLista) list = list.filter(x => statusLista.includes(String(x.status || '')));
       if (freqF) list = list.filter(x => String(x.frequencia || '') === freqF);
@@ -2290,13 +2462,41 @@ store.assistidos = {
       return { itens: list.slice(off, off + lim), total: list.length };
     }
 
+    if (busca) {
+      // Busca acento-insensível: o banco devolve os CANDIDATOS e o
+      // filtro final (nomeKey) é aplicado em JS — mesma regra do modo
+      // arquivo. A ordenação (id decrescente) é a mesma da listagem.
+      const clauses = clausesBusca(busca);
+      const candidatos = [];
+      let from = 0;
+      const pageSize = 1000; // limite do PostgREST por requisição
+      for (;;) {
+        let q = supa.from('assistidos').select('*').is('deleted_at', null)
+          .order('id', { ascending: false })
+          .range(from, from + pageSize - 1)
+          .or(clauses.join(','));
+        if (statusF) q = q.eq('status', statusF);
+        if (statusLista) q = q.in('status', statusLista);
+        if (freqF) q = q.eq('frequencia', freqF);
+        if (respF) q = q.ilike('responsavel_tecnico', respF);
+        if (confF) {
+          const legado = Object.keys(ETIQUETAS_LEGADAS).filter(k => ETIQUETAS_LEGADAS[k] === confF);
+          q = q.in('etiqueta', [confF].concat(legado));
+        }
+        const r = must(await q, 'assistidos.list.busca');
+        const linhas = (r || []).map(appASS);
+        candidatos.push(...linhas);
+        if (linhas.length < pageSize) break;
+        from += pageSize;
+        if (candidatos.length >= MAX_CANDIDATOS) break; // trava de segurança
+      }
+      const filtrados = candidatos.filter(x => matchBusca(x, busca));
+      return { itens: filtrados.slice(off, off + lim), total: filtrados.length };
+    }
+
     let query = supa.from('assistidos').select('*', { count: 'exact' })
       .is('deleted_at', null)
       .order('id', { ascending: false });
-    if (busca) {
-      const e = escOr(busca);
-      query = query.or(`nome.ilike.%${e}%,vinculo.ilike.%${e}%,processo.ilike.%${e}%`);
-    }
     if (statusF) query = query.eq('status', statusF);
     if (statusLista) query = query.in('status', statusLista);
     if (freqF) query = query.eq('frequencia', freqF);
@@ -2323,19 +2523,34 @@ store.assistidos = {
     const busca = String(q || '').trim().slice(0, 60);
     if (MODE === 'file') {
       let list = (mem.assistidos || []).filter(x => !estaExcluido(x));
-      if (busca) {
-        const k = nomeKey(busca), kr = busca.toLowerCase();
-        list = list.filter(x => nomeKey(x.nome).includes(k) || String(x.vinculo || '').toLowerCase().includes(kr));
-      }
+      if (busca) list = list.filter(x => matchBusca(x, busca, false));
       list.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
       return list.slice(0, lim).map(x => ({ id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status }));
     }
+    if (busca) {
+      // Mesma regra do modo arquivo: candidatos no banco + filtro final
+      // por nomeKey em JS (busca acento-insensível).
+      const clauses = clausesBusca(busca);
+      const candidatos = [];
+      let from = 0;
+      const pageSize = 1000;
+      for (;;) {
+        let q = supa.from('assistidos').select('id,nome,vinculo,status')
+          .is('deleted_at', null).order('id').range(from, from + pageSize - 1)
+          .or(clauses.join(','));
+        const r = must(await q, 'assistidos.listaSimples.busca');
+        const linhas = (r || []).map(appASS);
+        candidatos.push(...linhas);
+        if (linhas.length < pageSize) break;
+        from += pageSize;
+        if (candidatos.length >= MAX_CANDIDATOS) break; // trava de segurança
+      }
+      const filtrados = candidatos.filter(x => matchBusca(x, busca, false));
+      filtrados.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
+      return filtrados.slice(0, lim).map(x => ({ id: x.id, nome: x.nome, vinculo: x.vinculo, status: x.status }));
+    }
     let query = supa.from('assistidos').select('id,nome,vinculo,status')
       .is('deleted_at', null).order('nome').limit(lim);
-    if (busca) {
-      const e = escOr(busca);
-      query = query.or(`nome.ilike.%${e}%,vinculo.ilike.%${e}%`);
-    }
     const r = must(await query, 'assistidos.listaSimples');
     return r || [];
   },
@@ -2522,8 +2737,12 @@ store.assistidos = {
   // inteiro mas não de todos os campos.
   // Ultimo comparecimento de cada assistido, em uma varredura.
   // Base para a situacao (atraso/falta) e para os filtros.
-  async ultimosComparecimentos() {
-    const comps = await store.assistidosComparecimentos.all();
+  // `ids` opcional: filtra pelos assistidos informados (a paginação da
+  // listagem não precisa baixar a tabela inteira de comparecimentos).
+  // Sem argumento: devolve todos (comportamento antigo).
+  async ultimosComparecimentos(ids) {
+    const alvo = ids === undefined || ids === null ? null : (Array.isArray(ids) ? ids : [ids]);
+    const comps = await store.assistidosComparecimentos.all(alvo);
     const ultimoPor = new Map();
     for (const c of comps) {
       const k = String(c.assistidoId);
@@ -2536,30 +2755,40 @@ store.assistidos = {
   // Situacao (atraso/sem comparecimento/em dia) de cada assistido informado.
   // REGRA UNICA: a aba de alertas, o selo do card e os filtros usam
   // dom.situacao. Quando cada tela calculava por conta, discordavam.
+  // Só os comparecimentos dos assistidos da lista são lidos: sem isso
+  // cada página da listagem baixava a tabela inteira.
   async situacoes(lista, hoje) {
-    const dia = hoje || new Date().toISOString().slice(0, 10);
-    const ultimoPor = await store.assistidos.ultimosComparecimentos();
+    const dia = hoje || hojeLocal();
+    const alvo = Array.isArray(lista) ? lista : (lista ? [lista] : []);
+    const ultimoPor = await store.assistidos.ultimosComparecimentos(alvo.map(a => a && a.id));
     const out = new Map();
-    for (const a of lista) {
+    for (const a of (lista || [])) {
       const ultimo = ultimoPor.get(String(a.id)) || null;
       out.set(String(a.id), situacao(a, ultimo, dia));
     }
     return out;
   },
+
+  // Todos os assistidos ativos, sem paginação de resultado.
+  // `campos` é a lista de colunas pedidas (nomes do banco, em snake_case,
+  // ou os nomes do app em camelCase). Colunas desconhecidas/inexistentes
+  // são descartadas em vez de quebrar a consulta.
   async todosAtivos({ campos = '*' } = {}) {
     if (MODE === 'file') {
-      return (mem.assistidos || []).filter(x => !estaExcluido(x));
+      // Modo arquivo: o registro já vem completo — não há projeção de
+      // colunas para fazer (e o chamador pode pedir campos extras).
+      return (mem.assistidos || []).filter(x => !estaExcluido(x)).map(completaCamposAssistido);
     }
+    const colunas = colunasAssistidos(campos);
     const out = [];
     let from = 0;
-    const pageSize = 1000; // limite do PostgREST por requisição
-    while (true) {
-      const r = must(await supa.from('assistidos').select(campos).is('deleted_at', 'null')
-        .order('id').range(from, from + pageSize - 1), 'assistidos.todosAtivos');
+    const pageSize = 1000; // limite do PostgREST por requisicao
+    for (;;) {
+      const r = await selectAssistidosSeguro(colunas, from, from + pageSize - 1);
       out.push(...r.map(appASS));
       if (r.length < pageSize) break;
       from += pageSize;
-      if (from > 200000) break; // trava de segurança
+      if (from > 200000) break; // trava de seguranca
     }
     return out;
   },
@@ -2589,7 +2818,7 @@ store.assistidos = {
       (a, b) => String(b.dataComparecimento || '').localeCompare(String(a.dataComparecimento || ''))
     );
     const ultimo = ordenados[0] || null;
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     const dias = ultimo ? diasEntre(ultimo.dataComparecimento, hoje) : null;
     const periodo = FREQ_DIAS[assistido.frequencia] || 30;
     const faltas = dias == null ? 0 : Math.max(0, Math.floor(dias / periodo) - 1);
@@ -2608,13 +2837,14 @@ store.assistidos = {
   // Alertas de periodicidade: comparecimento atrasado, sem comparecimento
   // e faltas consecutivas. Espelha o modelo de alertas do modulo psi.
   async alertas({ hoje = null } = {}) {
-    const dia = hoje || new Date().toISOString().slice(0, 10);
+    const dia = hoje || hojeLocal();
     const todos = [];
     // Uma varredura da base (so os campos que o calculo usa).
     const assistidos = await store.assistidos.todosAtivos({
       campos: 'id,nome,vinculo,frequencia,data_inicio,status,local_assinatura,responsavel_tecnico',
     });
-    const ultimoPor = await store.assistidos.ultimosComparecimentos();
+    // Só os comparecimentos destes assistidos interessam aqui.
+    const ultimoPor = await store.assistidos.ultimosComparecimentos(assistidos.map(a => a.id));
     for (const a of assistidos) {
       const ultimo = ultimoPor.get(String(a.id)) || null;
       const sit = situacao(a, ultimo, dia);
@@ -2659,19 +2889,24 @@ store.assistidosComparecimentos = {
       const set = new Set(ids);
       return list.filter(x => set.has(Number(x.assistidoId)));
     }
+    if (ids && !ids.length) return [];
     const out = [];
-    let from = 0;
     const pageSize = 1000;
-    while (true) {
-      let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
-      if (ids) {
-        if (!ids.length) return [];
-        q = q.in('assistido_id', ids);
+    // O filtro .in() viaja na URL: uma lista com centenas de ids estoura
+    // o limite do PostgREST. A lista é fatiada em blocos de 100.
+    const blocos = [];
+    if (ids) for (let i = 0; i < ids.length; i += 100) blocos.push(ids.slice(i, i + 100));
+    else blocos.push(null);
+    for (const bloco of blocos) {
+      let from = 0;
+      for (;;) {
+        let q = supa.from('assistidos_comparecimentos').select('*').is('deleted_at', 'null').order('id').range(from, from + pageSize - 1);
+        if (bloco) q = q.in('assistido_id', bloco);
+        const r = must(await q, 'assistidosComparecimentos.all');
+        out.push(...r.map(appACC));
+        if (r.length < pageSize) break;
+        from += pageSize;
       }
-      const r = must(await q, 'assistidosComparecimentos.all');
-      out.push(...r.map(appACC));
-      if (r.length < pageSize) break;
-      from += pageSize;
     }
     return out;
   },
