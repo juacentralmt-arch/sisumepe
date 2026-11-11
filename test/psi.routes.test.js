@@ -19,6 +19,22 @@ const assert = (cond, msg) => {
 process.env.SUPABASE_URL = '';
 process.env.SUPABASE_KEY = '';
 
+// Isola o banco: quando o runner não define DB_FILE, a suíte usava o
+// db.json de desenvolvimento e deixava lá prontuários e auditoria de teste
+// ("Pessoa Teste Psi", personId 990001). Aqui a suíte sempre trabalha sobre
+// uma cópia temporária do banco atual — o dev permanece intacto.
+if (!process.env.DB_FILE) {
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+  const src = path.join(__dirname, '..', 'db.json');
+  const tmp = path.join(os.tmpdir(), 'sisumepe-psi-' + process.pid + '.db.json');
+  if (fs.existsSync(src)) fs.copyFileSync(src, tmp);
+  else fs.writeFileSync(tmp, JSON.stringify({ persons: [], tickets: [], audit: [], users: [], sessions: [] }));
+  process.env.DB_FILE = tmp;
+  process.on('exit', () => { try { fs.unlinkSync(tmp); } catch (e) {} });
+}
+
 const express = require('express');
 // Stub do middleware de sessão ANTES de carregar o router (o router captura
 // auth por desestruturação no require). A checagem de papéis continua sendo a
