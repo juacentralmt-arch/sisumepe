@@ -331,8 +331,10 @@ function enterApp(){
   document.getElementById('appShell').classList.remove('hidden');
   document.getElementById('loginOverlay').classList.add('hidden');
   try{ applySidebarState(); }catch(e){}
-  initEstoqueSistema();
-  paintUser(); go(session && session.role === 'admin' ? 'dash' : 'fila'); loadAll(); loadUsers(); loadChat(); connectSSE();
+  try{ initEstoqueSistema(); }catch(e){ console.error('initEstoqueSistema:', e); }
+  try{ paintUser(); }catch(e){ console.error('paintUser:', e); }
+  try{ go(session && session.role === 'admin' ? 'dash' : 'fila'); }catch(e){ console.error('go:', e); }
+  loadAll(); loadUsers(); loadChat(); connectSSE();
   setTimeout(() => { updateNotifyBanner(); if('Notification' in window && Notification.permission==='default'){ try{ Notification.requestPermission().then(()=>updateNotifyBanner()); }catch(e){} } }, 800);
   setTimeout(preloadOCR, 1200);
 }
@@ -349,10 +351,15 @@ function go(tab){
   if(!canSee(tab)){ toast('🔒 Acesso restrito'); tab='fila'; }
   ['fila','checkin','tecnico','agenda','termos','visao','dash','usuarios','psico','auditoria','estoque','pdf','arquivos','assistidos'].forEach(t=>{ const el=document.getElementById('tab-'+t); if(el) el.classList.add('hidden'); });
   const gsb = document.getElementById('globalStatsBar'); if(gsb) gsb.classList.toggle('hidden', tab === 'assistidos');
-  document.getElementById('tab-'+tab).classList.remove('hidden');
+  const tabEl = document.getElementById('tab-'+tab);
+  if(tabEl) tabEl.classList.remove('hidden');
   document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===tab));
   try{ document.querySelectorAll('#sidebarRailNav .rbtn').forEach(b=>b.classList.toggle('rail-active', b.dataset.tab===tab)); }catch(e){}
-  if(tab==='visao'){ renderVisaoGate(); if((role==='tecnico'||role==='admin') && !document.getElementById('visaoRes').innerHTML.trim()) buscarVisao(); }
+  if(tab==='visao'){
+    renderVisaoGate();
+    const vr = document.getElementById('visaoRes');
+    if(vr && (role==='tecnico'||role==='admin') && !vr.innerHTML.trim()) buscarVisao();
+  }
   if(tab==='dash') loadDash();
   if(tab==='agenda') loadAgenda();
   if(tab==='termos') loadTermos();
@@ -435,6 +442,7 @@ function deveAlertar(t){
 let lastTicketsHash = null, lastFullRenderAt = 0;
 async function loadAll(){
   if(!session || !session.token) return;
+  let erroTickets = null;
   try{
     tickets = await api('/api/tickets');
     // Evita re-render quando nada mudou (o maior custo: DOM + Tailwind JIT).
@@ -455,13 +463,33 @@ async function loadAll(){
         toast(t0.modeloTornozeleira === 'Infinity' ? '🔔 Novo ticket Infinity para você: ' + t0.code : '🎫 Novo ticket na fila: ' + t0.code);
       }
     }
+  }catch(e){ erroTickets = e; }
+
+  if(!session) return; // sessão expirou no meio (401 → logout já mostrou o login)
+  if(erroTickets){
+    console.error('loadAll /api/tickets:', erroTickets);
+    const msg = 'Falha ao carregar a fila: ' + (erroTickets.message || erroTickets);
+    const fl = document.getElementById('filaList');
+    if(fl) fl.innerHTML = '<div class="card p-6 text-center"><p class="font-bold text-red-600 text-sm">⚠️ ' + esc(msg) + '</p><p class="text-xs text-slate-500 mt-2">Recarregue a página (F5). Se persistir, verifique sua conexão ou avise o suporte.</p></div>';
+    try{ toast('⚠️ ' + msg); }catch(e){}
+    return;
+  }
+
+  let erroStats = null;
+  try{
     const s = await api('/api/stats');
     document.getElementById('stAguard').textContent=s.aguardando;
     document.getElementById('stAtend').textContent=s.em_atendimento;
     document.getElementById('stFin').textContent=s.finalizados;
     document.getElementById('stPes').textContent=s.totalPessoas;
-    renderFila(); renderTec();
-  }catch(e){}
+  }catch(e){ erroStats = e; }
+  if(!session) return;
+
+  renderFila(); renderTec();
+  if(erroStats){
+    console.error('loadAll /api/stats:', erroStats);
+    try{ toast('⚠️ Estatísticas indisponíveis: ' + (erroStats.message || erroStats)); }catch(e){}
+  }
 }
 
 function modeloBadge(m){
