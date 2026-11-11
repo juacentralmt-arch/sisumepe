@@ -31,6 +31,7 @@ const suites = [
   'test/tickets.anexos.test.js',
   'test/pdfTools.test.js',
   'test/tickets.edit.test.js',
+  'test/fila.render.test.js',
   'test/admin.dashboard.test.js',
   'test/estoqueFluxo.test.js',
   'test/estoqueConciliacao.test.js',

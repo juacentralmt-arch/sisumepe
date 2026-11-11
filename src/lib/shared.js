@@ -52,7 +52,12 @@ const apiHits = new Map();
 const API_WINDOW_MS = 60e3;
 const API_MAX = 300;
 function apiRateLimit(req, res, next) {
-  if (req.path === '/api/events' || req.path === '/api/health' || req.path === '/api/tv') return next();
+  // ATENÇÃO: este middleware é montado com app.use('/api', ...), então req.path
+  // é RELATIVO ('/events', '/health', '/tv'). Comparar com '/api/...' nunca casava
+  // e o SSE consumia a cota da API (300/min) — derrubando a fila em produção.
+  const p = String(req.path || '');
+  if (p === '/events' || p === '/health' || p === '/tv' ||
+      p === '/api/events' || p === '/api/health' || p === '/api/tv') return next();
   const ip = req.ip || '?';
   const now = Date.now();
   const h = apiHits.get(ip) || { n: 0, reset: now + API_WINDOW_MS };

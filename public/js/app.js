@@ -1,9 +1,20 @@
 
 let session = JSON.parse(localStorage.getItem('te_session') || 'null');
 // O token nunca é persistido no navegador: a sessão vive no cookie httpOnly.
+// Tokens salvos por versões anteriores são descartados aqui.
 if (session && session.token) {
   delete session.token;
   try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {}
+}
+// Persiste a sessão SEM o token (o token vive só em memória + cookie httpOnly).
+function saveSession(){
+  try{
+    if(!session){ localStorage.removeItem('te_session'); return; }
+    localStorage.setItem('te_session', JSON.stringify({
+      user: session.user, role: session.role, name: session.name,
+      sistema: session.sistema, mustChangePassword: !!session.mustChangePassword
+    }));
+  }catch(e){}
 }
 let es = null;
 let role = session ? session.role : null;
@@ -106,10 +117,11 @@ async function doLogin(){
   if(!setBtnLoading(btn, true, 'Entrando...')) return;
   try{
     const s = await api('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user, pass }) });
-    // A sessão fica no cookie httpOnly; o token não é persistido no navegador.
-    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword };
+    // A sessão fica no cookie httpOnly; o token fica só em memória (nunca no
+    // localStorage) e é reenviado no cabeçalho X-Session.
+    session = { user: s.user, role: s.role, name: s.name, sistema: s.sistema, mustChangePassword: !!s.mustChangePassword, token: s.token };
     role = s.role;
-    localStorage.setItem('te_session', JSON.stringify(session));
+    saveSession();
     document.getElementById('loginPass').value = '';
     err.classList.add('hidden');
     enterApp();
@@ -441,7 +453,10 @@ function deveAlertar(t){
 }
 let lastTicketsHash = null, lastFullRenderAt = 0;
 async function loadAll(){
-  if(!session || !session.token) return;
+  // A sessão NÃO precisa de token em memória: a autenticação usa o cookie
+  // httpOnly (te_session). Exigir session.token aqui impedia a fila, as
+  // estatísticas e o tempo real (SSE) de renderizarem — a tela ficava vazia.
+  if(!session) return;
   let erroTickets = null;
   try{
     tickets = await api('/api/tickets');
@@ -6615,8 +6630,11 @@ async function confirmFinish(){
 // VISAO 360 — Setor Técnico + Admin (recepção bloqueada)
 function renderVisaoGate(){
   const lock = role !== 'tecnico' && role !== 'admin';
-  document.getElementById('visaoLock').classList.toggle('hidden',!lock);
-  document.getElementById('visaoBody').classList.toggle('hidden',lock);
+  const l = document.getElementById('visaoLock');
+  const b = document.getElementById('visaoBody');
+  // Sem a seção no HTML a aba ficaria em branco: não pode interromper o app.
+  if(l) l.classList.toggle('hidden',!lock);
+  if(b) b.classList.toggle('hidden',lock);
 }
 // Busca instantânea enquanto digita (com debounce)
 let visaoTimer = null, visaoHist = [];
@@ -6625,12 +6643,15 @@ function visaoTyping(){
   visaoTimer = setTimeout(buscarVisao, 500);
 }
 async function buscarVisao(){
-  const q=document.getElementById('vQ').value.trim();
-  if(q && q.length < 2){ document.getElementById('visaoRes').innerHTML='<p class="text-xs text-slate-400">Digite ao menos 2 letras para buscar.</p>'; return; }
+  const inp = document.getElementById('vQ');
+  const res = document.getElementById('visaoRes');
+  if(!inp || !res) return;
+  const q=inp.value.trim();
+  if(q && q.length < 2){ res.innerHTML='<p class="text-xs text-slate-400">Digite ao menos 2 letras para buscar.</p>'; return; }
   try{
     const list=await api('/api/persons?limit=10&q='+encodeURIComponent(q));
     const more = list.length >= 10 ? '<p class="text-[11px] text-slate-400 col-span-full text-center">Mostrando 10 primeiros — refine a busca.</p>' : '';
-    document.getElementById('visaoRes').innerHTML=list.map(p=>`<button onclick="openVisao(${p.id})" class="card card-hover p-3.5 text-left flex items-center gap-3"><span class="avatar w-10 h-10 text-sm">${initials(p.nome)}</span><span class="min-w-0"><b class="text-sm block truncate">${esc(p.nome)}</b><span class="text-xs text-slate-500">${esc(p.cpf||p.rg||'')}</span> ${modeloBadge(p.modeloTornozeleira)}</span></button>`).join('')+more||'<p class="text-sm text-slate-500">Nada encontrado.</p>';
+    res.innerHTML=list.map(p=>`<button onclick="openVisao(${p.id})" class="card card-hover p-3.5 text-left flex items-center gap-3"><span class="avatar w-10 h-10 text-sm">${initials(p.nome)}</span><span class="min-w-0"><b class="text-sm block truncate">${esc(p.nome)}</b><span class="text-xs text-slate-500">${esc(p.cpf||p.rg||'')}</span> ${modeloBadge(p.modeloTornozeleira)}</span></button>`).join('')+more||'<p class="text-sm text-slate-500">Nada encontrado.</p>';
   }catch(e){ toast(e.message); }
 }
 function visaoMetricas(hist){
@@ -6949,7 +6970,13 @@ async function saveAccount(){
   const err = document.getElementById('accErr');
   try{
     const r = await api('/api/users/me/password', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: session.user, current: document.getElementById('accCur').value, next: document.getElementById('accNew').value }) });
-    if (session) { session.mustChangePassword = false; try { localStorage.setItem('te_session', JSON.stringify(session)); } catch (e) {} }
+    if (session) {
+      session.mustChangePassword = false;
+      // O servidor invalida todas as sessões do usuário na troca de senha e
+      // devolve um token novo: usa-o (memória) ou a sessão cai em 401.
+      if (r && r.token) session.token = r.token;
+      saveSession();
+    }
     closeAccount(); toast('Senha atualizada!');
   }catch(e){ err.textContent = '⚠️ ' + e.message; err.classList.remove('hidden'); }
 }
