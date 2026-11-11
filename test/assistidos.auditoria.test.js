@@ -224,6 +224,28 @@ const post = async (url, body, headers) => {
   assert(!abaJunt2.some(x => String(x.id) === String(aid)),
     'Aba Juntada: sai depois de protocolar');
 
+  // ------------------------------------------------------------------
+  console.log('\n=== ASSISTIDOS - comparecimento órfão é rejeitado ===');
+  // Um assistido_id inválido (NaN -> null) criava uma linha que contava
+  // como pendente mas não aparecia em nenhuma aba.
+  let orfao = null;
+  try {
+    await store.assistidosComparecimentos.insert({
+      assistidoId: Number(undefined), dataComparecimento: '2026-11-08',
+      ppPlantao: 'PP', observacao: '', juntada: '', protocolado: false,
+    });
+  } catch (e) { orfao = e; }
+  assert(!!orfao, 'Store: comparecimento sem assistido válido é rejeitado');
+  assert(!!orfao && orfao.status === 400, 'Store: rejeição com status 400');
+
+  // ------------------------------------------------------------------
+  console.log('\n=== ASSISTIDOS - aba Juntada não depende da listagem ===');
+  // A aba buscava os assistidos pela listagem (100 por página): um
+  // pendente de assistido antigo sumia. Agora busca pelo id.
+  const porId = await store.assistidos.byIds([Number(aid)]);
+  assert(Array.isArray(porId) && porId.length === 1, 'Store: byIds devolve o assistido pelo id');
+  assert(porId[0] && String(porId[0].id) === String(aid), 'Store: byIds devolve o assistido certo');
+
   console.log('\n==================== RESUMO ====================');
   console.log(`Testes: OK=${passed} | Falha=${failed}`);
   process.exit(failed ? 1 : 0);

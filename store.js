@@ -2352,9 +2352,15 @@ store.assistidos = {
     ]);
     out.ativo = ativo; out.concluido = concluido; out.arquivado = arquivado; out.total = total;
     try {
+      // Só conta pendentes cujo assistido existe e esta ativo: um
+      // comparecimento orfao contaria no badge sem aparecer na aba.
       const pend = await store.assistidosComparecimentos.pendentes();
-      out.pendentesJuntada = pend.length;
-      out.assistidosPendentes = new Set(pend.map(x => String(x.assistidoId))).size;
+      const ids = [...new Set(pend.map(c => Number(c.assistidoId)).filter(n => Number.isFinite(n) && n > 0))];
+      const existentes = await store.assistidos.byIds(ids);
+      const ok = new Set(existentes.map(a => String(a.id)));
+      const validos = pend.filter(c => ok.has(String(c.assistidoId)));
+      out.pendentesJuntada = validos.length;
+      out.assistidosPendentes = new Set(validos.map(c => String(c.assistidoId))).size;
     } catch (e) { /* segue sem os pendentes */ }
     return out;
   },
@@ -2478,6 +2484,21 @@ store.assistidos = {
     }
     const r = must(await supa.from('assistidos').select('*').eq('vinculo', alvo).is('deleted_at', null).limit(1), 'assistidos.byVinculo');
     return r.length ? appASS(r[0]) : null;
+  },
+
+  // Busca varios assistidos pelos ids, de uma vez.
+  // Usado pela aba Juntada: os pendentes podem ser de assistidos antigos
+  // e o limite de pagina da listagem esconderia parte deles.
+  async byIds(ids) {
+    const lista = (Array.isArray(ids) ? ids : [ids])
+      .map(Number).filter(n => Number.isFinite(n) && n > 0);
+    if (!lista.length) return [];
+    if (MODE === 'file') {
+      const set = new Set(lista);
+      return (mem.assistidos || []).filter(x => set.has(Number(x.id)) && !estaExcluido(x));
+    }
+    const r = must(await supa.from('assistidos').select('*').in('id', lista).is('deleted_at', null), 'assistidos.byIds');
+    return r.map(appASS);
   },
 
   // Todos os assistidos ativos, sem paginação de resultado.
@@ -2665,6 +2686,13 @@ store.assistidosComparecimentos = {
   },
 
   async insert(r) {
+    // Guarda: um assistido_id invalido (NaN/null) cria um comparecimento
+    // orfao — ele conta como pendente mas nao aparece em nenhuma aba,
+    // porque nao pertence a ninguem.
+    const assistidoId = Number(r && r.assistidoId);
+    if (!Number.isFinite(assistidoId) || assistidoId <= 0) {
+      throw Object.assign(new Error('assistidoId inválido para o comparecimento'), { status: 400 });
+    }
     if (MODE === 'file') {
       // Os defaults vêm ANTES do spread: quem chama pode passar
       // protocolado/protocoladoPor/dataProtocolacao (importação da
@@ -2673,6 +2701,7 @@ store.assistidosComparecimentos = {
         id: mem.seqAssistidoComp++,
         protocolado: false,
       }, r, {
+        assistidoId,
         deletedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

@@ -231,8 +231,11 @@ router.get('/api/assistidos/juntada', auth(['admin', 'tecnico']), ah(async (req,
   const ids = [...porAssistido.keys()];
   if (!ids.length) return res.json([]);
 
-  const assistidos = await store.assistidos.list({ limit: LIMITE_MAX, offset: 0 });
-  const porId = new Map(assistidos.itens.map(a => [String(a.id), a]));
+  // Busca os assistidos PELO ID, não pela listagem: a listagem é
+  // paginada (100 por página) e esconderia os pendentes de assistidos
+  // antigos — que são a maioria.
+  const assistidos = await store.assistidos.byIds(ids.map(Number));
+  const porId = new Map(assistidos.map(a => [String(a.id), a]));
   const out = [];
   for (const id of ids) {
     const a = porId.get(String(id));

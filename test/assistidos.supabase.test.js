@@ -167,6 +167,23 @@ const H = { 'Content-Type': 'application/json', 'X-Test-Auth': 'admin|teste|Test
   check(abaJuntada2.some(x => String(x.id) === String(a2.id)),
     'REGRESSÃO: comparecimento com juntada NULL também aparece na aba Juntada');
 
+  // 10) o store rejeita comparecimento sem assistido valido (evita orfao)
+  let orfao = null;
+  try {
+    await store.assistidosComparecimentos.insert({
+      assistidoId: Number(undefined), dataComparecimento: '2026-11-07',
+      ppPlantao: 'PP', observacao: '', juntada: '', protocolado: false,
+    });
+  } catch (e) { orfao = e; }
+  check(!!orfao, 'Store: comparecimento orfao é rejeitado');
+
+  // 11) a aba busca o assistido pelo id (nao pela listagem paginada)
+  const porId = await store.assistidos.byIds([Number(a2.id)]);
+  check(Array.isArray(porId) && porId.length === 1, 'Store: byIds devolve o assistido pelo id');
+  const resumo = await json('/api/assistidos/resumo');
+  check(typeof resumo.assistidosPendentes === 'number' && resumo.assistidosPendentes >= 1,
+    'Badge: conta os assistidos com pendencia (' + resumo.assistidosPendentes + ')');
+
   await json('/api/assistidos/' + a2.id, { method: 'DELETE', headers: H, body: JSON.stringify({ motivo: 'limpeza' }) });
 
   console.log('\n==================== RESUMO ====================');
