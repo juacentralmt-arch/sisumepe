@@ -2628,6 +2628,11 @@ store.assistidosComparecimentos = {
   // Comparecimentos pendentes de juntada (não protocolados).
   // `protocolado` desligado e `juntada` vazia — os dois precisam
   // concordar: a base herdada tem o número da juntada sem a flag.
+  //
+  // `juntada` e `protocolado` são aceitos como NULL e como string
+  // vazia/false: um .eq('juntada','') sozinho NAO encontra as linhas
+  // gravadas com NULL, e o comparecimento ficaria invisivel na aba
+  // Juntada. Por isso o filtro usa .or() com as duas formas.
   async pendentes() {
     if (MODE === 'file') {
       return (mem.assistidosComparecimentos || [])
@@ -2636,8 +2641,8 @@ store.assistidosComparecimentos = {
     try {
       const r = must(await supa.from('assistidos_comparecimentos').select('*')
         .is('deleted_at', 'null')
-        .eq('protocolado', false)
-        .eq('juntada', '')
+        .or('protocolado.is.null,protocolado.eq.false')
+        .or('juntada.is.null,juntada.eq.')
         .order('data_comparecimento'), 'assistidosComparecimentos.pendentes');
       return r.map(appACC);
     } catch (e) {

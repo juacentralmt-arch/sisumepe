@@ -134,6 +134,41 @@ const H = { 'Content-Type': 'application/json', 'X-Test-Auth': 'admin|teste|Test
   check(!restantes.itens.some(x => String(x.id) === String(criado.id)),
     'limpeza removeu o registro de teste da listagem');
 
+  // 8) REGRESSÃO: o comparecimento registrado tem que aparecer na aba
+  //    Juntada. O bug: a rota gravava juntada = NULL e a consulta filtrava
+  //    por juntada = '' — NULL nao casa, e o comparecimento sumia.
+  const a2 = await (await fetch(BASE + '/api/assistidos', {
+    method: 'POST', headers: Object.assign({}, H, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      vinculo: VINCULO.slice(0, -2) + '77', nome: NOME + ' 2', vara: 'V',
+      localAssinatura: 'COMEP Cariri', dataInicio: '2026-01-15',
+    }),
+  })).json();
+  check(!!a2.id, 'segundo assistido criado para o teste de regressao');
+  const c2 = await (await fetch(BASE + '/api/assistidos/' + a2.id + '/comparecimentos', {
+    method: 'POST', headers: Object.assign({}, H, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ dataComparecimento: '2026-11-09', ppPlantao: 'PP Teste' }),
+  })).json();
+  check(!!c2.id, 'comparecimento registrado pela rota');
+
+  const abaJuntada = await json('/api/assistidos/juntada');
+  check(abaJuntada.some(x => String(x.id) === String(a2.id)),
+    'REGRESSÃO: comparecimento recem-registrado aparece na aba Juntada');
+  const pend = (abaJuntada.find(x => String(x.id) === String(a2.id)) || {}).comparecimentoPendente;
+  check(!!pend && String(pend.id) === String(c2.id), 'REGRESSÃO: o comparecimento pendente e o correto');
+
+  // 9) defesa em profundidade: mesmo gravado com juntada = NULL, tem que
+  //    aparecer (o filtro aceita as duas formas)
+  await store.assistidosComparecimentos.insert({
+    assistidoId: Number(a2.id), dataComparecimento: '2026-11-08',
+    ppPlantao: 'PP Teste', observacao: '', juntada: null, protocolado: false,
+  });
+  const abaJuntada2 = await json('/api/assistidos/juntada');
+  check(abaJuntada2.some(x => String(x.id) === String(a2.id)),
+    'REGRESSÃO: comparecimento com juntada NULL também aparece na aba Juntada');
+
+  await json('/api/assistidos/' + a2.id, { method: 'DELETE', headers: H, body: JSON.stringify({ motivo: 'limpeza' }) });
+
   console.log('\n==================== RESUMO ====================');
   console.log(`Testes: OK=${passed} | Falha=${failed}`);
   server.close();

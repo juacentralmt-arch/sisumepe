@@ -438,8 +438,10 @@ router.post('/api/assistidos/:id/comparecimentos', auth(['admin', 'tecnico']), a
     assistidoId: Number(req.params.id),
     dataComparecimento: String(b.dataComparecimento).trim(),
     ppPlantao: String(b.ppPlantao || '').trim() || '—',
-    observacao: String(b.observacao || '').trim() || null,
-    juntada: null,
+    // String vazia, nunca null: a coluna tem default '' e a aba Juntada
+    // filtra por juntada vazia. Gravar null esconderia o registro.
+    observacao: String(b.observacao || '').trim(),
+    juntada: '',
     protocolado: false,
   });
   await auditar(req, 'comparecimento', 'comparecimento#' + row.id, a.nome,
@@ -700,8 +702,8 @@ router.post('/api/assistidos/import', auth(['admin', 'tecnico']), upload.single(
             assistidoId: Number(alvo.id),
             dataComparecimento: dataComp,
             ppPlantao: get('pp') || '—',
-            observacao: get('observacao') || null,
-            juntada: juntada || null,
+            observacao: get('observacao') || '',
+            juntada: juntada || '',
             protocolado: !!juntada,
             protocoladoPor: juntada ? (get('protocoladoPor') || '') : '',
             dataProtocolacao: juntada ? dataComp : '',

@@ -201,6 +201,29 @@ const post = async (url, body, headers) => {
   assert(aud.itens.some(x => x.acao === 'restaurado'), 'Auditoria: restauração registrada');
 
   // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  console.log('\n=== ASSISTIDOS - o compareimento registrado aparece na aba Juntada ===');
+  // Regressão: a rota gravava `juntada: null` e a consulta filtrava por
+  // `juntada = ''` — NULL não casa, e o comparecimento sumia da aba.
+  const cNovo = await post('/api/assistidos/' + aid + '/comparecimentos', {
+    dataComparecimento: '2026-11-09', ppPlantao: 'PP Teste', observacao: '',
+  });
+  assert(cNovo.status === 201, 'Comparecimento registrado');
+  assert(cNovo.json.juntada === '', 'Comparecimento: juntada gravada como string vazia (não null)');
+
+  const abaJunt = await get('/api/assistidos/juntada');
+  assert(abaJunt.some(x => String(x.id) === String(aid)),
+    'REGRESSÃO: comparecimento recem-registrado aparece na aba Juntada');
+  const pendente = (abaJunt.find(x => String(x.id) === String(aid)) || {}).comparecimentoPendente;
+  assert(!!pendente && String(pendente.id) === String(cNovo.json.id),
+    'REGRESSÃO: o comparecimento pendente listado é o correto');
+
+  // com a juntada registrada, sai da aba
+  await patch('/api/assistidos/comparecimentos/' + cNovo.json.id + '/juntada', { juntada: '55555' });
+  const abaJunt2 = await get('/api/assistidos/juntada');
+  assert(!abaJunt2.some(x => String(x.id) === String(aid)),
+    'Aba Juntada: sai depois de protocolar');
+
   console.log('\n==================== RESUMO ====================');
   console.log(`Testes: OK=${passed} | Falha=${failed}`);
   process.exit(failed ? 1 : 0);

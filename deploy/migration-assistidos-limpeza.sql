@@ -27,6 +27,21 @@ alter table assistidos drop column if exists juntadas;
 -- extras e a bolsa para as colunas desconhecidas da planilha.
 alter table assistidos add column if not exists extras jsonb default '{}'::jsonb;
 
+-- Normaliza NULL em colunas cujo default e string vazia.
+--
+-- A aba Juntada filtra os pendentes por `juntada` vazia. Um comparecimento
+-- gravado com juntada = NULL nao casa com esse filtro e some da aba — o
+-- monitorado comparecia mas o registro nao aparecia para protocolar.
+-- Daqui em diante toda escrita usa string vazia; isto alinha o que ja
+-- foi gravado.
+update assistidos_comparecimentos set juntada = '' where juntada is null;
+update assistidos_comparecimentos set observacoes = '' where observacoes is null;
+update assistidos_comparecimentos set protocolado = false where protocolado is null;
+update assistidos_comparecimentos set policial_plantao = '' where policial_plantao is null;
+update assistidos_comparecimentos set data_protocolacao = '' where data_protocolacao is null;
+update assistidos_comparecimentos set protocolado_por = '' where protocolado_por is null;
+update assistidos_comparecimentos set assinado_por = '' where assinado_por is null;
+
 -- Indice para a busca por nome/vinculo/processo.
 -- A busca usa ilike com %termo%, que nao aproveita btree: o trigram
 -- resolve. Precisa da extensao pg_trgm.
